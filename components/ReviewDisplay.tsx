@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { CaseReviewResponse } from '@/lib/types';
 import { api } from '@/lib/api';
 import { Alert } from './common/Alert';
-import { CopyButton } from './common/CopyButton';
+//import { CopyButton } from './common/CopyButton';
 
 interface ReviewDisplayProps {
   review: CaseReviewResponse;
@@ -31,7 +31,7 @@ export function ReviewDisplay({
   const handleContentChange = (section: string, content: string) => {
     setEditableContent(prev => {
       if (section.startsWith('capabilities.')) {
-        const [_, capabilityKey] = section.split('.');
+        const [, capabilityKey] = section.split('.'); // Changed '_' to ','
         return {
           ...prev,
           sections: {
@@ -63,7 +63,12 @@ export function ReviewDisplay({
     }
   };
 
-  const renderSection = (title: string, content: any, key: string) => {
+  const renderSection = (
+    title: string,
+    content: string | Record<string, string>,
+    key: string
+  ) => {
+    // For the capabilities section which is a Record<string, string>
     if (key === 'capabilities' && typeof content === 'object') {
       return (
         <div key={key} className="space-y-2">
@@ -89,25 +94,30 @@ export function ReviewDisplay({
         </div>
       );
     }
-
-    return (
-      <div key={key} className="space-y-2">
-        <div className="flex justify-between items-center">
-          <h3 className="text-lg font-medium text-gray-900">{title}</h3>
-          <button
-            onClick={() => copyToClipboard(content, key)}
-            className="inline-flex items-center px-3 py-1 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            {copiedSection === key ? 'Copied!' : 'Copy'}
-          </button>
+  
+    // For string content
+    if (typeof content === 'string') {
+      return (
+        <div key={key} className="space-y-2">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-medium text-gray-900">{title}</h3>
+            <button
+              onClick={() => copyToClipboard(content, key)}
+              className="inline-flex items-center px-3 py-1 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              {copiedSection === key ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+          <textarea
+            value={content}
+            onChange={(e) => handleContentChange(key, e.target.value)}
+            className="w-full min-h-[100px] p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          />
         </div>
-        <textarea
-          value={content}
-          onChange={(e) => handleContentChange(key, e.target.value)}
-          className="w-full min-h-[100px] p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-        />
-      </div>
-    );
+      );
+    }
+  
+    return null; // Handle any unexpected content types
   };
 
   const handleImprove = async () => {
