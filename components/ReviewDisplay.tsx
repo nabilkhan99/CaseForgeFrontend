@@ -1,7 +1,7 @@
 // src/components/ReviewDisplay.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { CaseReviewResponse } from '@/lib/types';
 import { api } from '@/lib/api';
 import { Alert } from './common/Alert';
@@ -27,6 +27,11 @@ export function ReviewDisplay({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
+
+  useEffect(() => {
+    console.log('Review prop changed:', review);
+    setEditableContent(review);
+  }, [review]);
 
   const handleContentChange = (section: string, content: string) => {
     setEditableContent(prev => {
@@ -137,6 +142,7 @@ export function ReviewDisplay({
 
       onImprove(improved);
       setImprovementPrompt('');
+      setIsImproveMode(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
