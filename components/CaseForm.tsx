@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { CapabilitySelect } from './CapabilitySelect';
 import { CaseReviewResponse } from '@/lib/types';
 import { Alert } from './common/Alert';
+import { motion } from 'framer-motion';
 
 interface CaseFormProps {
   onReviewGenerated: (review: CaseReviewResponse) => void;
@@ -49,76 +50,82 @@ export function CaseForm({ onReviewGenerated }: CaseFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="space-y-2">
+    <motion.form 
+      onSubmit={handleSubmit} 
+      className="space-y-6"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+    >
+      <motion.div 
+        className="space-y-2"
+        initial={{ x: -20 }}
+        animate={{ x: 0 }}
+        transition={{ delay: 0.1 }}
+      >
         <label
           htmlFor="case-description"
           className="block text-sm font-medium text-gray-700"
         >
           Case Description
         </label>
-        <div className="relative">
-          <textarea
-            id="case-description"
-            name="case-description"
-            rows={6}
-            className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
-            value={caseDescription}
-            onChange={(e) => setCaseDescription(e.target.value)}
-            placeholder="Enter your case description here..."
-            disabled={isLoading}
-            aria-describedby="case-description-error"
-          />
-        </div>
-      </div>
+        <textarea
+          id="case-description"
+          name="case-description"
+          rows={6}
+          className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md transition-all duration-200"
+          value={caseDescription}
+          onChange={(e) => setCaseDescription(e.target.value)}
+          placeholder="Enter your case description here..."
+          disabled={isLoading}
+        />
+      </motion.div>
 
-      <CapabilitySelect
-        selectedCapabilities={selectedCapabilities}
-        onChange={setSelectedCapabilities}
-        disabled={isLoading}
-      />
+      <motion.div
+        initial={{ x: -20 }}
+        animate={{ x: 0 }}
+        transition={{ delay: 0.2 }}
+      >
+        <CapabilitySelect
+          selectedCapabilities={selectedCapabilities}
+          onChange={setSelectedCapabilities}
+          disabled={isLoading}
+        />
+      </motion.div>
 
       {error && (
-        <div role="alert" aria-live="polite">
+        <motion.div 
+          role="alert" 
+          aria-live="polite"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+        >
           <Alert type="error" message={error} />
-        </div>
+        </motion.div>
       )}
 
-      <div className="flex justify-end">
+      <motion.div 
+        className="flex justify-center"
+        initial={{ x: -20 }}
+        animate={{ x: 0 }}
+        transition={{ delay: 0.3 }}
+      >
         <button
           type="submit"
           disabled={isLoading}
-          className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
-            isLoading ? 'opacity-50 cursor-not-allowed' : ''
-          }`}
-          aria-busy={isLoading}
+          className="primary-button w-full sm:w-auto"
         >
           {isLoading ? (
             <span className="flex items-center">
-              <span className="animate-spin mr-2">
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24">
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
-              </span>
+              <span className="animate-spin mr-2">⌛</span>
               Generating...
             </span>
           ) : (
             'Generate Case Review'
           )}
         </button>
-      </div>
-    </form>
+      </motion.div>
+    </motion.form>
   );
 }
