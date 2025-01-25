@@ -33,10 +33,19 @@ export function ReviewDisplay({
     setEditableContent(review);
   }, [review]);
 
+  useEffect(() => {
+    // Adjust all textareas to fit their content
+    const textareas = document.querySelectorAll('textarea');
+    textareas.forEach(textarea => {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    });
+  }, [editableContent]); // Run when content changes
+
   const handleContentChange = (section: string, content: string) => {
     setEditableContent(prev => {
       if (section.startsWith('capabilities.')) {
-        const [, capabilityKey] = section.split('.'); // Changed '_' to ','
+        const [, capabilityKey] = section.split('.');
         return {
           ...prev,
           sections: {
@@ -77,22 +86,28 @@ export function ReviewDisplay({
     if (key === 'capabilities' && typeof content === 'object') {
       return (
         <div key={key} className="space-y-2">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-medium text-gray-900">Capabilities</h3>
-            <button
-              onClick={() => copyToClipboard(Object.values(content).join('\n\n'), key)}
-              className="inline-flex items-center px-3 py-1 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              {copiedSection === key ? 'Copied!' : 'Copy'}
-            </button>
-          </div>
+          <h3 className="text-lg font-medium text-gray-900">Capabilities</h3>
           {Object.entries(content).map(([capKey, capContent]) => (
             <div key={capKey} className="mt-4">
-              <h4 className="text-md font-medium text-gray-700 mb-2">{capKey}</h4>
+              <div className="flex justify-between items-center mb-2">
+                <h4 className="text-md font-medium text-gray-700">{capKey}</h4>
+                <button
+                  onClick={() => copyToClipboard(capContent, `capabilities.${capKey}`)}
+                  className="inline-flex items-center px-3 py-1 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  {copiedSection === `capabilities.${capKey}` ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
               <textarea
                 value={capContent}
                 onChange={(e) => handleContentChange(`capabilities.${capKey}`, e.target.value)}
-                className="w-full min-h-[100px] p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                style={{ height: 'auto', minHeight: '0px' }}
+                onInput={(e) => {
+                  const target = e.target as HTMLTextAreaElement;
+                  target.style.height = 'auto';
+                  target.style.height = `${target.scrollHeight}px`;
+                }}
               />
             </div>
           ))}
@@ -116,7 +131,13 @@ export function ReviewDisplay({
           <textarea
             value={content}
             onChange={(e) => handleContentChange(key, e.target.value)}
-            className="w-full min-h-[100px] p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            style={{ height: 'auto', minHeight: '0px' }}
+            onInput={(e) => {
+              const target = e.target as HTMLTextAreaElement;
+              target.style.height = 'auto';
+              target.style.height = `${target.scrollHeight}px`;
+            }}
           />
         </div>
       );
