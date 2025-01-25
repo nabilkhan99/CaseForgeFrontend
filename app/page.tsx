@@ -31,19 +31,6 @@ export default function Home() {
             />
           )}
         </section>
-
-        <section className="card">
-          <h2 className="text-lg font-medium text-gray-900 mb-6">
-            How to use
-          </h2>
-          <ol className="list-decimal list-inside space-y-3 text-gray-600">
-            <li>Enter your case description in the text area</li>
-            <li>Select 1-3 capabilities from the list</li>
-            <li>Click &apos;Generate Case Review&apos;</li>
-            <li>Edit the generated sections as needed</li>
-            <li>Copy individual sections using the copy buttons</li>
-          </ol>
-        </section>
       </div>
     </ErrorBoundary>
   );
