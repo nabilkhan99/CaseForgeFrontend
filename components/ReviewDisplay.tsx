@@ -83,26 +83,63 @@ export function ReviewDisplay({
     content: string | Record<string, string>,
     key: string
   ) => {
-    // For the capabilities section which is a Record<string, string>
+    const getIcon = (sectionKey: string) => {
+      switch (sectionKey) {
+        case 'brief_description':
+          return '📝';
+        case 'capabilities':
+          return '🎯';
+        case 'learning_needs':
+          return (
+            <svg className="h-5 w-5 text-medical-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={2} 
+                d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+              />
+            </svg>
+          );
+        case 'reflection':
+          return (
+            <svg className="h-5 w-5 text-medical-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={2} 
+                d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+              />
+            </svg>
+          );
+        default:
+          return '📄';
+      }
+    };
+
     if (key === 'capabilities' && typeof content === 'object') {
       return (
-        <div key={key} className="space-y-2">
-          <h3 className="text-lg font-medium text-gray-900">Capabilities</h3>
+        <div className="space-y-4">
+          <h3 className="text-xl font-medium text-white flex items-center gap-2">
+            {getIcon(key)}
+            {title}
+          </h3>
           {Object.entries(content).map(([capKey, capContent]) => (
-            <div key={capKey} className="mt-4">
-              <div className="flex justify-between items-center mb-2">
-                <h4 className="text-md font-medium text-gray-700">{capKey}</h4>
-                <button
+            <div key={capKey} className="space-y-2">
+              <div className="flex justify-between items-center">
+                <h4 className="text-white/80">{capKey}</h4>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={() => copyToClipboard(capContent, `capabilities.${capKey}`)}
-                  className="inline-flex items-center px-3 py-1 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="button-secondary text-sm px-3 py-1"
                 >
-                  {copiedSection === `capabilities.${capKey}` ? 'Copied!' : 'Copy'}
-                </button>
+                  {copiedSection === `capabilities.${capKey}` ? '✓ Copied!' : 'Copy'}
+                </motion.button>
               </div>
               <textarea
                 value={capContent}
                 onChange={(e) => handleContentChange(`capabilities.${capKey}`, e.target.value)}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                className="glass-input w-full"
                 style={{ height: 'auto', minHeight: '0px' }}
                 onInput={(e) => {
                   const target = e.target as HTMLTextAreaElement;
@@ -116,23 +153,27 @@ export function ReviewDisplay({
       );
     }
   
-    // For string content
     if (typeof content === 'string') {
       return (
-        <div key={key} className="space-y-2">
+        <div className="space-y-2">
           <div className="flex justify-between items-center">
-            <h3 className="text-lg font-medium text-gray-900">{title}</h3>
-            <button
+            <h3 className="text-xl font-medium text-white flex items-center gap-2">
+              {getIcon(key)}
+              {title}
+            </h3>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={() => copyToClipboard(content, key)}
-              className="inline-flex items-center px-3 py-1 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="button-secondary text-sm px-3 py-1"
             >
-              {copiedSection === key ? 'Copied!' : 'Copy'}
-            </button>
+              {copiedSection === key ? '✓ Copied!' : 'Copy'}
+            </motion.button>
           </div>
           <textarea
             value={content}
             onChange={(e) => handleContentChange(key, e.target.value)}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="glass-input w-full"
             style={{ height: 'auto', minHeight: '0px' }}
             onInput={(e) => {
               const target = e.target as HTMLTextAreaElement;
@@ -144,7 +185,7 @@ export function ReviewDisplay({
       );
     }
   
-    return null; // Handle any unexpected content types
+    return null;
   };
 
   const handleImprove = async () => {
@@ -185,7 +226,7 @@ export function ReviewDisplay({
         animate={{ y: 0 }}
         transition={{ delay: 0.1 }}
       >
-        <h1 className="text-2xl font-bold text-gray-900">{editableContent.case_title}</h1>
+        <h1 className="text-2xl font-bold text-white">{editableContent.case_title}</h1>
         <div className="flex gap-4">
           <motion.button
             whileHover={{ scale: 1.05 }}
@@ -193,7 +234,9 @@ export function ReviewDisplay({
             onClick={() => setIsImproveMode(!isImproveMode)}
             className="button-secondary focus-ring"
           >
-            {isImproveMode ? 'Cancel Improve' : 'Improve'}
+            <span className="flex items-center gap-2">
+              {isImproveMode ? '✕ Cancel' : '✨ Improve'}
+            </span>
           </motion.button>
           <motion.button
             whileHover={{ scale: 1.05 }}
@@ -201,7 +244,10 @@ export function ReviewDisplay({
             onClick={onNewCase}
             className="primary-button focus-ring"
           >
-            New Case
+            <span className="flex items-center gap-2">
+              <span>🔄</span>
+              New Case
+            </span>
           </motion.button>
         </div>
       </motion.header>
@@ -213,10 +259,11 @@ export function ReviewDisplay({
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.3 }}
-            className="space-y-4"
+            className="space-y-4 p-6 bg-white/5 rounded-xl border border-white/10"
           >
             <div className="space-y-2">
-              <label htmlFor="improvement-prompt" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="improvement-prompt" className="text-white/80 flex items-center gap-2">
+                <span>✨</span>
                 Improvement Instructions
               </label>
               <textarea
@@ -224,26 +271,33 @@ export function ReviewDisplay({
                 value={improvementPrompt}
                 onChange={(e) => setImprovementPrompt(e.target.value)}
                 placeholder="Enter your improvement instructions..."
-                className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                className="glass-input w-full"
                 rows={3}
                 disabled={isLoading}
               />
             </div>
             {error && <Alert type="error" message={error} />}
-            <button
-              onClick={handleImprove}
-              disabled={isLoading}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              {isLoading ? (
-                <span className="flex items-center">
-                  <span className="animate-spin mr-2">⌛</span>
-                  Improving...
-                </span>
-              ) : (
-                'Apply Improvements'
-              )}
-            </button>
+            <div className="flex justify-center pt-6">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handleImprove}
+                disabled={isLoading}
+                className="primary-button"
+              >
+                {isLoading ? (
+                  <span className="flex items-center gap-1">
+                    <span className="animate-pulse text-white">🪄</span>
+                    Improving...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1">
+                    <span className="text-white">✨</span>
+                    Apply Improvements
+                  </span>
+                )}
+              </motion.button>
+            </div>
           </motion.section>
         )}
       </AnimatePresence>
@@ -255,11 +309,13 @@ export function ReviewDisplay({
         transition={{ delay: 0.2 }}
       >
         {Object.entries(editableContent.sections).map(([key, content]) => (
-          renderSection(
-            key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' '),
-            content,
-            key
-          )
+          <div key={key} className="bg-white/5 rounded-xl border border-white/10 p-6">
+            {renderSection(
+              key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' '),
+              content,
+              key
+            )}
+          </div>
         ))}
       </motion.div>
     </motion.article>

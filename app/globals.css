@@ -3,24 +3,61 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 55, 65, 81;
-  --background-start-rgb: 249, 250, 251;
-  --background-end-rgb: 243, 244, 246;
+  --medical-blue: theme('colors.medical-blue');
+  --ai-purple: theme('colors.ai-purple');
+  --accent-cyan: theme('colors.accent-cyan');
+  --neutral-900: theme('colors.neutral-900');
+  --neutral-50: theme('colors.neutral-50');
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
   background: linear-gradient(
-    to bottom,
-    rgb(var(--background-start-rgb)),
-    rgb(var(--background-end-rgb))
+    135deg,
+    var(--neutral-900) 0%,
+    #1E293B 100%
   );
   min-height: 100vh;
+  color: var(--neutral-50);
 }
 
 @layer components {
   .card {
-    @apply bg-white shadow-lg rounded-xl p-6 border border-gray-100 transition-all duration-200 hover:shadow-xl;
+    @apply backdrop-blur-lg bg-white/10 border border-white/20 
+           shadow-2xl rounded-2xl p-8 
+           hover:bg-white/15 transition-all duration-300;
+  }
+
+  .glass-input {
+    @apply bg-white/5 border border-white/10 rounded-xl p-4
+           text-white placeholder-white/50
+           ring-offset-neutral-900 focus:ring-2 focus:ring-medical-blue focus:border-transparent
+           transition-all duration-200;
+  }
+
+  .primary-button {
+    @apply bg-gradient-to-r from-medical-blue to-ai-purple
+           text-white font-medium px-8 py-3 rounded-xl
+           hover:shadow-lg hover:shadow-medical-blue/50
+           active:scale-95 transition-all duration-200
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .button-secondary {
+    @apply bg-white/10 text-white px-6 py-2 rounded-xl
+           hover:bg-white/20 transition-all duration-200;
+  }
+
+  .medical-icon {
+    @apply text-medical-blue animate-pulse;
+  }
+
+  .ai-glow {
+    @apply relative;
+    &::before {
+      content: '';
+      @apply absolute -inset-1 bg-gradient-to-r from-medical-blue to-ai-purple
+             blur opacity-30 -z-10 transition-all duration-300;
+    }
   }
 
   .case-form {
@@ -37,10 +74,6 @@ body {
 
   .capability-option {
     @apply relative flex items-start p-4 border border-gray-200 rounded-lg hover:border-indigo-500 transition-all duration-200 cursor-pointer;
-  }
-
-  .primary-button {
-    @apply inline-flex items-center px-6 py-3 border border-transparent text-sm font-semibold rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200;
   }
 
   .error-alert {

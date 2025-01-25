@@ -52,77 +52,68 @@ export function CaseForm({ onReviewGenerated }: CaseFormProps) {
   return (
     <motion.form 
       onSubmit={handleSubmit} 
-      className="space-y-6"
+      className="space-y-8"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.3 }}
+      transition={{ duration: 0.5 }}
     >
-      <motion.div 
-        className="space-y-2"
-        initial={{ x: -20 }}
-        animate={{ x: 0 }}
-        transition={{ delay: 0.1 }}
-      >
-        <label
-          htmlFor="case-description"
-          className="block text-sm font-medium text-gray-700"
-        >
-          Case Description
-        </label>
-        <textarea
-          id="case-description"
-          name="case-description"
-          rows={6}
-          className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md transition-all duration-200"
-          value={caseDescription}
-          onChange={(e) => setCaseDescription(e.target.value)}
-          placeholder="Enter your case description here..."
-          disabled={isLoading}
-        />
-      </motion.div>
-
-      <motion.div
-        initial={{ x: -20 }}
-        animate={{ x: 0 }}
-        transition={{ delay: 0.2 }}
-      >
-        <CapabilitySelect
-          selectedCapabilities={selectedCapabilities}
-          onChange={setSelectedCapabilities}
-          disabled={isLoading}
-        />
-      </motion.div>
-
-      {error && (
+      <div className="relative space-y-4">
         <motion.div 
-          role="alert" 
-          aria-live="polite"
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
+          className="space-y-2"
+          initial={{ x: -20 }}
+          animate={{ x: 0 }}
+          transition={{ delay: 0.1 }}
         >
-          <Alert type="error" message={error} />
+          <label className="text-white/80 flex items-center gap-2">
+            <svg className="h-5 w-5 text-medical-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Case Description
+          </label>
+          <textarea
+            className="glass-input w-full h-40"
+            value={caseDescription}
+            onChange={(e) => setCaseDescription(e.target.value)}
+            placeholder="Describe your medical case here..."
+            disabled={isLoading}
+          />
         </motion.div>
-      )}
+
+        <motion.div
+          initial={{ x: -20 }}
+          animate={{ x: 0 }}
+          transition={{ delay: 0.2 }}
+          className="ai-glow"
+        >
+          <CapabilitySelect
+            selectedCapabilities={selectedCapabilities}
+            onChange={setSelectedCapabilities}
+            disabled={isLoading}
+          />
+        </motion.div>
+      </div>
 
       <motion.div 
-        className="flex justify-center"
-        initial={{ x: -20 }}
-        animate={{ x: 0 }}
+        className="flex justify-center pt-6"
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.3 }}
       >
         <button
           type="submit"
           disabled={isLoading}
-          className="primary-button w-full sm:w-auto"
+          className="primary-button group relative"
         >
           {isLoading ? (
-            <span className="flex items-center">
-              <span className="animate-spin mr-2">⌛</span>
-              Generating...
+            <span className="flex items-center gap-1">
+              <span className="animate-pulse text-white">⚡</span>
+              Analysing Case...
             </span>
           ) : (
-            'Generate Case Review'
+            <span className="flex items-center gap-1">
+              <span className="text-white group-hover:rotate-180 transition-transform duration-300">✨</span>
+              Generate Review
+            </span>
           )}
         </button>
       </motion.div>
