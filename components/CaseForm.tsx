@@ -5,7 +5,6 @@ import { useState } from 'react';
 import { api } from '@/lib/api';
 import { CapabilitySelect } from './CapabilitySelect';
 import { CaseReviewResponse } from '@/lib/types';
-import { Alert } from './common/Alert';
 import { motion } from 'framer-motion';
 
 interface CaseFormProps {
@@ -16,11 +15,9 @@ export function CaseForm({ onReviewGenerated }: CaseFormProps) {
   const [caseDescription, setCaseDescription] = useState('');
   const [selectedCapabilities, setSelectedCapabilities] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     setIsLoading(true);
 
     try {
@@ -43,7 +40,7 @@ export function CaseForm({ onReviewGenerated }: CaseFormProps) {
 
       onReviewGenerated(response);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error(err);
     } finally {
       setIsLoading(false);
     }
