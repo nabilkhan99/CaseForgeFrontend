@@ -71,6 +71,13 @@ import { CaseReviewRequest, CaseReviewResponse, ImprovementRequest, Capabilities
 //const API_BASE_URL = 'https://caseforge2025a.azurewebsites.net/api';
 const API_BASE_URL = 'https://caseforge2025a.azurewebsites.net/api';
 
+interface SectionImprovementRequest {
+  section_type: string;
+  section_content: string;
+  improvement_prompt: string;
+  capability_name?: string;
+}
+
 export const api = {
   // async getCapabilities(): Promise<CapabilitiesResponse> {
   //   try {
@@ -158,5 +165,23 @@ export const api = {
     }
 
     return response.json();
+  },
+
+  async improveSection(request: SectionImprovementRequest): Promise<string> {
+    const response = await fetch(`${API_BASE_URL}/improve-section`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to improve section');
+    }
+
+    const data = await response.json();
+    return data.improved_content;
   },
 };

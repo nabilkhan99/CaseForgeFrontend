@@ -62,6 +62,9 @@ export function ReviewDisplay({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
+  const [improvingSectionKey, setImprovingSectionKey] = useState<string | null>(null);
+  const [sectionImprovementPrompt, setSectionImprovementPrompt] = useState('');
+  const [isSectionImproving, setIsSectionImproving] = useState(false);
 
   useEffect(() => {
     console.log('Review prop changed:', review);
@@ -119,6 +122,30 @@ export function ReviewDisplay({
     }
   };
 
+  const handleSectionImprovement = async (sectionKey: string, content: string) => {
+    try {
+      setIsSectionImproving(true);
+      
+      const isCapability = sectionKey.startsWith('capabilities.');
+      const [, capabilityName] = isCapability ? sectionKey.split('.') : [];
+      
+      const improvedContent = await api.improveSection({
+        section_type: isCapability ? 'capability' : sectionKey,
+        section_content: content,
+        improvement_prompt: sectionImprovementPrompt,
+        capability_name: capabilityName
+      });
+
+      handleContentChange(sectionKey, improvedContent);
+      setImprovingSectionKey(null);
+      setSectionImprovementPrompt('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to improve section');
+    } finally {
+      setIsSectionImproving(false);
+    }
+  };
+
   const renderSection = (
     title: string,
     content: string | Record<string, string>,
@@ -129,32 +156,60 @@ export function ReviewDisplay({
         <div className="space-y-4">
           {Object.entries(content).map(([capKey, capContent]) => (
             <div key={capKey} className="space-y-2">
-              <div className="flex justify-between items-center">
-                <h4 className="text-white/80">{capKey}</h4>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => copyToClipboard(capContent, `capabilities.${capKey}`)}
-                  className="button-secondary text-sm px-3 py-1"
-                >
-                  {copiedSection === `capabilities.${capKey}` ? '✓ Copied!' : 'Copy'}
-                </motion.button>
+              <h4 className="text-white/80">{capKey}</h4>
+              <div className="flex flex-col space-y-2">
+                <div className="flex justify-end items-center gap-2">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => {
+                      if (improvingSectionKey === `capabilities.${capKey}`) {
+                        handleSectionImprovement(`capabilities.${capKey}`, capContent);
+                      } else {
+                        setImprovingSectionKey(`capabilities.${capKey}`);
+                      }
+                    }}
+                    className="button-secondary text-sm px-3 py-1 whitespace-nowrap"
+                  >
+                    <span className="flex items-center gap-1">
+                      <span>🪄</span>
+                      {improvingSectionKey === `capabilities.${capKey}` ? 'Apply' : 'Improve'}
+                    </span>
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => copyToClipboard(capContent, `capabilities.${capKey}`)}
+                    className="button-secondary text-sm px-3 py-1"
+                  >
+                    {copiedSection === `capabilities.${capKey}` ? '✓ Copied!' : 'Copy'}
+                  </motion.button>
+                </div>
+                {improvingSectionKey === `capabilities.${capKey}` && (
+                  <textarea
+                    value={sectionImprovementPrompt}
+                    onChange={(e) => setSectionImprovementPrompt(e.target.value)}
+                    placeholder="Enter improvement instructions..."
+                    className="glass-input w-full text-sm py-1"
+                    rows={2}
+                    disabled={isSectionImproving}
+                  />
+                )}
               </div>
               <textarea
                 value={capContent}
                 onChange={(e) => handleContentChange(`capabilities.${capKey}`, e.target.value)}
-                className="glass-input w-full min-h-[100px] overflow-hidden"
-                style={{ height: 'auto' }}
-                onInput={(e) => {
-                  const target = e.target as HTMLTextAreaElement;
-                  target.style.height = 'auto';
-                  target.style.height = `${target.scrollHeight}px`;
-                }}
+                className="glass-input w-full min-h-[100px]"
                 ref={(textarea) => {
                   if (textarea) {
                     textarea.style.height = 'auto';
                     textarea.style.height = `${textarea.scrollHeight}px`;
                   }
+                }}
+                onInput={(e) => {
+                  const target = e.target as HTMLTextAreaElement;
+                  target.style.height = 'auto';
+                  target.style.height = `${target.scrollHeight}px`;
                 }}
               />
             </div>
@@ -166,31 +221,59 @@ export function ReviewDisplay({
     if (typeof content === 'string') {
       return (
         <div className="space-y-2">
-          <div className="flex justify-end">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => copyToClipboard(content, key)}
-              className="button-secondary text-sm px-3 py-1"
-            >
-              {copiedSection === key ? '✓ Copied!' : 'Copy'}
-            </motion.button>
+          <div className="flex flex-col space-y-2">
+            <div className="flex justify-end items-center gap-2">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => {
+                  if (improvingSectionKey === key) {
+                    handleSectionImprovement(key, content);
+                  } else {
+                    setImprovingSectionKey(key);
+                  }
+                }}
+                className="button-secondary text-sm px-3 py-1 whitespace-nowrap"
+              >
+                <span className="flex items-center gap-1">
+                  <span>🪄</span>
+                  {improvingSectionKey === key ? 'Apply' : 'Improve'}
+                </span>
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => copyToClipboard(content, key)}
+                className="button-secondary text-sm px-3 py-1"
+              >
+                {copiedSection === key ? '✓ Copied!' : 'Copy'}
+              </motion.button>
+            </div>
+            {improvingSectionKey === key && (
+              <textarea
+                value={sectionImprovementPrompt}
+                onChange={(e) => setSectionImprovementPrompt(e.target.value)}
+                placeholder="Enter improvement instructions..."
+                className="glass-input w-full text-sm py-1"
+                rows={2}
+                disabled={isSectionImproving}
+              />
+            )}
           </div>
           <textarea
             value={content}
             onChange={(e) => handleContentChange(key, e.target.value)}
-            className="glass-input w-full min-h-[100px] overflow-hidden"
-            style={{ height: 'auto' }}
-            onInput={(e) => {
-              const target = e.target as HTMLTextAreaElement;
-              target.style.height = 'auto';
-              target.style.height = `${target.scrollHeight}px`;
-            }}
+            className="glass-input w-full min-h-[100px]"
             ref={(textarea) => {
               if (textarea) {
                 textarea.style.height = 'auto';
                 textarea.style.height = `${textarea.scrollHeight}px`;
               }
+            }}
+            onInput={(e) => {
+              const target = e.target as HTMLTextAreaElement;
+              target.style.height = 'auto';
+              target.style.height = `${target.scrollHeight}px`;
             }}
           />
         </div>
