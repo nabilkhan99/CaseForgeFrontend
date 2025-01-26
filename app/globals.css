@@ -16,8 +16,10 @@ body {
     var(--neutral-900) 0%,
     #1E293B 100%
   );
-  min-height: 100vh;
+  min-height: 100dvh;
   color: var(--neutral-50);
+  overflow-x: hidden;
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 @layer components {
