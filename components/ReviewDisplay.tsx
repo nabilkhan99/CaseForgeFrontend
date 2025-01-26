@@ -156,9 +156,9 @@ export function ReviewDisplay({
         <div className="space-y-4">
           {Object.entries(content).map(([capKey, capContent]) => (
             <div key={capKey} className="space-y-2">
-              <h4 className="text-white/80">{capKey}</h4>
-              <div className="flex flex-col space-y-2">
-                <div className="flex justify-end items-center gap-2">
+              <div className="flex justify-between items-center">
+                <h4 className="text-white/80">{capKey}</h4>
+                <div className="flex items-center gap-2">
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
@@ -185,17 +185,17 @@ export function ReviewDisplay({
                     {copiedSection === `capabilities.${capKey}` ? '✓ Copied!' : 'Copy'}
                   </motion.button>
                 </div>
-                {improvingSectionKey === `capabilities.${capKey}` && (
-                  <textarea
-                    value={sectionImprovementPrompt}
-                    onChange={(e) => setSectionImprovementPrompt(e.target.value)}
-                    placeholder="Enter improvement instructions..."
-                    className="glass-input w-full text-sm py-1"
-                    rows={2}
-                    disabled={isSectionImproving}
-                  />
-                )}
               </div>
+              {improvingSectionKey === `capabilities.${capKey}` && (
+                <textarea
+                  value={sectionImprovementPrompt}
+                  onChange={(e) => setSectionImprovementPrompt(e.target.value)}
+                  placeholder="Enter improvement instructions..."
+                  className="glass-input w-full text-sm py-1"
+                  rows={2}
+                  disabled={isSectionImproving}
+                />
+              )}
               <textarea
                 value={capContent}
                 onChange={(e) => handleContentChange(`capabilities.${capKey}`, e.target.value)}
