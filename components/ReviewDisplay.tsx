@@ -24,16 +24,7 @@ const getIcon = (sectionKey: string) => {
     case 'capabilities':
       return '🎯';
     case 'learning_needs':
-      return (
-        <svg className="h-5 w-5 text-medical-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path 
-            strokeLinecap="round" 
-            strokeLinejoin="round" 
-            strokeWidth={2} 
-            d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-          />
-        </svg>
-      );
+      return '📒';
     case 'reflection':
       return (
         <svg className="h-5 w-5 text-medical-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -156,35 +147,33 @@ export function ReviewDisplay({
         <div className="space-y-4">
           {Object.entries(content).map(([capKey, capContent]) => (
             <div key={capKey} className="space-y-2">
-              <div className="flex justify-between items-center">
-                <h4 className="text-white/80">{capKey}</h4>
-                <div className="flex items-center gap-2">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => {
-                      if (improvingSectionKey === `capabilities.${capKey}`) {
-                        handleSectionImprovement(`capabilities.${capKey}`, capContent);
-                      } else {
-                        setImprovingSectionKey(`capabilities.${capKey}`);
-                      }
-                    }}
-                    className="button-secondary text-sm px-3 py-1 whitespace-nowrap"
-                  >
-                    <span className="flex items-center gap-1">
-                      <span>🪄</span>
-                      {improvingSectionKey === `capabilities.${capKey}` ? 'Apply' : 'Improve'}
-                    </span>
-                  </motion.button>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => copyToClipboard(capContent, `capabilities.${capKey}`)}
-                    className="button-secondary text-sm px-3 py-1"
-                  >
-                    {copiedSection === `capabilities.${capKey}` ? '✓ Copied!' : 'Copy'}
-                  </motion.button>
-                </div>
+              <h4 className="text-white/80">{capKey}</h4>
+              <div className="flex items-center gap-2">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => {
+                    if (improvingSectionKey === `capabilities.${capKey}`) {
+                      handleSectionImprovement(`capabilities.${capKey}`, capContent);
+                    } else {
+                      setImprovingSectionKey(`capabilities.${capKey}`);
+                    }
+                  }}
+                  className="button-secondary text-sm px-3 py-1 whitespace-nowrap"
+                >
+                  <span className="flex items-center gap-1">
+                    <span>🪄</span>
+                    {improvingSectionKey === `capabilities.${capKey}` ? 'Apply' : 'Improve'}
+                  </span>
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => copyToClipboard(capContent, `capabilities.${capKey}`)}
+                  className="button-secondary text-sm px-3 py-1"
+                >
+                  {copiedSection === `capabilities.${capKey}` ? '✓ Copied!' : 'Copy'}
+                </motion.button>
               </div>
               {improvingSectionKey === `capabilities.${capKey}` && (
                 <textarea
