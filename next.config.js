@@ -1,6 +1,16 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+    ],
+    unoptimized: true,
+    domains: ['case-forge-frontend-n5fd.vercel.app'],
+  },
   async rewrites() {
     return [
       {
