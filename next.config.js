@@ -9,7 +9,7 @@ const nextConfig = {
       },
     ],
     unoptimized: true,
-    domains: ['case-forge-frontend-n5fd.vercel.app'],
+    domains: ['case-forge-frontend-n5fd.vercel.app','www.fourteenfisherman.com'],
   },
   async rewrites() {
     return [
