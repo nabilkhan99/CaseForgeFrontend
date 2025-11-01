@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { CapabilitySelect } from './CapabilitySelect';
 import { CaseReviewResponse } from '@/lib/types';
 import { motion } from 'framer-motion';
+import { analytics } from '@/lib/analytics';
 
 interface CaseFormProps {
   onReviewGenerated: (review: CaseReviewResponse) => void;
@@ -33,14 +34,21 @@ export function CaseForm({ onReviewGenerated }: CaseFormProps) {
         throw new Error('Please enter a longer case description');
       }
 
+      // Track case submission
+      analytics.trackCaseSubmitted(caseDescription, selectedCapabilities);
+
       const response = await api.generateReview({
         case_description: caseDescription,
         selected_capabilities: selectedCapabilities,
       });
 
+      // Track successful generation
+      analytics.trackReviewGenerated(response.case_title, selectedCapabilities);
+
       onReviewGenerated(response);
     } catch (err) {
       console.error(err);
+      analytics.trackError('generation_failed', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setIsLoading(false);
     }

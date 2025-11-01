@@ -8,6 +8,7 @@ import { Alert } from './common/Alert';
 //import { CopyButton } from './common/CopyButton';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CollapsibleSection } from './CollapsibleSection';
+import { analytics } from '@/lib/analytics';
 
 interface ReviewDisplayProps {
   review: CaseReviewResponse;
@@ -106,10 +107,12 @@ export function ReviewDisplay({
   const copyToClipboard = async (content: string, section: string) => {
     try {
       await navigator.clipboard.writeText(content);
+      analytics.trackCopyAction(section, content.length);
       setCopiedSection(section);
       setTimeout(() => setCopiedSection(null), 2000);
     } catch (err) {
       console.error('Failed to copy:', err);
+      analytics.trackError('copy_failed', err instanceof Error ? err.message : 'Unknown error', { section });
     }
   };
 
@@ -119,6 +122,9 @@ export function ReviewDisplay({
       
       const isCapability = sectionKey.startsWith('capabilities.');
       const [, capabilityName] = isCapability ? sectionKey.split('.') : [];
+      
+      // Track section improvement request
+      analytics.trackImprovementRequested(sectionKey, sectionImprovementPrompt, false);
       
       const improvedContent = await api.improveSection({
         section_type: isCapability ? 'capability' : sectionKey,
@@ -131,6 +137,7 @@ export function ReviewDisplay({
       setImprovingSectionKey(null);
       setSectionImprovementPrompt('');
     } catch (err) {
+      analytics.trackError('section_improvement_failed', err instanceof Error ? err.message : 'Unknown error', { section: sectionKey });
       setError(err instanceof Error ? err.message : 'Failed to improve section');
     } finally {
       setIsSectionImproving(false);
@@ -283,6 +290,9 @@ export function ReviewDisplay({
         throw new Error('Please enter improvement instructions');
       }
 
+      // Track full review improvement request
+      analytics.trackImprovementRequested('full_review', improvementPrompt, true);
+
       const improved = await api.improveReview({
         original_case: editableContent.review_content,
         improvement_prompt: improvementPrompt,
@@ -293,6 +303,7 @@ export function ReviewDisplay({
       setImprovementPrompt('');
       setIsImproveMode(false);
     } catch (err) {
+      analytics.trackError('review_improvement_failed', err instanceof Error ? err.message : 'Unknown error');
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setIsLoading(false);
