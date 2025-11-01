@@ -5,6 +5,7 @@ import { CaseForm } from '@/components/CaseForm';
 import { ReviewDisplay } from '@/components/ReviewDisplay';
 import type { CaseReviewResponse } from '@/lib/types';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import { analytics } from '@/lib/analytics';
 
 export default function Home() {
   const [review, setReview] = useState<CaseReviewResponse | null>(null);
@@ -29,6 +30,7 @@ export default function Home() {
   };
 
   const handleNewCase = () => {
+    analytics.trackNewCaseStarted();
     setReview(null);
     setIsImproveMode(false);
     localStorage.removeItem('savedReview');
