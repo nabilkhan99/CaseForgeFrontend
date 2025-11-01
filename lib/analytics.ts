@@ -24,7 +24,7 @@ export const initAnalytics = () => {
   }
 };
 
-export const trackEvent = (eventName: string, properties?: Record<string, any>) => {
+export const trackEvent = (eventName: string, properties?: Record<string, string | number | boolean | string[]>) => {
   if (typeof window === 'undefined') return;
   
   try {
@@ -82,7 +82,7 @@ export const analytics = {
     trackEvent('new_case_started');
   },
   
-  trackError: (errorType: string, errorMessage: string, context?: Record<string, any>) => {
+  trackError: (errorType: string, errorMessage: string, context?: Record<string, string | number | boolean>) => {
     trackEvent('error_occurred', {
       error_type: errorType,
       error_message: errorMessage,
