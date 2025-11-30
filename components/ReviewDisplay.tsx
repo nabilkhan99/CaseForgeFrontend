@@ -51,7 +51,6 @@ export function ReviewDisplay({
   const [improvingSectionKey, setImprovingSectionKey] = useState<string | null>(null);
   const [sectionImprovementPrompt, setSectionImprovementPrompt] = useState('');
   const [isSectionImproving, setIsSectionImproving] = useState(false);
-  const [_error, setError] = useState<string | null>(null);
   const [titleCopied, setTitleCopied] = useState(false);
 
   useEffect(() => {
@@ -148,7 +147,7 @@ export function ReviewDisplay({
       setSectionImprovementPrompt('');
     } catch (err) {
       analytics.trackError('section_improvement_failed', err instanceof Error ? err.message : 'Unknown error', { section: sectionKey });
-      setError(err instanceof Error ? err.message : 'Failed to improve section');
+      console.error('Failed to improve section:', err);
     } finally {
       setIsSectionImproving(false);
     }
