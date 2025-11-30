@@ -6,34 +6,42 @@ import { ReviewDisplay } from '@/components/ReviewDisplay';
 import type { CaseReviewResponse } from '@/lib/types';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { analytics } from '@/lib/analytics';
+import { FeedbackWidget } from '@/components/FeedbackWidget';
 
 export default function Home() {
   const [review, setReview] = useState<CaseReviewResponse | null>(null);
-  const [isImproveMode, setIsImproveMode] = useState(false);
+  const [experienceGroups, setExperienceGroups] = useState<string[]>([]);
 
   // Load state from localStorage on initial render
   useEffect(() => {
     const savedReview = localStorage.getItem('savedReview');
+    const savedExperienceGroups = localStorage.getItem('savedExperienceGroups');
     if (savedReview) {
       setReview(JSON.parse(savedReview));
     }
+    if (savedExperienceGroups) {
+      setExperienceGroups(JSON.parse(savedExperienceGroups));
+    }
   }, []);
 
-  const handleReviewGenerated = (newReview: CaseReviewResponse) => {
+  const handleReviewGenerated = (newReview: CaseReviewResponse, newExperienceGroups: string[]) => {
     setReview(newReview);
+    setExperienceGroups(newExperienceGroups);
     localStorage.setItem('savedReview', JSON.stringify(newReview));
+    localStorage.setItem('savedExperienceGroups', JSON.stringify(newExperienceGroups));
   };
 
-  const handleImprove = (improved: CaseReviewResponse) => {
-    setReview(improved);
-    localStorage.setItem('savedReview', JSON.stringify(improved));
+  const handleReviewUpdate = (updatedReview: CaseReviewResponse) => {
+    setReview(updatedReview);
+    localStorage.setItem('savedReview', JSON.stringify(updatedReview));
   };
 
   const handleNewCase = () => {
     analytics.trackNewCaseStarted();
     setReview(null);
-    setIsImproveMode(false);
+    setExperienceGroups([]);
     localStorage.removeItem('savedReview');
+    localStorage.removeItem('savedExperienceGroups');
   };
 
   return (
@@ -45,14 +53,14 @@ export default function Home() {
           ) : (
             <ReviewDisplay
               review={review}
-              isImproveMode={isImproveMode}
-              onImprove={handleImprove}
+              experienceGroups={experienceGroups}
               onNewCase={handleNewCase}
-              setIsImproveMode={setIsImproveMode}
+              onUpdate={handleReviewUpdate}
             />
           )}
         </section>
       </div>
+      <FeedbackWidget />
     </ErrorBoundary>
   );
 }
