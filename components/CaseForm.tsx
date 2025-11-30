@@ -7,45 +7,64 @@ import { CapabilitySelect } from './CapabilitySelect';
 import { CaseReviewResponse } from '@/lib/types';
 import { motion } from 'framer-motion';
 import { analytics } from '@/lib/analytics';
+import { LoadingOverlay } from './common/LoadingOverlay';
 
 interface CaseFormProps {
-  onReviewGenerated: (review: CaseReviewResponse) => void;
+  onReviewGenerated: (review: CaseReviewResponse, experienceGroups: string[]) => void;
 }
 
 export function CaseForm({ onReviewGenerated }: CaseFormProps) {
   const [caseDescription, setCaseDescription] = useState('');
   const [selectedCapabilities, setSelectedCapabilities] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [aiSelectEnabled, setAiSelectEnabled] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
-      if (selectedCapabilities.length === 0) {
-        throw new Error('Please select at least one capability');
-      }
-
-      if (selectedCapabilities.length > 3) {
-        throw new Error('Please select no more than three capabilities');
-      }
-
       if (caseDescription.trim().length < 10) {
         throw new Error('Please enter a longer case description');
       }
 
-      // Track case submission
-      analytics.trackCaseSubmitted(caseDescription, selectedCapabilities);
+      let capabilitiesToUse = selectedCapabilities;
 
-      const response = await api.generateReview({
-        case_description: caseDescription,
-        selected_capabilities: selectedCapabilities,
-      });
+      // If AI selection is enabled, get AI-selected capabilities
+      if (aiSelectEnabled) {
+        const aiResponse = await api.selectCapabilities({
+          case_description: caseDescription,
+        });
+        capabilitiesToUse = aiResponse.selected_capabilities;
+      } else {
+        // Manual selection validation
+        if (selectedCapabilities.length === 0) {
+          throw new Error('Please select at least one capability or enable AI selection');
+        }
+
+        if (selectedCapabilities.length > 3) {
+          throw new Error('Please select no more than three capabilities');
+        }
+      }
+
+      // Track case submission
+      analytics.trackCaseSubmitted(caseDescription, capabilitiesToUse);
+
+      // Call both APIs in parallel for better performance
+      const [response, experienceGroupsResponse] = await Promise.all([
+        api.generateReview({
+          case_description: caseDescription,
+          selected_capabilities: capabilitiesToUse,
+        }),
+        api.selectExperienceGroups({
+          case_description: caseDescription,
+        }),
+      ]);
 
       // Track successful generation
-      analytics.trackReviewGenerated(response.case_title, selectedCapabilities);
+      analytics.trackReviewGenerated(response.case_title, capabilitiesToUse);
 
-      onReviewGenerated(response);
+      onReviewGenerated(response, experienceGroupsResponse.experience_groups);
     } catch (err) {
       console.error(err);
       analytics.trackError('generation_failed', err instanceof Error ? err.message : 'Unknown error');
@@ -55,8 +74,19 @@ export function CaseForm({ onReviewGenerated }: CaseFormProps) {
   };
 
   return (
-    <motion.form 
-      onSubmit={handleSubmit} 
+    <>
+      <LoadingOverlay 
+        isVisible={isLoading} 
+        messages={[
+          "Calibrating humility levels...",
+          "Making sure your ES approves...",
+          "Analysing case details...",
+          "Identifying clinical capabilities...",
+          "Consulting RCGP guidelines..."
+        ]}
+      />
+      <motion.form 
+        onSubmit={handleSubmit} 
       className="space-y-8"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -94,6 +124,8 @@ export function CaseForm({ onReviewGenerated }: CaseFormProps) {
             selectedCapabilities={selectedCapabilities}
             onChange={setSelectedCapabilities}
             disabled={isLoading}
+            aiSelectEnabled={aiSelectEnabled}
+            onAISelectToggle={setAiSelectEnabled}
           />
         </motion.div>
       </div>
@@ -109,19 +141,13 @@ export function CaseForm({ onReviewGenerated }: CaseFormProps) {
           disabled={isLoading}
           className="primary-button group relative"
         >
-          {isLoading ? (
-            <span className="flex items-center gap-1">
-              <span className="animate-pulse text-white">⚡</span>
-              Analysing Case...
-            </span>
-          ) : (
-            <span className="flex items-center gap-1">
-              <span className="text-white group-hover:rotate-180 transition-transform duration-300">✨</span>
-              Generate Review
-            </span>
-          )}
+          <span className="flex items-center gap-1">
+            <span className="text-white group-hover:rotate-180 transition-transform duration-300">✨</span>
+            Generate Review
+          </span>
         </button>
       </motion.div>
     </motion.form>
+    </>
   );
 }

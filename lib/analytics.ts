@@ -16,11 +16,15 @@ export const initAnalytics = () => {
         capture_pageview: true,
         capture_pageleave: true,
         autocapture: false, // Track events manually for better control
+        debug: true, // Enable debug mode to see logs in console
       });
       isInitialized = true;
+      console.log('PostHog initialized successfully');
     } catch (error) {
       console.error('Failed to initialize PostHog:', error);
     }
+  } else {
+    console.warn('PostHog key not found');
   }
 };
 
@@ -38,6 +42,9 @@ export const trackEvent = (eventName: string, properties?: Record<string, string
     
     if (isInitialized) {
       posthog.capture(eventName, eventData);
+      console.log(`[PostHog] Tracked event: ${eventName}`, eventData);
+    } else {
+      console.warn(`[PostHog] Skipped event ${eventName} (not initialized)`);
     }
   } catch (error) {
     console.error('Failed to track event:', error);
@@ -87,6 +94,13 @@ export const analytics = {
       error_type: errorType,
       error_message: errorMessage,
       ...context,
+    });
+  },
+
+  trackFeedback: (comment: string, email?: string) => {
+    trackEvent('feedback_submitted', {
+      comment,
+      email: email || 'anonymous',
     });
   },
 };

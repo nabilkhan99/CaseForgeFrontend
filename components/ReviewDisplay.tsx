@@ -4,18 +4,16 @@
 import { useState, useEffect } from 'react';
 import { CaseReviewResponse } from '@/lib/types';
 import { api } from '@/lib/api';
-import { Alert } from './common/Alert';
-//import { CopyButton } from './common/CopyButton';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { CollapsibleSection } from './CollapsibleSection';
 import { analytics } from '@/lib/analytics';
+import { LoadingOverlay } from './common/LoadingOverlay';
 
 interface ReviewDisplayProps {
   review: CaseReviewResponse;
-  isImproveMode: boolean;
-  onImprove: (improved: CaseReviewResponse) => void;
+  experienceGroups: string[];
   onNewCase: () => void;
-  setIsImproveMode: (value: boolean) => void;
+  onUpdate: (review: CaseReviewResponse) => void;
 }
 
 const getIcon = (sectionKey: string) => {
@@ -44,19 +42,16 @@ const getIcon = (sectionKey: string) => {
 
 export function ReviewDisplay({
   review,
-  isImproveMode,
-  onImprove,
+  experienceGroups,
   onNewCase,
-  setIsImproveMode,
+  onUpdate,
 }: ReviewDisplayProps) {
   const [editableContent, setEditableContent] = useState(review);
-  const [improvementPrompt, setImprovementPrompt] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
   const [improvingSectionKey, setImprovingSectionKey] = useState<string | null>(null);
   const [sectionImprovementPrompt, setSectionImprovementPrompt] = useState('');
   const [isSectionImproving, setIsSectionImproving] = useState(false);
+  const [titleCopied, setTitleCopied] = useState(false);
 
   useEffect(() => {
     console.log('Review prop changed:', review);
@@ -79,29 +74,43 @@ export function ReviewDisplay({
     return () => clearTimeout(timeoutId);
   }, [editableContent]);
 
+  const handleCopyTitle = async () => {
+    try {
+      await navigator.clipboard.writeText(editableContent.case_title);
+      setTitleCopied(true);
+      setTimeout(() => setTitleCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy title:', err);
+    }
+  };
+
   const handleContentChange = (section: string, content: string) => {
-    setEditableContent(prev => {
-      if (section.startsWith('capabilities.')) {
-        const [, capabilityKey] = section.split('.');
-        return {
-          ...prev,
-          sections: {
-            ...prev.sections,
-            capabilities: {
-              ...prev.sections.capabilities,
-              [capabilityKey]: content
-            }
-          }
-        };
-      }
-      return {
-        ...prev,
+    let updatedReview: CaseReviewResponse;
+    
+    if (section.startsWith('capabilities.')) {
+      const [, capabilityKey] = section.split('.');
+      updatedReview = {
+        ...editableContent,
         sections: {
-          ...prev.sections,
+          ...editableContent.sections,
+          capabilities: {
+            ...editableContent.sections.capabilities,
+            [capabilityKey]: content
+          }
+        }
+      };
+    } else {
+      updatedReview = {
+        ...editableContent,
+        sections: {
+          ...editableContent.sections,
           [section]: content
         }
       };
-    });
+    }
+
+    setEditableContent(updatedReview);
+    onUpdate(updatedReview);
   };
 
   const copyToClipboard = async (content: string, section: string) => {
@@ -138,7 +147,7 @@ export function ReviewDisplay({
       setSectionImprovementPrompt('');
     } catch (err) {
       analytics.trackError('section_improvement_failed', err instanceof Error ? err.message : 'Unknown error', { section: sectionKey });
-      setError(err instanceof Error ? err.message : 'Failed to improve section');
+      console.error('Failed to improve section:', err);
     } finally {
       setIsSectionImproving(false);
     }
@@ -281,123 +290,79 @@ export function ReviewDisplay({
     return null;
   };
 
-  const handleImprove = async () => {
-    setError(null);
-    setIsLoading(true);
-
-    try {
-      if (!improvementPrompt.trim()) {
-        throw new Error('Please enter improvement instructions');
-      }
-
-      // Track full review improvement request
-      analytics.trackImprovementRequested('full_review', improvementPrompt, true);
-
-      const improved = await api.improveReview({
-        original_case: editableContent.review_content,
-        improvement_prompt: improvementPrompt,
-        selected_capabilities: Object.keys(editableContent.sections.capabilities),
-      });
-
-      onImprove(improved);
-      setImprovementPrompt('');
-      setIsImproveMode(false);
-    } catch (err) {
-      analytics.trackError('review_improvement_failed', err instanceof Error ? err.message : 'Unknown error');
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   return (
-    <motion.article 
-      className="space-y-6"
+    <>
+      <LoadingOverlay 
+        isVisible={isSectionImproving} 
+        messages={[
+          "Analysing section content...",
+          "Understanding improvement request...",
+          "Consulting medical guidelines...",
+          "Applying specific improvements...",
+          "Polishing the text...",
+          "Finalising updates..."
+        ]}
+      />
+      <motion.article 
+        className="space-y-6"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
     >
       <motion.header 
-        className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4"
+        className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4"
         initial={{ y: -20 }}
         animate={{ y: 0 }}
         transition={{ delay: 0.1 }}
       >
-        <h1 className="text-xl sm:text-2xl font-bold text-white break-words">{editableContent.case_title}</h1>
-        <div className="flex gap-2 sm:gap-4">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setIsImproveMode(!isImproveMode)}
-            className="button-secondary text-sm sm:text-base flex-1 sm:flex-none px-3 sm:px-4 py-2"
+        <div className="flex items-start gap-3 flex-1 min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-white break-words">{editableContent.case_title}</h1>
+          <button
+            onClick={handleCopyTitle}
+            className="p-2 text-white/50 hover:text-white hover:bg-white/10 rounded-lg transition-all flex-shrink-0 mt-0.5"
+            title="Copy title"
           >
-            <span className="flex items-center justify-center gap-2">
-              {isImproveMode ? '✕ Cancel' : '✨ Improve'}
-            </span>
-          </motion.button>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={onNewCase}
-            className="primary-button text-sm sm:text-base flex-1 sm:flex-none px-3 sm:px-4 py-2"
-          >
-            <span className="flex items-center justify-center gap-2">
-              <span>🔄</span>
-              New Case
-            </span>
-          </motion.button>
+            {titleCopied ? (
+              <span className="text-green-400 text-sm font-medium">Copied!</span>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            )}
+          </button>
         </div>
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={onNewCase}
+          className="primary-button text-sm sm:text-base px-3 sm:px-4 py-2 flex-shrink-0"
+        >
+          <span className="flex items-center justify-center gap-2">
+            <span>🔄</span>
+            New Case
+          </span>
+        </motion.button>
       </motion.header>
 
-      <AnimatePresence>
-        {isImproveMode && (
-          <motion.section
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.3 }}
-            className="space-y-4 p-4 sm:p-6 bg-white/5 rounded-xl border border-white/10"
-          >
-            <div className="space-y-2">
-              <label htmlFor="improvement-prompt" className="text-white/80 flex items-center gap-2">
-                <span>✨</span>
-                Improvement Instructions
-              </label>
-              <textarea
-                id="improvement-prompt"
-                value={improvementPrompt}
-                onChange={(e) => setImprovementPrompt(e.target.value)}
-                placeholder="Enter your improvement instructions..."
-                className="glass-input w-full"
-                rows={3}
-                disabled={isLoading}
-              />
-            </div>
-            {error && <Alert type="error" message={error} />}
-            <div className="flex justify-center pt-6">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={handleImprove}
-                disabled={isLoading}
-                className="primary-button"
-              >
-                {isLoading ? (
-                  <span className="flex items-center gap-1">
-                    <span className="animate-pulse text-white">🪄</span>
-                    Improving...
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1">
-                    <span className="text-white">✨</span>
-                    Apply Improvements
-                  </span>
-                )}
-              </motion.button>
-            </div>
-          </motion.section>
-        )}
-      </AnimatePresence>
+      {/* Clinical Experience Groups */}
+      {experienceGroups && experienceGroups.length > 0 && (
+        <motion.div
+          className="flex flex-wrap gap-2"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+        >
+          <span className="text-white/60 text-sm self-center mr-1">Clinical Experience Groups:</span>
+          {experienceGroups.map((group, index) => (
+            <span
+              key={index}
+              className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-teal-500/20 text-teal-300 border border-teal-500/30"
+            >
+              🏥 {group}
+            </span>
+          ))}
+        </motion.div>
+      )}
 
       <motion.div 
         className="space-y-4"
@@ -405,21 +370,28 @@ export function ReviewDisplay({
         animate={{ y: 0 }}
         transition={{ delay: 0.2 }}
       >
-        {Object.entries(editableContent.sections).map(([key, content]) => (
-          <CollapsibleSection
-            key={key}
-            title={key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')}
-            icon={getIcon(key)}
-            defaultOpen={key === 'brief_description'}
-          >
-            {renderSection(
-              key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' '),
-              content,
-              key
-            )}
-          </CollapsibleSection>
-        ))}
+        {/* Define the desired order: brief_description, capabilities, reflection, learning_needs */}
+        {['brief_description', 'capabilities', 'reflection', 'learning_needs']
+          .filter(key => editableContent.sections[key as keyof typeof editableContent.sections])
+          .map((key) => {
+            const content = editableContent.sections[key as keyof typeof editableContent.sections];
+            return (
+              <CollapsibleSection
+                key={key}
+                title={key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')}
+                icon={getIcon(key)}
+                defaultOpen={key === 'brief_description'}
+              >
+                {renderSection(
+                  key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' '),
+                  content,
+                  key
+                )}
+              </CollapsibleSection>
+            );
+          })}
       </motion.div>
     </motion.article>
+    </>
   );
 }

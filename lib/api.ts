@@ -66,9 +66,9 @@
 // };
 
 
-import { CaseReviewRequest, CaseReviewResponse, ImprovementRequest, CapabilitiesResponse } from './types';
+import { CaseReviewRequest, CaseReviewResponse, ImprovementRequest, CapabilitiesResponse, CapabilitySelectionRequest, CapabilitySelectionResponse, ExperienceGroupRequest, ExperienceGroupResponse } from './types';
 
-//const API_BASE_URL = 'https://caseforge2025a.azurewebsites.net/api';
+//const API_BASE_URL = 'http://localhost:7071/api';
 const API_BASE_URL = 'https://caseforge2025a.azurewebsites.net/api';
 
 interface SectionImprovementRequest {
@@ -183,5 +183,39 @@ export const api = {
 
     const data = await response.json();
     return data.improved_content;
+  },
+
+  async selectCapabilities(request: CapabilitySelectionRequest): Promise<CapabilitySelectionResponse> {
+    const response = await fetch(`${API_BASE_URL}/select-capabilities`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to select capabilities');
+    }
+
+    return response.json();
+  },
+
+  async selectExperienceGroups(request: ExperienceGroupRequest): Promise<ExperienceGroupResponse> {
+    const response = await fetch(`${API_BASE_URL}/select-experience-groups`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to select experience groups');
+    }
+
+    return response.json();
   },
 };

@@ -8,12 +8,16 @@ interface CapabilitySelectProps {
   selectedCapabilities: string[];
   onChange: (capabilities: string[]) => void;
   disabled?: boolean;
+  onAISelectToggle?: (enabled: boolean) => void;
+  aiSelectEnabled?: boolean;
 }
 
 export function CapabilitySelect({
   selectedCapabilities,
   onChange,
   disabled = false,
+  onAISelectToggle,
+  aiSelectEnabled = false,
 }: CapabilitySelectProps) {
   const [capabilities, setCapabilities] = useState<Record<string, string[]>>({});
   const [error, setError] = useState<string | null>(null);
@@ -36,10 +40,31 @@ export function CapabilitySelect({
     fetchCapabilities();
   }, []);
 
+  const handleAISelect = (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    
+    if (onAISelectToggle) {
+      onAISelectToggle(!aiSelectEnabled);
+    }
+    
+    // Clear manual selections when AI is enabled
+    if (!aiSelectEnabled) {
+      onChange([]);
+    }
+    
+    setIsOpen(false);
+  };
+
   const handleSelect = (capability: string, e?: React.MouseEvent) => {
     // Prevent event bubbling
     e?.preventDefault();
     e?.stopPropagation();
+    
+    // Disable AI select when manual selection is made
+    if (aiSelectEnabled && onAISelectToggle) {
+      onAISelectToggle(false);
+    }
     
     const updated = selectedCapabilities.includes(capability)
       ? selectedCapabilities.filter((c) => c !== capability)
@@ -57,11 +82,13 @@ export function CapabilitySelect({
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          disabled={disabled || selectedCapabilities.length >= 3}
+          disabled={disabled || (!aiSelectEnabled && selectedCapabilities.length >= 3)}
           className="w-full flex justify-between items-center px-4 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm hover:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
         >
-          <span className="text-gray-700">
-            {selectedCapabilities.length === 0
+          <span className={aiSelectEnabled ? "text-indigo-600 font-medium" : "text-gray-700"}>
+            {aiSelectEnabled
+              ? '✨ AI will choose capabilities'
+              : selectedCapabilities.length === 0
               ? 'Choose capabilities...'
               : `${selectedCapabilities.length} selected`}
           </span>
@@ -80,15 +107,24 @@ export function CapabilitySelect({
         {isOpen && (
           <div className="absolute z-10 w-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 animate-slideDown">
             <div className="max-h-60 overflow-auto py-1">
+              <button
+                type="button"
+                onClick={(e) => handleAISelect(e)}
+                className={`w-full text-left px-4 py-2 hover:bg-indigo-50 transition-colors duration-150 border-b border-gray-200
+                  ${aiSelectEnabled ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-gray-700'}
+                `}
+              >
+                ✨ Let AI Choose
+              </button>
               {Object.keys(capabilities).map((cap) => (
                 <button
                   key={cap}
                   type="button"
                   onClick={(e) => handleSelect(cap, e)}
-                  disabled={selectedCapabilities.length >= 3 && !selectedCapabilities.includes(cap)}
+                  disabled={aiSelectEnabled || (selectedCapabilities.length >= 3 && !selectedCapabilities.includes(cap))}
                   className={`w-full text-left px-4 py-2 hover:bg-indigo-50 transition-colors duration-150
                     ${selectedCapabilities.includes(cap) ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700'}
-                    ${selectedCapabilities.length >= 3 && !selectedCapabilities.includes(cap) ? 'opacity-50 cursor-not-allowed' : ''}
+                    ${(aiSelectEnabled || (selectedCapabilities.length >= 3 && !selectedCapabilities.includes(cap))) ? 'opacity-50 cursor-not-allowed' : ''}
                   `}
                 >
                   {cap}

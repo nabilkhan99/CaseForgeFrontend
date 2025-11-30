@@ -26,3 +26,19 @@ export interface ImprovementRequest {
   improvement_prompt: string;
   selected_capabilities: string[];
 }
+
+export interface CapabilitySelectionRequest {
+  case_description: string;
+}
+
+export interface CapabilitySelectionResponse {
+  selected_capabilities: string[];
+}
+
+export interface ExperienceGroupRequest {
+  case_description: string;
+}
+
+export interface ExperienceGroupResponse {
+  experience_groups: string[];
+}
