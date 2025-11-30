@@ -51,7 +51,7 @@ export function ReviewDisplay({
   const [improvingSectionKey, setImprovingSectionKey] = useState<string | null>(null);
   const [sectionImprovementPrompt, setSectionImprovementPrompt] = useState('');
   const [isSectionImproving, setIsSectionImproving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [_error, setError] = useState<string | null>(null);
   const [titleCopied, setTitleCopied] = useState(false);
 
   useEffect(() => {
