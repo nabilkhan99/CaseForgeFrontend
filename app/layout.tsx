@@ -7,7 +7,6 @@ import { useEffect } from 'react'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import { initAnalytics } from '@/lib/analytics'
-import Head from 'next/head'
 
 const inter = Inter({ subsets: ['latin'] })
 
