@@ -68,8 +68,8 @@
 
 import { CaseReviewRequest, CaseReviewResponse, ImprovementRequest, CapabilitiesResponse, CapabilitySelectionRequest, CapabilitySelectionResponse, ExperienceGroupRequest, ExperienceGroupResponse } from './types';
 
-//const API_BASE_URL = 'http://localhost:7071/api';
-const API_BASE_URL = 'https://caseforge2025a.azurewebsites.net/api';
+const API_BASE_URL = 'http://localhost:7071/api';
+//const API_BASE_URL = 'https://caseforge2025a.azurewebsites.net/api';
 
 interface SectionImprovementRequest {
   section_type: string;
