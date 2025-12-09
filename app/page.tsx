@@ -60,7 +60,7 @@ export default function Home() {
           )}
         </section>
       </div>
-      <FeedbackWidget />
+      {review && <FeedbackWidget />}
     </ErrorBoundary>
   );
 }
