@@ -23,6 +23,10 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <title>Fourteen Fisherman - AI-Powered Case Review & Portfolio Builder</title>
+        <link
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+          rel="stylesheet"
+        />
         <meta name="description" content="Transform your GP Trainee experience into compelling case studies. Fourteen Fisherman uses AI to help you craft professional portfolio reviews that showcase your expertise and capabilities." />
         <meta name="keywords" content="GP Trainee portfolio, case studies, AI case review, GP Trainee experience, portfolio builder, professional services" />
         
