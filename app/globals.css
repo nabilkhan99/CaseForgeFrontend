@@ -103,14 +103,6 @@ body {
     @apply rounded-lg bg-red-50 p-4 mt-4 border border-red-200 text-red-700;
   }
 
-  /* Dashboard Styles */
-  .glass-card {
-    @apply bg-[#151a2e]/60 backdrop-blur-xl border border-white/10 shadow-glass-sm;
-  }
-
-  .glass-card-hover {
-    @apply hover:border-white/20 transition-all duration-300 hover:shadow-lift;
-  }
 }
 
 @layer utilities {
@@ -129,6 +121,21 @@ body {
   .button-press {
     @apply active:scale-95 transition-transform duration-150;
   }
+}
+
+/* Dashboard Styles - using CSS values instead of @apply for custom shadows */
+.glass-card {
+  background: rgba(21, 26, 46, 0.6);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 15px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+}
+
+.glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+  transition: all 300ms;
 }
 
 .progress-glow-emerald {
