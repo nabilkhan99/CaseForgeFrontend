@@ -18,6 +18,10 @@ module.exports = {
         "accent-cyan": "#22d3ee",
         "neutral-900": "#0f172a",
         "neutral-50": "#f8fafc",
+        // Dashboard-specific colors
+        "dashboard-dark": "#070A13",
+        "card-glass": "rgba(21, 26, 46, 0.6)",
+        "sidebar-dark": "#0B0F1A",
       },
       typography: {
         DEFAULT: {
@@ -28,6 +32,9 @@ module.exports = {
       },
       backgroundImage: {
         'grid-pattern': "linear-gradient(to right, #1e293b 1px, transparent 1px), linear-gradient(to bottom, #1e293b 1px, transparent 1px)",
+        'dashboard-gradient': 'radial-gradient(circle at top right, #1e1b4b 0%, #070A13 100%)',
+        'purple-indigo-vibrant': 'linear-gradient(135deg, #4338ca 0%, #6366f1 50%, #8b5cf6 100%)',
+        'glass-gradient': 'linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 100%)',
       },
       keyframes: {
         slideDown: {
@@ -61,6 +68,11 @@ module.exports = {
         'xl': '12px',
         '2xl': '16px',
         '3xl': '24px',
+      },
+      boxShadow: {
+        'glass-sm': '0 4px 15px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -2px rgba(0, 0, 0, 0.2)',
+        'glass-glow': '0 0 20px -5px rgba(139, 92, 246, 0.3)',
+        'lift': '0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3)',
       },
     },
   },
