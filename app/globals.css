@@ -22,6 +22,35 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* Landing Page Styles */
+.glass-panel {
+  background: rgba(30, 41, 59, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.text-glow {
+  text-shadow: 0 0 20px rgba(23, 84, 207, 0.5);
+}
+
+.gradient-text {
+  @apply text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-orange-400 to-amber-300;
+  -webkit-background-clip: text;
+}
+
+.gradient-text-blue {
+  background: linear-gradient(to right, #1754cf, #60a5fa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Infinite scroll mask for carousel */
+.scroll-mask {
+  mask-image: linear-gradient(to right, transparent 0, black 128px, black calc(100% - 128px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, black 128px, black calc(100% - 128px), transparent 100%);
+}
+
 @layer components {
   .card {
     @apply backdrop-blur-lg bg-white/10 border border-white/20 
