@@ -1,7 +1,6 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useParams } from 'next/navigation';
 import ClinicalLayout from '@/components/clinical-master/ClinicalLayout';
 import ConsultationTimer from '@/components/clinical-master/ConsultationTimer';
 import { candidateBriefs } from '@/lib/clinical-master/mock-data';
