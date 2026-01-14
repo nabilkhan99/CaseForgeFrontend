@@ -8,20 +8,14 @@ import { candidateBriefs } from '@/lib/clinical-master/mock-data';
 
 export default function ReadingPhasePage() {
   const params = useParams();
-  const router = useRouter();
   const stationId = params.stationId as string;
-  const [isTimerComplete, setIsTimerComplete] = useState(false);
 
   const brief = candidateBriefs[stationId];
 
-  const handleEnterRoom = () => {
-    // Generate a session ID and navigate to consultation
-    const sessionId = `session-${Date.now()}`;
-    router.push(`/clinical-master/session/${sessionId}`);
-  };
-
   const handleTimerComplete = () => {
-    setIsTimerComplete(true);
+    // Timer complete logic can be implemented here
+    // For now, just logging
+    console.log('Reading time complete');
   };
 
   return (

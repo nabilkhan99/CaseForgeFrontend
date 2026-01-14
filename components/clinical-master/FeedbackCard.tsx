@@ -8,7 +8,6 @@ interface FeedbackCardProps {
 }
 
 export default function FeedbackCard({ domain, passThreshold = 60 }: FeedbackCardProps) {
-  const isPassing = domain.score >= passThreshold;
   const barColor = domain.score >= 80 ? 'bg-emerald-500' : domain.score >= 60 ? 'bg-blue-500' : 'bg-orange-500';
 
   return (

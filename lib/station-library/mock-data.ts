@@ -217,7 +217,6 @@ function generateMockCases(domainId: string): StationCase[] {
     if (!domain) return [];
 
     const cases: StationCase[] = [];
-    const statuses: ('completed' | 'in-progress' | 'not-started')[] = ['completed', 'in-progress', 'not-started'];
     const focusAreas = ['Clinical Knowledge', 'Communication Skills', 'Examination', 'Diagnosis', 'Management'];
 
     for (let i = 0; i < domain.total; i++) {

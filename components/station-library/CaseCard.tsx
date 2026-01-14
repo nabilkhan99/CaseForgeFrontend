@@ -32,7 +32,6 @@ function getScoreColor(score: number): { bg: string; border: string; text: strin
 export default function CaseCard({ stationCase, onClick }: CaseCardProps) {
     const isCompleted = stationCase.status === 'completed';
     const isInProgress = stationCase.status === 'in-progress';
-    const isNotStarted = stationCase.status === 'not-started';
 
     // Special styling for in-progress cases
     const cardClasses = isInProgress

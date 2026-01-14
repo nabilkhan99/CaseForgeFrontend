@@ -6,7 +6,7 @@ import { mockExams } from '@/lib/clinical-master/mock-data';
 import Link from 'next/link';
 
 export default function ClinicalMasterPage() {
-  const [selectedStationId, setSelectedStationId] = useState<string>('station-1');
+  const [selectedStationId] = useState<string>('station-1');
   
   const selectedStation = mockExams[0].stations.find(s => s.id === selectedStationId);
 
