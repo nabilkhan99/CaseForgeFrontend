@@ -1,14 +1,14 @@
 import posthog from 'posthog-js';
-import { getUserSession } from './userSession';
+import { createClient } from './supabase/client';
 
 let isInitialized = false;
 
 export const initAnalytics = () => {
   if (typeof window === 'undefined' || isInitialized) return;
-  
+
   const posthogKey = process.env.NEXT_PUBLIC_POSTHOG_KEY;
   const posthogHost = process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://app.posthog.com';
-  
+
   if (posthogKey) {
     try {
       posthog.init(posthogKey, {
@@ -28,18 +28,20 @@ export const initAnalytics = () => {
   }
 };
 
-export const trackEvent = (eventName: string, properties?: Record<string, string | number | boolean | string[]>) => {
+export const trackEvent = async (eventName: string, properties?: Record<string, string | number | boolean | string[]>) => {
   if (typeof window === 'undefined') return;
-  
+
   try {
-    const session = getUserSession();
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
     const eventData = {
       ...properties,
-      session_id: session?.sessionId,
-      session_created: session?.createdAt,
+      user_id: user?.id,
+      user_email: user?.email,
       timestamp: new Date().toISOString(),
     };
-    
+
     if (isInitialized) {
       posthog.capture(eventName, eventData);
       console.log(`[PostHog] Tracked event: ${eventName}`, eventData);
@@ -60,7 +62,7 @@ export const analytics = {
       capabilities: capabilities,
     });
   },
-  
+
   trackReviewGenerated: (caseTitle: string, capabilities: string[]) => {
     trackEvent('review_generated', {
       case_title: caseTitle,
@@ -68,7 +70,7 @@ export const analytics = {
       capabilities_count: capabilities.length,
     });
   },
-  
+
   trackImprovementRequested: (sectionType: string, prompt: string, isFullReview: boolean = false) => {
     trackEvent('improvement_requested', {
       section_type: sectionType,
@@ -77,18 +79,18 @@ export const analytics = {
       is_full_review: isFullReview,
     });
   },
-  
+
   trackCopyAction: (sectionType: string, contentLength: number) => {
     trackEvent('content_copied', {
       section_type: sectionType,
       content_length: contentLength,
     });
   },
-  
+
   trackNewCaseStarted: () => {
     trackEvent('new_case_started');
   },
-  
+
   trackError: (errorType: string, errorMessage: string, context?: Record<string, string | number | boolean>) => {
     trackEvent('error_occurred', {
       error_type: errorType,
