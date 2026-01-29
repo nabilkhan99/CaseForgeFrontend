@@ -1,8 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { mockUserProfile } from '@/lib/dashboard/mock-data';
+import Image from 'next/image';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import type { User } from '@supabase/supabase-js';
 
 interface NavItemProps {
     href: string;
@@ -16,8 +19,8 @@ function NavItem({ href, icon, label, active }: NavItemProps) {
         <Link
             href={href}
             className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${active
-                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-500/20'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-500/20'
+                : 'text-gray-400 hover:text-white hover:bg-white/5'
                 }`}
         >
             <span className={`material-symbols-outlined ${active ? 'fill' : ''}`} style={{ fontSize: '22px' }}>
@@ -30,45 +33,79 @@ function NavItem({ href, icon, label, active }: NavItemProps) {
 
 export default function DashboardSidebar() {
     const pathname = usePathname();
+    const router = useRouter();
+    const supabase = createClient();
+    const [user, setUser] = useState<User | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        supabase.auth.getUser().then(({ data: { user } }) => {
+            setUser(user);
+            setLoading(false);
+        });
+    }, [supabase.auth]);
+
+    const handleSignOut = async () => {
+        await supabase.auth.signOut();
+        router.push('/');
+        router.refresh();
+    };
+
+    // Get user display name from metadata or email
+    const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
+    const displayEmail = user?.email || '';
 
     return (
         <aside className="w-[260px] bg-[#0B0F1A] flex flex-col border-r border-white/5 flex-shrink-0 z-20">
-            {/* Logo */}
-            <div className="h-20 flex items-center px-6 border-b border-white/5">
-                <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-white to-purple-600 flex items-center justify-center text-indigo-950 mr-3 shadow-lg shadow-purple-900/20 shrink-0">
-                    <span className="material-symbols-outlined font-bold" style={{ fontSize: '22px' }}>
-                        medical_services
-                    </span>
-                </div>
+            {/* Logo - Links to landing page */}
+            <Link href="/" className="h-20 flex items-center px-6 border-b border-white/5 hover:bg-white/5 transition-colors">
+                <Image
+                    src="/fourteenfishermann.png"
+                    alt="Fourteen Fisherman"
+                    width={36}
+                    height={36}
+                    className="mr-3"
+                />
                 <span className="font-extrabold text-lg tracking-tight text-white">Fourteen Fisherman</span>
-            </div>
+            </Link>
 
             {/* Navigation */}
             <nav className="flex-1 flex flex-col gap-1 w-full px-3 py-6 overflow-y-auto">
                 <NavItem href="/dashboard" icon="dashboard" label="Dashboard" active={pathname === '/dashboard'} />
-                <NavItem href="/dashboard/library" icon="library_books" label="Station Library" active={pathname === '/dashboard/library'} />
-                <NavItem href="/dashboard/analytics" icon="analytics" label="Progress Analytics" active={pathname === '/dashboard/analytics'} />
-                <NavItem href="/dashboard/history" icon="history" label="History" active={pathname === '/dashboard/history'} />
+                <NavItem href="/dashboard/library" icon="library_books" label="Station Library" active={pathname?.startsWith('/dashboard/library')} />
+                <NavItem href="/clinical-master" icon="record_voice_over" label="Practice Session" active={pathname?.startsWith('/clinical-master')} />
 
                 {/* Account Section */}
                 <div className="mt-4 pt-4 border-t border-white/5 px-2">
                     <span className="text-[10px] uppercase font-bold text-gray-500 tracking-widest px-2">Account</span>
-                    <NavItem href="/dashboard/subscription" icon="credit_card" label="Subscription" active={pathname === '/dashboard/subscription'} />
                     <NavItem href="/dashboard/settings" icon="settings" label="Settings" active={pathname === '/dashboard/settings'} />
                 </div>
             </nav>
 
-            {/* User Profile */}
-            <div className="mt-auto p-4 border-t border-white/5 w-full bg-black/20">
-                <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors cursor-pointer">
-                    <div
-                        className="h-10 w-10 rounded-full bg-gray-700 bg-cover bg-center ring-2 ring-white/10 shadow-inner"
-                        style={{ backgroundImage: `url('${mockUserProfile.avatar}')` }}
-                    />
-                    <div className="flex flex-col overflow-hidden">
-                        <span className="text-sm font-bold text-white truncate">{mockUserProfile.name}</span>
-                        <span className="text-xs text-purple-400/80 font-medium truncate">{mockUserProfile.membershipTier}</span>
+            {/* User Profile & Sign Out */}
+            <div className="mt-auto border-t border-white/5 w-full bg-black/20">
+                {/* User info */}
+                <div className="p-4 pb-2">
+                    <div className="flex items-center gap-3 p-2 rounded-xl">
+                        <div className="h-10 w-10 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm ring-2 ring-white/10">
+                            {loading ? '...' : displayName.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex flex-col overflow-hidden flex-1">
+                            <span className="text-sm font-bold text-white truncate">{loading ? 'Loading...' : displayName}</span>
+                            <span className="text-xs text-slate-400 truncate">{displayEmail}</span>
+                        </div>
                     </div>
+                </div>
+
+                {/* Sign Out Button */}
+                <div className="px-4 pb-4">
+                    <button
+                        onClick={handleSignOut}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors text-sm font-medium"
+                    >
+                        <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>logout</span>
+                        Sign Out
+                    </button>
                 </div>
             </div>
         </aside>

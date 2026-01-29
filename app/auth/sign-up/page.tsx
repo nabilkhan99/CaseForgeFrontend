@@ -163,16 +163,9 @@ export default function SignUpPage() {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full py-3 bg-primary hover:bg-primary/90 disabled:bg-primary/50 text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
+                            className="w-full py-3 bg-primary hover:bg-primary/90 disabled:bg-primary/50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors"
                         >
-                            {loading ? (
-                                <>
-                                    <span className="material-symbols-outlined animate-spin text-xl">progress_activity</span>
-                                    Creating account...
-                                </>
-                            ) : (
-                                'Create Account'
-                            )}
+                            {loading ? 'Creating account...' : 'Create Account'}
                         </button>
                     </form>
 
