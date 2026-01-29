@@ -4,118 +4,125 @@ import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
+import AuthLayout from '@/components/auth/AuthLayout';
+import AuthCard from '@/components/auth/AuthCard';
+import AuthInput from '@/components/auth/AuthInput';
+
+// Robust state management
+type FormState =
+    | { status: 'idle' }
+    | { status: 'loading' }
+    | { status: 'error'; message: string };
 
 export default function SignInPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [error, setError] = useState<string | null>(null);
-    const [loading, setLoading] = useState(false);
+    const [formState, setFormState] = useState<FormState>({ status: 'idle' });
     const router = useRouter();
     const supabase = createClient();
 
     const handleSignIn = async (e: React.FormEvent) => {
         e.preventDefault();
-        setError(null);
-        setLoading(true);
 
-        const { error } = await supabase.auth.signInWithPassword({
-            email,
-            password,
-        });
+        // Validation
+        if (!email.trim() || !password.trim()) {
+            setFormState({ status: 'error', message: 'Please fill in all fields' });
+            return;
+        }
 
-        if (error) {
-            setError(error.message);
-            setLoading(false);
-        } else {
-            router.push('/dashboard');
-            router.refresh();
+        setFormState({ status: 'loading' });
+
+        try {
+            const { error } = await supabase.auth.signInWithPassword({
+                email: email.trim(),
+                password,
+            });
+
+            if (error) {
+                setFormState({ status: 'error', message: error.message });
+            } else {
+                router.push('/dashboard');
+                router.refresh();
+            }
+        } catch {
+            setFormState({ status: 'error', message: 'An unexpected error occurred' });
         }
     };
 
-    return (
-        <div className="min-h-screen bg-background-dark flex items-center justify-center p-4">
-            {/* Background Gradients */}
-            <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-[120px] pointer-events-none" />
-            <div className="absolute bottom-[-10%] left-[10%] w-[400px] h-[400px] bg-blue-600/10 rounded-full blur-[100px] pointer-events-none" />
+    const isLoading = formState.status === 'loading';
+    const errorMessage = formState.status === 'error' ? formState.message : null;
 
-            <div className="w-full max-w-md relative z-10">
-                {/* Logo */}
-                <div className="flex justify-center mb-8">
-                    <Link href="/">
-                        <Image
-                            src="/fourteenfishermann.png"
-                            alt="Fourteen Fisherman"
-                            width={60}
-                            height={60}
-                            className="h-15 w-auto"
-                        />
+    return (
+        <AuthLayout>
+            <AuthCard
+                icon={
+                    <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                }
+                title="Welcome Back to Fourteen Fisherman"
+                subtitle="Enter your details to access your simulator."
+            >
+                <form onSubmit={handleSignIn} className="space-y-5">
+                    <AuthInput
+                        label="Email Address"
+                        type="email"
+                        icon="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="doctor@example.com"
+                        disabled={isLoading}
+                        autoComplete="email"
+                    />
+
+                    <AuthInput
+                        label="Password"
+                        type="password"
+                        icon="lock"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        disabled={isLoading}
+                        autoComplete="current-password"
+                    />
+
+                    {errorMessage && (
+                        <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                            <p className="text-red-400 text-sm text-center">{errorMessage}</p>
+                        </div>
+                    )}
+
+                    <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
+                    >
+                        {isLoading ? 'Logging in...' : (
+                            <>
+                                Log In
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                                </svg>
+                            </>
+                        )}
+                    </button>
+                </form>
+
+                {/* Forgot Password Link */}
+                <div className="mt-4 text-center">
+                    <Link href="/auth/forgot-password" className="text-blue-400 hover:text-blue-300 text-sm transition-colors">
+                        Forgot Password?
                     </Link>
                 </div>
 
-                {/* Card */}
-                <div className="glass-panel border border-slate-800/50 rounded-2xl p-8">
-                    <h1 className="text-2xl font-bold text-white text-center mb-2">
-                        Welcome back
-                    </h1>
-                    <p className="text-slate-400 text-center mb-8">
-                        Sign in to continue your SCA preparation
-                    </p>
-
-                    <form onSubmit={handleSignIn} className="space-y-5">
-                        <div>
-                            <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-2">
-                                Email
-                            </label>
-                            <input
-                                id="email"
-                                type="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                required
-                                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
-                                placeholder="you@example.com"
-                            />
-                        </div>
-
-                        <div>
-                            <label htmlFor="password" className="block text-sm font-medium text-slate-300 mb-2">
-                                Password
-                            </label>
-                            <input
-                                id="password"
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                required
-                                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
-                                placeholder="••••••••"
-                            />
-                        </div>
-
-                        {error && (
-                            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-                                <p className="text-red-400 text-sm">{error}</p>
-                            </div>
-                        )}
-
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full py-3 bg-primary hover:bg-primary/90 disabled:bg-primary/50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors"
-                        >
-                            {loading ? 'Signing in...' : 'Sign In'}
-                        </button>
-                    </form>
-
-                    <p className="mt-6 text-center text-slate-400 text-sm">
-                        Don&apos;t have an account?{' '}
-                        <Link href="/auth/sign-up" className="text-primary hover:underline font-medium">
-                            Sign up
-                        </Link>
-                    </p>
-                </div>
-            </div>
-        </div>
+                {/* Sign Up Link */}
+                <p className="mt-6 text-center text-slate-400 text-sm">
+                    Don&apos;t have an account?{' '}
+                    <Link href="/auth/sign-up" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">
+                        Sign Up
+                    </Link>
+                </p>
+            </AuthCard>
+        </AuthLayout>
     );
 }
