@@ -73,6 +73,7 @@ export default function DashboardSidebar() {
             <nav className="flex-1 flex flex-col gap-1 w-full px-3 py-6 overflow-y-auto">
                 <NavItem href="/dashboard" icon="dashboard" label="Dashboard" active={pathname === '/dashboard'} />
                 <NavItem href="/dashboard/library" icon="library_books" label="Station Library" active={pathname?.startsWith('/dashboard/library')} />
+                <NavItem href="/dashboard/history" icon="history" label="Session History" active={pathname === '/dashboard/history'} />
                 <NavItem href="/clinical-master" icon="record_voice_over" label="Practice Session" active={pathname?.startsWith('/clinical-master')} />
 
                 {/* Account Section */}
