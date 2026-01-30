@@ -6,6 +6,7 @@ import { CLINICAL_MASTER_BACKEND_URL } from '@/lib/clinical-master/mock-data';
 
 interface UseAudioSessionOptions {
   sessionId: string;
+  stationId?: string;
   onSessionStarted?: (durationSeconds: number) => void;
   onConsultationEnded?: () => void;
   onFeedbackReady?: (feedback: any) => void;
@@ -26,6 +27,7 @@ interface UseAudioSessionResult {
 
 export function useAudioSession({
   sessionId,
+  stationId,
   onSessionStarted,
   onConsultationEnded,
   onFeedbackReady,
@@ -43,6 +45,8 @@ export function useAudioSession({
   const playbackContextRef = useRef<AudioContext | null>(null);
   const audioQueueRef = useRef<Float32Array[]>([]);
   const isPlayingRef = useRef(false);
+  // Track seen item_ids for deduplication (SDK pattern)
+  const seenItemIdsRef = useRef<Set<string>>(new Set());
 
   // Initialize playback audio context
   useEffect(() => {
@@ -119,7 +123,8 @@ export function useAudioSession({
 
     try {
       const wsUrl = CLINICAL_MASTER_BACKEND_URL.replace('http://', 'ws://').replace('https://', 'wss://');
-      const ws = new WebSocket(`${wsUrl}/ws/${sessionId}`);
+      const stationParam = stationId ? `?station_id=${stationId}` : '';
+      const ws = new WebSocket(`${wsUrl}/ws/${sessionId}${stationParam}`);
 
       ws.onopen = () => {
         console.log('WebSocket connected');
@@ -157,50 +162,104 @@ export function useAudioSession({
               break;
 
             case 'history_added':
+              // Primary event for new transcript items - use item_id for deduplication
               if (message.item && message.item.content) {
-                const newItem: TranscriptItem = {
-                  role: message.item.role as 'user' | 'assistant',
-                  content: message.item.content,
-                  timestamp: new Date().toISOString(),
-                };
-                setTranscript((prev) => [...prev, newItem]);
+                const itemId = message.item.id;
+
+                // Only add if we haven't seen this item_id before
+                if (itemId && !seenItemIdsRef.current.has(itemId)) {
+                  seenItemIdsRef.current.add(itemId);
+                  const newItem: TranscriptItem = {
+                    id: itemId,
+                    role: message.item.role as 'user' | 'assistant',
+                    content: message.item.content,
+                    timestamp: new Date().toISOString(),
+                  };
+                  setTranscript((prev) => [...prev, newItem]);
+                } else if (!itemId) {
+                  // Fallback: no item_id, use content-based deduplication
+                  const newItem: TranscriptItem = {
+                    role: message.item.role as 'user' | 'assistant',
+                    content: message.item.content,
+                    timestamp: new Date().toISOString(),
+                  };
+                  setTranscript((prev) => {
+                    const lastItem = prev[prev.length - 1];
+                    if (lastItem && lastItem.content === newItem.content && lastItem.role === newItem.role) {
+                      return prev;
+                    }
+                    return [...prev, newItem];
+                  });
+                }
               }
               break;
 
             case 'history_updated':
-              // Content was updated (e.g., transcription completed)
+              // Update existing items by item_id - don't create duplicates
               if (message.item && message.item.content) {
-                const updatedItem: TranscriptItem = {
-                  role: message.item.role as 'user' | 'assistant',
-                  content: message.item.content,
-                  timestamp: new Date().toISOString(),
-                };
-                setTranscript((prev) => [...prev, updatedItem]);
+                const itemId = message.item.id;
+                setTranscript((prev) => {
+                  if (itemId) {
+                    // Find existing item by id and update content
+                    const existingIndex = prev.findIndex(item => item.id === itemId);
+                    if (existingIndex !== -1) {
+                      const updated = [...prev];
+                      updated[existingIndex] = { ...updated[existingIndex], content: message.item!.content };
+                      return updated;
+                    }
+                    // Item not found but has id - add it if not seen
+                    if (!seenItemIdsRef.current.has(itemId)) {
+                      seenItemIdsRef.current.add(itemId);
+                      return [...prev, {
+                        id: itemId,
+                        role: message.item!.role as 'user' | 'assistant',
+                        content: message.item!.content,
+                        timestamp: new Date().toISOString(),
+                      }];
+                    }
+                  }
+                  return prev;
+                });
               }
               break;
 
             case 'transcript_update':
-              // Direct transcript from transcription events
+              // Real-time transcript update - this is the PRIMARY source for display
+              // (history_added often has empty content, transcript_update has the actual text)
               if (message.item && message.item.content) {
-                console.log('Transcript update:', message.item.role, message.item.content);
-                const transcriptItem: TranscriptItem = {
-                  role: message.item.role as 'user' | 'assistant',
-                  content: message.item.content,
-                  timestamp: new Date().toISOString(),
-                };
-                setTranscript((prev) => [...prev, transcriptItem]);
+                console.log('Transcript update:', message.item.role, message.item.content.substring(0, 50));
+                setTranscript((prev) => {
+                  const lastItem = prev[prev.length - 1];
+                  // Skip if exact duplicate
+                  if (lastItem && lastItem.content === message.item!.content && lastItem.role === message.item!.role) {
+                    return prev;
+                  }
+                  // Update last item of same role if exists and recent (streaming update)
+                  if (lastItem && lastItem.role === message.item!.role) {
+                    const timeDiff = Date.now() - new Date(lastItem.timestamp).getTime();
+                    if (timeDiff < 5000) {
+                      return [...prev.slice(0, -1), { ...lastItem, content: message.item!.content }];
+                    }
+                  }
+                  // Add as new item
+                  return [...prev, {
+                    role: message.item!.role as 'user' | 'assistant',
+                    content: message.item!.content,
+                    timestamp: new Date().toISOString(),
+                  }];
+                });
               }
               break;
 
             case 'transcript_delta':
-              // Real-time streaming of assistant response text
+              // Real-time streaming of response text - handles BOTH user and assistant
               if (message.item && message.item.content) {
-                // Append to last assistant message or create new one
+                const deltaRole = message.item.role as 'user' | 'assistant';
                 setTranscript((prev) => {
                   const lastItem = prev[prev.length - 1];
-                  if (lastItem && lastItem.role === 'assistant' && 
-                      Date.now() - new Date(lastItem.timestamp).getTime() < 5000) {
-                    // Append to existing message if recent
+                  // Append to existing message of same role if recent
+                  if (lastItem && lastItem.role === deltaRole &&
+                    Date.now() - new Date(lastItem.timestamp).getTime() < 5000) {
                     return [
                       ...prev.slice(0, -1),
                       { ...lastItem, content: lastItem.content + message.item!.content }
@@ -208,7 +267,7 @@ export function useAudioSession({
                   } else {
                     // Create new message
                     return [...prev, {
-                      role: 'assistant' as const,
+                      role: deltaRole,
                       content: message.item!.content,
                       timestamp: new Date().toISOString(),
                     }];
@@ -255,7 +314,7 @@ export function useAudioSession({
       setError('Failed to connect');
       onError?.('Failed to connect');
     }
-  }, [sessionId, onSessionStarted, onConsultationEnded, onFeedbackReady, onError, playPCMAudio]);
+  }, [sessionId, stationId, onSessionStarted, onConsultationEnded, onFeedbackReady, onError, playPCMAudio]);
 
   const disconnect = useCallback(() => {
     if (wsRef.current) {
@@ -295,7 +354,7 @@ export function useAudioSession({
         }
 
         const inputData = e.inputBuffer.getChannelData(0);
-        
+
         // Convert Float32Array to Int16Array
         const int16Data = new Int16Array(inputData.length);
         for (let i = 0; i < inputData.length; i++) {
@@ -305,7 +364,7 @@ export function useAudioSession({
 
         // Send as array for JSON serialization
         const audioArray = Array.from(int16Data);
-        
+
         try {
           wsRef.current.send(
             JSON.stringify({

@@ -1,20 +1,54 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
 import ClinicalLayout from '@/components/clinical-master/ClinicalLayout';
 import ConsultationTimer from '@/components/clinical-master/ConsultationTimer';
 import AudioWaveform from '@/components/clinical-master/AudioWaveform';
 import TranscriptFeed from '@/components/clinical-master/TranscriptFeed';
 import { useAudioSession } from '@/hooks/useAudioSession';
+import { createClient } from '@/lib/supabase/client';
 
-export default function LiveConsultationPage() {
+interface StationData {
+  id: string;
+  title: string;
+  patient_name: string;
+  patient_age: number;
+  candidate_instructions: string;
+  consultation_duration_seconds: number;
+}
+
+function LiveConsultationContent() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const sessionId = params.sessionId as string;
-  
+  const stationId = searchParams.get('stationId');
+
+  const [station, setStation] = useState<StationData | null>(null);
   const [consultationDuration, setConsultationDuration] = useState(120); // 2 minutes default
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Fetch station data on mount
+  useEffect(() => {
+    async function fetchStation() {
+      if (!stationId) return;
+
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('stations')
+        .select('id, title, patient_name, patient_age, candidate_instructions, consultation_duration_seconds')
+        .eq('id', stationId)
+        .single();
+
+      if (!error && data) {
+        setStation(data);
+        setConsultationDuration(data.consultation_duration_seconds || 120);
+      }
+    }
+
+    fetchStation();
+  }, [stationId]);
 
   const {
     isConnected,
@@ -26,6 +60,7 @@ export default function LiveConsultationPage() {
     error,
   } = useAudioSession({
     sessionId,
+    stationId: stationId || undefined,
     onSessionStarted: (durationSeconds) => {
       setConsultationDuration(durationSeconds);
     },
@@ -63,6 +98,11 @@ export default function LiveConsultationPage() {
     }
   };
 
+  // Format patient display name
+  const patientDisplay = station
+    ? `${station.patient_name} (${station.patient_age}${station.patient_age ? 'y' : ''})`
+    : 'Patient';
+
   if (isProcessing) {
     return (
       <ClinicalLayout showSidebar={false} showNotepad={false}>
@@ -91,14 +131,19 @@ export default function LiveConsultationPage() {
   }
 
   return (
-    <ClinicalLayout showSidebar={false} showNotepad={true}>
+    <ClinicalLayout
+      showSidebar={false}
+      showNotepad={true}
+      candidateBrief={station?.candidate_instructions}
+      stationId={stationId || undefined}
+    >
       {/* Timer Bar */}
       <div className="h-16 border-b border-slate-800 bg-[#111318] flex items-center justify-between px-8 shadow-sm z-10">
         <div className="flex items-center gap-2">
           <span className="material-symbols-outlined text-slate-400">timer</span>
           <span className="text-slate-400 text-sm font-medium">Time Remaining</span>
         </div>
-        
+
         <ConsultationTimer
           durationSeconds={consultationDuration}
           label=""
@@ -134,7 +179,7 @@ export default function LiveConsultationPage() {
               </div>
               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
                 <p className="text-white text-sm font-semibold text-center">
-                  Margaret Thompson (58F)
+                  {patientDisplay}
                 </p>
               </div>
             </div>
@@ -158,7 +203,7 @@ export default function LiveConsultationPage() {
       {/* Utility Control Bar */}
       <div className="h-20 bg-[#111318] border-t border-slate-800 flex items-center justify-center gap-6 px-6 z-20">
         <button
-          onClick={() => {}}
+          onClick={() => { }}
           className="flex flex-col items-center gap-1 group"
           disabled={!isRecording}
         >
@@ -185,5 +230,17 @@ export default function LiveConsultationPage() {
         </button>
       </div>
     </ClinicalLayout>
+  );
+}
+
+export default function LiveConsultationPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center h-screen bg-[#0f172a]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500" />
+      </div>
+    }>
+      <LiveConsultationContent />
+    </Suspense>
   );
 }

@@ -1,15 +1,43 @@
-interface StartNewCardProps {
-    onClick?: () => void;
-}
+'use client';
 
-export default function StartNewCard({ onClick }: StartNewCardProps) {
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { getRandomStation } from '@/lib/supabase/queries/station-library';
+
+export default function StartNewCard() {
+    const router = useRouter();
+    const [loading, setLoading] = useState(false);
+
+    const handleStartRandom = async () => {
+        setLoading(true);
+        try {
+            const station = await getRandomStation();
+            if (station) {
+                router.push(`/clinical-master?station=${station.id}`);
+            } else {
+                // No stations available - go to library
+                router.push('/dashboard/library');
+            }
+        } catch (error) {
+            console.error('Error finding random station:', error);
+            router.push('/dashboard/library');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <button
-            onClick={onClick}
-            className="flex-1 glass-card hover:bg-white/[0.08] rounded-2xl p-6 flex flex-col justify-center items-center text-center gap-4 transition-all group/new h-[180px]"
+            onClick={handleStartRandom}
+            disabled={loading}
+            className="flex-1 glass-card hover:bg-white/[0.08] rounded-2xl p-6 flex flex-col justify-center items-center text-center gap-4 transition-all group/new h-[180px] disabled:opacity-50"
         >
             <div className="h-14 w-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center group-hover/new:scale-110 group-hover/new:border-purple-500/50 transition-all shadow-lg">
-                <span className="material-symbols-outlined text-purple-400 text-3xl font-light">add_circle</span>
+                {loading ? (
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-400" />
+                ) : (
+                    <span className="material-symbols-outlined text-purple-400 text-3xl font-light">add_circle</span>
+                )}
             </div>
             <div>
                 <h3 className="text-base font-bold text-white">Start New</h3>

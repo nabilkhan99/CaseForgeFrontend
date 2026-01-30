@@ -23,6 +23,7 @@ export interface CandidateBrief {
 }
 
 export interface TranscriptItem {
+  id?: string; // item_id from backend for deduplication
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
@@ -44,21 +45,21 @@ export interface ConsultationFeedback {
 }
 
 export interface WebSocketMessage {
-  type: 
-    | 'session_started' 
-    | 'audio' 
-    | 'audio_interrupted'
-    | 'audio_end'
-    | 'history_added' 
-    | 'history_updated'
-    | 'transcript_update'
-    | 'transcript_delta'
-    | 'consultation_ended' 
-    | 'feedback_ready' 
-    | 'error'
-    | 'agent_start'
-    | 'agent_end'
-    | 'raw_model_event';
+  type:
+  | 'session_started'
+  | 'audio'
+  | 'audio_interrupted'
+  | 'audio_end'
+  | 'history_added'
+  | 'history_updated'
+  | 'transcript_update'
+  | 'transcript_delta'
+  | 'consultation_ended'
+  | 'feedback_ready'
+  | 'error'
+  | 'agent_start'
+  | 'agent_end'
+  | 'raw_model_event';
   duration_seconds?: number;
   audio?: string; // base64 PCM16 audio
   item?: {
