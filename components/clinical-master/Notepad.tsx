@@ -163,7 +163,7 @@ export default function Notepad({ candidateBrief, stationId }: NotepadProps) {
           </div>
           <button
             onClick={() => {
-              const sessionId = `session-${Date.now()}`;
+              const sessionId = crypto.randomUUID();
               const stationParam = stationId ? `?stationId=${stationId}` : '';
               window.location.href = `/clinical-master/session/${sessionId}${stationParam}`;
             }}

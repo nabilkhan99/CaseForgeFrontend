@@ -5,6 +5,7 @@ interface StationSidebarProps {
   stationTitle?: string;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export default function StationSidebar({ currentStationId, stationTitle }: StationSidebarProps) {
   return (
     <aside className="w-80 bg-[#111318] border-r border-slate-800 flex flex-col shrink-0 z-20">

@@ -1,13 +1,15 @@
 'use client';
 
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import ClinicalLayout from '@/components/clinical-master/ClinicalLayout';
 import ConsultationTimer from '@/components/clinical-master/ConsultationTimer';
 import AudioWaveform from '@/components/clinical-master/AudioWaveform';
 import TranscriptFeed from '@/components/clinical-master/TranscriptFeed';
-import { useAudioSession } from '@/hooks/useAudioSession';
+import { useElevenLabsSession } from '@/hooks/useElevenLabsSession';
 import { createClient } from '@/lib/supabase/client';
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_CLINICAL_MASTER_URL || 'http://localhost:8000';
 
 interface StationData {
   id: string;
@@ -16,6 +18,7 @@ interface StationData {
   patient_age: number;
   candidate_instructions: string;
   consultation_duration_seconds: number;
+  station_script: string;
 }
 
 function LiveConsultationContent() {
@@ -26,10 +29,11 @@ function LiveConsultationContent() {
   const stationId = searchParams.get('stationId');
 
   const [station, setStation] = useState<StationData | null>(null);
-  const [consultationDuration, setConsultationDuration] = useState(120); // 2 minutes default
+  const [consultationDuration, setConsultationDuration] = useState(120);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
 
-  // Fetch station data on mount
+  // Fetch station data on mount (including station_script for ElevenLabs dynamic vars)
   useEffect(() => {
     async function fetchStation() {
       if (!stationId) return;
@@ -37,7 +41,7 @@ function LiveConsultationContent() {
       const supabase = createClient();
       const { data, error } = await supabase
         .from('stations')
-        .select('id, title, patient_name, patient_age, candidate_instructions, consultation_duration_seconds')
+        .select('id, title, patient_name, patient_age, candidate_instructions, consultation_duration_seconds, station_script')
         .eq('id', stationId)
         .single();
 
@@ -50,52 +54,97 @@ function LiveConsultationContent() {
     fetchStation();
   }, [stationId]);
 
+  // Trigger feedback generation after consultation ends
+  const triggerFeedbackGeneration = useCallback(async (
+    elConversationId: string | null,
+    localTranscript: Array<{ id?: string; role: string; content: string; timestamp: string }>
+  ) => {
+    try {
+      // Normalize the backend URL (strip ws:// protocol if present)
+      const baseUrl = BACKEND_URL.replace('ws://', 'http://').replace('wss://', 'https://');
+
+      // Send both conversationId and the local transcript for reliability
+      const response = await fetch(`${baseUrl}/session/${sessionId}/complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation_id: elConversationId,
+          station_id: stationId,
+          transcript: localTranscript.map(t => ({
+            role: t.role,
+            content: t.content,
+            timestamp: t.timestamp,
+          })),
+        }),
+      });
+
+      if (!response.ok) {
+        console.error('Failed to trigger feedback generation:', response.statusText);
+      }
+    } catch (err) {
+      console.error('Error triggering feedback:', err);
+    }
+  }, [sessionId, stationId]);
+
   const {
     isConnected,
-    isRecording,
+    isSpeaking,
     transcript,
+    conversationId,
     connect,
-    startRecording,
     endConsultation,
+    setMicMuted,
     error,
-  } = useAudioSession({
+    status,
+  } = useElevenLabsSession({
     sessionId,
     stationId: stationId || undefined,
-    onSessionStarted: (durationSeconds) => {
-      setConsultationDuration(durationSeconds);
+    stationData: station || undefined,
+    onSessionStarted: () => {
+      console.log('ElevenLabs session started');
     },
     onConsultationEnded: () => {
-      setIsProcessing(true);
-      // Navigate to feedback page after a short delay
-      setTimeout(() => {
-        router.push(`/clinical-master/feedback/${sessionId}`);
-      }, 2000);
+      console.log('ElevenLabs session disconnected (feedback triggered separately)');
     },
     onError: (error) => {
       console.error('Session error:', error);
     },
   });
 
-  // Auto-connect on mount
+  // Auto-connect once station data is loaded
   useEffect(() => {
-    connect();
-  }, [connect]);
-
-  // Auto-start recording once connected
-  useEffect(() => {
-    if (isConnected && !isRecording) {
-      startRecording();
+    if (station && status === 'disconnected') {
+      connect();
     }
-  }, [isConnected, isRecording, startRecording]);
+  }, [station, status, connect]);
+
+  // Shared logic: end session, trigger feedback, navigate
+  const finishConsultation = useCallback(async () => {
+    setIsProcessing(true);
+    try {
+      await endConsultation();
+      // Use the latest conversationId and transcript from the hook
+      await triggerFeedbackGeneration(conversationId, transcript);
+    } catch (err) {
+      console.error('Error finishing consultation:', err);
+    }
+    router.push(`/clinical-master/feedback/${sessionId}`);
+  }, [endConsultation, conversationId, transcript, triggerFeedbackGeneration, router, sessionId]);
 
   const handleTimerComplete = () => {
-    endConsultation();
+    finishConsultation();
   };
 
   const handleEndConsultation = () => {
     if (confirm('Are you sure you want to end this consultation?')) {
-      endConsultation();
+      finishConsultation();
     }
+  };
+
+  const handleToggleMute = () => {
+    const newMuted = !isMuted;
+    setIsMuted(newMuted);
+    setMicMuted(newMuted);
   };
 
   // Format patient display name
@@ -112,7 +161,7 @@ function LiveConsultationContent() {
               <div className="size-40 rounded-full border-4 border-slate-700/50 flex items-center justify-center">
                 <div className="size-40 absolute border-4 border-primary rounded-full animate-spin border-t-transparent"></div>
                 <div className="text-center">
-                  <span className="text-4xl font-bold text-white">82%</span>
+                  <span className="material-symbols-outlined text-5xl text-white">psychology</span>
                 </div>
               </div>
             </div>
@@ -183,17 +232,17 @@ function LiveConsultationContent() {
                 </p>
               </div>
             </div>
-            {isRecording && (
+            {isConnected && (
               <div className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-green-500 ring-4 ring-[#0f172a]">
                 <span className="material-symbols-outlined text-white text-[14px] font-bold">
-                  mic
+                  {isMuted ? 'mic_off' : 'mic'}
                 </span>
               </div>
             )}
           </div>
 
-          {/* Audio Waveform */}
-          <AudioWaveform isActive={transcript.length > 0 && transcript[transcript.length - 1]?.role === 'assistant'} />
+          {/* Audio Waveform - driven by ElevenLabs isSpeaking */}
+          <AudioWaveform isActive={isSpeaking} />
         </div>
 
         {/* Live Transcription Feed */}
@@ -203,17 +252,17 @@ function LiveConsultationContent() {
       {/* Utility Control Bar */}
       <div className="h-20 bg-[#111318] border-t border-slate-800 flex items-center justify-center gap-6 px-6 z-20">
         <button
-          onClick={() => { }}
+          onClick={handleToggleMute}
           className="flex flex-col items-center gap-1 group"
-          disabled={!isRecording}
+          disabled={!isConnected}
         >
           <div className="w-12 h-12 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center group-hover:bg-slate-700 group-hover:border-slate-600 transition-all disabled:opacity-50">
             <span className="material-symbols-outlined text-white text-[24px]">
-              {isRecording ? 'mic' : 'mic_off'}
+              {isMuted ? 'mic_off' : 'mic'}
             </span>
           </div>
           <span className="text-[10px] uppercase font-bold text-slate-500 group-hover:text-slate-300">
-            {isRecording ? 'Mute' : 'Unmuted'}
+            {isMuted ? 'Unmute' : 'Mute'}
           </span>
         </button>
 
