@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -15,6 +15,14 @@ type FormState =
     | { status: 'error'; message: string };
 
 export default function SignInPage() {
+    return (
+        <Suspense fallback={<AuthLayout><div /></AuthLayout>}>
+            <SignInForm />
+        </Suspense>
+    );
+}
+
+function SignInForm() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [formState, setFormState] = useState<FormState>({ status: 'idle' });
