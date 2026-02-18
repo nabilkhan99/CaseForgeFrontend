@@ -28,21 +28,21 @@ export default function RootLayout({
         />
         <meta name="description" content="Master the Simulated Consultation Assessment with AI-powered patient simulations. Practice 24/7 with realistic clinical scenarios mapped to the RCGP curriculum." />
         <meta name="keywords" content="SCA exam, RCGP, GP training, medical simulation, clinical assessment, AI patient, consultation practice" />
-        
+
         {/* Open Graph / Facebook */}
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://www.fourteenfisherman.com/" />
         <meta property="og:title" content="Fourteen Fisherman - The Gold Standard for SCA Prep" />
         <meta property="og:description" content="Master the Simulated Consultation Assessment with AI-powered patient simulations." />
         <meta property="og:image" content="https://www.fourteenfisherman.com/fourteenfishermann.png" />
-        
+
         {/* Twitter */}
         <meta property="twitter:card" content="summary_large_image" />
         <meta property="twitter:url" content="https://www.fourteenfisherman.com/" />
         <meta property="twitter:title" content="Fourteen Fisherman - The Gold Standard for SCA Prep" />
         <meta property="twitter:description" content="Master the Simulated Consultation Assessment with AI-powered patient simulations." />
         <meta property="twitter:image" content="https://www.fourteenfisherman.com/fourteenfishermann.png" />
-        
+
         <link rel="canonical" href="https://www.fourteenfisherman.com/" />
       </head>
       <body className={`${inter.className} bg-background-dark text-slate-300 antialiased overflow-x-hidden`}>

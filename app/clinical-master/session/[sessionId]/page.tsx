@@ -6,7 +6,7 @@ import ClinicalLayout from '@/components/clinical-master/ClinicalLayout';
 import ConsultationTimer from '@/components/clinical-master/ConsultationTimer';
 import AudioWaveform from '@/components/clinical-master/AudioWaveform';
 import TranscriptFeed from '@/components/clinical-master/TranscriptFeed';
-import { useElevenLabsSession } from '@/hooks/useElevenLabsSession';
+import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { createClient } from '@/lib/supabase/client';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_CLINICAL_MASTER_URL || 'http://localhost:8000';
@@ -32,8 +32,19 @@ function LiveConsultationContent() {
   const [consultationDuration, setConsultationDuration] = useState(120);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [userId, setUserId] = useState<string | undefined>(undefined);
 
-  // Fetch station data on mount (including station_script for ElevenLabs dynamic vars)
+  // Get current user ID for authenticated sessions
+  useEffect(() => {
+    async function fetchUser() {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) setUserId(user.id);
+    }
+    fetchUser();
+  }, []);
+
+  // Fetch station data on mount
   useEffect(() => {
     async function fetchStation() {
       if (!stationId) return;
@@ -56,19 +67,16 @@ function LiveConsultationContent() {
 
   // Trigger feedback generation after consultation ends
   const triggerFeedbackGeneration = useCallback(async (
-    elConversationId: string | null,
     localTranscript: Array<{ id?: string; role: string; content: string; timestamp: string }>
   ) => {
     try {
       // Normalize the backend URL (strip ws:// protocol if present)
       const baseUrl = BACKEND_URL.replace('ws://', 'http://').replace('wss://', 'https://');
 
-      // Send both conversationId and the local transcript for reliability
       const response = await fetch(`${baseUrl}/session/${sessionId}/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          conversation_id: elConversationId,
           station_id: stationId,
           transcript: localTranscript.map(t => ({
             role: t.role,
@@ -90,21 +98,20 @@ function LiveConsultationContent() {
     isConnected,
     isSpeaking,
     transcript,
-    conversationId,
     connect,
     endConsultation,
     setMicMuted,
     error,
     status,
-  } = useElevenLabsSession({
+  } = useRealtimeSession({
     sessionId,
     stationId: stationId || undefined,
-    stationData: station || undefined,
+    userId,
     onSessionStarted: () => {
-      console.log('ElevenLabs session started');
+      console.log('Realtime session started');
     },
     onConsultationEnded: () => {
-      console.log('ElevenLabs session disconnected (feedback triggered separately)');
+      console.log('Consultation ended (feedback triggered by backend)');
     },
     onError: (error) => {
       console.error('Session error:', error);
@@ -123,13 +130,13 @@ function LiveConsultationContent() {
     setIsProcessing(true);
     try {
       await endConsultation();
-      // Use the latest conversationId and transcript from the hook
-      await triggerFeedbackGeneration(conversationId, transcript);
+      // Trigger REST fallback for feedback (backend may already have started via WebSocket)
+      await triggerFeedbackGeneration(transcript);
     } catch (err) {
       console.error('Error finishing consultation:', err);
     }
-    router.push(`/clinical-master/feedback/${sessionId}`);
-  }, [endConsultation, conversationId, transcript, triggerFeedbackGeneration, router, sessionId]);
+    router.push(`/dashboard/feedback/${sessionId}`);
+  }, [endConsultation, transcript, triggerFeedbackGeneration, router, sessionId]);
 
   const handleTimerComplete = () => {
     finishConsultation();
@@ -241,7 +248,7 @@ function LiveConsultationContent() {
             )}
           </div>
 
-          {/* Audio Waveform - driven by ElevenLabs isSpeaking */}
+          {/* Audio Waveform - driven by Azure Realtime isSpeaking */}
           <AudioWaveform isActive={isSpeaking} />
         </div>
 

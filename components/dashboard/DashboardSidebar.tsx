@@ -58,15 +58,14 @@ export default function DashboardSidebar() {
     return (
         <aside className="w-[260px] bg-[#0B0F1A] flex flex-col border-r border-white/5 flex-shrink-0 z-20">
             {/* Logo - Links to landing page */}
-            <Link href="/" className="h-20 flex items-center px-6 border-b border-white/5 hover:bg-white/5 transition-colors">
+            <Link href="/" className="h-20 flex items-center justify-center border-b border-white/5 hover:bg-white/5 transition-colors p-3">
                 <Image
                     src="/fourteenfishermann.png"
                     alt="Fourteen Fisherman"
-                    width={36}
-                    height={36}
-                    className="mr-3"
+                    width={200}
+                    height={200}
+                    className="h-full w-auto object-contain"
                 />
-                <span className="font-extrabold text-lg tracking-tight text-white">Fourteen Fisherman</span>
             </Link>
 
             {/* Navigation */}
@@ -74,7 +73,7 @@ export default function DashboardSidebar() {
                 <NavItem href="/dashboard" icon="dashboard" label="Dashboard" active={pathname === '/dashboard'} />
                 <NavItem href="/dashboard/library" icon="library_books" label="Station Library" active={pathname?.startsWith('/dashboard/library')} />
                 <NavItem href="/dashboard/history" icon="history" label="Session History" active={pathname === '/dashboard/history'} />
-                <NavItem href="/clinical-master" icon="record_voice_over" label="Practice Session" active={pathname?.startsWith('/clinical-master')} />
+                <NavItem href="/clinical-master" icon="record_voice_over" label="Practice" active={pathname?.startsWith('/clinical-master')} />
 
                 {/* Account Section */}
                 <div className="mt-4 pt-4 border-t border-white/5 px-2">

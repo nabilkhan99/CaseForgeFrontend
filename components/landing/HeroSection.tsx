@@ -23,7 +23,7 @@ export default function HeroSection() {
                 {/* CTAs */}
                 <div className="flex flex-col sm:flex-row gap-4 mb-8">
                     <Link
-                        href="/clinical-master"
+                        href="/auth/sign-up"
                         className="px-8 py-4 bg-primary text-white font-bold rounded-xl shadow-lg hover:bg-primary-hover hover:shadow-primary/50 transition-all transform hover:-translate-y-1 text-lg flex items-center gap-2"
                     >
                         Begin Your SCA Practice

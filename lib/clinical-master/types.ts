@@ -42,6 +42,8 @@ export interface ConsultationFeedback {
   interpersonal_skills: DomainScore;
   overall_summary: string;
   key_learning_points: string[];
+  overall_score?: number;
+  station_title?: string;
 }
 
 export interface WebSocketMessage {

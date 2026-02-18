@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import AuthLayout from '@/components/auth/AuthLayout';
 import AuthCard from '@/components/auth/AuthCard';
 import AuthInput from '@/components/auth/AuthInput';
@@ -19,6 +19,7 @@ export default function SignInPage() {
     const [password, setPassword] = useState('');
     const [formState, setFormState] = useState<FormState>({ status: 'idle' });
     const router = useRouter();
+    const searchParams = useSearchParams();
     const supabase = createClient();
 
     const handleSignIn = async (e: React.FormEvent) => {
@@ -41,7 +42,8 @@ export default function SignInPage() {
             if (error) {
                 setFormState({ status: 'error', message: error.message });
             } else {
-                router.push('/dashboard');
+                const redirectTo = searchParams.get('redirect') || '/dashboard';
+                router.push(redirectTo);
                 router.refresh();
             }
         } catch {

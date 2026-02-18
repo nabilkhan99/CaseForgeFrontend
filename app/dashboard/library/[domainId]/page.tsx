@@ -59,7 +59,9 @@ function getIconForDomain(name: string): string {
     return 'medical_services';
 }
 
-function StationCard({ station, onStart }: { station: Station; onStart: (stationId: string) => void }) {
+function StationCard({ station, onStart, onViewFeedback }: { station: Station; onStart: (stationId: string) => void; onViewFeedback: (sessionId: string) => void }) {
+    const [expanded, setExpanded] = useState(false);
+
     const statusColors = {
         'completed': 'text-emerald-400',
         'in-progress': 'text-yellow-400',
@@ -72,9 +74,8 @@ function StationCard({ station, onStart }: { station: Station; onStart: (station
         'not-started': 'Not Started',
     };
 
-    // Score color based on value
-    const getScoreColor = (score?: number) => {
-        if (!score) return 'border-gray-600 text-gray-400';
+    const getScoreColor = (score?: number | null) => {
+        if (score == null) return 'border-gray-600 text-gray-400';
         if (score >= 70) return 'border-emerald-500 bg-emerald-500/10 text-emerald-400';
         if (score >= 50) return 'border-yellow-500 bg-yellow-500/10 text-yellow-400';
         return 'border-red-500 bg-red-500/10 text-red-400';
@@ -85,52 +86,111 @@ function StationCard({ station, onStart }: { station: Station; onStart: (station
         const date = new Date(dateStr);
         const now = new Date();
         const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-
         if (diffDays === 0) return 'Today';
         if (diffDays === 1) return 'Yesterday';
-        if (diffDays < 7) return `${diffDays} days ago`;
-        if (diffDays < 30) return `${Math.floor(diffDays / 7)} week${Math.floor(diffDays / 7) > 1 ? 's' : ''} ago`;
-        return `${Math.floor(diffDays / 30)} month${Math.floor(diffDays / 30) > 1 ? 's' : ''} ago`;
+        if (diffDays < 7) return `${diffDays}d ago`;
+        if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+        return `${Math.floor(diffDays / 30)}mo ago`;
+    };
+
+    const hasAttempts = station.attempts.length > 0;
+    const latestAttempt = hasAttempts ? station.attempts[0] : null;
+
+    const handleCardClick = () => {
+        if (hasAttempts) {
+            // If only 1 attempt, go straight to feedback
+            if (station.attempts.length === 1 && latestAttempt) {
+                onViewFeedback(latestAttempt.sessionId);
+            } else {
+                setExpanded(!expanded);
+            }
+        } else {
+            onStart(station.id);
+        }
     };
 
     return (
-        <div className="group relative flex items-center gap-4 py-4 px-5 rounded-xl bg-[#1a1a2e]/60 border border-[#2a2a4a] hover:border-purple-500/30 transition-all">
-            <div className="flex-1 min-w-0">
-                <h3 className="text-lg font-bold text-purple-400 group-hover:text-purple-300 transition-colors">
-                    {station.title}
-                </h3>
-                <div className="flex items-center gap-3 text-xs mt-1">
-                    <span className={`flex items-center gap-1 ${statusColors[station.status]}`}>
-                        <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                        {statusLabels[station.status]}
-                    </span>
-                    {station.last_attempted && (
-                        <>
-                            <span className="text-gray-600">•</span>
-                            <span className="text-gray-500">{formatDate(station.last_attempted)}</span>
-                        </>
-                    )}
+        <div className="rounded-xl bg-[#1a1a2e]/60 border border-[#2a2a4a] hover:border-purple-500/30 transition-all overflow-hidden">
+            {/* Main Row */}
+            <div
+                onClick={handleCardClick}
+                className="group flex items-center gap-4 py-4 px-5 cursor-pointer"
+            >
+                <div className="flex-1 min-w-0">
+                    <h3 className="text-lg font-bold text-purple-400 group-hover:text-purple-300 transition-colors">
+                        {station.title}
+                    </h3>
+                    <div className="flex items-center gap-3 text-xs mt-1">
+                        <span className={`flex items-center gap-1 ${statusColors[station.status]}`}>
+                            <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                            {statusLabels[station.status]}
+                        </span>
+                        {hasAttempts && (
+                            <>
+                                <span className="text-gray-600">•</span>
+                                <span className="text-gray-500">{station.attempts.length} attempt{station.attempts.length !== 1 ? 's' : ''}</span>
+                            </>
+                        )}
+                    </div>
                 </div>
+
+                {/* Score badge (most recent) */}
+                {hasAttempts && latestAttempt?.score != null ? (
+                    <div className={`px-4 py-2 rounded-lg border font-bold text-sm ${getScoreColor(latestAttempt.score)}`}>
+                        {latestAttempt.score}%
+                    </div>
+                ) : station.status !== 'completed' ? (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onStart(station.id); }}
+                        className="w-10 h-10 rounded-full flex items-center justify-center bg-purple-500/10 border border-purple-500/20 text-purple-400 hover:bg-purple-500/20 hover:scale-105 transition-all"
+                    >
+                        <span className="material-symbols-outlined text-xl">play_arrow</span>
+                    </button>
+                ) : null}
+
+                {/* Expand / navigate indicator */}
+                {hasAttempts && station.attempts.length > 1 ? (
+                    <span className={`material-symbols-outlined text-gray-600 group-hover:text-gray-400 transition-all ${expanded ? 'rotate-90' : ''}`}>
+                        chevron_right
+                    </span>
+                ) : hasAttempts ? (
+                    <span className="material-symbols-outlined text-gray-600 group-hover:text-gray-400 transition-colors">
+                        chevron_right
+                    </span>
+                ) : null}
             </div>
 
-            {/* Score or Play Button */}
-            {station.status === 'completed' && station.score ? (
-                <div className={`px-4 py-2 rounded-lg border font-bold ${getScoreColor(station.score)}`}>
-                    SCORE: {station.score}%
+            {/* Expanded Attempts List */}
+            {expanded && hasAttempts && (
+                <div className="border-t border-[#2a2a4a]/60 bg-[#12122a]/60">
+                    {station.attempts.map((attempt, i) => (
+                        <div
+                            key={attempt.sessionId}
+                            onClick={() => onViewFeedback(attempt.sessionId)}
+                            className="flex items-center gap-3 px-5 py-3 hover:bg-white/5 cursor-pointer transition-colors border-b border-[#2a2a4a]/30 last:border-b-0"
+                        >
+                            <span className="text-xs text-gray-500 font-mono w-6">#{station.attempts.length - i}</span>
+                            <span className="text-sm text-gray-400 flex-1">
+                                {formatDate(attempt.completedAt)}
+                            </span>
+                            {attempt.score != null && (
+                                <span className={`text-sm font-bold ${attempt.score >= 70 ? 'text-emerald-400' : attempt.score >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                                    {attempt.score}%
+                                </span>
+                            )}
+                            <span className="material-symbols-outlined text-gray-600 text-base">open_in_new</span>
+                        </div>
+                    ))}
+                    {/* Retry button */}
+                    <div
+                        onClick={(e) => { e.stopPropagation(); onStart(station.id); }}
+                        className="flex items-center justify-center gap-2 px-5 py-3 hover:bg-purple-500/10 cursor-pointer transition-colors text-purple-400"
+                    >
+                        <span className="material-symbols-outlined text-base">replay</span>
+                        <span className="text-sm font-semibold">Try Again</span>
+                    </div>
                 </div>
-            ) : (
-                <button
-                    onClick={() => onStart(station.id)}
-                    className="w-10 h-10 rounded-full flex items-center justify-center bg-purple-500/10 border border-purple-500/20 text-purple-400 hover:bg-purple-500/20 hover:scale-105 transition-all"
-                >
-                    <span className="material-symbols-rounded text-xl">play_arrow</span>
-                </button>
             )}
-
-            {/* Chevron */}
-            <span className="material-symbols-rounded text-gray-600 group-hover:text-gray-400 transition-colors">
-                chevron_right
-            </span>
         </div>
     );
 }
@@ -182,9 +242,14 @@ export default function DomainDetailPage({ params }: PageProps) {
         router.push(`/clinical-master?station=${stationId}`);
     };
 
+    const handleViewFeedback = (sessionId: string) => {
+        router.push(`/dashboard/feedback/${sessionId}`);
+    };
+
     const completedCount = stations.filter(s => s.status === 'completed').length;
-    const avgScore = stations.filter(s => s.score).length > 0
-        ? Math.round(stations.filter(s => s.score).reduce((sum, s) => sum + (s.score || 0), 0) / stations.filter(s => s.score).length)
+    const stationsWithScores = stations.filter(s => s.attempts.length > 0 && s.attempts[0].score != null);
+    const avgScore = stationsWithScores.length > 0
+        ? Math.round(stationsWithScores.reduce((sum, s) => sum + (s.attempts[0].score || 0), 0) / stationsWithScores.length)
         : 0;
 
     const domainShortName = domainName.split(' ').slice(0, 2).join(' ');
@@ -265,7 +330,7 @@ export default function DomainDetailPage({ params }: PageProps) {
                         </div>
                     ) : stations.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                            <span className="material-symbols-rounded text-5xl mb-4">inbox</span>
+                            <span className="material-symbols-outlined text-5xl mb-4">inbox</span>
                             <p className="text-lg font-medium">No stations available</p>
                             <p className="text-sm text-gray-500 mt-2">More stations coming soon for this domain</p>
                             <Link
@@ -282,6 +347,7 @@ export default function DomainDetailPage({ params }: PageProps) {
                                     key={station.id}
                                     station={station}
                                     onStart={handleStartStation}
+                                    onViewFeedback={handleViewFeedback}
                                 />
                             ))}
                         </div>

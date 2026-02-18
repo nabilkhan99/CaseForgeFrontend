@@ -124,19 +124,12 @@ export async function getBlueprintDomains(userId: string): Promise<BlueprintDoma
         return [];
     }
 
-    // Get user's progress for each domain
-    const { data: progress } = await supabase
-        .from('domain_progress')
-        .select('domain_id, stations_attempted, stations_passed')
-        .eq('user_id', userId);
-
     // Get total stations per domain
     const { data: stationCounts } = await supabase
         .from('stations')
         .select('domain_id')
         .eq('is_active', true);
 
-    // Count stations per domain
     const countByDomain: Record<string, number> = {};
     stationCounts?.forEach(s => {
         if (s.domain_id) {
@@ -144,25 +137,37 @@ export async function getBlueprintDomains(userId: string): Promise<BlueprintDoma
         }
     });
 
-    // Map progress by domain
-    const progressByDomain: Record<string, { attempted: number; passed: number }> = {};
-    progress?.forEach(p => {
-        progressByDomain[p.domain_id] = {
-            attempted: p.stations_attempted,
-            passed: p.stations_passed,
-        };
+    // Get completed sessions with scores, joined to stations to get domain_id
+    const { data: completedSessions } = await supabase
+        .from('clinical_sessions')
+        .select('overall_score, stations!inner(domain_id)')
+        .eq('user_id', userId)
+        .eq('status', 'completed');
+
+    // Compute per-domain: completed count + average score
+    const domainStats: Record<string, { completed: number; totalScore: number }> = {};
+    completedSessions?.forEach(s => {
+        const station = s.stations as unknown as { domain_id: string } | null;
+        const domainId = station?.domain_id;
+        if (!domainId) return;
+        if (!domainStats[domainId]) {
+            domainStats[domainId] = { completed: 0, totalScore: 0 };
+        }
+        domainStats[domainId].completed += 1;
+        domainStats[domainId].totalScore += s.overall_score ?? 0;
     });
 
     return domains.map((domain, index) => {
-        const prog = progressByDomain[domain.id] || { attempted: 0, passed: 0 };
-        const total = countByDomain[domain.id] || 10; // Default to 10 if no stations yet
-        const completed = prog.passed;
-        const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+        const stats = domainStats[domain.id] || { completed: 0, totalScore: 0 };
+        const total = countByDomain[domain.id] || 0;
+        const percentage = stats.completed > 0
+            ? Math.round(stats.totalScore / stats.completed)
+            : 0;
 
         return {
             id: index + 1,
             name: domain.name,
-            completed,
+            completed: stats.completed,
             total,
             percentage,
         };
@@ -277,16 +282,14 @@ export async function getSessionHistory(
             domains: { name: string } | null;
         } | null;
 
-        // session_results is an array but we only have one per session
-        const resultArray = session.session_results as Array<{
+        // session_results is a single object (not an array) due to unique constraint on session_id
+        const result = session.session_results as unknown as {
             overall_score: number;
             passed: boolean;
             data_gathering_score: number;
             clinical_management_score: number;
             interpersonal_skills_score: number;
-        }> | null;
-
-        const result = resultArray?.[0];
+        } | null;
 
         return {
             id: session.id,
@@ -294,11 +297,11 @@ export async function getSessionHistory(
             stationTitle: station?.title || 'Unknown Station',
             domainName: station?.domains?.name || 'General Practice',
             completedAt: session.completed_at || '',
-            overallScore: result?.overall_score || 0,
-            passed: result?.passed || false,
-            dataGatheringScore: result?.data_gathering_score || 0,
-            clinicalManagementScore: result?.clinical_management_score || 0,
-            interpersonalSkillsScore: result?.interpersonal_skills_score || 0,
+            overallScore: result?.overall_score ?? 0,
+            passed: result?.passed ?? false,
+            dataGatheringScore: result?.data_gathering_score ?? 0,
+            clinicalManagementScore: result?.clinical_management_score ?? 0,
+            interpersonalSkillsScore: result?.interpersonal_skills_score ?? 0,
         };
     });
 }

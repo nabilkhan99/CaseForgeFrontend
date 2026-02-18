@@ -15,7 +15,7 @@ export default function CTASection() {
                     Fisherman.
                 </p>
 
-                <Link href="/clinical-master">
+                <Link href="/auth/sign-up">
                     <button className="bg-primary hover:bg-primary-hover text-white text-xl font-bold py-4 px-12 rounded-xl shadow-2xl hover:shadow-primary/50 transition-all transform hover:scale-105">
                         Get Started for Free
                     </button>

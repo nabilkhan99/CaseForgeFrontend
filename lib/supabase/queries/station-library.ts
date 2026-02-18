@@ -14,6 +14,12 @@ export interface Domain {
     completed_count: number;
 }
 
+export interface CompletedAttempt {
+    sessionId: string;
+    score: number | null;
+    completedAt: string;
+}
+
 export interface Station {
     id: string;
     title: string;
@@ -26,7 +32,9 @@ export interface Station {
     // User-specific data (from clinical_sessions)
     status: 'not-started' | 'in-progress' | 'completed';
     score?: number;
+    sessionId?: string;
     last_attempted?: string;
+    attempts: CompletedAttempt[];
 }
 
 /**
@@ -114,34 +122,60 @@ export async function getStationsForDomain(domainId: string, userId?: string): P
 
     const domainName = domain?.name || 'Unknown';
 
-    // Get user's session status for each station if logged in
-    const sessionsByStation: Record<string, { status: string; overall_score: number | null; started_at: string }> = {};
+    // Get user's sessions for each station if logged in
+    // We track: the "display" session (most recent completed, else most recent any),
+    // plus the full list of completed attempts.
+    interface SessionInfo {
+        id: string;
+        status: string;
+        overall_score: number | null;
+        started_at: string;
+        completed_at: string | null;
+    }
+    const latestByStation: Record<string, SessionInfo> = {};
+    const attemptsByStation: Record<string, CompletedAttempt[]> = {};
+
     if (userId && stations.length > 0) {
         const { data: sessions } = await supabase
             .from('clinical_sessions')
-            .select('station_id, status, overall_score, started_at')
+            .select('id, station_id, status, overall_score, started_at, completed_at')
             .eq('user_id', userId)
             .in('station_id', stations.map(s => s.id))
             .order('started_at', { ascending: false });
 
-        // Get the most recent session for each station
         sessions?.forEach(session => {
-            if (!sessionsByStation[session.station_id]) {
-                sessionsByStation[session.station_id] = {
-                    status: session.status,
-                    overall_score: session.overall_score,
-                    started_at: session.started_at,
-                };
+            // Collect all completed attempts
+            if (session.status === 'completed') {
+                if (!attemptsByStation[session.station_id]) {
+                    attemptsByStation[session.station_id] = [];
+                }
+                attemptsByStation[session.station_id].push({
+                    sessionId: session.id,
+                    score: session.overall_score,
+                    completedAt: session.completed_at || session.started_at,
+                });
+            }
+
+            // Pick the best display session: most recent completed wins
+            const existing = latestByStation[session.station_id];
+            if (!existing) {
+                latestByStation[session.station_id] = session;
+            } else if (session.status === 'completed' && existing.status !== 'completed') {
+                latestByStation[session.station_id] = session;
             }
         });
     }
 
     return stations.map(s => {
-        const session = sessionsByStation[s.id];
+        const session = latestByStation[s.id];
+        const attempts = attemptsByStation[s.id] || [];
         let status: 'not-started' | 'in-progress' | 'completed' = 'not-started';
         if (session) {
             status = session.status === 'completed' ? 'completed' : 'in-progress';
         }
+
+        // Use the most recent completed attempt for score display
+        const latestCompleted = attempts.length > 0 ? attempts[0] : null;
 
         return {
             id: s.id,
@@ -153,8 +187,10 @@ export async function getStationsForDomain(domainId: string, userId?: string): P
             difficulty: s.difficulty,
             is_active: s.is_active,
             status,
-            score: session?.overall_score ?? undefined,
+            score: latestCompleted?.score ?? undefined,
+            sessionId: latestCompleted?.sessionId ?? session?.id,
             last_attempted: session?.started_at,
+            attempts,
         };
     });
 }
@@ -204,6 +240,7 @@ export async function getAllStations(): Promise<Station[]> {
         difficulty: s.difficulty,
         is_active: s.is_active,
         status: 'not-started' as const,
+        attempts: [],
     }));
 }
 

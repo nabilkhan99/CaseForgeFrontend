@@ -2,6 +2,7 @@
 
 import { Inter } from 'next/font/google';
 import Head from 'next/head';
+import Link from 'next/link';
 import '../globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -46,7 +47,18 @@ export default function ClinicalMasterLayout({
           border: 1px solid rgba(255, 255, 255, 0.1);
         }
       `}</style>
+
+      {/* Exit button — always visible */}
+      <Link
+        href="/dashboard"
+        className="fixed top-4 left-4 z-50 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10 transition-all text-xs font-medium backdrop-blur-sm"
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>arrow_back</span>
+        Exit
+      </Link>
+
       {children}
     </div>
   );
 }
+

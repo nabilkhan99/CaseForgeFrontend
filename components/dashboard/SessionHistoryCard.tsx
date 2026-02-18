@@ -59,14 +59,14 @@ export default function SessionHistoryCard({ session }: SessionHistoryCardProps)
 
                     {/* Pass/Fail Badge */}
                     <div className={`px-3 py-1 rounded-lg text-xs font-bold ${session.passed
-                            ? 'bg-emerald-500/20 text-emerald-400'
-                            : 'bg-red-500/20 text-red-400'
+                        ? 'bg-emerald-500/20 text-emerald-400'
+                        : 'bg-red-500/20 text-red-400'
                         }`}>
                         {session.passed ? 'PASS' : 'REFER'}
                     </div>
 
                     <Link
-                        href={`/dashboard/session/${session.id}`}
+                        href={`/dashboard/feedback/${session.id}`}
                         className="flex items-center justify-center"
                     >
                         <span className="material-symbols-outlined text-gray-600 group-hover:text-white transition-colors">

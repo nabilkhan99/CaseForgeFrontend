@@ -66,12 +66,12 @@ function DomainCard({ domain, index }: { domain: Domain; index: number }) {
 
     const CardContent = () => (
         <div className={`group relative flex items-center gap-4 p-4 rounded-xl border transition-all duration-200 ${hasStations
-                ? 'bg-[#1a1a2e]/60 border-[#2a2a4a] hover:border-purple-500/30 cursor-pointer'
-                : 'bg-[#1a1a2e]/30 border-[#2a2a4a]/50 opacity-60 cursor-not-allowed'
+            ? 'bg-[#1a1a2e]/60 border-[#2a2a4a] hover:border-purple-500/30 cursor-pointer'
+            : 'bg-[#1a1a2e]/30 border-[#2a2a4a]/50 opacity-60 cursor-not-allowed'
             }`}>
             {/* Icon */}
             <div className={`w-12 h-12 rounded-xl ${colors.bg} flex items-center justify-center`}>
-                <span className={`material-symbols-rounded text-2xl ${colors.text}`}>{icon}</span>
+                <span className={`material-symbols-outlined text-2xl ${colors.text}`}>{icon}</span>
             </div>
 
             {/* Content */}
@@ -89,7 +89,7 @@ function DomainCard({ domain, index }: { domain: Domain; index: number }) {
 
             {/* Chevron */}
             {hasStations && (
-                <span className="material-symbols-rounded text-gray-600 group-hover:text-gray-400 transition-colors">
+                <span className="material-symbols-outlined text-gray-600 group-hover:text-gray-400 transition-colors">
                     chevron_right
                 </span>
             )}
