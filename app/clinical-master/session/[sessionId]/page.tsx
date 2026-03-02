@@ -6,10 +6,10 @@ import ClinicalLayout from '@/components/clinical-master/ClinicalLayout';
 import ConsultationTimer from '@/components/clinical-master/ConsultationTimer';
 import AudioWaveform from '@/components/clinical-master/AudioWaveform';
 import TranscriptFeed from '@/components/clinical-master/TranscriptFeed';
-import { useRealtimeSession } from '@/hooks/useRealtimeSession';
+import { useLiveKitSession } from '@/hooks/useLiveKitSession';
 import { createClient } from '@/lib/supabase/client';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_CLINICAL_MASTER_URL || 'http://localhost:8000';
+
 
 interface StationData {
   id: string;
@@ -65,35 +65,6 @@ function LiveConsultationContent() {
     fetchStation();
   }, [stationId]);
 
-  // Trigger feedback generation after consultation ends
-  const triggerFeedbackGeneration = useCallback(async (
-    localTranscript: Array<{ id?: string; role: string; content: string; timestamp: string }>
-  ) => {
-    try {
-      // Normalize the backend URL (strip ws:// protocol if present)
-      const baseUrl = BACKEND_URL.replace('ws://', 'http://').replace('wss://', 'https://');
-
-      const response = await fetch(`${baseUrl}/session/${sessionId}/complete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          station_id: stationId,
-          transcript: localTranscript.map(t => ({
-            role: t.role,
-            content: t.content,
-            timestamp: t.timestamp,
-          })),
-        }),
-      });
-
-      if (!response.ok) {
-        console.error('Failed to trigger feedback generation:', response.statusText);
-      }
-    } catch (err) {
-      console.error('Error triggering feedback:', err);
-    }
-  }, [sessionId, stationId]);
-
   const {
     isConnected,
     isSpeaking,
@@ -103,18 +74,18 @@ function LiveConsultationContent() {
     setMicMuted,
     error,
     status,
-  } = useRealtimeSession({
+  } = useLiveKitSession({
     sessionId,
     stationId: stationId || undefined,
     userId,
     onSessionStarted: () => {
-      console.log('Realtime session started');
+      console.log('[LiveKit] Session started');
     },
     onConsultationEnded: () => {
-      console.log('Consultation ended (feedback triggered by backend)');
+      console.log('[LiveKit] Session ended — backend handles feedback');
     },
     onError: (error) => {
-      console.error('Session error:', error);
+      console.error('[LiveKit] Session error:', error);
     },
   });
 
@@ -125,18 +96,16 @@ function LiveConsultationContent() {
     }
   }, [station, status, connect]);
 
-  // Shared logic: end session, trigger feedback, navigate
+  // Shared logic: end session and navigate — backend handles feedback on disconnect
   const finishConsultation = useCallback(async () => {
     setIsProcessing(true);
     try {
       await endConsultation();
-      // Trigger REST fallback for feedback (backend may already have started via WebSocket)
-      await triggerFeedbackGeneration(transcript);
     } catch (err) {
       console.error('Error finishing consultation:', err);
     }
     router.push(`/dashboard/feedback/${sessionId}`);
-  }, [endConsultation, transcript, triggerFeedbackGeneration, router, sessionId]);
+  }, [endConsultation, router, sessionId]);
 
   const handleTimerComplete = () => {
     finishConsultation();
