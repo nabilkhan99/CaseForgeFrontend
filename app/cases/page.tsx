@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { getCasesGroupedByDomain, type CaseBankDomain, type CaseBankStation } from '@/lib/supabase/queries/cases';
+import { getCasesGroupedByDomain, type CaseBankDomain } from '@/lib/supabase/queries/cases';
 import CaseBankCard from '@/components/cases/CaseBankCard';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -137,8 +137,8 @@ export default function CaseBankPage() {
                                 key={f}
                                 onClick={() => setDifficultyFilter(f)}
                                 className={`px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${difficultyFilter === f
-                                        ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20'
-                                        : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/5'
+                                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20'
+                                    : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/5'
                                     }`}
                             >
                                 {f === 'all' ? 'All' : f}
