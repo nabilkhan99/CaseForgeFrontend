@@ -29,12 +29,13 @@ export default function HeroSection() {
                         Begin Your SCA Practice
                         <span className="material-symbols-outlined">arrow_forward</span>
                     </Link>
-                    <a
-                        href="#demo"
-                        className="px-8 py-4 bg-slate-800 text-white font-medium rounded-xl border border-slate-700 hover:bg-slate-700 transition-all text-lg"
+                    <Link
+                        href="/try"
+                        className="px-8 py-4 bg-slate-800 text-white font-medium rounded-xl border border-blue-500/30 hover:bg-blue-500/10 hover:border-blue-400/50 transition-all text-lg flex items-center gap-2 shadow-lg shadow-blue-500/10"
                     >
-                        View Sample Case
-                    </a>
+                        <span className="material-symbols-outlined text-blue-400">science</span>
+                        Try a Case Free
+                    </Link>
                 </div>
 
                 {/* App Preview */}

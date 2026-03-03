@@ -12,6 +12,7 @@ interface ClinicalLayoutProps {
   stationTitle?: string;
   candidateBrief?: string;
   stationId?: string;
+  sessionBasePath?: string;
 }
 
 export default function ClinicalLayout({
@@ -22,6 +23,7 @@ export default function ClinicalLayout({
   stationTitle,
   candidateBrief,
   stationId,
+  sessionBasePath,
 }: ClinicalLayoutProps) {
   return (
     <div className="flex h-screen overflow-hidden">
@@ -31,7 +33,7 @@ export default function ClinicalLayout({
         {children}
       </main>
 
-      {showNotepad && <Notepad candidateBrief={candidateBrief} stationId={stationId || currentStationId} />}
+      {showNotepad && <Notepad candidateBrief={candidateBrief} stationId={stationId || currentStationId} sessionBasePath={sessionBasePath} />}
     </div>
   );
 }

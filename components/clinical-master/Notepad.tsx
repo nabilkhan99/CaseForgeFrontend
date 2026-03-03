@@ -5,9 +5,10 @@ import { useState, useEffect } from 'react';
 interface NotepadProps {
   candidateBrief?: string;
   stationId?: string;
+  sessionBasePath?: string; // e.g. '/try/session' or '/clinical-master/session'
 }
 
-export default function Notepad({ candidateBrief, stationId }: NotepadProps) {
+export default function Notepad({ candidateBrief, stationId, sessionBasePath = '/clinical-master/session' }: NotepadProps) {
   const [notes, setNotes] = useState('');
   const [activeTab, setActiveTab] = useState<'notepad' | 'brief'>('brief');
 
@@ -165,7 +166,7 @@ export default function Notepad({ candidateBrief, stationId }: NotepadProps) {
             onClick={() => {
               const sessionId = crypto.randomUUID();
               const stationParam = stationId ? `?stationId=${stationId}` : '';
-              window.location.href = `/clinical-master/session/${sessionId}${stationParam}`;
+              window.location.href = `${sessionBasePath}/${sessionId}${stationParam}`;
             }}
             className="w-full h-12 bg-primary hover:bg-blue-600 active:bg-blue-700 text-white font-bold rounded-lg shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 transition-all transform active:scale-[0.98]"
           >

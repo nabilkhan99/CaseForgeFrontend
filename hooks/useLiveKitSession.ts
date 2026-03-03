@@ -17,6 +17,7 @@ interface UseLiveKitSessionProps {
     sessionId: string;
     stationId?: string;
     userId?: string;
+    tokenEndpoint?: string; // Custom token API endpoint (default: '/api/livekit-token')
     onSessionStarted?: () => void;
     onConsultationEnded?: () => void;
     onError?: (error: string) => void;
@@ -37,6 +38,7 @@ export function useLiveKitSession({
     sessionId,
     stationId,
     userId,
+    tokenEndpoint = '/api/livekit-token',
     onSessionStarted,
     onConsultationEnded,
     onError,
@@ -65,8 +67,8 @@ export function useLiveKitSession({
             setStatus('connecting');
             setError(null);
 
-            // 1. Fetch token from our API route
-            const res = await fetch('/api/livekit-token', {
+            // 1. Fetch token from our API route (supports custom endpoint for guest flow)
+            const res = await fetch(tokenEndpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sessionId, stationId, userId }),
@@ -180,7 +182,7 @@ export function useLiveKitSession({
             setStatus('disconnected');
             onError?.(errorMessage);
         }
-    }, [status, sessionId, stationId, userId, onSessionStarted, onConsultationEnded, onError]);
+    }, [status, sessionId, stationId, userId, tokenEndpoint, onSessionStarted, onConsultationEnded, onError]);
 
     const endConsultation = useCallback(async () => {
         const room = roomRef.current;
