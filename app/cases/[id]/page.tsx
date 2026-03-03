@@ -189,15 +189,6 @@ export default function CaseDetailPage() {
 
     const sections = parseInstructions(caseData.candidate_instructions);
 
-    // Extract patient info from sections
-    const _patientNameSection = sections.find(s => s.title.toLowerCase().includes('patient name'));
-    const _ageSection = sections.find(s => s.title.toLowerCase().includes('age'));
-    const _situationSection = sections.find(s =>
-        s.title.toLowerCase().includes('situation') ||
-        s.title.toLowerCase().includes('reason') ||
-        s.title.toLowerCase().includes('presenting')
-    );
-
     // Filter out top-level info fields from detailed sections
     const detailSections = sections.filter(
         s =>
