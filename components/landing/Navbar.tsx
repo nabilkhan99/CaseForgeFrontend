@@ -68,6 +68,12 @@ export default function Navbar() {
                         >
                             Stations
                         </a>
+                        <Link
+                            href="/cases"
+                            className="text-slate-300 hover:text-white transition-colors"
+                        >
+                            Cases
+                        </Link>
 
                         {loading ? (
                             <div className="w-20 h-9 bg-slate-800/50 rounded-lg animate-pulse" />
@@ -131,6 +137,13 @@ export default function Navbar() {
                         >
                             Stations
                         </a>
+                        <Link
+                            href="/cases"
+                            className="block px-4 py-2 text-slate-300 hover:text-white transition-colors"
+                            onClick={() => setMobileMenuOpen(false)}
+                        >
+                            Cases
+                        </Link>
 
                         {!loading && (
                             user ? (

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AccessToken } from 'livekit-server-sdk';
 import { RoomAgentDispatch, RoomConfiguration } from '@livekit/protocol';
+import { createClient } from '@/lib/supabase/server';
 
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
 const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET;
@@ -14,8 +15,18 @@ export async function POST(req: NextRequest) {
         );
     }
 
-    const { sessionId, stationId, userId
-    } = await req.json();
+    // Server-side auth: verify the user's Supabase JWT
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+        return NextResponse.json(
+            { error: 'Unauthorized' },
+            { status: 401 }
+        );
+    }
+
+    const { sessionId, stationId } = await req.json();
+    const userId = user.id; // Server-verified, not client-supplied
 
     if (!sessionId) {
         return NextResponse.json(

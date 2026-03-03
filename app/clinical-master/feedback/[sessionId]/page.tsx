@@ -1,12 +1,10 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import FeedbackCard from '@/components/clinical-master/FeedbackCard';
 import { ConsultationFeedback } from '@/lib/clinical-master/types';
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_CLINICAL_MASTER_URL || 'http://localhost:8000';
 
 export default function FeedbackPage() {
   const params = useParams();
@@ -15,27 +13,35 @@ export default function FeedbackPage() {
   const [feedback, setFeedback] = useState<ConsultationFeedback | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const generationTriggered = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
-    let timeoutId: NodeJS.Timeout;
 
-    const fetchFeedback = async () => {
+    const generateAndFetch = async () => {
+      if (generationTriggered.current) return;
+      generationTriggered.current = true;
+
       try {
-        const response = await fetch(
-          `${BACKEND_URL}/feedback/${sessionId}`
-        );
+        // Call the API route to generate feedback (idempotent — returns cached if exists)
+        const response = await fetch('/api/generate-feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId }),
+        });
 
         if (cancelled) return;
 
         if (response.status === 404) {
-          // Feedback not ready yet — keep polling
-          timeoutId = setTimeout(fetchFeedback, 2000);
+          // Transcript not ready yet — wait and retry
+          generationTriggered.current = false;
+          setTimeout(generateAndFetch, 3000);
           return;
         }
 
         if (!response.ok) {
-          console.error('Error fetching feedback:', response.statusText);
+          const errorData = await response.json().catch(() => ({}));
+          console.error('Feedback generation failed:', errorData);
           setError(true);
           setLoading(false);
           return;
@@ -47,28 +53,29 @@ export default function FeedbackPage() {
           setFeedback(data.feedback);
           setLoading(false);
         } else {
-          // Poll every 2 seconds if not ready
-          timeoutId = setTimeout(fetchFeedback, 2000);
+          setError(true);
+          setLoading(false);
         }
       } catch (err) {
         if (cancelled) return;
-        console.error('Error fetching feedback:', err);
+        console.error('Error generating feedback:', err);
         setError(true);
         setLoading(false);
       }
     };
 
-    fetchFeedback();
+    // Small delay to allow transcript to be saved by the agent
+    const timer = setTimeout(generateAndFetch, 2000);
 
     return () => {
       cancelled = true;
-      clearTimeout(timeoutId);
+      clearTimeout(timer);
     };
   }, [sessionId]);
 
   if (loading) {
     return (
-      <div className="flex-1 bg-[#0F1324] flex items-center justify-center">
+      <div className="flex-1 bg-[#0F1324] flex flex-col items-center justify-center gap-4">
         <div className="relative">
           <div className="size-40 rounded-full border-4 border-slate-700/50 flex items-center justify-center">
             <div className="size-40 absolute border-4 border-indigo-500 rounded-full animate-spin border-t-transparent"></div>
@@ -77,6 +84,7 @@ export default function FeedbackPage() {
             </div>
           </div>
         </div>
+        <p className="text-slate-400 text-sm animate-pulse">Generating feedback...</p>
       </div>
     );
   }
@@ -254,4 +262,3 @@ export default function FeedbackPage() {
     </main>
   );
 }
-
