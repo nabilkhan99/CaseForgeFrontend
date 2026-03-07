@@ -71,7 +71,7 @@ export default function CaseBankPage() {
 
             {/* Navbar */}
             <nav className="sticky top-0 z-50 bg-[#070A13]/80 backdrop-blur-xl border-b border-white/5">
-                <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+                <div className="max-w-7xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
                     <Link href="/" className="flex items-center gap-3">
                         <Image
                             src="/fourteenfishermann.png"
@@ -81,7 +81,7 @@ export default function CaseBankPage() {
                             className="h-10 w-auto"
                         />
                     </Link>
-                    <div className="flex items-center gap-6 text-sm font-medium">
+                    <div className="hidden sm:flex items-center gap-6 text-sm font-medium">
                         <Link href="/#features" className="text-gray-400 hover:text-white transition-colors">
                             Features
                         </Link>
@@ -93,7 +93,7 @@ export default function CaseBankPage() {
                         </Link>
                         <Link
                             href="/dashboard"
-                            className="px-4 py-2 bg-purple-600/10 text-purple-400 border border-purple-500/20 rounded-lg hover:bg-purple-600 hover:text-white transition-all"
+                            className="px-4 py-2 min-h-[44px] flex items-center bg-purple-600/10 text-purple-400 border border-purple-500/20 rounded-lg hover:bg-purple-600 hover:text-white transition-all"
                         >
                             Dashboard
                         </Link>
@@ -102,10 +102,10 @@ export default function CaseBankPage() {
             </nav>
 
             {/* Content */}
-            <main className="relative z-10 max-w-7xl mx-auto px-6 py-12">
+            <main className="relative z-10 max-w-7xl mx-auto px-4 md:px-6 py-8 md:py-12">
                 {/* Header */}
-                <div className="mb-10">
-                    <h1 className="text-4xl font-black tracking-tight mb-2">Case Library</h1>
+                <div className="mb-8 md:mb-10">
+                    <h1 className="text-3xl md:text-4xl font-black tracking-tight mb-2">Case Library</h1>
                     <p className="text-gray-400">
                         {loading
                             ? 'Loading cases...'
@@ -115,7 +115,7 @@ export default function CaseBankPage() {
                 </div>
 
                 {/* Search & Filters */}
-                <div className="flex flex-col sm:flex-row gap-4 mb-10">
+                <div className="flex flex-col sm:flex-row gap-4 mb-8 md:mb-10">
                     {/* Search */}
                     <div className="relative flex-1 max-w-xl">
                         <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-gray-500" style={{ fontSize: '20px' }}>
@@ -131,12 +131,12 @@ export default function CaseBankPage() {
                     </div>
 
                     {/* Difficulty pills */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
                         {difficultyFilters.map(f => (
                             <button
                                 key={f}
                                 onClick={() => setDifficultyFilter(f)}
-                                className={`px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${difficultyFilter === f
+                                className={`px-4 py-2.5 min-h-[44px] rounded-lg text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${difficultyFilter === f
                                     ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20'
                                     : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/5'
                                     }`}

@@ -1,7 +1,6 @@
 'use client';
 
 import { Inter } from 'next/font/google';
-import Head from 'next/head';
 import Link from 'next/link';
 import '../globals.css';
 
@@ -13,13 +12,7 @@ export default function ClinicalMasterLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className={`${inter.className} min-h-screen bg-[#070A13] text-white`}>
-      <Head>
-        <link
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
-          rel="stylesheet"
-        />
-      </Head>
+    <div className={`${inter.className} min-h-[100dvh] bg-[#070A13] text-white`}>
       <style jsx global>{`
         body {
           background: #070A13;
@@ -51,7 +44,7 @@ export default function ClinicalMasterLayout({
       {/* Exit button — always visible */}
       <Link
         href="/dashboard"
-        className="fixed top-4 left-4 z-50 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10 transition-all text-xs font-medium backdrop-blur-sm"
+        className="fixed top-4 left-4 z-50 flex items-center gap-1.5 px-3 py-2 min-h-[44px] min-w-[44px] rounded-lg bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10 transition-all text-xs font-medium backdrop-blur-sm"
       >
         <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>arrow_back</span>
         Exit
@@ -61,4 +54,3 @@ export default function ClinicalMasterLayout({
     </div>
   );
 }
-

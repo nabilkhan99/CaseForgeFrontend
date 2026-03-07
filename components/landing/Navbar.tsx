@@ -104,8 +104,9 @@ export default function Navbar() {
 
                     {/* Mobile menu button */}
                     <button
-                        className="md:hidden p-2 text-slate-400 hover:text-white"
+                        className="md:hidden p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
                         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                        aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
                     >
                         <span className="material-symbols-outlined">
                             {mobileMenuOpen ? 'close' : 'menu'}
@@ -115,31 +116,31 @@ export default function Navbar() {
 
                 {/* Mobile menu */}
                 {mobileMenuOpen && (
-                    <div className="md:hidden border-t border-slate-800/50 py-4 space-y-3">
+                    <div className="md:hidden border-t border-slate-800/50 py-4 space-y-1">
                         <a
                             href="#features"
-                            className="block px-4 py-2 text-slate-300 hover:text-white transition-colors"
+                            className="block px-4 py-3 min-h-[44px] flex items-center text-slate-300 hover:text-white transition-colors rounded-lg"
                             onClick={() => setMobileMenuOpen(false)}
                         >
                             Features
                         </a>
                         <a
                             href="#pricing"
-                            className="block px-4 py-2 text-slate-300 hover:text-white transition-colors"
+                            className="block px-4 py-3 min-h-[44px] flex items-center text-slate-300 hover:text-white transition-colors rounded-lg"
                             onClick={() => setMobileMenuOpen(false)}
                         >
                             Pricing
                         </a>
                         <a
                             href="#stations"
-                            className="block px-4 py-2 text-slate-300 hover:text-white transition-colors"
+                            className="block px-4 py-3 min-h-[44px] flex items-center text-slate-300 hover:text-white transition-colors rounded-lg"
                             onClick={() => setMobileMenuOpen(false)}
                         >
                             Stations
                         </a>
                         <Link
                             href="/cases"
-                            className="block px-4 py-2 text-slate-300 hover:text-white transition-colors"
+                            className="block px-4 py-3 min-h-[44px] flex items-center text-slate-300 hover:text-white transition-colors rounded-lg"
                             onClick={() => setMobileMenuOpen(false)}
                         >
                             Cases
@@ -147,10 +148,10 @@ export default function Navbar() {
 
                         {!loading && (
                             user ? (
-                                <div className="space-y-2 pt-2 border-t border-slate-800/50">
+                                <div className="space-y-1 pt-2 border-t border-slate-800/50">
                                     <Link
                                         href="/dashboard"
-                                        className="block px-4 py-2 text-primary hover:text-white transition-colors"
+                                        className="block px-4 py-3 min-h-[44px] flex items-center text-primary hover:text-white transition-colors rounded-lg"
                                         onClick={() => setMobileMenuOpen(false)}
                                     >
                                         Dashboard
@@ -160,7 +161,7 @@ export default function Navbar() {
                                             handleSignOut();
                                             setMobileMenuOpen(false);
                                         }}
-                                        className="block w-full text-left px-4 py-2 text-slate-400 hover:text-white transition-colors"
+                                        className="block w-full text-left px-4 py-3 min-h-[44px] flex items-center text-slate-400 hover:text-white transition-colors rounded-lg"
                                     >
                                         Sign Out
                                     </button>
@@ -168,7 +169,7 @@ export default function Navbar() {
                             ) : (
                                 <Link
                                     href="/auth/sign-in"
-                                    className="block px-4 py-2 text-primary hover:text-white transition-colors"
+                                    className="block px-4 py-3 min-h-[44px] flex items-center text-primary hover:text-white transition-colors rounded-lg"
                                     onClick={() => setMobileMenuOpen(false)}
                                 >
                                     Sign In

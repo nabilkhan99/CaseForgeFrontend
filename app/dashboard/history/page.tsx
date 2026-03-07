@@ -62,7 +62,7 @@ export default function HistoryPage() {
 
     if (loading) {
         return (
-            <main className="flex-1 bg-dashboard-gradient overflow-hidden relative flex items-center justify-center h-screen">
+            <main className="flex-1 bg-dashboard-gradient overflow-auto relative flex items-center justify-center">
                 <div className="flex flex-col items-center gap-4">
                     <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
                     <p className="text-gray-400 text-sm">Loading session history...</p>
@@ -72,15 +72,15 @@ export default function HistoryPage() {
     }
 
     return (
-        <main className="flex-1 bg-dashboard-gradient overflow-hidden relative flex flex-col h-screen">
+        <main className="flex-1 bg-dashboard-gradient overflow-auto relative flex flex-col">
             {/* Background Gradients */}
             <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-[120px] pointer-events-none" />
             <div className="absolute bottom-[-10%] left-[10%] w-[400px] h-[400px] bg-blue-600/10 rounded-full blur-[100px] pointer-events-none" />
 
-            <div className="max-w-4xl mx-auto w-full h-full flex flex-col relative z-10 px-8">
+            <div className="max-w-4xl mx-auto w-full flex-1 flex flex-col relative z-10 px-4 md:px-8">
                 {/* Header */}
-                <header className="w-full pt-10 pb-8 flex flex-col shrink-0">
-                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-gray-500 mb-6">
+                <header className="w-full pt-6 md:pt-10 pb-6 md:pb-8 flex flex-col shrink-0">
+                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-gray-500 mb-4 md:mb-6 flex-wrap">
                         <Link href="/dashboard" className="hover:text-purple-400 transition-colors flex items-center gap-1">
                             <span className="material-symbols-outlined text-sm">home</span>
                             Dashboard
@@ -88,9 +88,9 @@ export default function HistoryPage() {
                         <span className="material-symbols-outlined text-xs">chevron_right</span>
                         <span className="text-purple-400">Session History</span>
                     </div>
-                    <div className="flex items-end justify-between">
+                    <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
                         <div>
-                            <h1 className="text-4xl font-black text-white tracking-tight">Session History</h1>
+                            <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight">Session History</h1>
                             <p className="text-gray-400 text-sm mt-2 font-medium">
                                 Review your past consultation sessions and scores
                             </p>
@@ -131,7 +131,7 @@ export default function HistoryPage() {
                                 <div className="flex justify-center py-6">
                                     <button
                                         onClick={loadMore}
-                                        className="px-6 py-2.5 rounded-xl border border-white/10 text-gray-400 text-sm font-bold hover:bg-white/5 transition-all"
+                                        className="px-6 py-3 min-h-[44px] rounded-xl border border-white/10 text-gray-400 text-sm font-bold hover:bg-white/5 transition-all"
                                     >
                                         Load More Sessions
                                     </button>

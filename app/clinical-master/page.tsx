@@ -103,7 +103,7 @@ function ClinicalMasterContent() {
   return (
     <ClinicalLayout showSidebar={true} showNotepad={true} stationTitle={station?.title}>
       {/* Main Content Area */}
-      <div className="flex-1 relative flex flex-col items-center justify-center p-8 bg-[#080c12]">
+      <div className="flex-1 relative flex flex-col items-center justify-center p-4 md:p-8 bg-[#080c12]">
         {/* Background Gradients */}
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none"></div>
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-600/10 rounded-full blur-[120px] pointer-events-none"></div>
@@ -114,7 +114,7 @@ function ClinicalMasterContent() {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500" />
           ) : station ? (
             <>
-              <h2 className="text-5xl font-extrabold text-white mb-4 tracking-tight">
+              <h2 className="text-3xl md:text-5xl font-extrabold text-white mb-4 tracking-tight">
                 {station.title}
               </h2>
 
@@ -125,7 +125,7 @@ function ClinicalMasterContent() {
                 {station.domain_name}
               </p>
 
-              <div className="flex items-center gap-3 text-indigo-300/80 font-medium mb-12 bg-indigo-500/5 px-6 py-2 rounded-full border border-indigo-500/10">
+              <div className="flex items-center gap-3 text-indigo-300/80 font-medium mb-8 md:mb-12 bg-indigo-500/5 px-4 md:px-6 py-2 rounded-full border border-indigo-500/10 text-sm md:text-base">
                 <span className="material-symbols-outlined text-[20px]">schedule</span>
                 <span className="tracking-wide">{readingMins} min reading / {consultMins} min consultation</span>
               </div>
@@ -133,7 +133,7 @@ function ClinicalMasterContent() {
               <div className="relative group w-full max-w-sm">
                 <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl blur opacity-30 group-hover:opacity-60 transition duration-1000 group-hover:duration-200"></div>
                 <Link href={`/clinical-master/station/${station.id}`}>
-                  <button className="relative w-full py-6 px-12 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl flex items-center justify-center gap-4 text-white font-bold text-xl shadow-2xl transition-all hover:scale-[1.02] active:scale-[0.98]">
+                  <button className="relative w-full py-4 px-8 md:py-6 md:px-12 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl flex items-center justify-center gap-4 text-white font-bold text-lg md:text-xl shadow-2xl transition-all hover:scale-[1.02] active:scale-[0.98] min-h-[44px]">
                     <span>Start Station</span>
                     <span className="material-symbols-outlined text-2xl">play_circle</span>
                   </button>

@@ -95,25 +95,43 @@ export default function DashboardPage() {
 
     if (loading) {
         return (
-            <main className="flex-1 bg-dashboard-gradient overflow-hidden relative flex items-center justify-center h-screen">
-                <div className="flex flex-col items-center gap-4">
-                    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
-                    <p className="text-gray-400 text-sm">Loading your dashboard...</p>
+            <main className="flex-1 bg-dashboard-gradient overflow-auto relative flex flex-col">
+                <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-[120px] pointer-events-none" />
+                <div className="max-w-6xl mx-auto w-full flex-1 flex flex-col relative z-10">
+                    {/* Skeleton header */}
+                    <header className="w-full px-4 md:px-8 py-6 flex items-center shrink-0 border-b border-white/5">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 w-full">
+                            {[...Array(3)].map((_, i) => (
+                                <div key={i} className="glass-card rounded-2xl p-4 animate-pulse">
+                                    <div className="h-3 bg-white/10 rounded w-1/2 mb-3" />
+                                    <div className="h-5 bg-white/10 rounded w-3/4" />
+                                </div>
+                            ))}
+                        </div>
+                    </header>
+                    {/* Skeleton content */}
+                    <div className="flex-1 px-4 md:px-8 py-6 md:py-8 flex flex-col gap-6">
+                        <div className="flex flex-col md:flex-row gap-6">
+                            <div className="flex-1 glass-card rounded-2xl p-6 min-h-[160px] animate-pulse"><div className="h-4 bg-white/10 rounded w-2/3 mb-3" /><div className="h-3 bg-white/10 rounded w-1/2" /></div>
+                            <div className="flex-1 glass-card rounded-2xl p-6 min-h-[160px] animate-pulse"><div className="h-4 bg-white/10 rounded w-2/3 mb-3" /><div className="h-3 bg-white/10 rounded w-1/2" /></div>
+                        </div>
+                        <div className="glass-card rounded-2xl p-6 animate-pulse"><div className="h-4 bg-white/10 rounded w-1/3 mb-4" /><div className="h-20 bg-white/10 rounded" /></div>
+                    </div>
                 </div>
             </main>
         );
     }
 
     return (
-        <main className="flex-1 bg-dashboard-gradient overflow-hidden relative flex flex-col h-screen">
+        <main className="flex-1 bg-dashboard-gradient overflow-auto relative flex flex-col">
             {/* Background Gradients */}
             <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-[120px] pointer-events-none" />
             <div className="absolute bottom-[-10%] left-[10%] w-[400px] h-[400px] bg-blue-600/10 rounded-full blur-[100px] pointer-events-none" />
 
-            <div className="max-w-6xl mx-auto w-full h-full flex flex-col relative z-10">
+            <div className="max-w-6xl mx-auto w-full flex-1 flex flex-col relative z-10">
                 {/* Header Stats */}
-                <header className="w-full px-8 py-6 flex items-center shrink-0 border-b border-white/5">
-                    <div className="grid grid-cols-3 gap-6 w-full">
+                <header className="w-full px-4 md:px-8 py-6 flex items-center shrink-0 border-b border-white/5">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 w-full">
                         <StatCard
                             icon="local_fire_department"
                             iconColor="orange"
@@ -136,7 +154,7 @@ export default function DashboardPage() {
                 </header>
 
                 {/* Main Content */}
-                <div className="flex-1 px-8 py-8 overflow-hidden flex flex-col gap-6">
+                <div className="flex-1 px-4 md:px-8 py-6 md:py-8 flex flex-col gap-6">
                     {/* Hero Cards Row */}
                     <section className="flex flex-col md:flex-row gap-6 shrink-0">
                         {lastStation ? (
