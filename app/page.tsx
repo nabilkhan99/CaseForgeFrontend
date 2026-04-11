@@ -77,9 +77,7 @@ function WaveformBars({ active = true, bars = 20 }: { active?: boolean; bars?: n
                   duration: 1.2 + (i % 4) * 0.15,
                   repeat: Infinity,
                   delay: (i % 5) * 0.08,
-                  type: 'spring',
-                  stiffness: 60,
-                  damping: 12,
+                  ease: 'easeInOut',
                 }
               : {}
           }
