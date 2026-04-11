@@ -51,7 +51,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className="dark scroll-smooth">
+    <html lang="en" className="scroll-smooth">
       <body className={`${jakarta.variable} ${jetbrains.variable} font-sans bg-surface text-body antialiased overflow-x-hidden`}>
         {children}
         <AnalyticsWrapper />

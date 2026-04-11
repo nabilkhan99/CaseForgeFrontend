@@ -32,9 +32,9 @@ body::before {
 }
 
 body {
-  background: #09090b;
+  background: var(--color-bg);
   min-height: 100dvh;
-  color: var(--color-text-primary);
+  color: var(--color-body);
   overflow-x: hidden;
   padding-bottom: env(safe-area-inset-bottom);
   -webkit-font-smoothing: antialiased;
@@ -133,15 +133,27 @@ body {
 
 @layer components {
   .card {
-    @apply backdrop-blur-lg bg-white/10 border border-white/20 shadow-2xl rounded-2xl p-8 hover:bg-white/15 transition-all duration-300;
+    @apply backdrop-blur-lg bg-white/70 border border-black/[0.06] rounded-2xl p-8 transition-all duration-300;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  }
+  .card:hover {
+    box-shadow: 0 12px 32px rgba(0,0,0,0.1), 0 4px 8px rgba(0,0,0,0.04);
   }
 
   .glass-input {
-    @apply bg-white/5 border border-white/10 rounded-xl p-4 text-white placeholder-white/50 ring-offset-neutral-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200;
-
-    &.text-sm {
-      @apply px-3 py-1.5;
-    }
+    @apply bg-white/70 border border-black/[0.06] rounded-xl p-4 transition-all duration-200;
+    color: #1C1917;
+  }
+  .glass-input::placeholder {
+    color: #A8A29E;
+  }
+  .glass-input:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(180, 83, 9, 0.3);
+    border-color: rgba(180, 83, 9, 0.3);
+  }
+  .glass-input.text-sm {
+    @apply px-3 py-1.5;
   }
 
   .primary-button {
@@ -188,7 +200,8 @@ body {
   }
 
   .focus-ring {
-    @apply focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:outline-none;
+    @apply focus:ring-2 focus:ring-offset-2 focus:outline-none;
+    --tw-ring-color: rgba(180, 83, 9, 0.5);
   }
 
   .button-press {
@@ -196,7 +209,9 @@ body {
   }
 
   .focus-visible-ring {
-    @apply outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#09090b];
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-offset-2;
+    --tw-ring-color: rgba(180, 83, 9, 0.5);
+    --tw-ring-offset-color: #FAF9F6;
   }
 }
 
@@ -232,14 +247,14 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #09090b;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.12);
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.2);
 }
