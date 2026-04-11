@@ -4,52 +4,19 @@ import {
   motion,
   useScroll,
   useTransform,
-  useSpring,
-  useInView,
   AnimatePresence,
 } from 'framer-motion';
 import Link from 'next/link';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-interface AnimatedCounterProps {
-  target: number;
-  suffix?: string;
-  prefix?: string;
-}
 
 interface ChatMessage {
   role: 'patient' | 'doctor';
   text: string;
 }
 
-// ─── AnimatedCounter ──────────────────────────────────────────────────────────
-
-function AnimatedCounter({ target, suffix = '', prefix = '' }: AnimatedCounterProps) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const isInView = useInView(ref, { once: true });
-  const spring = useSpring(0, { stiffness: 50, damping: 20 });
-  const [display, setDisplay] = useState('0');
-
-  useEffect(() => {
-    if (isInView) spring.set(target);
-  }, [isInView, spring, target]);
-
-  useEffect(() => {
-    const unsubscribe = spring.on('change', (v) => {
-      setDisplay(Math.round(v).toString());
-    });
-    return unsubscribe;
-  }, [spring]);
-
-  return (
-    <span ref={ref}>
-      {prefix}{display}{suffix}
-    </span>
-  );
-}
 
 // ─── Waveform ─────────────────────────────────────────────────────────────────
 
@@ -225,72 +192,6 @@ export default function LandingPage() {
     hidden: { opacity: 0, y: 22 },
     show: { opacity: 1, y: 0, transition: { type: 'spring' as const, stiffness: 90, damping: 18 } },
   };
-
-  // Feature rows
-  const features = [
-    {
-      number: '01',
-      title: 'Voice consultations with real AI patients',
-      description:
-        'Step into lifelike 12-minute consultations. Our AI patients respond naturally, push back, and escalate — exactly like your SCA exam station.',
-      visual: <WaveformBars active={true} bars={18} />,
-    },
-    {
-      number: '02',
-      title: 'Instant SCA scoring across all 3 domains',
-      description:
-        'Every session ends with structured feedback scored on Data Gathering, Clinical Management, and Interpersonal Skills — the exact SCA marking framework.',
-      visual: (
-        <div className="flex flex-col gap-2 w-full max-w-[140px]">
-          {[
-            { label: 'Data Gathering', pct: 82 },
-            { label: 'Clinical Mgmt', pct: 74 },
-            { label: 'Interpersonal', pct: 91 },
-          ].map((item, i) => (
-            <div key={i} className="flex flex-col gap-1">
-              <div className="flex justify-between items-center">
-                <span className="text-[9px] font-mono text-muted uppercase tracking-wide">{item.label}</span>
-                <span className="text-[9px] font-mono text-primary font-semibold">{item.pct}%</span>
-              </div>
-              <div className="h-[3px] w-full bg-black/[0.06] rounded-full overflow-hidden">
-                <motion.div
-                  className="h-full rounded-full"
-                  style={{ background: 'linear-gradient(90deg, #B45309, #F59E0B)' }}
-                  initial={{ width: 0 }}
-                  whileInView={{ width: `${item.pct}%` }}
-                  viewport={{ once: true, margin: '-80px' }}
-                  transition={{ type: 'spring', stiffness: 50, damping: 18, delay: i * 0.12 }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      ),
-    },
-    {
-      number: '03',
-      title: '78 cases across 12 RCGP domains',
-      description:
-        'From MSK to mental health, ENT to end of life — our case library covers the full breadth of the RCGP curriculum with new cases added every month.',
-      visual: (
-        <div className="grid grid-cols-4 gap-1">
-          {Array.from({ length: 12 }).map((_, i) => (
-            <motion.div
-              key={i}
-              className="h-5 w-5 rounded-[4px] border border-black/[0.06]"
-              style={{
-                background: i < 8 ? `rgba(180, 83, 9, ${0.15 + i * 0.07})` : 'rgba(0,0,0,0.04)',
-              }}
-              initial={{ scale: 0, opacity: 0 }}
-              whileInView={{ scale: 1, opacity: 1 }}
-              viewport={{ once: true, margin: '-80px' }}
-              transition={{ type: 'spring', stiffness: 140, damping: 16, delay: i * 0.05 }}
-            />
-          ))}
-        </div>
-      ),
-    },
-  ];
 
   return (
     <div className="min-h-screen bg-surface font-sans">
@@ -658,140 +559,305 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── DIVIDER ───────────────────────────────────────────────────── */}
-      <div id="features" className="relative flex items-center justify-center py-12 px-6">
-        <div className="absolute inset-x-6 top-1/2 -translate-y-1/2 overflow-hidden">
-          <motion.svg
-            viewBox="0 0 1200 2"
-            className="w-full"
-            style={{ overflow: 'visible' }}
+      {/* ── FEATURE 1: VOICE CONSULTATIONS — Light bg, text left, mockup right ── */}
+      <section id="features" className="bg-surface py-24 lg:py-32 overflow-hidden">
+        <div className="max-w-[1200px] mx-auto px-6">
+          <motion.div
+            className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center"
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-100px' }}
+            transition={{ type: 'spring', stiffness: 60, damping: 20 }}
           >
-            <motion.line
-              x1="600" y1="1" x2="0" y2="1"
-              stroke="rgba(0,0,0,0.08)"
-              strokeWidth="1"
-              initial={{ pathLength: 0, opacity: 0 }}
-              whileInView={{ pathLength: 1, opacity: 1 }}
-              viewport={{ once: true, margin: '-80px' }}
-              transition={{ duration: 0.8, ease: 'easeOut', delay: 0.1 }}
-            />
-            <motion.line
-              x1="600" y1="1" x2="1200" y2="1"
-              stroke="rgba(0,0,0,0.08)"
-              strokeWidth="1"
-              initial={{ pathLength: 0, opacity: 0 }}
-              whileInView={{ pathLength: 1, opacity: 1 }}
-              viewport={{ once: true, margin: '-80px' }}
-              transition={{ duration: 0.8, ease: 'easeOut', delay: 0.1 }}
-            />
-          </motion.svg>
-        </div>
-        <motion.span
-          className="relative bg-surface z-10 px-5 text-[11px] font-mono uppercase tracking-[0.16em] text-muted"
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true, margin: '-80px' }}
-          transition={{ delay: 0.4, duration: 0.5 }}
-        >
-          How it works
-        </motion.span>
-      </div>
+            {/* Copy */}
+            <div>
+              <div className="text-[11px] font-mono font-medium tracking-[0.12em] uppercase text-primary mb-5">Voice Consultations</div>
+              <h2 className="text-[36px] lg:text-[44px] font-extrabold text-heading tracking-[-0.03em] leading-[1.08] mb-5">
+                Speak to patients<br />who <span className="gradient-text">talk back</span>
+              </h2>
+              <p className="text-[16px] text-body leading-[1.75] mb-8 max-w-[440px]">
+                12-minute stations with AI patients that respond naturally, push back on vague questions, and escalate emotions — just like the real SCA.
+              </p>
+              <div className="flex flex-wrap gap-x-6 gap-y-2 text-[13px] text-muted">
+                {['Real-time voice', 'Adaptive responses', '12 min per station'].map((item) => (
+                  <span key={item} className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary-lighter flex-shrink-0" />
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
 
-      {/* ── FEATURES ──────────────────────────────────────────────────── */}
-      <section className="max-w-[1200px] mx-auto px-6 pb-28">
-        {/* Intro */}
-        <motion.div
-          className="mb-16 max-w-[560px]"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: '-80px' }}
-          transition={{ type: 'spring', stiffness: 70, damping: 18 }}
-        >
-          <h2 className="text-[42px] font-bold text-heading tracking-[-0.025em] leading-[1.1] mb-5">
-            Everything you need to{' '}
-            <span className="gradient-text">pass first time.</span>
-          </h2>
-          <p className="text-[16px] text-body leading-[1.75]">
-            Built by GP trainees who failed their SCA. We know exactly what&apos;s missing from
-            standard revision — and we built it.
-          </p>
-        </motion.div>
-
-        {/* Feature rows */}
-        <div className="flex flex-col">
-          {features.map((feature, i) => (
+            {/* Rich consultation mockup */}
             <motion.div
-              key={i}
-              className="group relative grid grid-cols-1 md:grid-cols-[80px_1fr_200px] gap-6 md:gap-10 py-10 border-t border-black/[0.06] items-start cursor-default overflow-hidden"
-              initial={{ opacity: 0, x: -24 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true, margin: '-80px' }}
-              transition={{ type: 'spring', stiffness: 70, damping: 18, delay: i * 0.1 }}
-              whileHover="hover"
+              className="relative"
+              whileHover={{ y: -4 }}
+              transition={{ type: 'spring', stiffness: 200, damping: 20 }}
             >
-              {/* Hover wash */}
+              <div className="rounded-2xl overflow-hidden bg-white border border-black/[0.08] shadow-elevation-4">
+                {/* Chrome */}
+                <div className="flex items-center gap-2 px-4 py-2.5 bg-black/[0.02] border-b border-black/[0.06]">
+                  <div className="flex gap-1.5">
+                    <div className="w-[10px] h-[10px] rounded-full bg-[#FF5F57]" />
+                    <div className="w-[10px] h-[10px] rounded-full bg-[#FEBC2E]" />
+                    <div className="w-[10px] h-[10px] rounded-full bg-[#28C840]" />
+                  </div>
+                  <div className="flex-1 text-center">
+                    <span className="text-[10px] font-mono text-muted">Station 14 — Mrs. Thompson</span>
+                  </div>
+                  <span className="font-mono text-[11px] font-semibold text-primary">08:34</span>
+                </div>
+
+                {/* Layout: sidebar + main */}
+                <div className="flex min-h-[300px]">
+                  {/* Sidebar */}
+                  <div className="w-[180px] bg-[#FAFAF8] border-r border-black/[0.05] p-4 hidden sm:flex flex-col gap-2">
+                    <div className="text-[9px] font-bold text-heading uppercase tracking-[0.06em] mb-1">Station 14</div>
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/[0.08] text-primary text-[11px] font-semibold">
+                      <span className="w-[6px] h-[6px] rounded-full bg-success" />
+                      Consultation
+                    </div>
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-muted text-[11px]">
+                      <span className="w-[6px] h-[6px] rounded-full bg-black/[0.08]" />
+                      Patient notes
+                    </div>
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-muted text-[11px]">
+                      <span className="w-[6px] h-[6px] rounded-full bg-black/[0.08]" />
+                      Notepad
+                    </div>
+                  </div>
+
+                  {/* Main consultation area */}
+                  <div className="flex-1 flex flex-col">
+                    {/* Patient header */}
+                    <div className="flex items-center gap-3 px-5 py-3 border-b border-black/[0.04]">
+                      <div className="w-9 h-9 rounded-[10px] bg-gradient-to-br from-amber-100 to-amber-200 flex items-center justify-center text-[12px] font-semibold text-amber-800 flex-shrink-0">MT</div>
+                      <div>
+                        <div className="text-[12px] font-semibold text-heading">Mrs. Thompson, 62</div>
+                        <div className="text-[10px] text-muted">Headache &middot; 3 days</div>
+                      </div>
+                      <div className="ml-auto flex items-center gap-2">
+                        <motion.div className="w-[6px] h-[6px] rounded-full bg-success" animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }} />
+                        <span className="text-[9px] font-semibold text-success uppercase tracking-[0.04em]">Live</span>
+                      </div>
+                    </div>
+
+                    {/* Chat */}
+                    <div className="flex-1 p-5 flex flex-col gap-3">
+                      <div className="self-start max-w-[80%] px-3.5 py-2.5 rounded-2xl rounded-bl-sm bg-black/[0.03] border border-black/[0.04] text-[11px] text-body leading-[1.6]">
+                        I&apos;ve had this terrible headache for three days now. It&apos;s mostly in the mornings when I wake up.
+                      </div>
+                      <div className="self-end max-w-[75%] px-3.5 py-2.5 rounded-2xl rounded-br-sm text-[11px] text-white leading-[1.6]" style={{ background: 'linear-gradient(135deg, #B45309, #D97706)' }}>
+                        I&apos;m sorry to hear that. Can you show me where exactly the pain is?
+                      </div>
+                      <div className="self-start max-w-[80%] px-3.5 py-2.5 rounded-2xl rounded-bl-sm bg-black/[0.03] border border-black/[0.04] text-[11px] text-body leading-[1.6]">
+                        It&apos;s right here, at the back of my head. Sometimes behind my eyes too.
+                      </div>
+                    </div>
+
+                    {/* Waveform bar */}
+                    <div className="px-5 py-3 border-t border-black/[0.04] flex items-center gap-3">
+                      <div className="flex-1"><WaveformBars active bars={24} /></div>
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'linear-gradient(135deg, #B45309, #D97706)' }}>
+                        <svg width="10" height="12" viewBox="0 0 10 12" fill="white"><path d="M5 0C3.35 0 2 1.35 2 3v5c0 1.65 1.35 3 3 3s3-1.35 3-3V3c0-1.65-1.35-3-3-3z" /></svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Floating "78 cases" pill */}
               <motion.div
-                className="absolute inset-0 pointer-events-none"
-                variants={{ hover: { opacity: 1 }, initial: { opacity: 0 } }}
-                initial="initial"
-                style={{ background: 'linear-gradient(90deg, rgba(180,83,9,0.03) 0%, transparent 60%)' }}
-                transition={{ duration: 0.25 }}
-              />
-
-              {/* Number */}
-              <div className="text-[60px] font-bold font-mono text-black/[0.04] leading-none select-none pt-1 md:text-right">
-                {feature.number}
-              </div>
-
-              {/* Text */}
-              <div>
-                <h3 className="text-[22px] font-semibold text-heading tracking-[-0.015em] leading-[1.2] mb-3">
-                  {feature.title}
-                </h3>
-                <p className="text-[15px] text-body leading-[1.75] max-w-[480px]">
-                  {feature.description}
-                </p>
-              </div>
-
-              {/* Visual */}
-              <div className="flex items-center justify-start md:justify-end pt-1">
-                {feature.visual}
-              </div>
+                className="absolute -top-3 -right-3 glass-panel rounded-xl px-3.5 py-2 shadow-elevation-2 flex items-center gap-2"
+                initial={{ scale: 0 }}
+                whileInView={{ scale: 1 }}
+                viewport={{ once: true }}
+                transition={{ type: 'spring', stiffness: 160, damping: 14, delay: 0.4 }}
+              >
+                <span className="w-2 h-2 rounded-full bg-success" />
+                <span className="text-[11px] font-semibold text-heading">78 stations</span>
+              </motion.div>
             </motion.div>
-          ))}
-
-          {/* Bottom border */}
-          <div className="border-t border-black/[0.06]" />
+          </motion.div>
         </div>
       </section>
 
-      {/* ── NUMBERS ───────────────────────────────────────────────────── */}
-      <section id="cases" className="py-6">
+      {/* ── FEATURE 2: SCA SCORING — Dark bg, mockup left, text right ────── */}
+      <section className="bg-[#1C1917] py-24 lg:py-32 overflow-hidden">
         <div className="max-w-[1200px] mx-auto px-6">
-          <div className="border-t border-black/[0.06]" />
-          <div className="grid grid-cols-2 md:grid-cols-4 py-14 gap-8">
-            {[
-              { target: 78, suffix: '', label: 'Case stations' },
-              { target: 12, suffix: '', label: 'RCGP domains' },
-              { target: 3, suffix: '', label: 'SCA domains scored' },
-              { target: 12, suffix: 'min', label: 'Per session' },
-            ].map((stat, i) => (
-              <motion.div
-                key={i}
-                className="flex flex-col items-start"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: '-80px' }}
-                transition={{ type: 'spring', stiffness: 70, damping: 18, delay: i * 0.1 }}
-              >
-                <div className="text-[56px] font-bold font-mono text-heading leading-none tracking-[-0.03em] mb-2">
-                  <AnimatedCounter target={stat.target} suffix={stat.suffix} />
+          <motion.div
+            className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center"
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-100px' }}
+            transition={{ type: 'spring', stiffness: 60, damping: 20 }}
+          >
+            {/* Scoring mockup */}
+            <motion.div
+              className="order-2 lg:order-1"
+              whileHover={{ y: -4 }}
+              transition={{ type: 'spring', stiffness: 200, damping: 20 }}
+            >
+              <div className="rounded-2xl bg-[#292524] border border-white/[0.06] p-7 shadow-[0_24px_48px_rgba(0,0,0,0.3)]">
+                {/* Header */}
+                <div className="flex items-start justify-between mb-7">
+                  <div>
+                    <div className="font-mono text-[52px] font-bold text-white leading-none tracking-[-0.03em]">78</div>
+                    <div className="text-[12px] text-[#A8A29E] mt-1">Overall score &middot; Station 14</div>
+                  </div>
+                  <div className="px-3 py-1.5 rounded-lg bg-success/[0.15] text-success text-[11px] font-semibold uppercase tracking-[0.04em]">&#10003; Pass</div>
                 </div>
-                <div className="text-[13px] text-muted">{stat.label}</div>
-              </motion.div>
-            ))}
-          </div>
-          <div className="border-b border-black/[0.06]" />
+
+                {/* Domain bars */}
+                <div className="flex flex-col gap-5 mb-6">
+                  {[
+                    { label: 'Data Gathering', pct: 82 },
+                    { label: 'Clinical Management', pct: 71 },
+                    { label: 'Interpersonal Skills', pct: 88 },
+                  ].map((d, i) => (
+                    <div key={d.label} className="flex items-center gap-3">
+                      <span className="text-[11px] text-[#A8A29E] w-[140px] font-medium flex-shrink-0">{d.label}</span>
+                      <div className="flex-1 h-2 bg-white/[0.06] rounded-full overflow-hidden">
+                        <motion.div
+                          className="h-full rounded-full"
+                          style={{ background: 'linear-gradient(90deg, #B45309, #F59E0B)' }}
+                          initial={{ width: 0 }}
+                          whileInView={{ width: `${d.pct}%` }}
+                          viewport={{ once: true }}
+                          transition={{ type: 'spring', stiffness: 40, damping: 18, delay: 0.3 + i * 0.15 }}
+                        />
+                      </div>
+                      <span className="font-mono text-[12px] font-semibold text-white w-[36px] text-right">{d.pct}%</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Feedback items */}
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-start gap-2.5 p-3 rounded-xl bg-white/[0.03] border border-white/[0.04] text-[11px] text-[#A8A29E] leading-[1.5]">
+                    <span className="text-primary-light flex-shrink-0 mt-0.5">&#10003;</span>
+                    Strong open questions exploring patient&apos;s ideas, concerns, and expectations
+                  </div>
+                  <div className="flex items-start gap-2.5 p-3 rounded-xl bg-white/[0.03] border border-white/[0.04] text-[11px] text-[#A8A29E] leading-[1.5]">
+                    <span className="text-primary-lighter flex-shrink-0 mt-0.5">&#9889;</span>
+                    Consider safety-netting for red flag symptoms earlier in the consultation
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Copy */}
+            <div className="order-1 lg:order-2">
+              <div className="text-[11px] font-mono font-medium tracking-[0.12em] uppercase text-primary-light mb-5">Instant Scoring</div>
+              <h2 className="text-[36px] lg:text-[44px] font-extrabold text-white tracking-[-0.03em] leading-[1.08] mb-5">
+                Know your score<br /><span style={{ color: '#F59E0B' }}>before exam day</span>
+              </h2>
+              <p className="text-[16px] text-[#A8A29E] leading-[1.75] mb-8 max-w-[440px]">
+                Every consultation ends with structured feedback scored on Data Gathering, Clinical Management, and Interpersonal Skills — the exact SCA marking framework.
+              </p>
+              <div className="flex flex-wrap gap-x-6 gap-y-2 text-[13px] text-[#78716C]">
+                {['3 SCA domains', 'Actionable feedback', 'Track over time'].map((item) => (
+                  <span key={item} className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary-lighter flex-shrink-0" />
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* ── FEATURE 3: RCGP COVERAGE — Warm bg, text left, grid right ──── */}
+      <section id="cases" className="bg-surface-warm py-24 lg:py-32 overflow-hidden">
+        <div className="max-w-[1200px] mx-auto px-6">
+          <motion.div
+            className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center"
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-100px' }}
+            transition={{ type: 'spring', stiffness: 60, damping: 20 }}
+          >
+            {/* Copy */}
+            <div>
+              <div className="text-[11px] font-mono font-medium tracking-[0.12em] uppercase text-primary mb-5">RCGP Coverage</div>
+              <h2 className="text-[36px] lg:text-[44px] font-extrabold text-heading tracking-[-0.03em] leading-[1.08] mb-5">
+                Every domain.<br /><span className="gradient-text">Every specialty.</span>
+              </h2>
+              <p className="text-[16px] text-body leading-[1.75] mb-8 max-w-[440px]">
+                78 cases spanning all 12 RCGP curriculum domains. Track your progress and see exactly where to focus your remaining practice time.
+              </p>
+              {/* Stat row */}
+              <div className="flex gap-8">
+                {[
+                  { value: '78', label: 'Case stations' },
+                  { value: '12', label: 'RCGP domains' },
+                  { value: '26', label: 'Specialties' },
+                ].map((s) => (
+                  <div key={s.label}>
+                    <div className="font-mono text-[32px] font-bold text-heading leading-none tracking-[-0.03em]">{s.value}</div>
+                    <div className="text-[11px] text-muted mt-1">{s.label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Domain grid mockup */}
+            <motion.div
+              whileHover={{ y: -4 }}
+              transition={{ type: 'spring', stiffness: 200, damping: 20 }}
+            >
+              <div className="rounded-2xl bg-white border border-black/[0.06] p-6 shadow-elevation-3">
+                <div className="flex items-center justify-between mb-5">
+                  <span className="text-[13px] font-bold text-heading">Your RCGP Blueprint</span>
+                  <span className="text-[10px] font-semibold text-primary bg-primary/[0.08] px-2.5 py-1 rounded-md">8 / 12 started</span>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { name: 'Cardiovascular', pct: 85, color: 'green' },
+                    { name: 'Mental Health', pct: 62, color: 'amber' },
+                    { name: 'MSK', pct: 74, color: 'green' },
+                    { name: 'Respiratory', pct: 45, color: 'amber' },
+                    { name: "Women's Health", pct: 91, color: 'green' },
+                    { name: 'ENT', pct: 0, color: 'gray' },
+                    { name: 'Neurology', pct: 33, color: 'amber' },
+                    { name: 'Paediatrics', pct: 78, color: 'green' },
+                    { name: 'Renal', pct: 0, color: 'gray' },
+                    { name: 'Endocrine', pct: 0, color: 'gray' },
+                    { name: 'Dermatology', pct: 20, color: 'amber' },
+                    { name: 'Gastro', pct: 70, color: 'green' },
+                  ].map((d, i) => (
+                    <motion.div
+                      key={d.name}
+                      className="aspect-square rounded-xl border border-black/[0.04] flex flex-col items-center justify-center gap-1 p-2"
+                      style={{
+                        background:
+                          d.color === 'green' ? `rgba(22,163,74,${0.06 + d.pct * 0.001})` :
+                          d.color === 'amber' ? `rgba(180,83,9,${0.04 + d.pct * 0.001})` :
+                          'rgba(0,0,0,0.02)',
+                      }}
+                      initial={{ scale: 0, opacity: 0 }}
+                      whileInView={{ scale: 1, opacity: 1 }}
+                      viewport={{ once: true }}
+                      transition={{ type: 'spring', stiffness: 120, damping: 14, delay: i * 0.04 }}
+                    >
+                      <span className="text-[8px] font-semibold uppercase tracking-[0.02em] text-center leading-[1.2]" style={{
+                        color: d.color === 'green' ? '#166534' : d.color === 'amber' ? '#92400E' : '#A8A29E'
+                      }}>{d.name}</span>
+                      <span className="font-mono text-[11px] font-bold" style={{
+                        color: d.color === 'green' ? '#16A34A' : d.color === 'amber' ? '#B45309' : '#A8A29E'
+                      }}>{d.pct > 0 ? `${d.pct}%` : '—'}</span>
+                    </motion.div>
+                  ))}
+                </div>
+                <div className="flex gap-5 mt-4 pt-4 border-t border-black/[0.04]">
+                  <span className="flex items-center gap-2 text-[10px] text-muted"><span className="w-2 h-2 rounded bg-success/30" />Strong (&gt;70%)</span>
+                  <span className="flex items-center gap-2 text-[10px] text-muted"><span className="w-2 h-2 rounded bg-primary/25" />Needs work</span>
+                  <span className="flex items-center gap-2 text-[10px] text-muted"><span className="w-2 h-2 rounded bg-black/[0.06]" />Not started</span>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
         </div>
       </section>
 
