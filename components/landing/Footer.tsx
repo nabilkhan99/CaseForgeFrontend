@@ -1,32 +1,23 @@
-import Image from 'next/image';
 import Link from 'next/link';
 
 export default function Footer() {
-    return (
-        <footer className="bg-[#0f172a] border-t border-slate-800 pt-16 pb-8">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="flex flex-col items-center justify-center mb-8 text-center">
-                    <Link href="/" className="flex items-center gap-2 mb-6">
-                        <Image
-                            src="/fourteenfishermann.png"
-                            alt="Fourteen Fisherman Logo"
-                            width={32}
-                            height={32}
-                            className="h-8 w-auto"
-                        />
-                        <span className="text-white font-bold text-xl">
-                            Fourteen Fisherman
-                        </span>
-                    </Link>
-                    <p className="text-sm text-slate-500 max-w-sm">
-                        The ultimate preparation tool for the RCGP SCA examination.
-                    </p>
-                </div>
-
-                <div className="border-t border-slate-800 pt-8 flex flex-col items-center text-xs text-slate-600">
-                    <p>© {new Date().getFullYear()} Fourteen Fisherman Ltd. All rights reserved.</p>
-                </div>
-            </div>
-        </footer>
-    );
+  return (
+    <footer className="max-w-[1200px] mx-auto px-12 py-8">
+      <div className="border-t border-black/[0.05] pt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <span className="font-bold text-[13px] text-heading">Fourteen Fisherman</span>
+        <div className="flex gap-6">
+          {[
+            { label: 'Pricing', href: '/pricing' },
+            { label: 'Cases', href: '/cases' },
+            { label: 'Privacy', href: '/privacy-policy' },
+            { label: 'Terms', href: '/terms-of-service' },
+          ].map((link) => (
+            <Link key={link.href} href={link.href} className="text-[12px] text-muted hover:text-primary transition-colors">
+              {link.label}
+            </Link>
+          ))}
+        </div>
+      </div>
+    </footer>
+  );
 }
