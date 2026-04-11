@@ -1,120 +1,118 @@
-import { features } from '@/lib/landing/mock-data';
+'use client';
 
-const colorMap = {
-    yellow: {
-        bg: 'bg-yellow-500/10',
-        border: 'border-yellow-500/20',
-        shadow: 'shadow-[0_0_15px_-3px_rgba(234,179,8,0.2)]',
-        text: 'text-yellow-500',
-        hover: 'hover:border-yellow-500/30',
-    },
-    green: {
-        bg: 'bg-green-500/10',
-        border: 'border-green-500/20',
-        shadow: 'shadow-[0_0_15px_-3px_rgba(34,197,94,0.2)]',
-        text: 'text-green-500',
-        hover: 'hover:border-green-500/30',
-    },
-    blue: {
-        bg: 'bg-primary/10',
-        border: 'border-primary/20',
-        shadow: 'shadow-[0_0_15px_-3px_rgba(23,84,207,0.3)]',
-        text: 'text-primary',
-        hover: 'hover:border-primary/30',
-    },
-    purple: {
-        bg: 'bg-purple-500/10',
-        border: 'border-purple-500/20',
-        shadow: 'shadow-[0_0_15px_-3px_rgba(168,85,247,0.2)]',
-        text: 'text-purple-500',
-        hover: 'hover:border-purple-500/30',
-    },
-};
+import { motion } from 'framer-motion';
+
+const features = [
+  {
+    num: '01',
+    title: 'Voice consultations',
+    description: 'Speak naturally to AI patients who respond like real people. Each case adapts to your questioning style. Conversations branch based on what you ask — no scripts, no rails.',
+  },
+  {
+    num: '02',
+    title: 'Instant SCA scoring',
+    description: 'After every session, get scored across all three SCA domains — data gathering, clinical management, and interpersonal skills. See exactly what you did well and what to fix.',
+  },
+  {
+    num: '03',
+    title: 'RCGP curriculum coverage',
+    description: '78 cases spanning all 12 curriculum domains and 26 specialties. A visual map shows what you\'ve mastered, what needs work, and where to practice next.',
+  },
+];
+
+function VoiceVisualisation() {
+  return (
+    <div className="flex items-end gap-[3px] h-12">
+      {[0, 0.12, 0.24, 0.36, 0.48, 0.6, 0.72].map((delay, i) => (
+        <div
+          key={i}
+          className="w-1 rounded-sm bg-primary animate-pulse"
+          style={{
+            animationDelay: `${delay}s`,
+            animationDuration: '1.2s',
+            height: `${20 + Math.sin(i * 1.2) * 60}%`,
+            opacity: 0.3 + Math.sin(i * 1.2) * 0.4,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ScoringVisualisation() {
+  return (
+    <div className="flex gap-3 items-end h-14">
+      <div className="w-6 rounded-t bg-primary/70" style={{ height: '70%' }} />
+      <div className="w-6 rounded-t bg-primary-lighter/60" style={{ height: '55%' }} />
+      <div className="w-6 rounded-t bg-primary/80" style={{ height: '85%' }} />
+    </div>
+  );
+}
+
+function CoverageVisualisation() {
+  return (
+    <div className="grid grid-cols-4 gap-1.5">
+      {[0.6, 0.3, 0.15, 0.8, 0.2, 0.5, 0.7, 0.1, 0.4, 0.3, 0.6, 0.9].map((opacity, i) => (
+        <div
+          key={i}
+          className="w-4 h-4 rounded"
+          style={{ background: opacity > 0.4 ? `rgba(22,163,74,${opacity})` : `rgba(180,83,9,${opacity})` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+const visualisations = [
+  <VoiceVisualisation key="voice" />,
+  <ScoringVisualisation key="scoring" />,
+  <CoverageVisualisation key="coverage" />,
+];
 
 export default function FeaturesSection() {
-    return (
-        <section id="features" className="py-24 bg-[#111318] relative overflow-hidden">
-            {/* Background Effects */}
-            <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-                <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-                <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-600/5 rounded-full blur-3xl" />
+  return (
+    <section className="max-w-[1200px] mx-auto px-12 py-[100px]">
+      {/* Divider with label */}
+      <div className="flex items-center gap-4 mb-0">
+        <div className="flex-1 h-px bg-black/[0.06]" />
+        <span className="text-[11px] font-semibold tracking-[0.08em] uppercase text-muted whitespace-nowrap">How it works</span>
+        <div className="flex-1 h-px bg-black/[0.06]" />
+      </div>
+
+      {/* Section intro — LEFT aligned, not centered */}
+      <div className="max-w-[500px] mt-[100px] mb-20">
+        <h2 className="text-[44px] font-extrabold text-heading tracking-[-0.04em] leading-[1.05] mb-4">
+          Three things.<br />One platform.
+        </h2>
+        <p className="text-[16px] text-[#78716C] leading-[1.7]">
+          Practice consultations, get instant scores, and track your coverage across the entire RCGP curriculum.
+        </p>
+      </div>
+
+      {/* Feature rows */}
+      <div className="flex flex-col">
+        {features.map((feature, index) => (
+          <motion.div
+            key={feature.num}
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-80px' }}
+            transition={{ type: 'spring', stiffness: 100, damping: 20, delay: index * 0.1 }}
+            className="flex items-start gap-12 py-12 border-t border-black/[0.06] transition-colors hover:bg-gradient-to-r hover:from-primary/[0.02] hover:to-transparent group"
+          >
+            <span className="font-mono text-5xl font-bold text-primary/[0.12] leading-none min-w-[80px] tracking-[-0.03em]">
+              {feature.num}
+            </span>
+            <div className="flex-1">
+              <h3 className="text-[22px] font-bold text-heading tracking-[-0.02em] mb-2">{feature.title}</h3>
+              <p className="text-[14px] text-[#78716C] leading-[1.7] max-w-[480px]">{feature.description}</p>
             </div>
-
-            <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-                {/* Header */}
-                <div className="mb-10 text-center">
-                    <h2 className="text-3xl md:text-5xl font-bold text-white mb-4 leading-tight">
-                        Everything you need to{' '}
-                        <span className="gradient-text-blue">
-                            pass.
-                        </span>
-                    </h2>
-                    <p className="text-lg text-slate-400 max-w-2xl mx-auto">
-                        We&apos;re not just another question bank. We are a complete
-                        simulation ecosystem designed to bridge the gap between revision
-                        and reality.
-                    </p>
-                </div>
-
-                {/* Feature Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {features.map((feature, index) => {
-                        const colors = colorMap[feature.color];
-                        return (
-                            <div
-                                key={index}
-                                className={`group relative bg-[#1e293b]/40 backdrop-blur-sm rounded-3xl border border-slate-800 p-6 overflow-hidden ${colors.hover} transition-all duration-300`}
-                            >
-                                {/* Background Icon */}
-                                <div className="absolute -top-10 -right-10 p-12 opacity-[0.03] group-hover:opacity-10 transition-opacity duration-500 transform group-hover:scale-110 origin-top-right">
-                                    <span
-                                        className={`material-symbols-outlined text-[150px] ${colors.text} leading-none`}
-                                    >
-                                        {feature.icon}
-                                    </span>
-                                </div>
-
-                                <div className="relative z-10 flex flex-col justify-between h-full">
-                                    <div>
-                                        {/* Icon */}
-                                        <div
-                                            className={`w-12 h-12 rounded-2xl ${colors.bg} flex items-center justify-center mb-4 border ${colors.border} ${colors.shadow}`}
-                                        >
-                                            <span
-                                                className={`material-symbols-outlined text-2xl ${colors.text}`}
-                                            >
-                                                {feature.icon}
-                                            </span>
-                                        </div>
-
-                                        {/* Content */}
-                                        <h3 className="text-lg font-bold text-white mb-2">
-                                            {feature.title}
-                                        </h3>
-                                        <p className="text-slate-400 text-sm leading-relaxed">
-                                            {feature.description}
-                                        </p>
-                                    </div>
-
-                                    {/* Badge */}
-                                    {feature.badge && (
-                                        <div className="mt-4 pt-4 border-t border-slate-800/50">
-                                            <div
-                                                className={`flex items-center gap-2 text-xs ${colors.text} font-mono uppercase tracking-wider`}
-                                            >
-                                                <span className="material-symbols-outlined text-sm">
-                                                    check_circle
-                                                </span>{' '}
-                                                {feature.badge}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
+            <div className="flex-[0.6] flex justify-end items-center">
+              {visualisations[index]}
             </div>
-        </section>
-    );
+          </motion.div>
+        ))}
+      </div>
+    </section>
+  );
 }
