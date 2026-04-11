@@ -17,7 +17,6 @@ export default function HeroChatSimulation() {
 
     useEffect(() => {
         if (currentMessageIndex >= heroChatMessages.length) {
-            // Reset and loop
             const timeout = setTimeout(() => {
                 setDisplayedMessages([]);
                 setCurrentMessageIndex(0);
@@ -30,7 +29,6 @@ export default function HeroChatSimulation() {
         const currentMessage = heroChatMessages[currentMessageIndex];
 
         if (currentCharIndex < currentMessage.text.length) {
-            // Type one character
             const timeout = setTimeout(() => {
                 setDisplayedMessages((prev) => {
                     const newMessages = [...prev];
@@ -47,7 +45,6 @@ export default function HeroChatSimulation() {
             }, 15);
             return () => clearTimeout(timeout);
         } else {
-            // Move to next message after a pause
             const timeout = setTimeout(() => {
                 setCurrentMessageIndex((prev) => prev + 1);
                 setCurrentCharIndex(0);
@@ -65,33 +62,44 @@ export default function HeroChatSimulation() {
     return (
         <div
             ref={containerRef}
-            className="p-4 space-y-4 overflow-y-auto h-full"
+            className="p-4 space-y-3 overflow-y-auto h-full"
         >
             {displayedMessages.map((msg, index) => (
                 <div
                     key={index}
-                    className={`flex gap-3 ${msg.role === 'doctor' ? 'flex-row-reverse' : ''}`}
+                    className={`flex gap-2.5 ${msg.role === 'doctor' ? 'flex-row-reverse' : ''}`}
                 >
                     {msg.role === 'doctor' ? (
-                        <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-[10px] font-bold text-white shrink-0">
+                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary/20 to-primary-light/20 flex items-center justify-center text-[9px] font-bold text-primary shrink-0">
                             DR
                         </div>
                     ) : (
-                        <div className="w-6 h-6 rounded-full bg-slate-700 shrink-0 ring-2 ring-green-500 flex items-center justify-center overflow-hidden">
-                            <span className="material-symbols-outlined text-slate-400 text-sm">
-                                person
-                            </span>
+                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-amber-100 to-amber-200 shrink-0 flex items-center justify-center overflow-hidden">
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className="w-3.5 h-3.5 text-amber-700"
+                            >
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                <circle cx="12" cy="7" r="4" />
+                            </svg>
                         </div>
                     )}
                     <div
-                        className={`p-3 rounded-2xl text-xs ${msg.role === 'doctor'
-                                ? 'bg-primary/20 text-slate-200 rounded-tr-none'
-                                : 'bg-slate-800 text-slate-200 rounded-tl-none border border-slate-700'
-                            }`}
+                        className={`p-3 rounded-2xl text-xs leading-relaxed text-body ${
+                            msg.role === 'doctor'
+                                ? 'bg-white border border-black/[0.04] shadow-elevation-1 rounded-tr-sm'
+                                : 'bg-[rgba(180,83,9,0.05)] border border-[rgba(180,83,9,0.08)] rounded-tl-sm'
+                        }`}
                     >
                         {msg.text}
                         {index === displayedMessages.length - 1 && isTyping && (
-                            <span className="inline-block w-1 h-3 bg-white/50 ml-1 animate-pulse" />
+                            <span className="inline-block w-0.5 h-3.5 bg-primary ml-1 animate-pulse" />
                         )}
                     </div>
                 </div>
