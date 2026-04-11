@@ -8,20 +8,25 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: "#1754cf",
-        "primary-hover": "#1342a6",
-        "background-dark": "#0f172a",
-        "background-card": "#1e293b",
-        "accent-green": "#22c55e",
-        "medical-blue": "#1754cf",
-        "ai-purple": "#8b5cf6",
-        "accent-cyan": "#22d3ee",
-        "neutral-900": "#0f172a",
-        "neutral-50": "#f8fafc",
-        // Dashboard-specific colors
-        "dashboard-dark": "#070A13",
-        "card-glass": "rgba(21, 26, 46, 0.6)",
-        "sidebar-dark": "#0B0F1A",
+        primary: {
+          DEFAULT: '#B45309',
+          light: '#D97706',
+          lighter: '#F59E0B',
+        },
+        heading: '#1C1917',
+        body: '#57534E',
+        muted: '#A8A29E',
+        surface: {
+          DEFAULT: '#FAF9F6',
+          warm: '#F5F0EB',
+          alt: '#FDF8F3',
+        },
+        success: '#16A34A',
+        danger: '#DC2626',
+      },
+      fontFamily: {
+        sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'monospace'],
       },
       typography: {
         DEFAULT: {
@@ -32,8 +37,6 @@ module.exports = {
       },
       backgroundImage: {
         'grid-pattern': "linear-gradient(to right, #1e293b 1px, transparent 1px), linear-gradient(to bottom, #1e293b 1px, transparent 1px)",
-        'dashboard-gradient': 'radial-gradient(circle at top right, #1e1b4b 0%, #070A13 100%)',
-        'purple-indigo-vibrant': 'linear-gradient(135deg, #4338ca 0%, #6366f1 50%, #8b5cf6 100%)',
         'glass-gradient': 'linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 100%)',
       },
       keyframes: {
@@ -57,12 +60,46 @@ module.exports = {
           '0%, 100%': { height: '10%' },
           '50%': { height: '100%' },
         },
+        // Magic UI keyframes
+        'shimmer-slide': {
+          to: { transform: 'translate(calc(100cqw - 100%), 0)' },
+        },
+        'spin-around': {
+          '0%': { transform: 'translateZ(0) rotate(0)' },
+          '15%, 35%': { transform: 'translateZ(0) rotate(90deg)' },
+          '65%, 85%': { transform: 'translateZ(0) rotate(270deg)' },
+          '100%': { transform: 'translateZ(0) rotate(360deg)' },
+        },
+        'border-beam': {
+          '100%': { 'offset-distance': '100%' },
+        },
+        marquee: {
+          from: { transform: 'translateX(0)' },
+          to: { transform: 'translateX(calc(-100% - var(--gap)))' },
+        },
+        'marquee-vertical': {
+          from: { transform: 'translateY(0)' },
+          to: { transform: 'translateY(calc(-100% - var(--gap)))' },
+        },
+        'gradient-bg': {
+          '0%': { backgroundPosition: '0% 50%' },
+          '50%': { backgroundPosition: '100% 50%' },
+          '100%': { backgroundPosition: '0% 50%' },
+        },
       },
       animation: {
         slideDown: 'slideDown 0.2s ease-out',
         fadeIn: 'fadeIn 0.2s ease-out',
         'infinite-scroll': 'infinite-scroll 40s linear infinite',
         'fade-in-up': 'fade-in-up 0.5s ease-out',
+        // Magic UI animations
+        'shimmer-slide': 'shimmer-slide var(--speed) ease-in-out infinite alternate',
+        'spin-around': 'spin-around calc(var(--speed) * 2) infinite linear',
+        'border-beam': 'border-beam calc(var(--duration)) infinite linear',
+        marquee: 'marquee var(--duration) infinite linear',
+        'marquee-vertical': 'marquee-vertical var(--duration) infinite linear',
+        'gradient-bg': 'gradient-bg 8s linear infinite',
+        'gradient-text': 'gradient-bg 8s linear infinite',
       },
       borderRadius: {
         'xl': '12px',
@@ -70,9 +107,10 @@ module.exports = {
         '3xl': '24px',
       },
       boxShadow: {
-        'glass-sm': '0 4px 15px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -2px rgba(0, 0, 0, 0.2)',
-        'glass-glow': '0 0 20px -5px rgba(139, 92, 246, 0.3)',
-        'lift': '0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3)',
+        'elevation-1': '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
+        'elevation-2': '0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04)',
+        'elevation-3': '0 12px 32px rgba(0,0,0,0.1), 0 4px 8px rgba(0,0,0,0.04)',
+        'elevation-4': '0 24px 48px rgba(0,0,0,0.12), 0 8px 16px rgba(0,0,0,0.06)',
       },
     },
   },

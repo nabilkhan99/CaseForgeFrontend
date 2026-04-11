@@ -2,52 +2,134 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  scroll-behavior: smooth;
+}
+
 :root {
-  --medical-blue: theme('colors.medical-blue');
-  --ai-purple: theme('colors.ai-purple');
-  --accent-cyan: theme('colors.accent-cyan');
-  --neutral-900: theme('colors.neutral-900');
-  --neutral-50: theme('colors.neutral-50');
+  --color-primary: #B45309;
+  --color-primary-light: #D97706;
+  --color-primary-lighter: #F59E0B;
+  --color-heading: #1C1917;
+  --color-body: #57534E;
+  --color-muted: #A8A29E;
+  --color-bg: #FAF9F6;
+  --color-bg-warm: #F5F0EB;
+  --color-border: rgba(0, 0, 0, 0.06);
+  --color-border-hover: rgba(0, 0, 0, 0.1);
+  --color-glass: rgba(255, 255, 255, 0.65);
+  --color-glass-border: rgba(0, 0, 0, 0.06);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  opacity: 0.018;
+  background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIj48ZmlsdGVyIGlkPSJuIj48ZmVUdXJidWxlbmNlIHR5cGU9ImZyYWN0YWxOb2lzZSIgYmFzZUZyZXF1ZW5jeT0iMC44IiBudW1PY3RhdmVzPSI0IiBzdGl0Y2hUaWxlcz0ic3RpdGNoIi8+PC9maWx0ZXI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsdGVyPSJ1cmwoI24pIi8+PC9zdmc+');
+  pointer-events: none;
+  z-index: 9999;
 }
 
 body {
-  background: linear-gradient(135deg,
-      var(--neutral-900) 0%,
-      #1E293B 100%);
+  background: #09090b;
   min-height: 100dvh;
-  color: var(--neutral-50);
+  color: var(--color-text-primary);
   overflow-x: hidden;
   padding-bottom: env(safe-area-inset-bottom);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Landing Page Styles */
-.glass-panel {
-  background: rgba(30, 41, 59, 0.7);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
+/* ============================================
+   LANDING PAGE — Pristine Editorial System
+   ============================================ */
 
-.text-glow {
-  text-shadow: 0 0 20px rgba(23, 84, 207, 0.5);
-}
-
+/* Gradient text — warm earth */
 .gradient-text {
-  @apply text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-orange-400 to-amber-300;
-  -webkit-background-clip: text;
-}
-
-.gradient-text-blue {
-  background: linear-gradient(to right, #1754cf, #60a5fa);
+  background: linear-gradient(135deg, #B45309 0%, #D97706 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
-/* Infinite scroll mask for carousel */
+/* Glass panel — warm, light */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+/* Marquee / infinite carousel animation */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(calc(-100% - var(--gap))); }
+}
+
+@keyframes marquee-vertical {
+  from { transform: translateY(0); }
+  to { transform: translateY(calc(-100% - var(--gap))); }
+}
+
+.animate-marquee {
+  animation: marquee var(--duration, 40s) linear infinite;
+}
+
+.animate-marquee-vertical {
+  animation: marquee-vertical var(--duration, 40s) linear infinite;
+}
+
+/* Scroll mask */
 .scroll-mask {
   mask-image: linear-gradient(to right, transparent 0, black 128px, black calc(100% - 128px), transparent 100%);
   -webkit-mask-image: linear-gradient(to right, transparent 0, black 128px, black calc(100% - 128px), transparent 100%);
 }
+
+/* Mobile menu slide-down */
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-down {
+  animation: slideDown 0.2s ease-out;
+}
+
+/* Scroll-triggered reveal — elements start invisible and slide up */
+@keyframes reveal-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.reveal-up {
+  animation: reveal-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Subtle card spotlight — mouse-tracking radial highlight */
+.card-spotlight {
+  position: relative;
+  overflow: hidden;
+}
+
+.card-spotlight::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(255,255,255,0.03), transparent 40%);
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.card-spotlight:hover::before {
+  opacity: 1;
+}
+
+/* ============================================
+   COMPONENT LAYER
+   ============================================ */
 
 @layer components {
   .card {
@@ -55,7 +137,7 @@ body {
   }
 
   .glass-input {
-    @apply bg-white/5 border border-white/10 rounded-xl p-4 text-white placeholder-white/50 ring-offset-neutral-900 focus:ring-2 focus:ring-medical-blue focus:border-transparent transition-all duration-200;
+    @apply bg-white/5 border border-white/10 rounded-xl p-4 text-white placeholder-white/50 ring-offset-neutral-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200;
 
     &.text-sm {
       @apply px-3 py-1.5;
@@ -63,24 +145,16 @@ body {
   }
 
   .primary-button {
-    @apply bg-gradient-to-r from-medical-blue to-ai-purple text-white font-medium px-8 py-3 rounded-xl hover:shadow-lg hover:shadow-medical-blue/50 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center gap-2 px-7 py-3.5 rounded-xl font-semibold text-white cursor-pointer transition-all duration-150;
+    background: linear-gradient(135deg, #B45309 0%, #D97706 100%);
+    box-shadow: 0 2px 10px rgba(180, 83, 9, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.15);
   }
-
-  .button-secondary {
-    @apply bg-white/10 text-white px-6 py-2 rounded-xl hover:bg-white/20 transition-all duration-200;
+  .primary-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(180, 83, 9, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.15);
   }
-
-  .medical-icon {
-    @apply text-medical-blue animate-pulse;
-  }
-
-  .ai-glow {
-    @apply relative;
-
-    &::before {
-      content: '';
-      @apply absolute -inset-1 bg-gradient-to-r from-medical-blue to-ai-purple blur opacity-30 -z-10 transition-all duration-300;
-    }
+  .primary-button:active {
+    transform: translateY(0);
   }
 
   .case-form {
@@ -88,7 +162,7 @@ body {
   }
 
   .case-textarea {
-    @apply shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-lg h-40 transition-all duration-200;
+    @apply shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-lg h-40 transition-all duration-200;
   }
 
   .capability-select {
@@ -96,13 +170,12 @@ body {
   }
 
   .capability-option {
-    @apply relative flex items-start p-4 border border-gray-200 rounded-lg hover:border-indigo-500 transition-all duration-200 cursor-pointer;
+    @apply relative flex items-start p-4 border border-gray-200 rounded-lg hover:border-blue-500 transition-all duration-200 cursor-pointer;
   }
 
   .error-alert {
     @apply rounded-lg bg-red-50 p-4 mt-4 border border-red-200 text-red-700;
   }
-
 }
 
 @layer utilities {
@@ -115,45 +188,33 @@ body {
   }
 
   .focus-ring {
-    @apply focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 focus:outline-none;
+    @apply focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:outline-none;
   }
 
   .button-press {
-    @apply active:scale-95 transition-transform duration-150;
+    @apply active:scale-[0.98] transition-transform duration-150;
   }
 
   .focus-visible-ring {
-    @apply outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#070A13];
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#09090b];
   }
 }
 
-/* Dashboard Styles - using CSS values instead of @apply for custom shadows */
+/* ============================================
+   DASHBOARD STYLES
+   ============================================ */
+
 .glass-card {
-  background: rgba(21, 26, 46, 0.6);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 4px 15px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+  background: rgba(24, 24, 27, 0.8);
+  border: 1px solid rgb(39, 39, 42);
+  border-radius: 12px;
 }
 
 @media (hover: hover) {
   .glass-card:hover {
-    border-color: rgba(255, 255, 255, 0.2);
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
-    transition: all 300ms;
+    border-color: rgb(63, 63, 70);
+    transition: border-color 200ms;
   }
-}
-
-.progress-glow-emerald {
-  filter: drop-shadow(0 0 6px rgba(52, 211, 153, 0.6));
-}
-
-.progress-glow-orange {
-  filter: drop-shadow(0 0 6px rgba(251, 146, 60, 0.6));
-}
-
-.progress-glow-blue {
-  filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.6));
 }
 
 .no-scrollbar::-webkit-scrollbar {
@@ -165,13 +226,13 @@ body {
   scrollbar-width: none;
 }
 
-/* Custom scrollbar for dashboard */
+/* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 4px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(11, 15, 26, 0.5);
+  background: #09090b;
 }
 
 ::-webkit-scrollbar-thumb {

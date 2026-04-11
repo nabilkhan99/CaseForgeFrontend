@@ -1,11 +1,21 @@
 import './globals.css'
-import { Inter } from 'next/font/google'
+import { Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import AnalyticsWrapper from '@/components/common/AnalyticsWrapper'
 import type { Metadata, Viewport } from 'next'
 
-const inter = Inter({ subsets: ['latin'] })
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ['latin'],
+  variable: '--font-sans',
+  display: 'swap',
+})
+
+const jetbrains = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-mono',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   title: 'Fourteen Fisherman - The Gold Standard for SCA Prep',
@@ -42,13 +52,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark scroll-smooth">
-      <head>
-        <link
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
-          rel="stylesheet"
-        />
-      </head>
-      <body className={`${inter.className} bg-background-dark text-slate-300 antialiased overflow-x-hidden`}>
+      <body className={`${jakarta.variable} ${jetbrains.variable} font-sans bg-surface text-body antialiased overflow-x-hidden`}>
         {children}
         <AnalyticsWrapper />
         <Analytics />
