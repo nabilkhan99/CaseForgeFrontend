@@ -300,7 +300,8 @@ export default function LandingPage() {
       {/* ── NAVBAR ────────────────────────────────────────────────────── */}
       <div className="fixed top-4 left-0 right-0 z-50 flex justify-center px-4">
         <motion.nav
-          style={{ maxWidth: 'min(92%, 1200px)', backgroundColor: navBg as unknown as string, boxShadow: navShadow as unknown as string }}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          style={{ maxWidth: 'min(92%, 1200px)', backgroundColor: navBg, boxShadow: navShadow } as any}
           className="w-full backdrop-blur-2xl border border-black/[0.06] rounded-[14px] px-5 py-3 flex items-center justify-between"
           initial={{ opacity: 0, y: -12 }}
           animate={{ opacity: 1, y: 0 }}
