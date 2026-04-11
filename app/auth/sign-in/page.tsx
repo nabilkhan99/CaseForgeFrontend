@@ -97,15 +97,15 @@ function SignInForm() {
                     />
 
                     {errorMessage && (
-                        <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-                            <p className="text-red-400 text-sm text-center">{errorMessage}</p>
+                        <div className="p-3 bg-danger/10 border border-danger/20 rounded-lg">
+                            <p className="text-danger text-sm text-center">{errorMessage}</p>
                         </div>
                     )}
 
                     <button
                         type="submit"
                         disabled={isLoading}
-                        className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
+                        className="w-full py-3 bg-gradient-to-br from-primary to-primary-light disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
                     >
                         {isLoading ? 'Logging in...' : (
                             <>
@@ -120,15 +120,15 @@ function SignInForm() {
 
                 {/* Forgot Password Link */}
                 <div className="mt-4 text-center">
-                    <Link href="/auth/forgot-password" className="text-blue-400 hover:text-blue-300 text-sm transition-colors">
+                    <Link href="/auth/forgot-password" className="text-primary hover:text-primary-light text-sm transition-colors">
                         Forgot Password?
                     </Link>
                 </div>
 
                 {/* Sign Up Link */}
-                <p className="mt-6 text-center text-slate-400 text-sm">
+                <p className="mt-6 text-center text-muted text-sm">
                     Don&apos;t have an account?{' '}
-                    <Link href="/auth/sign-up" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">
+                    <Link href="/auth/sign-up" className="text-primary hover:text-primary-light font-medium transition-colors">
                         Sign Up
                     </Link>
                 </p>

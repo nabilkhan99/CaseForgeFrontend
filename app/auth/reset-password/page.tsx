@@ -99,7 +99,7 @@ export default function ResetPasswordPage() {
             <AuthLayout>
                 <AuthCard title="Loading..." subtitle="Please wait...">
                     <div className="flex justify-center py-8">
-                        <div className="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                     </div>
                 </AuthCard>
             </AuthLayout>
@@ -121,7 +121,7 @@ export default function ResetPasswordPage() {
                 >
                     <Link
                         href="/auth/forgot-password"
-                        className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
+                        className="w-full py-3 bg-gradient-to-br from-primary to-primary-light text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
                     >
                         Request New Link
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -152,7 +152,7 @@ export default function ResetPasswordPage() {
                             router.push('/auth/sign-in');
                             router.refresh();
                         }}
-                        className="w-full py-3 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
+                        className="w-full py-3 bg-gradient-to-br from-primary to-primary-light text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
                     >
                         Go to Login
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -189,11 +189,11 @@ export default function ResetPasswordPage() {
                         />
                         {/* Password Requirements */}
                         <div className="mt-2 space-y-1">
-                            <p className={`text-xs flex items-center gap-1 ${passwordValidation.minLength ? 'text-emerald-400' : 'text-slate-500'}`}>
+                            <p className={`text-xs flex items-center gap-1 ${passwordValidation.minLength ? 'text-primary' : 'text-muted'}`}>
                                 <span>{passwordValidation.minLength ? '✓' : '○'}</span>
                                 At least 8 characters
                             </p>
-                            <p className={`text-xs flex items-center gap-1 ${passwordValidation.hasUppercase && passwordValidation.hasNumber ? 'text-emerald-400' : 'text-slate-500'}`}>
+                            <p className={`text-xs flex items-center gap-1 ${passwordValidation.hasUppercase && passwordValidation.hasNumber ? 'text-primary' : 'text-muted'}`}>
                                 <span>{passwordValidation.hasUppercase && passwordValidation.hasNumber ? '✓' : '○'}</span>
                                 One uppercase letter & one number
                             </p>
@@ -213,15 +213,15 @@ export default function ResetPasswordPage() {
                     />
 
                     {errorMessage && (
-                        <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-                            <p className="text-red-400 text-sm text-center">{errorMessage}</p>
+                        <div className="p-3 bg-danger/10 border border-danger/20 rounded-lg">
+                            <p className="text-danger text-sm text-center">{errorMessage}</p>
                         </div>
                     )}
 
                     <button
                         type="submit"
                         disabled={isLoading || !isPasswordValid || !doPasswordsMatch}
-                        className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
+                        className="w-full py-3 bg-gradient-to-br from-primary to-primary-light disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
                     >
                         {isLoading ? 'Resetting...' : (
                             <>
@@ -236,7 +236,7 @@ export default function ResetPasswordPage() {
 
                 {/* Back to Login Link */}
                 <div className="mt-6 text-center">
-                    <Link href="/auth/sign-in" className="text-slate-400 hover:text-white text-sm transition-colors inline-flex items-center gap-2">
+                    <Link href="/auth/sign-in" className="text-muted hover:text-primary text-sm transition-colors inline-flex items-center gap-2">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                         </svg>

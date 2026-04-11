@@ -79,14 +79,14 @@ export default function ForgotPasswordPage() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                         </svg>
                     }
-                    accentColor="purple"
+                    accentColor="blue"
                     title="Check Your Email!"
                     subtitle={`We've sent a password reset link to your email address. Please check your inbox and spam folder.`}
                 >
                     <div className="space-y-4">
                         <Link
                             href="/auth/sign-in"
-                            className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
+                            className="w-full py-3 bg-gradient-to-br from-primary to-primary-light text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
                         >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -94,11 +94,11 @@ export default function ForgotPasswordPage() {
                             Back to Log In
                         </Link>
 
-                        <p className="text-center text-slate-400 text-sm">
+                        <p className="text-center text-muted text-sm">
                             Didn&apos;t receive the email?{' '}
                             <button
                                 onClick={handleResend}
-                                className="text-blue-400 hover:text-blue-300 font-medium transition-colors"
+                                className="text-primary hover:text-primary-light font-medium transition-colors"
                             >
                                 Click to resend
                             </button>
@@ -133,15 +133,15 @@ export default function ForgotPasswordPage() {
                     />
 
                     {errorMessage && (
-                        <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-                            <p className="text-red-400 text-sm text-center">{errorMessage}</p>
+                        <div className="p-3 bg-danger/10 border border-danger/20 rounded-lg">
+                            <p className="text-danger text-sm text-center">{errorMessage}</p>
                         </div>
                     )}
 
                     <button
                         type="submit"
                         disabled={isLoading}
-                        className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
+                        className="w-full py-3 bg-gradient-to-br from-primary to-primary-light disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
                     >
                         {isLoading ? 'Sending...' : (
                             <>
@@ -156,7 +156,7 @@ export default function ForgotPasswordPage() {
 
                 {/* Back to Login Link */}
                 <div className="mt-6 text-center">
-                    <Link href="/auth/sign-in" className="text-slate-400 hover:text-white text-sm transition-colors inline-flex items-center gap-2">
+                    <Link href="/auth/sign-in" className="text-muted hover:text-primary text-sm transition-colors inline-flex items-center gap-2">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                         </svg>
