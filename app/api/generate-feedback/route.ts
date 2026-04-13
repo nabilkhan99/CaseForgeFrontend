@@ -68,7 +68,12 @@ You MUST respond with a single JSON object with these exact fields:
 function getSupabaseAdmin() {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    return createClient(url, key);
+    return createClient(url, key, {
+        auth: {
+            autoRefreshToken: false,
+            persistSession: false,
+        },
+    });
 }
 
 // ── Gemini REST API call ──
@@ -193,7 +198,8 @@ export async function POST(request: NextRequest) {
             .single();
 
         if (sessionError || !session) {
-            return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+            console.error('Session lookup failed:', { sessionId, error: sessionError?.message, code: sessionError?.code });
+            return NextResponse.json({ error: 'Session not found', details: sessionError?.message }, { status: 404 });
         }
 
         if (!session.transcript || session.transcript.length === 0) {
