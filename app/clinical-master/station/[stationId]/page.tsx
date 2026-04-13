@@ -1,10 +1,14 @@
 'use client';
 
-import { useParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import ClinicalLayout from '@/components/clinical-master/ClinicalLayout';
-import ConsultationTimer from '@/components/clinical-master/ConsultationTimer';
+import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useState, useCallback } from 'react';
+import { motion } from 'framer-motion';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import Container from '@/components/ui/Container';
+import PrimaryButton from '@/components/ui/PrimaryButton';
+import DomainTag from '@/components/ui/DomainTag';
+import ConsultationTimer from '@/components/clinical-master/ConsultationTimer';
 
 interface StationData {
   id: string;
@@ -18,15 +22,17 @@ interface StationData {
 
 export default function ReadingPhasePage() {
   const params = useParams();
+  const router = useRouter();
   const stationId = params.stationId as string;
 
   const [station, setStation] = useState<StationData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [timerDone, setTimerDone] = useState(false);
+  const [starting, setStarting] = useState(false);
 
   useEffect(() => {
     async function fetchStation() {
       const supabase = createClient();
-
       const { data: s, error } = await supabase
         .from('stations')
         .select('id, title, patient_name, candidate_instructions, domain_id, reading_duration_seconds, consultation_duration_seconds')
@@ -34,12 +40,10 @@ export default function ReadingPhasePage() {
         .single();
 
       if (error || !s) {
-        console.error('Error fetching station:', error?.message);
         setLoading(false);
         return;
       }
 
-      // Fetch domain name separately
       const { data: domain } = await supabase
         .from('domains')
         .select('name')
@@ -51,149 +55,158 @@ export default function ReadingPhasePage() {
         title: s.title,
         patient_name: s.patient_name,
         candidate_instructions: s.candidate_instructions || '',
-        reading_duration_seconds: s.reading_duration_seconds,
-        consultation_duration_seconds: s.consultation_duration_seconds,
-        domain_name: domain?.name || 'Unknown',
+        reading_duration_seconds: s.reading_duration_seconds || 180,
+        consultation_duration_seconds: s.consultation_duration_seconds || 480,
+        domain_name: domain?.name || 'General Practice',
       });
       setLoading(false);
     }
 
-    if (stationId) {
-      fetchStation();
-    }
+    if (stationId) fetchStation();
   }, [stationId]);
 
-  const handleTimerComplete = () => {
-    console.log('Reading time complete');
-  };
+  const handleStartConsultation = useCallback(async () => {
+    if (starting) return;
+    setStarting(true);
+
+    const sessionId = crypto.randomUUID();
+
+    try {
+      const res = await fetch('/api/clinical-master/create-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, stationId }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to create session');
+      }
+
+      router.push(`/clinical-master/session/${sessionId}?stationId=${stationId}`);
+    } catch (err) {
+      setStarting(false);
+      alert(err instanceof Error ? err.message : 'Failed to start consultation');
+    }
+  }, [stationId, router, starting]);
 
   if (loading) {
     return (
-      <ClinicalLayout showSidebar={true} showNotepad={true} candidateBrief="" stationId={stationId}>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500" />
-        </div>
-      </ClinicalLayout>
+      <div className="min-h-screen bg-surface flex items-center justify-center">
+        <motion.div
+          className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent"
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+        />
+      </div>
     );
   }
 
+  if (!station) {
+    return (
+      <div className="min-h-screen bg-surface flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted mb-4">Station not found</p>
+          <Link href="/dashboard/library" className="text-primary hover:underline text-sm">
+            Back to Library
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Parse candidate instructions into sections
+  const sections = station.candidate_instructions.split('\n').filter(line => line.trim());
+
   return (
-    <ClinicalLayout
-      showSidebar={true}
-      showNotepad={true}
-      currentStationId={stationId}
-      stationTitle={station?.title || 'Station'}
-      candidateBrief={station?.candidate_instructions || ''}
-      stationId={stationId}
-    >
-      {/* Header with Timer */}
-      <header className="h-16 flex items-center justify-between px-6 border-b border-slate-800 bg-[#17202b] shrink-0 z-20 relative shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="size-8 rounded-lg bg-primary flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
-            <span className="material-symbols-outlined text-[20px]">medical_services</span>
-          </div>
-          <div>
-            <h1 className="text-base font-bold tracking-tight text-white leading-none">
-              Clinical Master
-            </h1>
-            <p className="text-xs text-slate-400 font-medium mt-0.5">{station?.title || 'Loading...'}</p>
-          </div>
-        </div>
-
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+    <div className="min-h-screen bg-surface font-sans">
+      {/* Top bar */}
+      <div className="sticky top-0 z-40 bg-surface/80 backdrop-blur-xl border-b border-black/[0.06]">
+        <div className="max-w-[640px] mx-auto px-6 h-14 flex items-center justify-between">
+          <Link
+            href="/dashboard/library"
+            className="text-[13px] text-muted hover:text-heading transition-colors flex items-center gap-1"
+          >
+            &larr; Back to Library
+          </Link>
           <ConsultationTimer
-            durationSeconds={station?.reading_duration_seconds || 180}
+            durationSeconds={station.reading_duration_seconds}
             label="Reading Time"
-            onComplete={handleTimerComplete}
+            autoStart={true}
+            onComplete={() => setTimerDone(true)}
           />
+          <span className="text-[12px] text-muted">{station.title}</span>
         </div>
+      </div>
 
-        <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 transition-colors text-sm font-medium border border-red-500/20">
-            <span className="material-symbols-outlined text-[18px]">close</span>
-            <span>End Exam</span>
-          </button>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 bg-[#101922] relative overflow-hidden">
-        <div className="px-8 py-4 border-b border-slate-800 bg-[#17202b]/50 backdrop-blur-sm sticky top-0 z-10 flex justify-between items-center">
-          <h2 className="text-lg font-bold text-white tracking-tight">
-            Station 1: Reading Material
-          </h2>
-          <div className="flex items-center gap-2">
-            <button
-              className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"
-              title="Zoom Out"
-            >
-              <span className="material-symbols-outlined text-[20px]">remove</span>
-            </button>
-            <button
-              className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"
-              title="Zoom In"
-            >
-              <span className="material-symbols-outlined text-[20px]">add</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar flex justify-center">
-          {station?.candidate_instructions ? (
-            <div className="w-full max-w-4xl bg-white text-slate-900 shadow-2xl min-h-[800px] relative">
-              <div className="p-12 md:p-16">
-                <h3 className="text-xl font-bold uppercase tracking-wide mb-8 border-b-2 border-slate-900 pb-2 inline-block">
-                  Materials for Candidate
-                </h3>
-
-                <div className="space-y-1 mb-8 font-medium text-base">
-                  <div className="flex gap-2">
-                    <span className="font-bold w-20">Name:</span>
-                    <span>{station.patient_name}</span>
-                  </div>
-                </div>
-
-                <div className="space-y-4 text-base leading-relaxed">
-                  {/* Render the candidate instructions with better formatting */}
-                  {station.candidate_instructions.split('\n').map((line, index) => (
-                    <p key={index} className={line.includes(':') && line.match(/^[A-Z]/) ? 'font-semibold mt-4' : ''}>
-                      {line}
-                    </p>
-                  ))}
-
-                  {/* If it's a single paragraph, split it intelligently */}
-                  {!station.candidate_instructions.includes('\n') && (
-                    <div className="whitespace-pre-wrap">
-                      {station.candidate_instructions
-                        .replace(/Personal details:/gi, '\n\n**Personal details:**\n')
-                        .replace(/Past Medical History:/gi, '\n\n**Past Medical History:**\n')
-                        .replace(/Medication History:/gi, '\n\n**Medication History:**\n')
-                        .replace(/Medical Notes:/gi, '\n\n**Medical Notes:**\n')
-                        .replace(/Investigation Results:/gi, '\n\n**Investigation Results:**\n')
-                        .replace(/Discharge Summary:/gi, '\n\n**Discharge Summary:**\n')
-                        .split('\n')
-                        .map((line, i) => {
-                          if (line.startsWith('**') && line.endsWith('**')) {
-                            return <h4 key={i} className="font-bold text-lg mt-6 mb-2">{line.replace(/\*\*/g, '')}</h4>;
-                          }
-                          return line && <p key={i} className="mb-2">{line}</p>;
-                        })}
-                    </div>
-                  )}
-
-                  <div className="pt-8 border-t border-slate-300">
-                    <p className="font-bold italic text-slate-600">End of notes</p>
-                  </div>
+      {/* Main content */}
+      <div className="max-w-[640px] mx-auto px-6 py-8">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 60, damping: 20 }}
+        >
+          <Container>
+            {/* Patient identity */}
+            <div className="flex items-start gap-4 mb-5">
+              <div
+                className="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-[18px] font-semibold flex-shrink-0"
+                style={{ background: 'linear-gradient(135deg, #F59E0B, #B45309)', boxShadow: '0 4px 16px rgba(180,83,9,0.2)' }}
+              >
+                {station.patient_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+              </div>
+              <div className="flex-1">
+                <div className="text-[16px] font-semibold text-heading mb-0.5">{station.patient_name}</div>
+                <div className="flex items-center gap-2 mt-1">
+                  <DomainTag name={station.domain_name} size="sm" />
+                  <span className="text-[11px] font-mono text-primary font-semibold px-2 py-0.5 rounded-md" style={{ background: 'rgba(180,83,9,0.08)' }}>
+                    {Math.round(station.consultation_duration_seconds / 60)} min
+                  </span>
                 </div>
               </div>
             </div>
-          ) : (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-slate-400">No candidate brief available for this station.</p>
+
+            {/* Divider */}
+            <div className="border-t border-black/[0.05] mb-5" />
+
+            {/* Candidate instructions */}
+            <div className="mb-6">
+              <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-3">
+                Candidate Brief
+              </div>
+              <div
+                className="px-4 py-3 rounded-xl text-[14px] text-heading leading-[1.8]"
+                style={{ background: 'linear-gradient(135deg, rgba(180,83,9,0.03), rgba(245,158,11,0.03))', borderLeft: '3px solid #B45309' }}
+              >
+                {sections.map((line, i) => {
+                  const isHeader = line.includes(':') && /^[A-Z]/.test(line);
+                  return (
+                    <p key={i} className={isHeader ? 'font-semibold mt-3 first:mt-0' : 'mt-1'}>
+                      {line}
+                    </p>
+                  );
+                })}
+              </div>
             </div>
-          )}
-        </div>
+
+            {/* CTA */}
+            <PrimaryButton
+              fullWidth
+              size="lg"
+              disabled={!timerDone && !starting}
+              onClick={handleStartConsultation}
+            >
+              {starting ? 'Starting...' : timerDone ? 'Begin Consultation \u2192' : 'Reading time remaining...'}
+            </PrimaryButton>
+
+            {!timerDone && (
+              <p className="text-[11px] text-muted text-center mt-3">
+                Button activates when reading time completes
+              </p>
+            )}
+          </Container>
+        </motion.div>
       </div>
-    </ClinicalLayout>
+    </div>
   );
 }
