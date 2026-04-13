@@ -11,7 +11,7 @@ export default function FeedbackCard({ domain, passThreshold = 60 }: FeedbackCar
   const barColor = domain.score >= 80 ? 'bg-emerald-500' : domain.score >= 60 ? 'bg-blue-500' : 'bg-orange-500';
 
   return (
-    <div className="bg-white/5 rounded-xl p-4 border border-white/5 flex flex-col justify-center">
+    <div className="bg-zinc-900 rounded-xl p-4 border border-zinc-800 flex flex-col justify-center">
       <div className="flex items-center justify-between mb-3">
         <div>
           <p className="text-xs font-bold text-white uppercase mb-0.5">{domain.domain}</p>
