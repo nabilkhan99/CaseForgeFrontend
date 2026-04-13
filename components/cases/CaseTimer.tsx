@@ -5,9 +5,10 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 interface Stage {
     name: string;
     subtitle: string;
-    color: string;
+    dotColor: string;
     bgColor: string;
     borderColor: string;
+    barColor: string;
     tips: string[];
     startSecond: number;
     endSecond: number;
@@ -17,9 +18,10 @@ const STAGES: Stage[] = [
     {
         name: 'Golden Minute',
         subtitle: 'Initial Introduction',
-        color: 'bg-amber-400',
-        bgColor: 'bg-amber-500/5',
-        borderColor: 'border-amber-500/15',
+        dotColor: 'bg-amber-500',
+        bgColor: 'bg-amber-50',
+        borderColor: 'border-amber-200',
+        barColor: 'bg-amber-400',
         tips: ['Introduce yourself', 'Establish rapport', 'Set the agenda'],
         startSecond: 0,
         endSecond: 60,
@@ -27,9 +29,10 @@ const STAGES: Stage[] = [
     {
         name: 'Data Gathering',
         subtitle: 'History & ICE',
-        color: 'bg-blue-400',
-        bgColor: 'bg-blue-500/5',
-        borderColor: 'border-blue-500/15',
+        dotColor: 'bg-blue-500',
+        bgColor: 'bg-blue-50',
+        borderColor: 'border-blue-200',
+        barColor: 'bg-blue-400',
         tips: ['Discover ICE', 'Discover psycho-social context', 'Ask open and closed questions', 'Rule out Red Flags', 'Use a summary'],
         startSecond: 60,
         endSecond: 300,
@@ -37,9 +40,10 @@ const STAGES: Stage[] = [
     {
         name: 'Clinical Management',
         subtitle: 'Diagnosis & Plan',
-        color: 'bg-emerald-400',
-        bgColor: 'bg-emerald-500/5',
-        borderColor: 'border-emerald-500/15',
+        dotColor: 'bg-emerald-500',
+        bgColor: 'bg-emerald-50',
+        borderColor: 'border-emerald-200',
+        barColor: 'bg-emerald-400',
         tips: ['Share your working diagnosis', 'Explain management plan', 'Shared decision making'],
         startSecond: 300,
         endSecond: 480,
@@ -47,9 +51,10 @@ const STAGES: Stage[] = [
     {
         name: 'Safety Net',
         subtitle: 'Follow-up & End',
-        color: 'bg-red-400',
-        bgColor: 'bg-red-500/5',
-        borderColor: 'border-red-500/15',
+        dotColor: 'bg-red-500',
+        bgColor: 'bg-red-50',
+        borderColor: 'border-red-200',
+        barColor: 'bg-red-400',
         tips: ['Safety-net advice', 'Follow-up plan', 'Check understanding'],
         startSecond: 480,
         endSecond: 600,
@@ -100,50 +105,42 @@ export default function CaseTimer({ totalSeconds = 600 }: CaseTimerProps) {
 
     return (
         <>
-            {/* Desktop sidebar */}
-            <div className="hidden md:flex w-[240px] flex-shrink-0 bg-[#0c0c0f] border-r border-zinc-800 flex-col h-full">
+            {/* Desktop timer (inside Container card) */}
+            <div className="hidden lg:flex flex-col">
                 {/* Timer Display */}
-                <div className="px-6 pt-8 pb-4">
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-600 font-semibold mb-2">
+                <div className="px-6 pt-6 pb-4">
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-muted font-semibold mb-2">
                         Station Timer
                     </p>
-                    <div className="text-5xl font-black text-white tracking-tight tabular-nums font-mono">
+                    <div className="text-5xl font-black text-heading tracking-tight tabular-nums font-mono">
                         {String(minutes).padStart(2, '0')}
-                        <span className={`${running ? 'animate-pulse' : ''} text-zinc-700`}>:</span>
+                        <span className={`${running ? 'animate-pulse' : ''} text-muted/40`}>:</span>
                         {String(seconds).padStart(2, '0')}
                     </div>
                 </div>
 
                 {/* Progress Timeline */}
-                <div className="flex-1 px-6 py-4 overflow-y-auto no-scrollbar">
+                <div className="px-6 py-4">
                     <div className="relative">
                         {STAGES.map((stage, i) => {
-                            const isActive = i === activeStage && running;
                             const isCompleted = elapsed >= stage.endSecond;
                             const isPending = i > activeStage || (!running && !isCompleted);
                             const isCurrent = i === activeStage;
 
                             return (
-                                <div key={stage.name} className="relative flex gap-4 pb-6 last:pb-0">
+                                <div key={stage.name} className="relative flex gap-4 pb-5 last:pb-0">
                                     {/* Vertical line + circle */}
                                     <div className="flex flex-col items-center">
                                         <div
-                                            className={`relative z-10 w-3 h-3 rounded-full border-2 transition-all duration-500 flex-shrink-0 ${isCompleted
-                                                    ? `${stage.color} border-transparent`
-                                                    : isActive || isCurrent
-                                                        ? `${stage.color} border-transparent`
-                                                        : 'bg-transparent border-zinc-700'
+                                            className={`relative z-10 w-3 h-3 rounded-full border-2 transition-all duration-500 flex-shrink-0 ${isCompleted || isCurrent
+                                                    ? `${stage.dotColor} border-transparent`
+                                                    : 'bg-transparent border-black/[0.1]'
                                                 }`}
                                         />
                                         {i < STAGES.length - 1 && (
-                                            <div className="relative w-0.5 flex-1 min-h-[20px] bg-zinc-800 mt-1">
+                                            <div className="relative w-0.5 flex-1 min-h-[20px] bg-black/[0.06] mt-1">
                                                 <div
-                                                    className={`absolute top-0 left-0 w-full transition-all duration-1000 rounded-full ${isCompleted
-                                                            ? `${stage.color} h-full`
-                                                            : isCurrent && running
-                                                                ? `${stage.color}`
-                                                                : 'h-0'
-                                                        }`}
+                                                    className={`absolute top-0 left-0 w-full transition-all duration-1000 rounded-full ${isCompleted || (isCurrent && running) ? stage.barColor : ''}`}
                                                     style={
                                                         isCurrent && running
                                                             ? {
@@ -160,18 +157,18 @@ export default function CaseTimer({ totalSeconds = 600 }: CaseTimerProps) {
 
                                     {/* Content */}
                                     <div className={`flex-1 -mt-0.5 transition-all duration-300 ${isPending && !isCurrent ? 'opacity-30' : 'opacity-100'}`}>
-                                        <h4 className={`text-xs font-semibold ${isCurrent ? 'text-white' : isCompleted ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                                        <h4 className={`text-xs font-semibold ${isCurrent ? 'text-heading' : isCompleted ? 'text-body' : 'text-muted'}`}>
                                             {stage.name}
                                         </h4>
-                                        <p className="text-[10px] text-zinc-600 mb-1">
+                                        <p className="text-[10px] text-muted mb-1">
                                             {stage.subtitle}
                                         </p>
 
                                         {isCurrent && (
                                             <div className={`mt-2 p-2.5 rounded-lg ${stage.bgColor} border ${stage.borderColor} transition-all duration-500`}>
                                                 {stage.tips.map(tip => (
-                                                    <p key={tip} className="text-[10px] text-zinc-400 leading-relaxed flex items-start gap-1.5 mb-0.5 last:mb-0">
-                                                        <span className="text-zinc-600 mt-0.5">•</span>
+                                                    <p key={tip} className="text-[10px] text-body leading-relaxed flex items-start gap-1.5 mb-0.5 last:mb-0">
+                                                        <span className="text-muted mt-0.5">&#8226;</span>
                                                         {tip}
                                                     </p>
                                                 ))}
@@ -185,44 +182,52 @@ export default function CaseTimer({ totalSeconds = 600 }: CaseTimerProps) {
                 </div>
 
                 {/* Controls */}
-                <div className="px-4 pb-6 mt-auto space-y-2">
+                <div className="px-4 pb-5 mt-auto space-y-2">
                     {!running ? (
                         <button
                             onClick={start}
-                            className="w-full py-3 rounded-xl bg-blue-600 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 hover:bg-blue-500 transition-all active:scale-[0.98]"
+                            className="w-full py-3 rounded-xl bg-primary text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-[0_2px_8px_rgba(180,83,9,0.2)] hover:bg-primary/90 transition-all active:scale-[0.98]"
                         >
-                            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>play_arrow</span>
-                            {elapsed > 0 ? 'Resume Station' : 'Start Station'}
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polygon points="5 3 19 12 5 21 5 3" />
+                            </svg>
+                            {elapsed > 0 ? 'Resume Station' : 'Start Timer'}
                         </button>
                     ) : (
                         <button
                             onClick={pause}
-                            className="w-full py-3 rounded-xl bg-amber-600 text-white font-semibold text-sm flex items-center justify-center gap-2 hover:bg-amber-500 transition-all active:scale-[0.98]"
+                            className="w-full py-3 rounded-xl bg-amber-500 text-white font-semibold text-sm flex items-center justify-center gap-2 hover:bg-amber-400 transition-all active:scale-[0.98]"
                         >
-                            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>pause</span>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="6" y="4" width="4" height="16" />
+                                <rect x="14" y="4" width="4" height="16" />
+                            </svg>
                             Pause Timer
                         </button>
                     )}
                     <button
                         onClick={reset}
-                        className="w-full py-2 rounded-xl text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/50 text-xs font-medium transition-all flex items-center justify-center gap-1.5"
+                        className="w-full py-2 rounded-xl text-muted hover:text-body hover:bg-black/[0.02] text-xs font-medium transition-all flex items-center justify-center gap-1.5"
                     >
-                        <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>refresh</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="23 4 23 10 17 10" />
+                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                        </svg>
                         Reset Timer
                     </button>
                 </div>
             </div>
 
-            {/* Mobile timer bar — fixed at bottom */}
-            <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0c0c0f] border-t border-zinc-800 px-4 py-3 flex items-center justify-between gap-3" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+            {/* Mobile timer bar -- fixed at bottom */}
+            <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-surface-raised/95 backdrop-blur-xl border-t border-black/[0.06] px-4 py-3 flex items-center justify-between gap-3" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
                 <div className="flex items-center gap-3">
-                    <div className="text-2xl font-black text-white tabular-nums font-mono">
+                    <div className="text-2xl font-black text-heading tabular-nums font-mono">
                         {String(minutes).padStart(2, '0')}
-                        <span className={`${running ? 'animate-pulse' : ''} text-zinc-700`}>:</span>
+                        <span className={`${running ? 'animate-pulse' : ''} text-muted/40`}>:</span>
                         {String(seconds).padStart(2, '0')}
                     </div>
                     {STAGES[activeStage] && (
-                        <span className="text-[10px] text-zinc-500 font-medium">
+                        <span className="text-[10px] text-muted font-medium">
                             {STAGES[activeStage].name}
                         </span>
                     )}
@@ -231,25 +236,33 @@ export default function CaseTimer({ totalSeconds = 600 }: CaseTimerProps) {
                     {!running ? (
                         <button
                             onClick={start}
-                            className="px-5 py-2.5 min-h-[44px] rounded-xl bg-blue-600 text-white text-xs font-bold flex items-center gap-1.5 active:scale-[0.98]"
+                            className="px-5 py-2.5 min-h-[44px] rounded-xl bg-primary text-white text-xs font-bold flex items-center gap-1.5 active:scale-[0.98]"
                         >
-                            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>play_arrow</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polygon points="5 3 19 12 5 21 5 3" />
+                            </svg>
                             {elapsed > 0 ? 'Resume' : 'Start'}
                         </button>
                     ) : (
                         <button
                             onClick={pause}
-                            className="px-5 py-2.5 min-h-[44px] rounded-xl bg-amber-600 text-white text-xs font-bold flex items-center gap-1.5 active:scale-[0.98]"
+                            className="px-5 py-2.5 min-h-[44px] rounded-xl bg-amber-500 text-white text-xs font-bold flex items-center gap-1.5 active:scale-[0.98]"
                         >
-                            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>pause</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="6" y="4" width="4" height="16" />
+                                <rect x="14" y="4" width="4" height="16" />
+                            </svg>
                             Pause
                         </button>
                     )}
                     <button
                         onClick={reset}
-                        className="px-3 py-2.5 min-h-[44px] rounded-xl text-zinc-500 hover:bg-zinc-800/50 flex items-center"
+                        className="px-3 py-2.5 min-h-[44px] rounded-xl text-muted hover:bg-black/[0.03] flex items-center"
                     >
-                        <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>refresh</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="23 4 23 10 17 10" />
+                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                        </svg>
                     </button>
                 </div>
             </div>
