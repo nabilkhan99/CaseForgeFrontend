@@ -252,12 +252,7 @@ export default function PricingPage() {
           </div>
 
           {/* Comparison table */}
-          <motion.div
-            className="mb-16"
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-          >
+          <div className="mb-16">
             <h2 className="text-[20px] font-bold text-heading text-center mb-6">Compare Plans</h2>
             <div className="border border-black/[0.06] rounded-2xl overflow-hidden">
               {/* Header row */}
@@ -304,15 +299,12 @@ export default function PricingPage() {
                 </div>
               ))}
             </div>
-          </motion.div>
+          </div>
 
           {/* Free cases banner */}
-          <motion.div
+          <div
             className="mb-16 p-8 rounded-2xl text-center border border-black/[0.06]"
             style={{ background: 'rgba(22,163,74,0.03)' }}
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
           >
             <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-success mb-2 inline-block">
               Always Free
@@ -324,7 +316,7 @@ export default function PricingPage() {
             <Link href="/try" className="text-[13px] font-semibold text-primary hover:underline">
               Browse Free Cases &rarr;
             </Link>
-          </motion.div>
+          </div>
 
           {/* FAQ */}
           <div className="max-w-2xl mx-auto mb-8">

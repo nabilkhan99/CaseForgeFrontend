@@ -63,7 +63,7 @@ export default function CaseBankPage() {
     const totalDomains = domains.length;
 
     return (
-        <div className="min-h-screen">
+        <div className="min-h-screen bg-surface">
             <LandingNavbar user={user} />
 
             <main className="relative z-10 max-w-7xl mx-auto px-4 md:px-6 pt-24 pb-12 md:pt-28 md:pb-16">
