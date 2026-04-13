@@ -137,6 +137,8 @@ function buildMarkingCriteria(station: Record<string, unknown> | null): string |
 
 // ── API Route Handler ──
 
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
     try {
         const { sessionId } = await request.json();
