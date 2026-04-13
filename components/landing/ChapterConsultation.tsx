@@ -191,32 +191,33 @@ export default function ChapterConsultation() {
         </div>
 
         {/* Center: mic */}
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-full flex items-center justify-center border border-black/[0.08] cursor-pointer hover:bg-black/[0.02] transition-colors">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full flex items-center justify-center border border-black/[0.08] cursor-pointer hover:bg-black/[0.02] transition-colors">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="text-muted">
               <path d="M7 1v12M4 4v6M10 3v8M1 6v2M13 5v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
           </div>
           <motion.div
-            className="w-16 h-16 rounded-full flex items-center justify-center cursor-pointer"
+            className="w-11 h-11 rounded-full flex items-center justify-center cursor-pointer"
             style={{
               background: 'linear-gradient(135deg, #B45309, #D97706)',
-              boxShadow: '0 6px 24px rgba(180,83,9,0.3)',
+              boxShadow: '0 4px 16px rgba(180,83,9,0.25)',
             }}
             animate={{
               boxShadow: [
-                '0 6px 24px rgba(180,83,9,0.3)',
-                '0 8px 32px rgba(180,83,9,0.45)',
-                '0 6px 24px rgba(180,83,9,0.3)',
+                '0 4px 16px rgba(180,83,9,0.25)',
+                '0 6px 20px rgba(180,83,9,0.35)',
+                '0 4px 16px rgba(180,83,9,0.25)',
               ],
             }}
             transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
           >
-            <svg width="18" height="20" viewBox="0 0 12 14" fill="white">
-              <path d="M6 0C4.35 0 3 1.35 3 3v5c0 1.65 1.35 3 3 3s3-1.35 3-3V3c0-1.65-1.35-3-3-3z" />
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M7 1C5.62 1 4.5 2.12 4.5 3.5v3.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V3.5C9.5 2.12 8.38 1 7 1z" fill="white" />
+              <path d="M3 6.5v.5a4 4 0 0 0 8 0v-.5M7 11v2M5 13h4" stroke="white" strokeWidth="1.2" strokeLinecap="round" />
             </svg>
           </motion.div>
-          <div className="w-10 h-10 rounded-full flex items-center justify-center border border-black/[0.08] cursor-pointer hover:bg-black/[0.02] transition-colors">
+          <div className="w-9 h-9 rounded-full flex items-center justify-center border border-black/[0.08] cursor-pointer hover:bg-black/[0.02] transition-colors">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="text-muted">
               <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.3" />
               <path d="M7 4.5v3l2 1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
