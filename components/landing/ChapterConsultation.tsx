@@ -2,34 +2,89 @@
 
 import { motion } from 'framer-motion';
 
-// Large dynamic waveform — 48 bars, varying heights, staggered animation
-function LargeWaveform() {
-  const barCount = 48;
+// Circular audio visualizer — concentric rings that pulse
+function AudioVisualizer() {
+  const rings = 5;
   return (
-    <div className="flex items-center justify-center gap-[4px] h-24 w-full">
+    <div className="relative w-48 h-48">
+      {/* Ambient glow */}
+      <div
+        className="absolute inset-0 rounded-full"
+        style={{
+          background: 'radial-gradient(circle, rgba(180,83,9,0.06) 0%, transparent 70%)',
+        }}
+      />
+      {/* Concentric pulse rings */}
+      {Array.from({ length: rings }).map((_, i) => {
+        const size = 60 + i * 24;
+        return (
+          <motion.div
+            key={i}
+            className="absolute rounded-full"
+            style={{
+              width: size,
+              height: size,
+              left: `calc(50% - ${size / 2}px)`,
+              top: `calc(50% - ${size / 2}px)`,
+              border: `${i === 0 ? 2 : 1.5}px solid rgba(180,83,9,${0.25 - i * 0.04})`,
+            }}
+            animate={{
+              scale: [1, 1 + (i + 1) * 0.04, 1],
+              opacity: [0.6 - i * 0.08, 0.2, 0.6 - i * 0.08],
+            }}
+            transition={{
+              duration: 1.6 + i * 0.3,
+              repeat: Infinity,
+              ease: 'easeInOut',
+              delay: i * 0.15,
+            }}
+          />
+        );
+      })}
+      {/* Center avatar */}
+      <motion.div
+        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full flex items-center justify-center text-white text-[20px] font-semibold"
+        style={{
+          background: 'linear-gradient(135deg, #F59E0B, #B45309)',
+          boxShadow: '0 8px 32px rgba(180,83,9,0.35)',
+        }}
+        animate={{ scale: [1, 1.05, 1] }}
+        transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+      >
+        MT
+      </motion.div>
+    </div>
+  );
+}
+
+// Horizontal waveform — bar-style EQ
+function BarWaveform() {
+  const barCount = 56;
+  return (
+    <div className="flex items-center justify-center gap-[3px] h-16 w-full">
       {Array.from({ length: barCount }).map((_, i) => {
         const center = barCount / 2;
         const dist = Math.abs(i - center) / center;
-        const maxHeight = 100 - dist * 60;
+        const maxH = 100 - dist * 55;
         return (
           <motion.div
             key={i}
             className="rounded-full"
             style={{
-              width: '4px',
-              background: `linear-gradient(180deg, #B45309 0%, rgba(217,119,6,${0.3 + (1 - dist) * 0.7}) 100%)`,
+              width: '3px',
+              background: `linear-gradient(180deg, rgba(180,83,9,${0.8 - dist * 0.4}) 0%, rgba(245,158,11,${0.2 + (1 - dist) * 0.3}) 100%)`,
             }}
             animate={{
               height: [
-                `${12 + Math.sin(i * 0.6) * 8}%`,
-                `${maxHeight * (0.4 + Math.sin(i * 0.4 + 1) * 0.6)}%`,
-                `${12 + Math.sin(i * 0.6 + 2) * 8}%`,
+                `${10 + Math.sin(i * 0.5) * 6}%`,
+                `${maxH * (0.3 + Math.sin(i * 0.35 + 1) * 0.7)}%`,
+                `${10 + Math.sin(i * 0.5 + 2) * 6}%`,
               ],
             }}
             transition={{
-              duration: 1.0 + (i % 5) * 0.12,
+              duration: 0.8 + (i % 6) * 0.1,
               repeat: Infinity,
-              delay: (i % 7) * 0.06,
+              delay: (i % 8) * 0.05,
               ease: 'easeInOut',
             }}
           />
@@ -66,124 +121,112 @@ export default function ChapterConsultation() {
         </div>
       </div>
 
-      {/* Voice consultation — full, dramatic layout */}
-      <div className="flex flex-col items-center justify-center px-8 py-10 min-h-[320px]">
-        {/* Pulsing avatar with expanding rings */}
+      {/* Main voice area */}
+      <div className="flex flex-col items-center justify-center px-6 py-8 min-h-[340px]">
+        {/* Circular audio visualizer */}
         <motion.div
-          className="relative mb-6"
+          className="mb-4"
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ type: 'spring', stiffness: 80, damping: 16 }}
         >
-          {/* Outer pulse ring */}
-          <motion.div
-            className="absolute rounded-full"
-            style={{
-              inset: '-20px',
-              border: '1.5px solid rgba(180,83,9,0.08)',
-            }}
-            animate={{ scale: [1, 1.3, 1], opacity: [0.4, 0, 0.4] }}
-            transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-          />
-          {/* Middle pulse ring */}
-          <motion.div
-            className="absolute rounded-full"
-            style={{
-              inset: '-10px',
-              border: '2px solid rgba(180,83,9,0.15)',
-            }}
-            animate={{ scale: [1, 1.2, 1], opacity: [0.6, 0, 0.6] }}
-            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut', delay: 0.2 }}
-          />
-          {/* Inner glow */}
-          <motion.div
-            className="absolute rounded-full"
-            style={{
-              inset: '-4px',
-              background: 'radial-gradient(circle, rgba(180,83,9,0.12) 0%, transparent 70%)',
-            }}
-            animate={{ scale: [1, 1.1, 1] }}
-            transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-          />
-          <div
-            className="relative w-20 h-20 rounded-full flex items-center justify-center text-white text-[24px] font-semibold"
-            style={{
-              background: 'linear-gradient(135deg, #F59E0B, #B45309)',
-              boxShadow: '0 8px 32px rgba(180,83,9,0.3)',
-            }}
-          >
-            MT
-          </div>
+          <AudioVisualizer />
         </motion.div>
 
-        {/* Speaking label */}
+        {/* Speaking indicator */}
         <motion.div
-          className="text-center mb-8"
+          className="text-center mb-6"
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
         >
           <motion.div
-            className="text-[12px] font-semibold text-primary uppercase tracking-[0.1em] mb-1"
+            className="text-[12px] font-semibold text-primary uppercase tracking-[0.1em] mb-0.5"
             animate={{ opacity: [1, 0.4, 1] }}
             transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
           >
             Patient Speaking
           </motion.div>
-          <div className="text-[13px] text-muted">Mrs. Thompson is responding...</div>
+          <div className="text-[12px] text-muted">Mrs. Thompson is responding...</div>
         </motion.div>
 
-        {/* LARGE dynamic waveform — full width */}
+        {/* Bar waveform — full width */}
         <motion.div
-          className="w-full mb-8"
+          className="w-full mb-6"
           initial={{ opacity: 0, scaleY: 0.5 }}
           animate={{ opacity: 1, scaleY: 1 }}
           transition={{ delay: 0.4, type: 'spring', stiffness: 80, damping: 16 }}
         >
-          <LargeWaveform />
+          <BarWaveform />
         </motion.div>
 
-        {/* Recording indicator */}
-        <div className="flex items-center gap-2 text-[11px] text-muted">
-          <motion.div
-            className="w-2 h-2 rounded-full bg-red-400"
-            animate={{ opacity: [1, 0.3, 1], scale: [1, 0.85, 1] }}
-            transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
-          />
-          <span className="font-mono">Recording · 03:34 elapsed</span>
+        {/* Status row */}
+        <div className="flex items-center justify-center gap-6 text-[11px] text-muted">
+          <div className="flex items-center gap-2">
+            <motion.div
+              className="w-2 h-2 rounded-full bg-red-400"
+              animate={{ opacity: [1, 0.3, 1], scale: [1, 0.85, 1] }}
+              transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+            />
+            <span className="font-mono">Recording</span>
+          </div>
+          <div className="w-px h-3 bg-black/[0.08]" />
+          <span className="font-mono">03:34 / 08:00</span>
+          <div className="w-px h-3 bg-black/[0.08]" />
+          <span className="font-mono text-primary font-semibold">54% remaining</span>
         </div>
       </div>
 
       {/* Voice controls bar */}
       <div
-        className="px-5 py-4 border-t border-black/[0.05] flex items-center justify-center gap-6"
+        className="px-5 py-4 border-t border-black/[0.05] flex items-center justify-between"
         style={{ background: 'rgba(255,252,248,0.8)', backdropFilter: 'blur(12px)' }}
       >
-        {/* Mute button */}
-        <div className="w-11 h-11 rounded-full flex items-center justify-center border border-black/[0.08] cursor-pointer hover:bg-black/[0.02] transition-colors">
-          <svg width="16" height="16" viewBox="0 0 14 14" fill="none" className="text-muted">
-            <path d="M7 1v12M4 4v6M10 3v8M1 6v2M13 5v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        {/* Left: notepad */}
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center border border-black/[0.08] cursor-pointer hover:bg-black/[0.02] transition-colors">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="text-muted">
+            <rect x="2" y="1" width="10" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+            <path d="M5 4.5h4M5 7h4M5 9.5h2.5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
           </svg>
         </div>
 
-        {/* Mic button (active) — larger */}
-        <motion.div
-          className="w-16 h-16 rounded-full flex items-center justify-center cursor-pointer"
-          style={{
-            background: 'linear-gradient(135deg, #B45309, #D97706)',
-            boxShadow: '0 6px 24px rgba(180,83,9,0.3)',
-          }}
-          animate={{ boxShadow: ['0 6px 24px rgba(180,83,9,0.3)', '0 8px 32px rgba(180,83,9,0.45)', '0 6px 24px rgba(180,83,9,0.3)'] }}
-          transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-        >
-          <svg width="18" height="20" viewBox="0 0 12 14" fill="white">
-            <path d="M6 0C4.35 0 3 1.35 3 3v5c0 1.65 1.35 3 3 3s3-1.35 3-3V3c0-1.65-1.35-3-3-3z" />
-          </svg>
-        </motion.div>
+        {/* Center: mic */}
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center border border-black/[0.08] cursor-pointer hover:bg-black/[0.02] transition-colors">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="text-muted">
+              <path d="M7 1v12M4 4v6M10 3v8M1 6v2M13 5v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </div>
+          <motion.div
+            className="w-16 h-16 rounded-full flex items-center justify-center cursor-pointer"
+            style={{
+              background: 'linear-gradient(135deg, #B45309, #D97706)',
+              boxShadow: '0 6px 24px rgba(180,83,9,0.3)',
+            }}
+            animate={{
+              boxShadow: [
+                '0 6px 24px rgba(180,83,9,0.3)',
+                '0 8px 32px rgba(180,83,9,0.45)',
+                '0 6px 24px rgba(180,83,9,0.3)',
+              ],
+            }}
+            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <svg width="18" height="20" viewBox="0 0 12 14" fill="white">
+              <path d="M6 0C4.35 0 3 1.35 3 3v5c0 1.65 1.35 3 3 3s3-1.35 3-3V3c0-1.65-1.35-3-3-3z" />
+            </svg>
+          </motion.div>
+          <div className="w-10 h-10 rounded-full flex items-center justify-center border border-black/[0.08] cursor-pointer hover:bg-black/[0.02] transition-colors">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="text-muted">
+              <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.3" />
+              <path d="M7 4.5v3l2 1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
 
-        {/* End consultation button */}
-        <div className="w-11 h-11 rounded-full flex items-center justify-center bg-red-50 border border-red-200 cursor-pointer hover:bg-red-100 transition-colors">
-          <svg width="14" height="14" viewBox="0 0 12 12" fill="none">
+        {/* Right: end */}
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-red-50 border border-red-200 cursor-pointer hover:bg-red-100 transition-colors">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
             <path d="M1.5 1.5l9 9M10.5 1.5l-9 9" stroke="#DC2626" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
         </div>
