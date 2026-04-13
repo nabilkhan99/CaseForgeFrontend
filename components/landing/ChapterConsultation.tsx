@@ -3,25 +3,6 @@
 import { motion } from 'framer-motion';
 import WaveformBars from './WaveformBars';
 
-const MESSAGES = [
-  {
-    role: 'patient' as const,
-    text: "I've had this terrible headache for three days now. It's mostly in the mornings when I wake up.",
-  },
-  {
-    role: 'doctor' as const,
-    text: "I'm sorry to hear that, Mrs. Thompson. Can you show me where exactly you feel the pain?",
-  },
-  {
-    role: 'patient' as const,
-    text: "It's right here, at the back of my head. Sometimes behind my eyes too. I'm worried it might be something serious.",
-  },
-  {
-    role: 'doctor' as const,
-    text: 'I understand your concern. Have you noticed anything else — any changes in your vision, or feeling sick with it?',
-  },
-];
-
 export default function ChapterConsultation() {
   return (
     <div className="flex flex-col">
@@ -49,51 +30,92 @@ export default function ChapterConsultation() {
         </div>
       </div>
 
-      {/* Transcript */}
-      <div className="p-5 flex flex-col gap-3 min-h-[200px]">
-        {MESSAGES.map((msg, i) => (
-          <motion.div
-            key={i}
-            className={`flex ${msg.role === 'doctor' ? 'justify-end' : 'justify-start'}`}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ type: 'spring', stiffness: 200, damping: 24, delay: i * 0.15 }}
-          >
+      {/* Voice consultation area */}
+      <div className="flex flex-col items-center justify-center py-12 px-6 min-h-[260px] gap-6">
+        {/* Patient speaking indicator */}
+        <motion.div
+          className="flex flex-col items-center gap-4"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: 'spring', stiffness: 100, damping: 20 }}
+        >
+          {/* Pulsing avatar ring */}
+          <div className="relative">
+            <motion.div
+              className="absolute inset-[-6px] rounded-full"
+              style={{ border: '2px solid rgba(180,83,9,0.2)' }}
+              animate={{ scale: [1, 1.15, 1], opacity: [0.5, 0, 0.5] }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+            />
+            <motion.div
+              className="absolute inset-[-12px] rounded-full"
+              style={{ border: '1.5px solid rgba(180,83,9,0.1)' }}
+              animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0, 0.3] }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut', delay: 0.3 }}
+            />
             <div
-              className={`max-w-[75%] px-4 py-3 text-[13px] leading-[1.6] ${
-                msg.role === 'patient'
-                  ? 'bg-black/[0.03] border border-black/[0.05] text-body rounded-2xl rounded-bl-sm'
-                  : 'text-white rounded-2xl rounded-br-sm'
-              }`}
-              style={
-                msg.role === 'doctor'
-                  ? { background: 'linear-gradient(135deg, #B45309, #D97706)' }
-                  : {}
-              }
+              className="w-16 h-16 rounded-full flex items-center justify-center text-white text-[20px] font-semibold"
+              style={{ background: 'linear-gradient(135deg, #F59E0B, #B45309)' }}
             >
-              {msg.text}
+              MT
             </div>
-          </motion.div>
-        ))}
+          </div>
+
+          <div className="text-center">
+            <motion.div
+              className="text-[11px] font-semibold text-primary uppercase tracking-[0.08em] mb-1"
+              animate={{ opacity: [1, 0.5, 1] }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              Patient Speaking
+            </motion.div>
+            <div className="text-[12px] text-muted">Mrs. Thompson is responding...</div>
+          </div>
+        </motion.div>
+
+        {/* Large waveform visualization */}
+        <div className="w-full max-w-[320px]">
+          <WaveformBars active bars={32} className="h-12" />
+        </div>
+
+        {/* Elapsed time */}
+        <div className="flex items-center gap-3 text-[11px] text-muted">
+          <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+          <span className="font-mono">Recording · 03:34 elapsed</span>
+        </div>
       </div>
 
-      {/* Voice bar */}
+      {/* Voice controls bar */}
       <div
-        className="px-5 py-3 border-t border-black/[0.05] flex items-center gap-3"
+        className="px-5 py-4 border-t border-black/[0.05] flex items-center justify-center gap-6"
         style={{ background: 'rgba(255,252,248,0.8)', backdropFilter: 'blur(12px)' }}
       >
-        <div className="flex-1">
-          <WaveformBars active bars={24} />
+        {/* Mute button */}
+        <div className="w-10 h-10 rounded-full flex items-center justify-center border border-black/[0.08] cursor-pointer hover:bg-black/[0.02] transition-colors">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="text-muted">
+            <path d="M7 1v12M4 4v6M10 3v8M1 6v2M13 5v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
         </div>
+
+        {/* Mic button (active) */}
         <div
-          className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 cursor-pointer"
-          style={{ background: 'linear-gradient(135deg, #B45309, #D97706)' }}
+          className="w-14 h-14 rounded-full flex items-center justify-center cursor-pointer"
+          style={{
+            background: 'linear-gradient(135deg, #B45309, #D97706)',
+            boxShadow: '0 4px 16px rgba(180,83,9,0.25)',
+          }}
         >
-          <svg width="12" height="14" viewBox="0 0 12 14" fill="white">
+          <svg width="16" height="18" viewBox="0 0 12 14" fill="white">
             <path d="M6 0C4.35 0 3 1.35 3 3v5c0 1.65 1.35 3 3 3s3-1.35 3-3V3c0-1.65-1.35-3-3-3z" />
           </svg>
         </div>
-        <span className="text-[12px] font-mono text-muted w-12 text-right">04:26</span>
+
+        {/* End consultation button */}
+        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-red-50 border border-red-200 cursor-pointer hover:bg-red-100 transition-colors">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M1.5 1.5l9 9M10.5 1.5l-9 9" stroke="#DC2626" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </div>
       </div>
     </div>
   );
