@@ -2,23 +2,56 @@
 
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useCallback, Suspense } from 'react';
-import ClinicalLayout from '@/components/clinical-master/ClinicalLayout';
-import ConsultationTimer from '@/components/clinical-master/ConsultationTimer';
-import AudioWaveform from '@/components/clinical-master/AudioWaveform';
-import TranscriptFeed from '@/components/clinical-master/TranscriptFeed';
+import { motion } from 'framer-motion';
 import { useLiveKitSession } from '@/hooks/useLiveKitSession';
 import { createClient } from '@/lib/supabase/client';
-
-
+import ConsultationTimer from '@/components/clinical-master/ConsultationTimer';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 
 interface StationData {
   id: string;
   title: string;
   patient_name: string;
-  patient_age: number;
-  candidate_instructions: string;
   consultation_duration_seconds: number;
-  station_script: string;
+}
+
+function AudioVisualizer({ active }: { active: boolean }) {
+  const barCount = 48;
+  return (
+    <div className="flex items-center justify-center gap-[3px] h-20 w-full max-w-[400px] mx-auto">
+      {Array.from({ length: barCount }).map((_, i) => {
+        const center = barCount / 2;
+        const dist = Math.abs(i - center) / center;
+        const maxH = active ? 100 - dist * 55 : 15;
+        return (
+          <motion.div
+            key={i}
+            className="rounded-full"
+            style={{
+              width: '3px',
+              background: active
+                ? `linear-gradient(180deg, rgba(180,83,9,${0.8 - dist * 0.4}) 0%, rgba(245,158,11,${0.2 + (1 - dist) * 0.3}) 100%)`
+                : 'rgba(0,0,0,0.08)',
+            }}
+            animate={{
+              height: active
+                ? [
+                    `${10 + Math.sin(i * 0.5) * 6}%`,
+                    `${maxH * (0.3 + Math.sin(i * 0.35 + 1) * 0.7)}%`,
+                    `${10 + Math.sin(i * 0.5 + 2) * 6}%`,
+                  ]
+                : ['15%'],
+            }}
+            transition={
+              active
+                ? { duration: 0.8 + (i % 6) * 0.1, repeat: Infinity, delay: (i % 8) * 0.05, ease: 'easeInOut' }
+                : { duration: 0.3 }
+            }
+          />
+        );
+      })}
+    </div>
+  );
 }
 
 function LiveConsultationContent() {
@@ -29,12 +62,11 @@ function LiveConsultationContent() {
   const stationId = searchParams.get('stationId');
 
   const [station, setStation] = useState<StationData | null>(null);
-  const [consultationDuration, setConsultationDuration] = useState(120);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [showEndModal, setShowEndModal] = useState(false);
   const [userId, setUserId] = useState<string | undefined>(undefined);
 
-  // Get current user ID for authenticated sessions
   useEffect(() => {
     async function fetchUser() {
       const supabase = createClient();
@@ -44,78 +76,43 @@ function LiveConsultationContent() {
     fetchUser();
   }, []);
 
-  // Fetch station data on mount
   useEffect(() => {
     async function fetchStation() {
       if (!stationId) return;
-
       const supabase = createClient();
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('stations')
-        .select('id, title, patient_name, patient_age, candidate_instructions, consultation_duration_seconds, station_script')
+        .select('id, title, patient_name, consultation_duration_seconds')
         .eq('id', stationId)
         .single();
-
-      if (!error && data) {
-        setStation(data);
-        setConsultationDuration(data.consultation_duration_seconds || 120);
-      }
+      if (data) setStation(data);
     }
-
     fetchStation();
   }, [stationId]);
 
-  const {
-    isConnected,
-    isSpeaking,
-    transcript,
-    connect,
-    endConsultation,
-    setMicMuted,
-    error,
-    status,
-  } = useLiveKitSession({
-    sessionId,
-    stationId: stationId || undefined,
-    userId,
-    onSessionStarted: () => {
-      console.log('[LiveKit] Session started');
-    },
-    onConsultationEnded: () => {
-      console.log('[LiveKit] Session ended — backend handles feedback');
-    },
-    onError: (error) => {
-      console.error('[LiveKit] Session error:', error);
-    },
-  });
+  const { isConnected, isSpeaking, connect, endConsultation, setMicMuted, error, status } =
+    useLiveKitSession({
+      sessionId,
+      stationId: stationId || undefined,
+      userId,
+      onSessionStarted: () => {},
+      onConsultationEnded: () => {},
+      onError: () => {},
+    });
 
-  // Auto-connect once station data is loaded
   useEffect(() => {
-    if (station && status === 'disconnected') {
-      connect();
-    }
+    if (station && status === 'disconnected') connect();
   }, [station, status, connect]);
 
-  // Shared logic: end session and navigate — backend handles feedback on disconnect
   const finishConsultation = useCallback(async () => {
     setIsProcessing(true);
     try {
       await endConsultation();
-    } catch (err) {
-      console.error('Error finishing consultation:', err);
+    } catch {
+      // Continue to feedback even if disconnect fails
     }
-    router.push(`/dashboard/feedback/${sessionId}`);
+    router.push(`/clinical-master/feedback/${sessionId}`);
   }, [endConsultation, router, sessionId]);
-
-  const handleTimerComplete = () => {
-    finishConsultation();
-  };
-
-  const handleEndConsultation = () => {
-    if (confirm('Are you sure you want to end this consultation?')) {
-      finishConsultation();
-    }
-  };
 
   const handleToggleMute = () => {
     const newMuted = !isMuted;
@@ -123,148 +120,159 @@ function LiveConsultationContent() {
     setMicMuted(newMuted);
   };
 
-  // Format patient display name
-  const patientDisplay = station
-    ? `${station.patient_name} (${station.patient_age}${station.patient_age ? 'y' : ''})`
-    : 'Patient';
+  const patientInitials = station
+    ? station.patient_name.split(' ').map(n => n[0]).join('').slice(0, 2)
+    : '??';
 
   if (isProcessing) {
     return (
-      <ClinicalLayout showSidebar={false} showNotepad={false}>
-        <div className="flex-1 flex items-center justify-center bg-gradient-to-b from-[#111731] to-[#070A13]">
-          <div className="glass-card w-full max-w-2xl rounded-3xl p-12 flex flex-col items-center gap-8">
-            <div className="relative">
-              <div className="size-40 rounded-full border-4 border-slate-700/50 flex items-center justify-center">
-                <div className="size-40 absolute border-4 border-primary rounded-full animate-spin border-t-transparent"></div>
-                <div className="text-center">
-                  <span className="material-symbols-outlined text-5xl text-white">psychology</span>
-                </div>
-              </div>
-            </div>
-            <div className="text-center">
-              <h3 className="text-2xl font-bold text-white tracking-tight mb-2">
-                Finalising Consultation
-              </h3>
-              <p className="text-slate-400 text-sm">
-                Our clinical engine is processing your assessment.
-              </p>
-            </div>
-          </div>
+      <div className="min-h-screen bg-surface flex flex-col items-center justify-center gap-6">
+        <motion.div
+          className="w-12 h-12 rounded-full border-2 border-primary border-t-transparent"
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+        />
+        <div className="text-center">
+          <h3 className="text-[18px] font-semibold text-heading mb-1">Finalising Consultation</h3>
+          <p className="text-[14px] text-muted">Generating your feedback...</p>
         </div>
-      </ClinicalLayout>
+      </div>
+    );
+  }
+
+  if (!stationId) {
+    return (
+      <div className="min-h-screen bg-surface flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted mb-4">Missing station information</p>
+          <a href="/dashboard/library" className="text-primary hover:underline text-sm">Back to Library</a>
+        </div>
+      </div>
     );
   }
 
   return (
-    <ClinicalLayout
-      showSidebar={false}
-      showNotepad={true}
-      candidateBrief={station?.candidate_instructions}
-      stationId={stationId || undefined}
-    >
-      {/* Timer Bar */}
-      <div className="h-16 border-b border-slate-800 bg-[#111318] flex items-center justify-between px-8 shadow-sm z-10">
-        <div className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-slate-400">timer</span>
-          <span className="text-slate-400 text-sm font-medium">Time Remaining</span>
+    <div className="min-h-screen bg-surface font-sans flex flex-col">
+      {/* Top bar */}
+      <div className="h-12 flex items-center justify-between px-6 border-b border-black/[0.06] bg-surface/80 backdrop-blur-xl flex-shrink-0">
+        <div className="text-[13px] text-muted truncate max-w-[200px]">
+          {station?.patient_name || 'Loading...'}
         </div>
-
         <ConsultationTimer
-          durationSeconds={consultationDuration}
-          label=""
-          onComplete={handleTimerComplete}
-          autoStart={true}
+          durationSeconds={station?.consultation_duration_seconds || 480}
+          autoStart={isConnected}
+          onComplete={finishConsultation}
         />
-
         <div className="flex items-center gap-2">
-          <div className="px-2 py-1 rounded bg-slate-800 border border-slate-700 text-xs text-slate-400">
-            Session ID: {sessionId.slice(-8)}
-          </div>
           {isConnected && (
-            <div className="flex items-center gap-1 text-xs text-green-400">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-              Connected
+            <div className="flex items-center gap-1.5">
+              <motion.div
+                className="w-1.5 h-1.5 rounded-full bg-success"
+                animate={{ opacity: [1, 0.3, 1] }}
+                transition={{ duration: 1.8, repeat: Infinity }}
+              />
+              <span className="text-[10px] font-semibold text-success uppercase">Live</span>
             </div>
           )}
-          {error && (
-            <div className="text-xs text-red-400">Error: {error}</div>
-          )}
+          {error && <span className="text-[11px] text-danger">{error}</span>}
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 scroll-smooth">
-        {/* Patient Avatar & Audio Visualizer */}
-        <div className="flex flex-col md:flex-row gap-6 items-center justify-center min-h-[220px]">
-          {/* Patient Avatar */}
-          <div className="relative group shrink-0">
-            <div className="w-32 h-32 md:w-40 md:h-40 rounded-2xl overflow-hidden border-2 border-slate-700 shadow-xl relative bg-slate-800">
-              <div className="w-full h-full flex items-center justify-center">
-                <span className="material-symbols-outlined text-6xl text-slate-600">person</span>
-              </div>
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
-                <p className="text-white text-sm font-semibold text-center">
-                  {patientDisplay}
-                </p>
-              </div>
-            </div>
-            {isConnected && (
-              <div className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-green-500 ring-4 ring-[#0f172a]">
-                <span className="material-symbols-outlined text-white text-[14px] font-bold">
-                  {isMuted ? 'mic_off' : 'mic'}
-                </span>
-              </div>
-            )}
+      {/* Main voice area */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 gap-8">
+        {/* Patient avatar with pulse */}
+        <motion.div className="relative" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}>
+          <motion.div
+            className="absolute rounded-full"
+            style={{ inset: '-16px', border: '1.5px solid rgba(180,83,9,0.1)' }}
+            animate={isSpeaking ? { scale: [1, 1.25, 1], opacity: [0.4, 0, 0.4] } : { scale: 1, opacity: 0 }}
+            transition={{ duration: 2, repeat: Infinity }}
+          />
+          <motion.div
+            className="absolute rounded-full"
+            style={{ inset: '-8px', border: '2px solid rgba(180,83,9,0.15)' }}
+            animate={isSpeaking ? { scale: [1, 1.15, 1], opacity: [0.6, 0, 0.6] } : { scale: 1, opacity: 0 }}
+            transition={{ duration: 1.5, repeat: Infinity, delay: 0.2 }}
+          />
+          <div
+            className="w-20 h-20 rounded-full flex items-center justify-center text-white text-[24px] font-semibold relative"
+            style={{ background: 'linear-gradient(135deg, #F59E0B, #B45309)', boxShadow: '0 8px 32px rgba(180,83,9,0.3)' }}
+          >
+            {patientInitials}
           </div>
+        </motion.div>
 
-          {/* Audio Waveform - driven by Azure Realtime isSpeaking */}
-          <AudioWaveform isActive={isSpeaking} />
+        {/* Speaking indicator */}
+        <div className="text-center">
+          <motion.div
+            className="text-[12px] font-semibold text-primary uppercase tracking-[0.1em] mb-0.5"
+            animate={isSpeaking ? { opacity: [1, 0.4, 1] } : { opacity: 0.5 }}
+            transition={{ duration: 1.8, repeat: Infinity }}
+          >
+            {isSpeaking ? 'Patient Speaking' : 'Listening...'}
+          </motion.div>
+          <div className="text-[12px] text-muted">
+            {station?.patient_name || 'Patient'}
+          </div>
         </div>
 
-        {/* Live Transcription Feed */}
-        <TranscriptFeed transcript={transcript} />
+        {/* Waveform */}
+        <AudioVisualizer active={isSpeaking} />
       </div>
 
-      {/* Utility Control Bar */}
-      <div className="h-20 bg-[#111318] border-t border-slate-800 flex items-center justify-center gap-6 px-6 z-20">
+      {/* Controls bar */}
+      <div className="h-20 flex items-center justify-center gap-6 px-6 border-t border-black/[0.06] flex-shrink-0">
         <button
           onClick={handleToggleMute}
-          className="flex flex-col items-center gap-1 group"
           disabled={!isConnected}
+          className="w-11 h-11 rounded-full flex items-center justify-center border border-black/[0.08] cursor-pointer hover:bg-black/[0.02] transition-colors disabled:opacity-40"
         >
-          <div className="w-12 h-12 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center group-hover:bg-slate-700 group-hover:border-slate-600 transition-all disabled:opacity-50">
-            <span className="material-symbols-outlined text-white text-[24px]">
-              {isMuted ? 'mic_off' : 'mic'}
-            </span>
-          </div>
-          <span className="text-[10px] uppercase font-bold text-slate-500 group-hover:text-slate-300">
-            {isMuted ? 'Unmute' : 'Mute'}
-          </span>
+          <svg width="16" height="16" viewBox="0 0 14 14" fill="none" className={isMuted ? 'text-danger' : 'text-muted'}>
+            {isMuted ? (
+              <path d="M7 1v12M4 4v6M10 3v8M1 6v2M13 5v4M2 2l10 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            ) : (
+              <path d="M7 1v12M4 4v6M10 3v8M1 6v2M13 5v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            )}
+          </svg>
         </button>
 
-        <div className="w-px h-10 bg-slate-800 mx-2"></div>
+        <motion.div
+          className="w-14 h-14 rounded-full flex items-center justify-center cursor-pointer"
+          style={{ background: 'linear-gradient(135deg, #B45309, #D97706)', boxShadow: '0 4px 16px rgba(180,83,9,0.25)' }}
+          animate={isConnected ? { boxShadow: ['0 4px 16px rgba(180,83,9,0.25)', '0 6px 20px rgba(180,83,9,0.35)', '0 4px 16px rgba(180,83,9,0.25)'] } : {}}
+          transition={{ duration: 2, repeat: Infinity }}
+        >
+          <svg width="16" height="16" viewBox="0 0 14 14" fill="none">
+            <path d="M7 1C5.62 1 4.5 2.12 4.5 3.5v3.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V3.5C9.5 2.12 8.38 1 7 1z" fill="white" />
+            <path d="M3 6.5v.5a4 4 0 0 0 8 0v-.5M7 11v2M5 13h4" stroke="white" strokeWidth="1.2" strokeLinecap="round" />
+          </svg>
+        </motion.div>
 
         <button
-          onClick={handleEndConsultation}
-          className="flex items-center gap-3 px-6 h-12 rounded-full bg-red-500/10 border border-red-500/50 hover:bg-red-500 hover:text-white text-red-500 transition-all group"
+          onClick={() => setShowEndModal(true)}
+          className="px-5 py-2.5 rounded-xl text-[13px] font-medium text-danger bg-red-50 border border-red-200 hover:bg-red-100 transition-colors cursor-pointer"
         >
-          <span className="material-symbols-outlined group-hover:text-white transition-colors">
-            call_end
-          </span>
-          <span className="font-semibold text-sm">End Consultation</span>
+          End Consultation
         </button>
       </div>
-    </ClinicalLayout>
+
+      <ConfirmModal
+        open={showEndModal}
+        title="End Consultation"
+        message="Are you sure you want to end this consultation? Your feedback will be generated based on the conversation so far."
+        confirmLabel="End Now"
+        cancelLabel="Continue"
+        variant="danger"
+        onConfirm={() => { setShowEndModal(false); finishConsultation(); }}
+        onCancel={() => setShowEndModal(false)}
+      />
+    </div>
   );
 }
 
 export default function LiveConsultationPage() {
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center h-screen bg-[#0f172a]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500" />
-      </div>
-    }>
+    <Suspense fallback={<div className="min-h-screen bg-surface flex items-center justify-center"><div className="text-muted text-sm">Loading...</div></div>}>
       <LiveConsultationContent />
     </Suspense>
   );
