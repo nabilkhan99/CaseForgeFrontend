@@ -439,7 +439,8 @@ export default function CaseDetailPage() {
                                 ? `/clinical-master/station/${caseData.id}`
                                 : `/auth/sign-in?redirect=/clinical-master/station/${caseData.id}`
                             }
-                            className="mt-4 w-full py-3.5 rounded-xl bg-primary text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-[0_2px_8px_rgba(180,83,9,0.2)] hover:bg-primary/90 transition-all active:scale-[0.98]"
+                            className="mt-4 w-full py-3.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                            style={{ background: 'linear-gradient(135deg, #B45309, #D97706)', color: '#fff', boxShadow: '0 2px 8px rgba(180,83,9,0.2)' }}
                         >
                             {user ? (
                                 <>

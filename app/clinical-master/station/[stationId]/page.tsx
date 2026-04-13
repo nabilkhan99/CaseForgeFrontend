@@ -4,6 +4,8 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, useCallback, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { createClient } from '@/lib/supabase/client';
 import Container from '@/components/ui/Container';
 import PrimaryButton from '@/components/ui/PrimaryButton';
@@ -29,7 +31,6 @@ function ReadingPhaseContent() {
 
   const [station, setStation] = useState<StationData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [timerDone, setTimerDone] = useState(false);
   const [starting, setStarting] = useState(false);
 
   useEffect(() => {
@@ -120,9 +121,6 @@ function ReadingPhaseContent() {
     );
   }
 
-  // Parse candidate instructions into sections
-  const sections = station.candidate_instructions.split('\n').filter(line => line.trim());
-
   return (
     <div className="min-h-screen bg-surface font-sans">
       {/* Top bar */}
@@ -138,7 +136,7 @@ function ReadingPhaseContent() {
             durationSeconds={station.reading_duration_seconds}
             label="Reading Time"
             autoStart={true}
-            onComplete={() => setTimerDone(true)}
+            onComplete={() => {}}
           />
           <span className="text-[12px] text-muted">{station.title}</span>
         </div>
@@ -183,14 +181,27 @@ function ReadingPhaseContent() {
                 className="px-4 py-3 rounded-xl text-[14px] text-heading leading-[1.8]"
                 style={{ background: 'linear-gradient(135deg, rgba(180,83,9,0.03), rgba(245,158,11,0.03))', borderLeft: '3px solid #B45309' }}
               >
-                {sections.map((line, i) => {
-                  const isHeader = line.includes(':') && /^[A-Z]/.test(line);
-                  return (
-                    <p key={i} className={isHeader ? 'font-semibold mt-3 first:mt-0' : 'mt-1'}>
-                      {line}
-                    </p>
-                  );
-                })}
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    p: ({ children }) => <p className="text-[14px] text-body leading-relaxed mb-2 last:mb-0">{children}</p>,
+                    strong: ({ children }) => <strong className="font-semibold text-heading">{children}</strong>,
+                    em: ({ children }) => <em className="italic">{children}</em>,
+                    ul: ({ children }) => <ul className="space-y-1 my-2 pl-1">{children}</ul>,
+                    ol: ({ children }) => <ol className="space-y-1 my-2 pl-1 list-decimal list-inside">{children}</ol>,
+                    li: ({ children }) => (
+                      <li className="text-[14px] text-body leading-relaxed flex items-start gap-2">
+                        <span className="text-primary mt-1.5 text-[6px] shrink-0">●</span>
+                        <span>{children}</span>
+                      </li>
+                    ),
+                    h1: ({ children }) => <h3 className="text-[15px] font-bold text-heading mt-4 mb-2 first:mt-0">{children}</h3>,
+                    h2: ({ children }) => <h3 className="text-[15px] font-bold text-heading mt-4 mb-2 first:mt-0">{children}</h3>,
+                    h3: ({ children }) => <h4 className="text-[14px] font-bold text-heading mt-3 mb-1">{children}</h4>,
+                  }}
+                >
+                  {station.candidate_instructions}
+                </ReactMarkdown>
               </div>
             </div>
 
@@ -198,17 +209,11 @@ function ReadingPhaseContent() {
             <PrimaryButton
               fullWidth
               size="lg"
-              disabled={!timerDone && !starting}
+              disabled={starting}
               onClick={handleStartConsultation}
             >
-              {starting ? 'Starting...' : timerDone ? 'Begin Consultation \u2192' : 'Reading time remaining...'}
+              {starting ? 'Starting...' : 'Begin Consultation \u2192'}
             </PrimaryButton>
-
-            {!timerDone && (
-              <p className="text-[11px] text-muted text-center mt-3">
-                Button activates when reading time completes
-              </p>
-            )}
           </Container>
         </motion.div>
       </div>

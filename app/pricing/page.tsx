@@ -103,12 +103,8 @@ function FAQItem({ faq, index }: { faq: { q: string; a: string }; index: number 
   const [open, setOpen] = useState(index === 0);
 
   return (
-    <motion.div
+    <div
       className="border-b border-black/[0.06] last:border-b-0"
-      initial={{ opacity: 0, y: 6 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ delay: 0.06 * index }}
     >
       <button
         onClick={() => setOpen(!open)}
@@ -133,7 +129,7 @@ function FAQItem({ faq, index }: { faq: { q: string; a: string }; index: number 
       >
         <p className="pb-4 text-[13px] text-muted leading-relaxed">{faq.a}</p>
       </div>
-    </motion.div>
+    </div>
   );
 }
 

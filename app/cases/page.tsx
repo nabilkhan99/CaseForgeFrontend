@@ -112,9 +112,10 @@ export default function CaseBankPage() {
                                     key={f}
                                     onClick={() => setDifficultyFilter(f)}
                                     className={`px-4 py-2.5 min-h-[44px] rounded-lg text-xs font-semibold uppercase tracking-wider transition-all whitespace-nowrap ${difficultyFilter === f
-                                        ? 'bg-primary text-white shadow-[0_2px_8px_rgba(180,83,9,0.2)]'
+                                        ? 'shadow-[0_2px_8px_rgba(180,83,9,0.2)]'
                                         : 'bg-white/60 border border-black/[0.06] text-body hover:border-black/[0.1]'
                                         }`}
+                                    style={difficultyFilter === f ? { background: 'linear-gradient(135deg, #B45309, #D97706)', color: '#fff' } : undefined}
                                 >
                                     {f === 'all' ? 'All' : f}
                                 </button>

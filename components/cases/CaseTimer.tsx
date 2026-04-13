@@ -186,7 +186,8 @@ export default function CaseTimer({ totalSeconds = 600 }: CaseTimerProps) {
                     {!running ? (
                         <button
                             onClick={start}
-                            className="w-full py-3 rounded-xl bg-primary text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-[0_2px_8px_rgba(180,83,9,0.2)] hover:bg-primary/90 transition-all active:scale-[0.98]"
+                            className="w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                            style={{ background: 'linear-gradient(135deg, #B45309, #D97706)', color: '#fff', boxShadow: '0 2px 8px rgba(180,83,9,0.2)' }}
                         >
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <polygon points="5 3 19 12 5 21 5 3" />
@@ -196,7 +197,8 @@ export default function CaseTimer({ totalSeconds = 600 }: CaseTimerProps) {
                     ) : (
                         <button
                             onClick={pause}
-                            className="w-full py-3 rounded-xl bg-amber-500 text-white font-semibold text-sm flex items-center justify-center gap-2 hover:bg-amber-400 transition-all active:scale-[0.98]"
+                            className="w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                            style={{ background: '#D97706', color: '#fff' }}
                         >
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <rect x="6" y="4" width="4" height="16" />
@@ -236,7 +238,8 @@ export default function CaseTimer({ totalSeconds = 600 }: CaseTimerProps) {
                     {!running ? (
                         <button
                             onClick={start}
-                            className="px-5 py-2.5 min-h-[44px] rounded-xl bg-primary text-white text-xs font-bold flex items-center gap-1.5 active:scale-[0.98]"
+                            className="px-5 py-2.5 min-h-[44px] rounded-xl text-xs font-bold flex items-center gap-1.5 active:scale-[0.98]"
+                            style={{ background: 'linear-gradient(135deg, #B45309, #D97706)', color: '#fff' }}
                         >
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <polygon points="5 3 19 12 5 21 5 3" />
@@ -246,7 +249,8 @@ export default function CaseTimer({ totalSeconds = 600 }: CaseTimerProps) {
                     ) : (
                         <button
                             onClick={pause}
-                            className="px-5 py-2.5 min-h-[44px] rounded-xl bg-amber-500 text-white text-xs font-bold flex items-center gap-1.5 active:scale-[0.98]"
+                            className="px-5 py-2.5 min-h-[44px] rounded-xl text-xs font-bold flex items-center gap-1.5 active:scale-[0.98]"
+                            style={{ background: '#D97706', color: '#fff' }}
                         >
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <rect x="6" y="4" width="4" height="16" />
