@@ -1,7 +1,7 @@
 'use client';
 
-import { useParams } from 'next/navigation';
-import { useState, useEffect, useRef } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import Container from '@/components/ui/Container';
@@ -9,14 +9,20 @@ import PrimaryButton from '@/components/ui/PrimaryButton';
 import ScoreBadge from '@/components/ui/ScoreBadge';
 import { ConsultationFeedback } from '@/lib/clinical-master/types';
 
-export default function FeedbackPage() {
+function FeedbackContent() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const sessionId = params.sessionId as string;
+  const from = searchParams.get('from');
 
   const [feedback, setFeedback] = useState<ConsultationFeedback | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [timedOut, setTimedOut] = useState(false);
   const generationTriggered = useRef(false);
+  const retryCount = useRef(0);
+
+  const MAX_RETRIES = 20;
 
   useEffect(() => {
     let cancelled = false;
@@ -35,6 +41,12 @@ export default function FeedbackPage() {
         if (cancelled) return;
 
         if (response.status === 404) {
+          retryCount.current += 1;
+          if (retryCount.current >= MAX_RETRIES) {
+            setTimedOut(true);
+            setLoading(false);
+            return;
+          }
           generationTriggered.current = false;
           setTimeout(generateAndFetch, 3000);
           return;
@@ -74,6 +86,22 @@ export default function FeedbackPage() {
           transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
         />
         <p className="text-muted text-sm animate-pulse">Generating feedback...</p>
+      </div>
+    );
+  }
+
+  if (timedOut) {
+    return (
+      <div className="min-h-screen bg-surface flex items-center justify-center">
+        <div className="text-center max-w-md px-6">
+          <p className="text-heading font-medium mb-2">This is taking longer than expected.</p>
+          <p className="text-muted text-sm mb-6">
+            Your feedback may still be processing — you can check back from your dashboard.
+          </p>
+          <Link href="/dashboard" className="text-primary hover:underline text-sm font-medium">
+            Back to Dashboard
+          </Link>
+        </div>
       </div>
     );
   }
@@ -274,7 +302,7 @@ export default function FeedbackPage() {
 
         {/* Actions */}
         <div className="flex flex-col sm:flex-row items-center gap-4 justify-center">
-          <Link href="/dashboard/library">
+          <Link href={from ? `/dashboard/library/${from}` : '/dashboard/library'}>
             <PrimaryButton>Practice Another Case &rarr;</PrimaryButton>
           </Link>
           <Link href="/dashboard" className="text-[13px] text-muted hover:text-heading transition-colors">
@@ -283,5 +311,13 @@ export default function FeedbackPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function FeedbackPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-surface flex items-center justify-center"><div className="text-muted text-sm">Loading...</div></div>}>
+      <FeedbackContent />
+    </Suspense>
   );
 }
