@@ -4,164 +4,201 @@ import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import type { User } from '@supabase/supabase-js';
+import { motion } from 'framer-motion';
+import Container from '@/components/ui/Container';
+import PrimaryButton from '@/components/ui/PrimaryButton';
+import SecondaryButton from '@/components/ui/SecondaryButton';
+import PageHeader from '@/components/ui/PageHeader';
 
 export default function SettingsPage() {
-    const router = useRouter();
-    const supabase = createClient();
-    const [user, setUser] = useState<User | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [saved, setSaved] = useState(false);
+  const router = useRouter();
+  const supabase = createClient();
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
-    // Form state
-    const [fullName, setFullName] = useState('');
-    const [examDate, setExamDate] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [examDate, setExamDate] = useState('');
 
-    useEffect(() => {
-        supabase.auth.getUser().then(({ data: { user } }) => {
-            setUser(user);
-            setFullName(user?.user_metadata?.full_name || '');
-            setExamDate(user?.user_metadata?.exam_date || '');
-            setLoading(false);
-        });
-    }, [supabase.auth]);
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user);
+      setFullName(user?.user_metadata?.full_name || '');
+      setExamDate(user?.user_metadata?.exam_date || '');
+      setLoading(false);
+    });
+  }, [supabase.auth]);
 
-    const handleSave = async () => {
-        setSaving(true);
-        setSaved(false);
-        try {
-            await supabase.auth.updateUser({
-                data: {
-                    full_name: fullName,
-                    exam_date: examDate,
-                },
-            });
-            setSaved(true);
-            setTimeout(() => setSaved(false), 3000);
-        } catch (error) {
-            console.error('Error saving settings:', error);
-        } finally {
-            setSaving(false);
-        }
-    };
+  const handleSave = async () => {
+    if (!user?.id) return;
+    setSaving(true);
+    setSaved(false);
 
-    const handleSignOut = async () => {
-        await supabase.auth.signOut();
-        router.push('/');
-        router.refresh();
-    };
+    try {
+      // Write to user_metadata
+      await supabase.auth.updateUser({
+        data: {
+          full_name: fullName,
+          exam_date: examDate,
+        },
+      });
 
-    if (loading) {
-        return (
-            <main className="flex-1 bg-dashboard-gradient flex items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500" />
-            </main>
-        );
+      // Also write exam_date to profiles table (fix sync bug)
+      await supabase
+        .from('profiles')
+        .upsert({ id: user.id, exam_date: examDate || null }, { onConflict: 'id' });
+
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (error) {
+      if (error instanceof Error) {
+        // Handle silently
+      }
+    } finally {
+      setSaving(false);
     }
+  };
 
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.push('/');
+    router.refresh();
+  };
+
+  if (loading) {
     return (
-        <main className="flex-1 bg-dashboard-gradient overflow-y-auto relative">
-            {/* Background blobs */}
-            <div className="absolute top-[-10%] right-[-5%] w-[600px] h-[600px] bg-purple-600/5 rounded-full blur-[120px] pointer-events-none" />
-            <div className="absolute bottom-[-10%] left-[10%] w-[500px] h-[500px] bg-blue-600/5 rounded-full blur-[100px] pointer-events-none" />
-
-            <div className="max-w-2xl mx-auto px-8 py-10 relative z-10">
-                {/* Header */}
-                <header className="mb-10">
-                    <h1 className="text-3xl font-black text-white tracking-tight">Settings</h1>
-                    <p className="text-gray-400 text-sm mt-2">Manage your account preferences</p>
-                </header>
-
-                {/* Profile Section */}
-                <section className="glass-card rounded-2xl p-6 mb-6">
-                    <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-6 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-purple-400" style={{ fontSize: '18px' }}>person</span>
-                        Profile
-                    </h2>
-
-                    <div className="space-y-5">
-                        {/* Avatar + Email (read-only) */}
-                        <div className="flex items-center gap-4 pb-5 border-b border-white/5">
-                            <div className="h-14 w-14 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xl ring-2 ring-white/10">
-                                {fullName?.charAt(0)?.toUpperCase() || '?'}
-                            </div>
-                            <div>
-                                <p className="text-white font-bold">{fullName || 'User'}</p>
-                                <p className="text-gray-500 text-sm">{user?.email}</p>
-                            </div>
-                        </div>
-
-                        {/* Full Name */}
-                        <div>
-                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
-                                Full Name
-                            </label>
-                            <input
-                                type="text"
-                                value={fullName}
-                                onChange={(e) => setFullName(e.target.value)}
-                                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all text-sm"
-                                placeholder="Your full name"
-                            />
-                        </div>
-                    </div>
-                </section>
-
-                {/* Exam Section */}
-                <section className="glass-card rounded-2xl p-6 mb-6">
-                    <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-6 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-purple-400" style={{ fontSize: '18px' }}>event</span>
-                        Exam Preparation
-                    </h2>
-
-                    <div>
-                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
-                            SCA Exam Date
-                        </label>
-                        <input
-                            type="date"
-                            value={examDate}
-                            onChange={(e) => setExamDate(e.target.value)}
-                            className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all text-sm [color-scheme:dark]"
-                        />
-                        <p className="text-xs text-gray-500 mt-2">
-                            Set your exam date to see a countdown on your dashboard.
-                        </p>
-                    </div>
-                </section>
-
-                {/* Save Button */}
-                <div className="flex items-center gap-4 mb-10">
-                    <button
-                        onClick={handleSave}
-                        disabled={saving}
-                        className="px-8 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-sm hover:shadow-lg hover:shadow-purple-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {saving ? 'Saving...' : 'Save Changes'}
-                    </button>
-                    {saved && (
-                        <span className="flex items-center gap-1.5 text-emerald-400 text-sm font-medium animate-pulse">
-                            <span className="material-symbols-outlined text-sm">check_circle</span>
-                            Saved successfully
-                        </span>
-                    )}
-                </div>
-
-                {/* Danger Zone */}
-                <section className="glass-card rounded-2xl p-6 border-red-500/20">
-                    <h2 className="text-sm font-bold text-red-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>warning</span>
-                        Account
-                    </h2>
-                    <button
-                        onClick={handleSignOut}
-                        className="flex items-center gap-2 px-6 py-3 rounded-xl border border-red-500/20 text-red-400 hover:bg-red-500/10 transition-all text-sm font-medium"
-                    >
-                        <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>logout</span>
-                        Sign Out
-                    </button>
-                </section>
-            </div>
-        </main>
+      <div className="flex items-center justify-center py-20">
+        <motion.div
+          className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent"
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+        />
+      </div>
     );
+  }
+
+  const initial = fullName?.charAt(0)?.toUpperCase() || '?';
+
+  return (
+    <div className="max-w-[560px] mx-auto">
+      <PageHeader
+        title="Settings"
+        subtitle="Manage your account preferences"
+      />
+
+      {/* Profile Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 80, damping: 20 }}
+      >
+        <Container className="mb-6">
+          <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-5">
+            Profile
+          </div>
+
+          {/* Avatar + Email */}
+          <div className="flex items-center gap-4 pb-5 mb-5 border-b border-black/[0.06]">
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-[20px] font-semibold flex-shrink-0"
+              style={{
+                background: 'linear-gradient(135deg, #F59E0B, #B45309)',
+                boxShadow: '0 4px 16px rgba(180,83,9,0.2)',
+              }}
+            >
+              {initial}
+            </div>
+            <div>
+              <p className="text-[15px] font-semibold text-heading">{fullName || 'User'}</p>
+              <p className="text-[13px] text-muted">{user?.email}</p>
+            </div>
+          </div>
+
+          {/* Full Name */}
+          <div>
+            <label className="block text-[11px] font-semibold text-muted uppercase tracking-[0.08em] mb-2">
+              Full Name
+            </label>
+            <input
+              type="text"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl bg-white/70 border border-black/[0.06] text-heading placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-[14px]"
+              placeholder="Your full name"
+            />
+          </div>
+        </Container>
+      </motion.div>
+
+      {/* Exam Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.06 }}
+      >
+        <Container className="mb-6">
+          <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-5">
+            Exam Preparation
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-muted uppercase tracking-[0.08em] mb-2">
+              SCA Exam Date
+            </label>
+            <input
+              type="date"
+              value={examDate}
+              onChange={(e) => setExamDate(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl bg-white/70 border border-black/[0.06] text-heading placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-[14px]"
+            />
+            <p className="text-[12px] text-muted mt-2">
+              Set your exam date to see a countdown on your dashboard.
+            </p>
+          </div>
+        </Container>
+      </motion.div>
+
+      {/* Save Button */}
+      <motion.div
+        className="flex items-center gap-4 mb-8"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.12 }}
+      >
+        <PrimaryButton onClick={handleSave} disabled={saving}>
+          {saving ? 'Saving...' : 'Save Changes'}
+        </PrimaryButton>
+        {saved && (
+          <motion.span
+            className="flex items-center gap-1.5 text-[13px] font-medium"
+            style={{ color: '#16A34A' }}
+            initial={{ opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+            Saved
+          </motion.span>
+        )}
+      </motion.div>
+
+      {/* Account / Sign Out */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.18 }}
+      >
+        <Container className="mb-8">
+          <div className="text-[10px] font-semibold text-danger uppercase tracking-[0.1em] mb-4">
+            Account
+          </div>
+          <SecondaryButton variant="danger" onClick={handleSignOut}>
+            Sign Out
+          </SecondaryButton>
+        </Container>
+      </motion.div>
+    </div>
+  );
 }
