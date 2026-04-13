@@ -11,14 +11,16 @@ html {
   --color-primary-light: #D97706;
   --color-primary-lighter: #F59E0B;
   --color-heading: #1C1917;
-  --color-body: #57534E;
+  --color-body: #44403C;
   --color-muted: #A8A29E;
-  --color-bg: #FAF9F6;
-  --color-bg-warm: #F5F0EB;
+  --color-bg: #FAFAF7;
+  --color-bg-raised: #FFFCF8;
   --color-border: rgba(0, 0, 0, 0.06);
   --color-border-hover: rgba(0, 0, 0, 0.1);
   --color-glass: rgba(255, 255, 255, 0.65);
   --color-glass-border: rgba(0, 0, 0, 0.06);
+  --color-success: #16A34A;
+  --color-danger: #DC2626;
 }
 
 body::before {
@@ -220,14 +222,16 @@ body {
    ============================================ */
 
 .glass-card {
-  background: rgba(24, 24, 27, 0.8);
-  border: 1px solid rgb(39, 39, 42);
-  border-radius: 12px;
+  background: rgba(255, 252, 248, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 16px;
 }
 
 @media (hover: hover) {
   .glass-card:hover {
-    border-color: rgb(63, 63, 70);
+    border-color: rgba(0, 0, 0, 0.1);
     transition: border-color 200ms;
   }
 }
@@ -251,10 +255,10 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.12);
+  background: rgba(180, 83, 9, 0.15);
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(180, 83, 9, 0.3);
 }
