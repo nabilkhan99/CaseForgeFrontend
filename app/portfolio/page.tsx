@@ -5,16 +5,14 @@ import { CaseForm } from '@/components/CaseForm';
 import { ReviewDisplay } from '@/components/ReviewDisplay';
 import type { CaseReviewResponse } from '@/lib/types';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import { analytics } from '@/lib/analytics';
 import { FeedbackWidget } from '@/components/FeedbackWidget';
-import LandingNavbar from '@/components/landing/LandingNavbar';
-import LandingFooter from '@/components/landing/LandingFooter';
-import { createClient } from '@/lib/supabase/client';
 
-export default function PortfolioPage() {
+export default function Home() {
   const [review, setReview] = useState<CaseReviewResponse | null>(null);
   const [experienceGroups, setExperienceGroups] = useState<string[]>([]);
-  const [user, setUser] = useState<{ id: string } | null>(null);
 
+  // Load state from localStorage on initial render
   useEffect(() => {
     const savedReview = localStorage.getItem('savedReview');
     const savedExperienceGroups = localStorage.getItem('savedExperienceGroups');
@@ -24,9 +22,6 @@ export default function PortfolioPage() {
     if (savedExperienceGroups) {
       setExperienceGroups(JSON.parse(savedExperienceGroups));
     }
-
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => setUser(data.user as { id: string } | null));
   }, []);
 
   const handleReviewGenerated = (newReview: CaseReviewResponse, newExperienceGroups: string[]) => {
@@ -42,6 +37,7 @@ export default function PortfolioPage() {
   };
 
   const handleNewCase = () => {
+    analytics.trackNewCaseStarted();
     setReview(null);
     setExperienceGroups([]);
     localStorage.removeItem('savedReview');
@@ -49,28 +45,22 @@ export default function PortfolioPage() {
   };
 
   return (
-    <div className="min-h-screen bg-surface font-sans">
-      <LandingNavbar user={user} />
-
-      <main className="pt-28 pb-16 px-6">
-        <div className="max-w-5xl mx-auto">
-          <ErrorBoundary>
-            {!review ? (
-              <CaseForm onReviewGenerated={handleReviewGenerated} />
-            ) : (
-              <ReviewDisplay
-                review={review}
-                experienceGroups={experienceGroups}
-                onNewCase={handleNewCase}
-                onUpdate={handleReviewUpdate}
-              />
-            )}
-          </ErrorBoundary>
-        </div>
-      </main>
-
+    <ErrorBoundary>
+      <div className="max-w-7xl mx-auto space-y-8">
+        <section className="card">
+          {!review ? (
+            <CaseForm onReviewGenerated={handleReviewGenerated} />
+          ) : (
+            <ReviewDisplay
+              review={review}
+              experienceGroups={experienceGroups}
+              onNewCase={handleNewCase}
+              onUpdate={handleReviewUpdate}
+            />
+          )}
+        </section>
+      </div>
       {review && <FeedbackWidget />}
-      <LandingFooter />
-    </div>
+    </ErrorBoundary>
   );
 }
