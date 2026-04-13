@@ -3,6 +3,7 @@
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { motion } from 'framer-motion';
+import Link from 'next/link';
 import { useLiveKitSession } from '@/hooks/useLiveKitSession';
 import { createClient } from '@/lib/supabase/client';
 import ConsultationTimer from '@/components/clinical-master/ConsultationTimer';
@@ -145,7 +146,7 @@ function LiveConsultationContent() {
       <div className="min-h-screen bg-surface flex items-center justify-center">
         <div className="text-center">
           <p className="text-muted mb-4">Missing station information</p>
-          <a href="/dashboard/library" className="text-primary hover:underline text-sm">Back to Library</a>
+          <Link href="/dashboard/library" className="text-primary hover:underline text-sm">Back to Library</Link>
         </div>
       </div>
     );
