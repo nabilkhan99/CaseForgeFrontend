@@ -185,7 +185,6 @@ export default function DashboardPage() {
       {recentSessions.length > 0 && (
         <div
           className="mb-8"
-          transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.12 }}
         >
           <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-3">
             Recent Sessions
