@@ -14,15 +14,19 @@ module.exports = {
           lighter: '#F59E0B',
         },
         heading: '#1C1917',
-        body: '#57534E',
+        body: '#44403C',
         muted: '#A8A29E',
         surface: {
-          DEFAULT: '#FAF9F6',
+          DEFAULT: '#FAFAF7',
+          raised: '#FFFCF8',
           warm: '#F5F0EB',
-          alt: '#FDF8F3',
         },
         success: '#16A34A',
         danger: '#DC2626',
+        border: {
+          DEFAULT: 'rgba(0,0,0,0.06)',
+          hover: 'rgba(0,0,0,0.10)',
+        },
       },
       fontFamily: {
         sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
