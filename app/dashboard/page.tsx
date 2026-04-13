@@ -130,12 +130,7 @@ export default function DashboardPage() {
   return (
     <div>
       {/* Welcome section */}
-      <motion.div
-        className="mb-8"
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ type: 'spring', stiffness: 80, damping: 20 }}
-      >
+      <div className="mb-8">
         <h1 className="text-[28px] font-bold text-heading tracking-[-0.02em]">
           {greeting}, {firstName}
         </h1>
@@ -152,15 +147,10 @@ export default function DashboardPage() {
             SCA exam in {stats.examCountdownDays} days
           </span>
         )}
-      </motion.div>
+      </div>
 
       {/* Quick start */}
-      <motion.div
-        className="mb-8"
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.06 }}
-      >
+      <div className="mb-8">
         {lastStation ? (
           <Container>
             <div className="flex items-center justify-between gap-4">
@@ -189,14 +179,12 @@ export default function DashboardPage() {
             </PrimaryButton>
           </Link>
         )}
-      </motion.div>
+      </div>
 
       {/* Recent sessions */}
       {recentSessions.length > 0 && (
-        <motion.div
+        <div
           className="mb-8"
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
           transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.12 }}
         >
           <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-3">
@@ -232,16 +220,12 @@ export default function DashboardPage() {
           >
             View all history
           </Link>
-        </motion.div>
+        </div>
       )}
 
       {/* Domain progress */}
       {(metrics.dataGathering > 0 || metrics.clinicalManagement > 0 || metrics.interpersonalSkills > 0) && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.18 }}
-        >
+        <div>
           <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-3">
             Your Progress
           </div>
@@ -284,7 +268,7 @@ export default function DashboardPage() {
           >
             View library
           </Link>
-        </motion.div>
+        </div>
       )}
     </div>
   );
