@@ -19,7 +19,6 @@ function FeedbackContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
-  const generationTriggered = useRef(false);
   const retryCount = useRef(0);
 
   const MAX_RETRIES = 20;
@@ -27,10 +26,7 @@ function FeedbackContent() {
   useEffect(() => {
     let cancelled = false;
 
-    const generateAndFetch = async () => {
-      if (generationTriggered.current) return;
-      generationTriggered.current = true;
-
+    const pollForFeedback = async () => {
       try {
         const response = await fetch('/api/generate-feedback', {
           method: 'POST',
@@ -40,40 +36,43 @@ function FeedbackContent() {
 
         if (cancelled) return;
 
-        if (response.status === 404) {
+        const data = await response.json();
+
+        // Results ready — display them
+        if (data.status === 'ready' && data.feedback) {
+          setFeedback(data.feedback);
+          setLoading(false);
+          return;
+        }
+
+        // Still generating or no transcript yet — keep polling
+        if (data.status === 'generating' || response.status === 404) {
           retryCount.current += 1;
           if (retryCount.current >= MAX_RETRIES) {
             setTimedOut(true);
             setLoading(false);
             return;
           }
-          generationTriggered.current = false;
-          setTimeout(generateAndFetch, 3000);
+          setTimeout(pollForFeedback, 3000);
           return;
         }
 
-        if (!response.ok) {
-          setError(true);
-          setLoading(false);
-          return;
-        }
-
-        const data = await response.json();
-        if (data.status === 'ready' && data.feedback) {
-          setFeedback(data.feedback);
-          setLoading(false);
-        } else {
-          setError(true);
-          setLoading(false);
-        }
-      } catch {
-        if (cancelled) return;
+        // Unexpected error
         setError(true);
         setLoading(false);
+      } catch {
+        if (cancelled) return;
+        retryCount.current += 1;
+        if (retryCount.current >= MAX_RETRIES) {
+          setTimedOut(true);
+          setLoading(false);
+          return;
+        }
+        setTimeout(pollForFeedback, 3000);
       }
     };
 
-    const timer = setTimeout(generateAndFetch, 2000);
+    const timer = setTimeout(pollForFeedback, 2000);
     return () => { cancelled = true; clearTimeout(timer); };
   }, [sessionId]);
 
