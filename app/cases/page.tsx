@@ -4,17 +4,24 @@ import { useEffect, useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { getCasesGroupedByDomain, type CaseBankDomain } from '@/lib/supabase/queries/cases';
 import CaseBankCard from '@/components/cases/CaseBankCard';
-import Navbar from '@/components/landing/Navbar';
+import LandingNavbar from '@/components/landing/LandingNavbar';
 import { BlurFade } from '@/components/magicui/blur-fade';
+import { createClient } from '@/lib/supabase/client';
 
 const difficultyFilters = ['all', 'beginner', 'intermediate', 'advanced'] as const;
 type DifficultyFilter = (typeof difficultyFilters)[number];
 
 export default function CaseBankPage() {
+    const [user, setUser] = useState<{ id: string } | null>(null);
     const [domains, setDomains] = useState<CaseBankDomain[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [difficultyFilter, setDifficultyFilter] = useState<DifficultyFilter>('all');
+
+    useEffect(() => {
+        const supabase = createClient();
+        supabase.auth.getUser().then(({ data }) => setUser(data.user as { id: string } | null));
+    }, []);
 
     useEffect(() => {
         async function fetchData() {
@@ -57,7 +64,7 @@ export default function CaseBankPage() {
 
     return (
         <div className="min-h-screen">
-            <Navbar />
+            <LandingNavbar user={user} />
 
             <main className="relative z-10 max-w-7xl mx-auto px-4 md:px-6 pt-24 pb-12 md:pt-28 md:pb-16">
                 {/* Header */}
