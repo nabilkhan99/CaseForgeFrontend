@@ -45,32 +45,3 @@ export interface ConsultationFeedback {
   overall_score?: number;
   station_title?: string;
 }
-
-export interface WebSocketMessage {
-  type:
-  | 'session_started'
-  | 'audio'
-  | 'audio_interrupted'
-  | 'audio_end'
-  | 'history_added'
-  | 'history_updated'
-  | 'transcript_update'
-  | 'transcript_delta'
-  | 'consultation_ended'
-  | 'feedback_ready'
-  | 'error'
-  | 'agent_start'
-  | 'agent_end'
-  | 'raw_model_event';
-  duration_seconds?: number;
-  audio?: string; // base64 PCM16 audio
-  item?: {
-    role: string;
-    content: string;
-    id?: string;
-  };
-  message?: string;
-  feedback?: ConsultationFeedback;
-}
-
-export type ConsultationPhase = 'selection' | 'reading' | 'live' | 'processing' | 'feedback';
