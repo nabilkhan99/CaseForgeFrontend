@@ -55,10 +55,10 @@ export default function LandingNavbar({ user }: LandingNavbarProps) {
             Pricing
           </Link>
           <Link
-            href="/cases"
+            href="/portfolio"
             className="text-[13px] text-body hover:text-heading transition-colors duration-150"
           >
-            Cases
+            Portfolio
           </Link>
           <div className="w-px h-4 bg-black/10" />
           {user ? (
@@ -142,11 +142,11 @@ export default function LandingNavbar({ user }: LandingNavbarProps) {
               Pricing
             </Link>
             <Link
-              href="/cases"
+              href="/portfolio"
               onClick={() => setMobileOpen(false)}
               className="px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
             >
-              Cases
+              Portfolio
             </Link>
             <div className="my-1 border-t border-black/[0.06]" />
             {user ? (

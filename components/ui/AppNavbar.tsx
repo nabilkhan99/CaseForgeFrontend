@@ -10,7 +10,7 @@ const NAV_LINKS = [
   { label: 'Home', href: '/dashboard', exact: true },
   { label: 'Library', href: '/dashboard/library' },
   { label: 'History', href: '/dashboard/history' },
-  { label: 'Portfolio', href: '/cases' },
+  { label: 'Portfolio', href: '/portfolio' },
 ];
 
 export default function AppNavbar() {
