@@ -1,13 +1,25 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
 
 export default function PortfolioLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setIsAuthenticated(!!data.user));
+  }, []);
+
+  const backHref = isAuthenticated ? '/dashboard' : '/';
+  const backLabel = isAuthenticated ? '\u2190 Back to Dashboard' : '\u2190 Back to Home';
+
   return (
     <>
       {/* Scoped styles to preserve the original portfolio tool appearance */}
@@ -34,7 +46,7 @@ export default function PortfolioLayout({
         <nav className="backdrop-blur-lg bg-black/20 border-b border-white/10">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between h-16 items-center">
-              <Link href="/" className="flex items-center h-full py-2">
+              <Link href={backHref} className="flex items-center h-full py-2">
                 <Image
                   src="/fourteenfishermann.png"
                   alt="Fourteen Fisherman Logo"
@@ -45,10 +57,10 @@ export default function PortfolioLayout({
                 />
               </Link>
               <Link
-                href="/"
+                href={backHref}
                 className="text-sm text-white/60 hover:text-white transition-colors"
               >
-                ← Back to Home
+                {backLabel}
               </Link>
             </div>
           </div>
