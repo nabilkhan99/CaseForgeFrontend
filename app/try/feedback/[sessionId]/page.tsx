@@ -4,376 +4,427 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
+import { motion } from 'framer-motion';
+import Container from '@/components/ui/Container';
+import PrimaryButton from '@/components/ui/PrimaryButton';
+import ScoreBadge from '@/components/ui/ScoreBadge';
+import AuthCard from '@/components/auth/AuthCard';
+import AuthInput from '@/components/auth/AuthInput';
 
 type AuthMode = 'sign-up' | 'sign-in';
 
+interface FeedbackPreview {
+  overall_score: number;
+  passed: boolean;
+  data_gathering_score: number;
+  clinical_management_score: number;
+  interpersonal_skills_score: number;
+}
+
 export default function TryFeedbackAuthGatePage() {
-    const params = useParams();
-    const router = useRouter();
-    const sessionId = params.sessionId as string;
+  const params = useParams();
+  const router = useRouter();
+  const sessionId = params.sessionId as string;
 
-    const [authMode, setAuthMode] = useState<AuthMode>('sign-up');
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [fullName, setFullName] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [checkingAuth, setCheckingAuth] = useState(true);
-    const [emailConfirmationSent, setEmailConfirmationSent] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthMode>('sign-up');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [emailConfirmationSent, setEmailConfirmationSent] = useState(false);
+  const [feedback, setFeedback] = useState<FeedbackPreview | null>(null);
 
-    const supabase = createClient();
+  const supabase = createClient();
 
-    // Check if user is already authenticated (or comes back after confirming email)
-    useEffect(() => {
-        async function checkAuth() {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
-                // Already authenticated — claim and redirect
-                await claimAndRedirect();
-            } else {
-                setCheckingAuth(false);
-            }
+  // Try to load partial feedback from the session
+  useEffect(() => {
+    async function loadFeedback() {
+      try {
+        const { data } = await supabase
+          .from('session_results')
+          .select('overall_score, passed, data_gathering_score, clinical_management_score, interpersonal_skills_score')
+          .eq('session_id', sessionId)
+          .single();
+
+        if (data) {
+          setFeedback({
+            overall_score: data.overall_score ?? 0,
+            passed: data.passed ?? false,
+            data_gathering_score: data.data_gathering_score ?? 0,
+            clinical_management_score: data.clinical_management_score ?? 0,
+            interpersonal_skills_score: data.interpersonal_skills_score ?? 0,
+          });
         }
-        checkAuth();
+      } catch {
+        // Feedback may not be ready yet
+      }
+    }
+    loadFeedback();
+  }, [sessionId, supabase]);
 
-        // Listen for auth state changes (e.g. user confirms email and comes back)
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
-            if (event === 'SIGNED_IN') {
-                await claimAndRedirect();
-            }
+  useEffect(() => {
+    async function checkAuth() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await claimAndRedirect();
+      } else {
+        setCheckingAuth(false);
+      }
+    }
+    checkAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
+      if (event === 'SIGNED_IN') {
+        await claimAndRedirect();
+      }
+    });
+
+    return () => subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function claimAndRedirect() {
+    try {
+      const res = await fetch('/api/try/claim-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        if (!data.alreadyClaimed) {
+          // Non-critical error
+        }
+      }
+    } catch {
+      // Non-critical error
+    }
+
+    router.push(`/clinical-master/feedback/${sessionId}`);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (authMode === 'sign-up') {
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            data: { full_name: fullName.trim() },
+            emailRedirectTo: `${window.location.origin}/auth/callback?next=/clinical-master/feedback/${sessionId}`,
+          },
         });
 
-        return () => subscription.unsubscribe();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    async function claimAndRedirect() {
-        try {
-            // Claim the guest session (uses the auth cookie set by Supabase)
-            const res = await fetch('/api/try/claim-session', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sessionId }),
-            });
-
-            if (!res.ok) {
-                const data = await res.json();
-                // Session already claimed is fine — proceed
-                if (!data.alreadyClaimed) {
-                    console.error('Failed to claim session:', data.error);
-                }
-            }
-        } catch (err) {
-            console.error('Error claiming session:', err);
+        if (signUpError) {
+          setError(signUpError.message);
+          setLoading(false);
+          return;
         }
 
-        // Redirect to the real feedback page
-        router.push(`/clinical-master/feedback/${sessionId}`);
-    }
-
-    async function handleSubmit(e: React.FormEvent) {
-        e.preventDefault();
-        setLoading(true);
-        setError(null);
-
-        try {
-            if (authMode === 'sign-up') {
-                const { data, error: signUpError } = await supabase.auth.signUp({
-                    email: email.trim(),
-                    password,
-                    options: {
-                        data: { full_name: fullName.trim() },
-                        emailRedirectTo: `${window.location.origin}/try/feedback/${sessionId}`,
-                    },
-                });
-
-                if (signUpError) {
-                    setError(signUpError.message);
-                    setLoading(false);
-                    return;
-                }
-
-                // If session is null, email confirmation is required
-                if (data.user && !data.session) {
-                    setEmailConfirmationSent(true);
-                    setLoading(false);
-                    return;
-                }
-
-                // Session exists — user is immediately authenticated (email confirm disabled)
-                if (data.session) {
-                    await claimAndRedirect();
-                }
-            } else {
-                const { data, error: signInError } = await supabase.auth.signInWithPassword({
-                    email: email.trim(),
-                    password,
-                });
-
-                if (signInError) {
-                    setError(signInError.message);
-                    setLoading(false);
-                    return;
-                }
-
-                if (data.user) {
-                    await claimAndRedirect();
-                }
-            }
-        } catch {
-            setError('An unexpected error occurred');
-            setLoading(false);
+        if (data.user && !data.session) {
+          setEmailConfirmationSent(true);
+          setLoading(false);
+          return;
         }
-    }
 
-    if (checkingAuth) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-[#070A13]">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500" />
-            </div>
-        );
-    }
+        if (data.session) {
+          await claimAndRedirect();
+        }
+      } else {
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
 
-    if (emailConfirmationSent) {
-        return (
-            <div className="min-h-screen flex items-center justify-center p-6 bg-[#070A13]">
-                <div className="glass-card rounded-2xl p-10 border border-white/10 max-w-md text-center">
-                    <div className="w-16 h-16 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-6">
-                        <span className="material-symbols-outlined text-3xl text-blue-400">mark_email_read</span>
-                    </div>
-                    <h2 className="text-2xl font-bold text-white mb-3">Check Your Email</h2>
-                    <p className="text-slate-400 text-sm mb-6 leading-relaxed">
-                        We&apos;ve sent a confirmation link to <span className="text-white font-medium">{email}</span>.
-                        Click the link in the email, then come back here to view your feedback.
-                    </p>
-                    <div className="p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg text-xs text-blue-300">
-                        <span className="material-symbols-outlined align-middle mr-1" style={{ fontSize: '14px' }}>info</span>
-                        Your feedback has been saved and will be waiting for you after you confirm.
-                    </div>
-                    <button
-                        onClick={() => {
-                            setEmailConfirmationSent(false);
-                            setAuthMode('sign-in');
-                        }}
-                        className="mt-6 text-sm text-slate-400 hover:text-white transition-colors underline underline-offset-4"
-                    >
-                        Already confirmed? Sign in here
-                    </button>
-                </div>
-            </div>
-        );
-    }
+        if (signInError) {
+          setError(signInError.message);
+          setLoading(false);
+          return;
+        }
 
+        if (data.user) {
+          await claimAndRedirect();
+        }
+      }
+    } catch {
+      setError('An unexpected error occurred');
+      setLoading(false);
+    }
+  }
+
+  async function handleResend() {
+    try {
+      await supabase.auth.resend({ type: 'signup', email: email.trim() });
+    } catch {
+      // Handle silently
+    }
+  }
+
+  if (checkingAuth) {
     return (
-        <div className="min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden">
-            {/* Background effects */}
-            <div className="absolute inset-0 bg-gradient-to-b from-blue-900/20 via-[#070A13] to-[#070A13]" />
-            <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-blue-500/5 rounded-full blur-3xl" />
-
-            <div className="relative z-10 w-full max-w-5xl">
-                {/* Header */}
-                <div className="text-center mb-8">
-                    <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-semibold mb-4">
-                        <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>check_circle</span>
-                        CONSULTATION COMPLETE
-                    </div>
-                    <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight mb-3">
-                        Your Assessment is <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">Ready</span>
-                    </h1>
-                    <p className="text-slate-400 text-base">
-                        Sign up to unlock your detailed AI-powered feedback report
-                    </p>
-                </div>
-
-                {/* Main Content: Blurred Preview + Auth Panel */}
-                <div className="flex flex-col lg:flex-row gap-8 items-stretch">
-                    {/* Blurred Feedback Preview */}
-                    <div className="flex-1 relative rounded-2xl overflow-hidden">
-                        {/* Blur overlay */}
-                        <div className="absolute inset-0 z-20 backdrop-blur-md bg-black/30" />
-
-                        {/* Lock icon overlay */}
-                        <div className="absolute inset-0 z-30 flex items-center justify-center">
-                            <div className="glass-card rounded-2xl p-6 text-center">
-                                <span className="material-symbols-outlined text-4xl text-blue-400 mb-2 block">lock</span>
-                                <p className="text-white font-semibold text-sm">Sign up to unlock</p>
-                            </div>
-                        </div>
-
-                        {/* Fake feedback cards (visible but blurred) */}
-                        <div className="p-6 space-y-4 relative z-10">
-                            {/* Overall score card */}
-                            <div className="glass-card rounded-xl p-6">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h3 className="text-lg font-bold text-white">Overall Performance</h3>
-                                    <div className="text-3xl font-bold text-green-400">72%</div>
-                                </div>
-                                <div className="h-3 bg-slate-700 rounded-full overflow-hidden">
-                                    <div className="h-full w-[72%] bg-gradient-to-r from-green-500 to-emerald-400 rounded-full" />
-                                </div>
-                            </div>
-
-                            {/* Domain scores */}
-                            <div className="grid grid-cols-3 gap-3">
-                                {[
-                                    { name: 'Data Gathering', score: 68, color: 'blue' },
-                                    { name: 'Clinical Management', score: 74, color: 'purple' },
-                                    { name: 'Interpersonal Skills', score: 75, color: 'cyan' },
-                                ].map((domain) => (
-                                    <div key={domain.name} className="glass-card rounded-xl p-4 text-center">
-                                        <div className={`text-2xl font-bold text-${domain.color}-400 mb-1`}>{domain.score}%</div>
-                                        <div className="text-xs text-slate-400">{domain.name}</div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* Fake strengths/improvements */}
-                            <div className="glass-card rounded-xl p-4">
-                                <h4 className="text-sm font-semibold text-white mb-3">Key Strengths</h4>
-                                <div className="space-y-2">
-                                    {['Excellent rapport building with the patient', 'Systematic approach to history taking', 'Clear safety-netting advice'].map((s, i) => (
-                                        <div key={i} className="flex items-start gap-2">
-                                            <span className="text-green-400 mt-0.5">✓</span>
-                                            <span className="text-sm text-slate-300">{s}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="glass-card rounded-xl p-4">
-                                <h4 className="text-sm font-semibold text-white mb-3">Areas for Improvement</h4>
-                                <div className="space-y-2">
-                                    {['Explore red flag symptoms more systematically', 'Consider broader differential diagnosis'].map((s, i) => (
-                                        <div key={i} className="flex items-start gap-2">
-                                            <span className="text-amber-400 mt-0.5">→</span>
-                                            <span className="text-sm text-slate-300">{s}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Auth Panel */}
-                    <div className="w-full lg:w-[400px] shrink-0">
-                        <div className="glass-card rounded-2xl p-8 border border-white/10 shadow-2xl shadow-blue-500/5">
-                            {/* Toggle */}
-                            <div className="flex bg-white/5 rounded-xl p-1 mb-6">
-                                <button
-                                    onClick={() => setAuthMode('sign-up')}
-                                    className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${authMode === 'sign-up'
-                                        ? 'bg-blue-600 text-white shadow-lg'
-                                        : 'text-slate-400 hover:text-white'
-                                        }`}
-                                >
-                                    Sign Up
-                                </button>
-                                <button
-                                    onClick={() => setAuthMode('sign-in')}
-                                    className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${authMode === 'sign-in'
-                                        ? 'bg-blue-600 text-white shadow-lg'
-                                        : 'text-slate-400 hover:text-white'
-                                        }`}
-                                >
-                                    Sign In
-                                </button>
-                            </div>
-
-                            <form onSubmit={handleSubmit} className="space-y-4">
-                                {authMode === 'sign-up' && (
-                                    <div>
-                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Full Name</label>
-                                        <input
-                                            type="text"
-                                            value={fullName}
-                                            onChange={(e) => setFullName(e.target.value)}
-                                            placeholder="Dr. John Smith"
-                                            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-sm"
-                                            required
-                                        />
-                                    </div>
-                                )}
-
-                                <div>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1.5">Email Address</label>
-                                    <input
-                                        type="email"
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        placeholder="doctor@example.com"
-                                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-sm"
-                                        required
-                                        autoComplete="email"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1.5">Password</label>
-                                    <input
-                                        type="password"
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        placeholder="••••••••"
-                                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-sm"
-                                        required
-                                        minLength={6}
-                                        autoComplete={authMode === 'sign-up' ? 'new-password' : 'current-password'}
-                                    />
-                                </div>
-
-                                {error && (
-                                    <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-                                        <p className="text-red-400 text-sm text-center">{error}</p>
-                                    </div>
-                                )}
-
-                                <button
-                                    type="submit"
-                                    disabled={loading}
-                                    className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20"
-                                >
-                                    {loading ? (
-                                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
-                                    ) : (
-                                        <>
-                                            {authMode === 'sign-up' ? 'Sign Up & View Feedback' : 'Sign In & View Feedback'}
-                                            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>arrow_forward</span>
-                                        </>
-                                    )}
-                                </button>
-                            </form>
-
-                            {/* Benefits */}
-                            {authMode === 'sign-up' && (
-                                <div className="mt-6 pt-6 border-t border-white/5">
-                                    <p className="text-xs text-slate-500 font-medium mb-3">Your free account includes:</p>
-                                    <div className="space-y-2">
-                                        {[
-                                            'Detailed domain-by-domain scoring',
-                                            'Personalised strengths & improvements',
-                                            'Key learning points for exam prep',
-                                        ].map((benefit, i) => (
-                                            <div key={i} className="flex items-center gap-2">
-                                                <span className="material-symbols-outlined text-blue-400" style={{ fontSize: '14px' }}>check</span>
-                                                <span className="text-xs text-slate-400">{benefit}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Forgot password (sign-in mode) */}
-                            {authMode === 'sign-in' && (
-                                <div className="mt-4 text-center">
-                                    <Link href="/auth/forgot-password" className="text-blue-400 hover:text-blue-300 text-xs transition-colors">
-                                        Forgot Password?
-                                    </Link>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <motion.div
+          className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent"
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+        />
+      </div>
     );
+  }
+
+  if (emailConfirmationSent) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <div className="max-w-md w-full">
+          <AuthCard
+            icon={
+              <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            }
+            accentColor="blue"
+            title="Check Your Email"
+            subtitle={`We've sent a confirmation link to ${email}. Click the link, then come back to view your feedback.`}
+          >
+            <div className="space-y-4">
+              <p className="text-[12px] text-muted text-center">
+                Your feedback has been saved and will be waiting for you after you confirm.
+              </p>
+              <button
+                onClick={handleResend}
+                className="w-full text-[13px] text-primary hover:underline font-medium cursor-pointer"
+              >
+                Resend confirmation email
+              </button>
+              <button
+                onClick={() => {
+                  setEmailConfirmationSent(false);
+                  setAuthMode('sign-in');
+                }}
+                className="w-full text-[13px] text-muted hover:text-heading transition-colors cursor-pointer"
+              >
+                Already confirmed? Sign in here
+              </button>
+            </div>
+          </AuthCard>
+        </div>
+      </div>
+    );
+  }
+
+  const domainBars = feedback ? [
+    { label: 'Data Gathering', score: feedback.data_gathering_score },
+    { label: 'Clinical Management', score: feedback.clinical_management_score },
+    { label: 'Interpersonal Skills', score: feedback.interpersonal_skills_score },
+  ] : [];
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 py-16">
+      {/* Header */}
+      <motion.div
+        className="text-center mb-8"
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 60, damping: 20 }}
+      >
+        <span
+          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-semibold uppercase tracking-wide mb-4"
+          style={{ background: 'rgba(22,163,74,0.08)', color: '#16A34A' }}
+        >
+          Consultation Complete
+        </span>
+        <h1 className="text-[28px] font-bold text-heading tracking-[-0.02em] mb-2">
+          Your Assessment is Ready
+        </h1>
+        <p className="text-[14px] text-muted">
+          Sign up to see your full feedback and track your progress
+        </p>
+      </motion.div>
+
+      <div className="w-full max-w-[900px] flex flex-col lg:flex-row gap-8 items-start">
+        {/* Partial feedback preview */}
+        <motion.div
+          className="flex-1 w-full"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <Container>
+            {/* Score hero */}
+            {feedback ? (
+              <div className="text-center mb-6">
+                <div
+                  className="text-[48px] font-bold font-mono mb-1"
+                  style={{
+                    background: 'linear-gradient(135deg, #B45309, #D97706)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                  }}
+                >
+                  {feedback.overall_score}
+                </div>
+                <div className="text-[13px] text-muted mb-3">out of 100</div>
+                <ScoreBadge score={feedback.overall_score} showLabel />
+              </div>
+            ) : (
+              <div className="text-center py-6">
+                <motion.div
+                  className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent mx-auto mb-2"
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                />
+                <p className="text-[13px] text-muted">Loading feedback...</p>
+              </div>
+            )}
+
+            {/* Domain bars */}
+            {domainBars.length > 0 && (
+              <div className="space-y-3 mb-6">
+                {domainBars.map((bar, i) => (
+                  <div key={bar.label}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[13px] font-medium text-heading">{bar.label}</span>
+                      <span className="text-[12px] font-mono font-semibold text-primary">{bar.score}%</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-black/[0.04] overflow-hidden">
+                      <motion.div
+                        className="h-full rounded-full"
+                        style={{ background: 'linear-gradient(90deg, #B45309, #D97706)' }}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${bar.score}%` }}
+                        transition={{ type: 'spring', stiffness: 40, damping: 20, delay: 0.3 + i * 0.1 }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Gradient fade overlay for hidden content */}
+            <div className="relative">
+              <div className="space-y-3 opacity-30 blur-[2px]">
+                <div className="h-4 bg-black/[0.04] rounded w-3/4" />
+                <div className="h-4 bg-black/[0.04] rounded w-full" />
+                <div className="h-4 bg-black/[0.04] rounded w-2/3" />
+                <div className="h-4 bg-black/[0.04] rounded w-5/6" />
+                <div className="h-4 bg-black/[0.04] rounded w-1/2" />
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-t from-surface-raised to-transparent" />
+            </div>
+
+            <div className="text-center mt-4">
+              <p className="text-[13px] text-muted">
+                Sign up to see strengths, improvements, and learning points
+              </p>
+            </div>
+          </Container>
+        </motion.div>
+
+        {/* Auth panel */}
+        <motion.div
+          className="w-full lg:w-[400px] shrink-0"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <AuthCard
+            title={authMode === 'sign-up' ? 'Create Account' : 'Sign In'}
+            subtitle={authMode === 'sign-up' ? 'Unlock your full feedback report' : 'Welcome back'}
+          >
+            {/* Toggle */}
+            <div className="flex bg-black/[0.03] rounded-xl p-1 mb-5">
+              <button
+                onClick={() => setAuthMode('sign-up')}
+                className={`flex-1 py-2 rounded-lg text-[13px] font-semibold transition-all cursor-pointer ${
+                  authMode === 'sign-up'
+                    ? 'bg-white shadow-sm text-heading'
+                    : 'text-muted hover:text-heading'
+                }`}
+              >
+                Sign Up
+              </button>
+              <button
+                onClick={() => setAuthMode('sign-in')}
+                className={`flex-1 py-2 rounded-lg text-[13px] font-semibold transition-all cursor-pointer ${
+                  authMode === 'sign-in'
+                    ? 'bg-white shadow-sm text-heading'
+                    : 'text-muted hover:text-heading'
+                }`}
+              >
+                Sign In
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {authMode === 'sign-up' && (
+                <AuthInput
+                  label="Full Name"
+                  type="text"
+                  icon="user"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Dr. John Smith"
+                  required
+                  autoComplete="name"
+                />
+              )}
+
+              <AuthInput
+                label="Email Address"
+                type="email"
+                icon="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="doctor@example.com"
+                required
+                autoComplete="email"
+              />
+
+              <AuthInput
+                label="Password"
+                type="password"
+                icon="lock"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Minimum 8 characters"
+                required
+                minLength={8}
+                autoComplete={authMode === 'sign-up' ? 'new-password' : 'current-password'}
+              />
+
+              {error && (
+                <div className="p-3 bg-danger/10 border border-danger/20 rounded-lg">
+                  <p className="text-danger text-sm text-center">{error}</p>
+                </div>
+              )}
+
+              <PrimaryButton type="submit" fullWidth disabled={loading}>
+                {loading
+                  ? 'Please wait...'
+                  : authMode === 'sign-up'
+                    ? 'Sign Up & View Feedback'
+                    : 'Sign In & View Feedback'
+                }
+              </PrimaryButton>
+            </form>
+
+            {authMode === 'sign-in' && (
+              <div className="mt-4 text-center">
+                <Link href="/auth/forgot-password" className="text-[13px] text-primary hover:underline transition-colors">
+                  Forgot password?
+                </Link>
+              </div>
+            )}
+          </AuthCard>
+        </motion.div>
+      </div>
+    </div>
+  );
 }
