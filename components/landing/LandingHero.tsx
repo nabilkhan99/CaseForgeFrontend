@@ -99,7 +99,7 @@ export default function LandingHero() {
         transition={{ delay: 1.2, duration: 0.5 }}
       >
         <Link
-          href="/try"
+          href="/cases"
           className="text-[13px] text-muted hover:text-primary transition-colors duration-150"
         >
           or browse all 78 cases →
