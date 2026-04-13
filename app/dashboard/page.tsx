@@ -149,6 +149,32 @@ export default function DashboardPage() {
         )}
       </div>
 
+      {/* Getting started onboarding for new users */}
+      {stats.completedStations === 0 && (
+        <div className="mb-8 rounded-[20px] bg-surface-raised border border-black/[0.06] p-6" style={{ boxShadow: '0 24px 64px rgba(180,83,9,0.06), 0 2px 4px rgba(0,0,0,0.04)' }}>
+          <div className="text-[10px] font-semibold text-primary uppercase tracking-[0.1em] mb-4">
+            How it works
+          </div>
+          <div className="flex flex-col sm:flex-row gap-6">
+            <div className="flex-1">
+              <div className="text-[24px] font-bold text-primary/20 font-mono mb-1">01</div>
+              <div className="text-[14px] font-semibold text-heading mb-1">Pick a case</div>
+              <div className="text-[13px] text-muted">Choose from 78 stations across all SCA domains</div>
+            </div>
+            <div className="flex-1">
+              <div className="text-[24px] font-bold text-primary/20 font-mono mb-1">02</div>
+              <div className="text-[14px] font-semibold text-heading mb-1">Talk to your patient</div>
+              <div className="text-[13px] text-muted">Voice consultation with an AI patient that responds naturally</div>
+            </div>
+            <div className="flex-1">
+              <div className="text-[24px] font-bold text-primary/20 font-mono mb-1">03</div>
+              <div className="text-[14px] font-semibold text-heading mb-1">Get scored</div>
+              <div className="text-[13px] text-muted">Instant feedback on all three SCA domains</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Quick start */}
       <div className="mb-8">
         {lastStation ? (
@@ -167,7 +193,7 @@ export default function DashboardPage() {
                   </span>
                 </div>
               </div>
-              <Link href={`/clinical-master/session/${lastStation.id}?stationId=${lastStation.id}`}>
+              <Link href={`/clinical-master/session/${lastStation.sessionId}?stationId=${lastStation.id}`}>
                 <PrimaryButton size="sm">Continue</PrimaryButton>
               </Link>
             </div>

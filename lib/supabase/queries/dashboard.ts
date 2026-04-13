@@ -220,6 +220,7 @@ export async function getLastStation(userId: string): Promise<LastStation | null
 
     return {
         id: station.id,
+        sessionId: session.id,
         title: station.title,
         domain: station.domains?.name || 'General Practice',
         timeRemaining: station.consultation_duration_seconds || 300,

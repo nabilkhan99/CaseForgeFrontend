@@ -9,6 +9,7 @@ export interface UserStats {
 
 export interface LastStation {
     id: string;
+    sessionId: string;
     title: string;
     domain: string;
     timeRemaining: number; // in seconds
@@ -46,6 +47,7 @@ export const mockUserStats: UserStats = {
 // Last station in progress
 export const mockLastStation: LastStation = {
     id: "station-001",
+    sessionId: "session-001",
     title: "Chest Pain - 45yo Male",
     domain: "Cardiology",
     timeRemaining: 14 * 60, // 14 minutes
