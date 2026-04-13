@@ -203,11 +203,11 @@ export default function DomainDetailPage({ params }: PageProps) {
   }, [domainId, user]);
 
   const handleStartStation = (stationId: string) => {
-    router.push(`/clinical-master/station/${stationId}`);
+    router.push(`/clinical-master/station/${stationId}?from=${domainId}`);
   };
 
   const handleViewFeedback = (sessionId: string) => {
-    router.push(`/clinical-master/feedback/${sessionId}`);
+    router.push(`/clinical-master/feedback/${sessionId}?from=${domainId}`);
   };
 
   const completedCount = stations.filter(s => s.status === 'completed').length;

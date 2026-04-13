@@ -61,6 +61,7 @@ function LiveConsultationContent() {
   const searchParams = useSearchParams();
   const sessionId = params.sessionId as string;
   const stationId = searchParams.get('stationId');
+  const from = searchParams.get('from');
 
   const [station, setStation] = useState<StationData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -112,8 +113,11 @@ function LiveConsultationContent() {
     } catch {
       // Continue to feedback even if disconnect fails
     }
-    router.push(`/clinical-master/feedback/${sessionId}`);
-  }, [endConsultation, router, sessionId]);
+    const feedbackUrl = from
+      ? `/clinical-master/feedback/${sessionId}?from=${from}`
+      : `/clinical-master/feedback/${sessionId}`;
+    router.push(feedbackUrl);
+  }, [endConsultation, router, sessionId, from]);
 
   const handleToggleMute = () => {
     const newMuted = !isMuted;

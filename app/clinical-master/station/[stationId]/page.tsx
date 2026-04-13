@@ -1,7 +1,7 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState, useCallback } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState, useCallback, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -20,10 +20,12 @@ interface StationData {
   domain_name: string;
 }
 
-export default function ReadingPhasePage() {
+function ReadingPhaseContent() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const stationId = params.stationId as string;
+  const from = searchParams.get('from');
 
   const [station, setStation] = useState<StationData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -83,12 +85,15 @@ export default function ReadingPhasePage() {
         throw new Error(err.error || 'Failed to create session');
       }
 
-      router.push(`/clinical-master/session/${sessionId}?stationId=${stationId}`);
+      const sessionUrl = from
+        ? `/clinical-master/session/${sessionId}?stationId=${stationId}&from=${from}`
+        : `/clinical-master/session/${sessionId}?stationId=${stationId}`;
+      router.push(sessionUrl);
     } catch (err) {
       setStarting(false);
       alert(err instanceof Error ? err.message : 'Failed to start consultation');
     }
-  }, [stationId, router, starting]);
+  }, [stationId, router, starting, from]);
 
   if (loading) {
     return (
@@ -107,7 +112,7 @@ export default function ReadingPhasePage() {
       <div className="min-h-screen bg-surface flex items-center justify-center">
         <div className="text-center">
           <p className="text-muted mb-4">Station not found</p>
-          <Link href="/dashboard/library" className="text-primary hover:underline text-sm">
+          <Link href={from ? `/dashboard/library/${from}` : '/dashboard/library'} className="text-primary hover:underline text-sm">
             Back to Library
           </Link>
         </div>
@@ -124,7 +129,7 @@ export default function ReadingPhasePage() {
       <div className="sticky top-0 z-40 bg-surface/80 backdrop-blur-xl border-b border-black/[0.06]">
         <div className="max-w-[640px] mx-auto px-6 h-14 flex items-center justify-between">
           <Link
-            href="/dashboard/library"
+            href={from ? `/dashboard/library/${from}` : '/dashboard/library'}
             className="text-[13px] text-muted hover:text-heading transition-colors flex items-center gap-1"
           >
             &larr; Back to Library
@@ -208,5 +213,13 @@ export default function ReadingPhasePage() {
         </motion.div>
       </div>
     </div>
+  );
+}
+
+export default function ReadingPhasePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-surface flex items-center justify-center"><div className="text-muted text-sm">Loading...</div></div>}>
+      <ReadingPhaseContent />
+    </Suspense>
   );
 }
