@@ -137,6 +137,8 @@ export function useLiveKitSession({
 
             // Room disconnected
             room.on(RoomEvent.Disconnected, () => {
+                // Clean up any orphaned audio elements
+                document.querySelectorAll('audio[data-livekit-track]').forEach(el => el.remove());
                 setStatus('disconnected');
                 setIsSpeaking(false);
                 onConsultationEnded?.();
@@ -154,8 +156,8 @@ export function useLiveKitSession({
                 RoomEvent.TrackSubscribed,
                 (track: RemoteTrack, publication: RemoteTrackPublication, participant: Participant) => {
                     if (track.kind === Track.Kind.Audio) {
-                        console.log('[LiveKit] Playing agent audio track');
                         const audioEl = track.attach();
+                        audioEl.dataset.livekitTrack = publication.trackSid;
                         document.body.appendChild(audioEl);
                     }
                 }
@@ -174,10 +176,8 @@ export function useLiveKitSession({
             await room.connect(serverUrl, token);
             await room.localParticipant.setMicrophoneEnabled(true);
 
-            console.log('[LiveKit] Connected to room:', room.name);
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Failed to connect';
-            console.error('[LiveKit] Connection error:', err);
             setError(errorMessage);
             setStatus('disconnected');
             onError?.(errorMessage);
