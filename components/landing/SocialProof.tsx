@@ -44,11 +44,11 @@ const STATS = [
 
 export default function SocialProof() {
   return (
-    <section className="py-[120px] px-6">
+    <section className="py-[80px] px-6">
       <div className="max-w-[900px] mx-auto">
         {/* Section header */}
         <motion.div
-          className="text-center mb-20"
+          className="text-center mb-12"
           initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
@@ -64,7 +64,7 @@ export default function SocialProof() {
 
         {/* Featured testimonial — large, prominent */}
         <motion.div
-          className="mb-16"
+          className="mb-10"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-60px' }}
@@ -137,7 +137,7 @@ export default function SocialProof() {
         </motion.div>
 
         {/* Two smaller testimonials side by side */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 mb-20">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 mb-12">
           {TESTIMONIALS.slice(1).map((t, i) => (
             <motion.div
               key={i}

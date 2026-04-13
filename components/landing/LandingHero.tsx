@@ -25,7 +25,7 @@ const wordVariant = {
 
 export default function LandingHero() {
   return (
-    <section className="relative min-h-screen flex flex-col items-center justify-center pt-32 pb-20 px-6 overflow-hidden">
+    <section className="relative min-h-[90vh] flex flex-col items-center justify-center pt-28 pb-12 px-6 overflow-hidden">
       {/* Ambient orb */}
       <div
         className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full pointer-events-none"
