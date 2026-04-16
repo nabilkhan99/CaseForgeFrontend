@@ -2,28 +2,8 @@
  * TypeScript interfaces for Clinical Master
  */
 
-export interface Station {
-  id: string;
-  title: string;
-  domain: string;
-  completed: boolean;
-}
-
-export interface MockExam {
-  id: string;
-  name: string;
-  stations: Station[];
-}
-
-export interface CandidateBrief {
-  patientName: string;
-  age: number;
-  address?: string;
-  medicalHistory: string[];
-}
-
 export interface TranscriptItem {
-  id?: string; // item_id from backend for deduplication
+  id?: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;

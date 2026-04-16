@@ -7,6 +7,8 @@ import Link from 'next/link';
 import { useLiveKitSession } from '@/hooks/useLiveKitSession';
 import { createClient } from '@/lib/supabase/client';
 import ConsultationTimer from '@/components/clinical-master/ConsultationTimer';
+import AudioVisualizer from '@/components/clinical-master/AudioVisualizer';
+import LiveTranscript from '@/components/clinical-master/LiveTranscript';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 
 interface StationData {
@@ -14,45 +16,6 @@ interface StationData {
   title: string;
   patient_name: string;
   consultation_duration_seconds: number;
-}
-
-function AudioVisualizer({ active }: { active: boolean }) {
-  const barCount = 48;
-  return (
-    <div className="flex items-center justify-center gap-[3px] h-20 w-full max-w-[400px] mx-auto">
-      {Array.from({ length: barCount }).map((_, i) => {
-        const center = barCount / 2;
-        const dist = Math.abs(i - center) / center;
-        const maxH = active ? 100 - dist * 55 : 15;
-        return (
-          <motion.div
-            key={i}
-            className="rounded-full"
-            style={{
-              width: '3px',
-              background: active
-                ? `linear-gradient(180deg, rgba(180,83,9,${0.8 - dist * 0.4}) 0%, rgba(245,158,11,${0.2 + (1 - dist) * 0.3}) 100%)`
-                : 'rgba(0,0,0,0.08)',
-            }}
-            animate={{
-              height: active
-                ? [
-                    `${10 + Math.sin(i * 0.5) * 6}%`,
-                    `${maxH * (0.3 + Math.sin(i * 0.35 + 1) * 0.7)}%`,
-                    `${10 + Math.sin(i * 0.5 + 2) * 6}%`,
-                  ]
-                : ['15%'],
-            }}
-            transition={
-              active
-                ? { duration: 0.8 + (i % 6) * 0.1, repeat: Infinity, delay: (i % 8) * 0.05, ease: 'easeInOut' }
-                : { duration: 0.3 }
-            }
-          />
-        );
-      })}
-    </div>
-  );
 }
 
 function LiveConsultationContent() {
@@ -92,7 +55,9 @@ function LiveConsultationContent() {
     fetchStation();
   }, [stationId]);
 
-  const { isConnected, isSpeaking, connect, endConsultation, setMicMuted, error, status } =
+  const [showTranscript, setShowTranscript] = useState(false);
+
+  const { isConnected, isSpeaking, transcript, connect, endConsultation, setMicMuted, error, status } =
     useLiveKitSession({
       sessionId,
       stationId: stationId || undefined,
@@ -184,9 +149,9 @@ function LiveConsultationContent() {
       </div>
 
       {/* Main voice area */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 gap-8">
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 gap-6 min-h-0">
         {/* Patient avatar with pulse */}
-        <motion.div className="relative" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}>
+        <motion.div className="relative flex-shrink-0" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}>
           <motion.div
             className="absolute rounded-full"
             style={{ inset: '-16px', border: '1.5px solid rgba(180,83,9,0.1)' }}
@@ -208,7 +173,7 @@ function LiveConsultationContent() {
         </motion.div>
 
         {/* Speaking indicator */}
-        <div className="text-center">
+        <div className="text-center flex-shrink-0">
           <motion.div
             className="text-[12px] font-semibold text-primary uppercase tracking-[0.1em] mb-0.5"
             animate={isSpeaking ? { opacity: [1, 0.4, 1] } : { opacity: 0.5 }}
@@ -221,12 +186,16 @@ function LiveConsultationContent() {
           </div>
         </div>
 
-        {/* Waveform */}
-        <AudioVisualizer active={isSpeaking} />
+        {/* Waveform or Transcript */}
+        {showTranscript ? (
+          <LiveTranscript items={transcript} className="flex-1 w-full max-w-[480px] min-h-0" />
+        ) : (
+          <AudioVisualizer active={isSpeaking} />
+        )}
       </div>
 
       {/* Controls bar */}
-      <div className="min-h-[80px] flex items-center justify-center gap-6 px-6 border-t border-black/[0.06] flex-shrink-0 pb-[env(safe-area-inset-bottom)]">
+      <div className="min-h-[80px] flex items-center justify-center gap-4 px-6 border-t border-black/[0.06] flex-shrink-0 pb-[env(safe-area-inset-bottom)]">
         <button
           onClick={handleToggleMute}
           disabled={!isConnected}
@@ -238,6 +207,18 @@ function LiveConsultationContent() {
             ) : (
               <path d="M7 1v12M4 4v6M10 3v8M1 6v2M13 5v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             )}
+          </svg>
+        </button>
+
+        <button
+          onClick={() => setShowTranscript(prev => !prev)}
+          className={`w-11 h-11 rounded-full flex items-center justify-center border cursor-pointer hover:bg-black/[0.02] transition-colors ${
+            showTranscript ? 'border-primary/30 bg-primary/5' : 'border-black/[0.08]'
+          }`}
+          title={showTranscript ? 'Show waveform' : 'Show transcript'}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className={showTranscript ? 'text-primary' : 'text-muted'}>
+            <path d="M2 4h12M2 8h8M2 12h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
         </button>
 
