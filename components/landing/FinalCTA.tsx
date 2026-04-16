@@ -14,7 +14,7 @@ export default function FinalCTA() {
           viewport={{ once: true }}
           transition={{ type: 'spring', stiffness: 60, damping: 20 }}
         >
-          Start your first consultation
+          Be the first to know
         </motion.h2>
 
         <motion.p
@@ -24,7 +24,7 @@ export default function FinalCTA() {
           viewport={{ once: true }}
           transition={{ type: 'spring', stiffness: 60, damping: 20, delay: 0.1 }}
         >
-          Pick a case. Talk to your patient. Get scored. No account needed.
+          Join the waitlist and we&apos;ll notify you when AI consultations go live.
         </motion.p>
 
         <motion.div
@@ -33,7 +33,7 @@ export default function FinalCTA() {
           viewport={{ once: true }}
           transition={{ type: 'spring', stiffness: 100, damping: 16, delay: 0.2 }}
         >
-          <Link href="/try">
+          <Link href="/waitlist">
             <motion.div
               className="inline-flex items-center gap-2 px-12 py-4 rounded-[14px] text-[14px] font-semibold text-white cursor-pointer"
               style={{
@@ -43,23 +43,11 @@ export default function FinalCTA() {
               whileHover={{ y: -2, boxShadow: '0 12px 32px rgba(180,83,9,0.25)' }}
               whileTap={{ scale: 0.98 }}
             >
-              Try a free case →
+              Join the waitlist →
             </motion.div>
           </Link>
         </motion.div>
 
-        <motion.p
-          className="mt-4 text-[13px] text-muted"
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-          transition={{ delay: 0.4, duration: 0.5 }}
-        >
-          Already have an account?{' '}
-          <Link href="/auth/sign-in" className="text-primary hover:underline">
-            Sign in
-          </Link>
-        </motion.p>
       </div>
     </section>
   );

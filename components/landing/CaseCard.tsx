@@ -101,7 +101,7 @@ export default function CaseCard({ className = '' }: CaseCardProps) {
           </div>
 
           {/* CTA */}
-          <Link href="/try" className="block">
+          <Link href="/waitlist" className="block">
             <motion.div
               className="w-full py-3.5 rounded-xl text-center text-[14px] font-semibold text-white cursor-pointer"
               style={{
@@ -111,7 +111,7 @@ export default function CaseCard({ className = '' }: CaseCardProps) {
               whileHover={{ y: -2 }}
               whileTap={{ scale: 0.98 }}
             >
-              Start consultation →
+              Join the waitlist →
             </motion.div>
           </Link>
         </div>
