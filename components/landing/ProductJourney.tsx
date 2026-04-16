@@ -101,11 +101,8 @@ export default function ProductJourney() {
               </div>
             </div>
 
-            {/* Mobile/Tablet: stacked */}
-            <div className="lg:hidden flex flex-col gap-6 max-w-[500px] mx-auto">
-              <ProductWindow label="Fourteen Fisherman" timer={chapter.timer}>
-                {CHAPTER_CONTENT[i]}
-              </ProductWindow>
+            {/* Mobile/Tablet: stacked — heading first, then visual */}
+            <div className="lg:hidden flex flex-col gap-4 max-w-[500px] mx-auto">
               <div>
                 <div className="flex items-center gap-3 mb-2">
                   <span className="text-[24px] font-bold font-mono text-primary/30">
@@ -127,6 +124,9 @@ export default function ProductJourney() {
                   </div>
                 )}
               </div>
+              <ProductWindow label="Fourteen Fisherman" timer={chapter.timer}>
+                {CHAPTER_CONTENT[i]}
+              </ProductWindow>
             </div>
           </motion.div>
         ))}
