@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { createClient as createServerClient } from '@/lib/supabase/server';
 
 // ── Supabase admin client (server-side only) ──
 
 function getSupabaseAdmin() {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !key) {
+        throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY — cannot use anon key for admin operations');
+    }
     return createClient(url, key, {
         auth: { autoRefreshToken: false, persistSession: false },
     });
@@ -20,7 +24,35 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'sessionId required' }, { status: 400 });
         }
 
+        // Verify the caller owns this session (or it's a guest session they just completed)
+        const authSupabase = await createServerClient();
+        const { data: { user } } = await authSupabase.auth.getUser();
+
         const supabase = getSupabaseAdmin();
+
+        // For authenticated users, verify they own the session
+        if (user) {
+            const { data: owned } = await supabase
+                .from('clinical_sessions')
+                .select('id')
+                .eq('id', sessionId)
+                .eq('user_id', user.id)
+                .maybeSingle();
+
+            if (!owned) {
+                // Allow guest sessions (user_id is null) — they're accessed by session ID only
+                const { data: guest } = await supabase
+                    .from('clinical_sessions')
+                    .select('id')
+                    .eq('id', sessionId)
+                    .is('user_id', null)
+                    .maybeSingle();
+
+                if (!guest) {
+                    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+                }
+            }
+        }
 
         // 1. Check if feedback already exists → return immediately
         const { data: existingResults } = await supabase
@@ -83,7 +115,7 @@ export async function POST(request: NextRequest) {
         // 3. Trigger Supabase Edge Function (fire-and-forget)
         //    The Edge Function has 150s timeout — plenty for Gemini.
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
         fetch(`${supabaseUrl}/functions/v1/generate-feedback`, {
             method: 'POST',
