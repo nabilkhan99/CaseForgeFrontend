@@ -8,7 +8,7 @@ interface AuthCardProps {
 
 export default function AuthCard({ children, icon, title, subtitle }: AuthCardProps) {
     return (
-        <div className="bg-white/60 backdrop-blur-xl border border-black/[0.04] shadow-elevation-2 rounded-2xl p-8">
+        <div className="bg-white/60 backdrop-blur-xl border border-black/[0.04] shadow-elevation-2 rounded-2xl p-6 sm:p-8">
             {/* Icon */}
             {icon && (
                 <div className="w-14 h-14 rounded-xl bg-primary/20 text-primary flex items-center justify-center mx-auto mb-6">

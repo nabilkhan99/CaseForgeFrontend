@@ -137,7 +137,7 @@ export default function PricingPage() {
   return (
     <>
       <LandingNavbar user={null} />
-      <main className="min-h-screen bg-surface pt-24 pb-16 font-sans">
+      <main className="min-h-[100dvh] bg-surface pt-24 pb-16 font-sans">
         <div className="max-w-[1000px] mx-auto px-6">
           {/* Header */}
           <motion.div
@@ -251,55 +251,59 @@ export default function PricingPage() {
           <div className="mb-16">
             <h2 className="text-[20px] font-bold text-heading text-center mb-6">Compare Plans</h2>
             <div className="border border-black/[0.06] rounded-2xl overflow-hidden">
-              {/* Header row */}
-              <div className="grid grid-cols-4 border-b border-black/[0.06] bg-black/[0.01]">
-                <div className="p-4 text-[12px] font-medium text-muted">Feature</div>
-                <div className="p-4 text-[12px] font-medium text-muted text-center">Monthly</div>
-                <div className="p-4 text-[12px] font-bold text-primary text-center" style={{ background: 'rgba(180,83,9,0.03)' }}>3 Months</div>
-                <div className="p-4 text-[12px] font-medium text-muted text-center">12 Months</div>
-              </div>
+              <div className="overflow-x-auto">
+                <div className="min-w-[640px]">
+                  {/* Header row */}
+                  <div className="grid grid-cols-4 border-b border-black/[0.06] bg-black/[0.01]">
+                    <div className="p-4 text-[12px] font-medium text-muted">Feature</div>
+                    <div className="p-4 text-[12px] font-medium text-muted text-center">Monthly</div>
+                    <div className="p-4 text-[12px] font-bold text-primary text-center" style={{ background: 'rgba(180,83,9,0.03)' }}>3 Months</div>
+                    <div className="p-4 text-[12px] font-medium text-muted text-center">12 Months</div>
+                  </div>
 
-              {/* Data rows */}
-              {comparisonFeatures.map((feat, i) => (
-                <div
-                  key={feat.label}
-                  className={`grid grid-cols-4 border-b border-black/[0.04] last:border-b-0 ${i % 2 === 0 ? '' : 'bg-black/[0.01]'}`}
-                >
-                  <div className="p-4 text-[13px] text-body">{feat.label}</div>
-                  {(['monthly', 'quarterly', 'annual'] as const).map((key, ci) => {
-                    const val = feat[key];
-                    return (
-                      <div key={key} className={`p-4 text-center ${ci === 1 ? 'bg-primary/[0.02]' : ''}`}>
-                        {typeof val === 'boolean' ? (
-                          <svg
-                            className={`w-4 h-4 mx-auto ${val ? 'text-success' : 'text-black/10'}`}
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={2.5}
-                          >
-                            {val ? (
-                              <polyline points="20 6 9 17 4 12" />
+                  {/* Data rows */}
+                  {comparisonFeatures.map((feat, i) => (
+                    <div
+                      key={feat.label}
+                      className={`grid grid-cols-4 border-b border-black/[0.04] last:border-b-0 ${i % 2 === 0 ? '' : 'bg-black/[0.01]'}`}
+                    >
+                      <div className="p-4 text-[13px] text-body">{feat.label}</div>
+                      {(['monthly', 'quarterly', 'annual'] as const).map((key, ci) => {
+                        const val = feat[key];
+                        return (
+                          <div key={key} className={`p-4 text-center ${ci === 1 ? 'bg-primary/[0.02]' : ''}`}>
+                            {typeof val === 'boolean' ? (
+                              <svg
+                                className={`w-4 h-4 mx-auto ${val ? 'text-success' : 'text-black/10'}`}
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={2.5}
+                              >
+                                {val ? (
+                                  <polyline points="20 6 9 17 4 12" />
+                                ) : (
+                                  <path strokeLinecap="round" d="M18 6L6 18M6 6l12 12" />
+                                )}
+                              </svg>
                             ) : (
-                              <path strokeLinecap="round" d="M18 6L6 18M6 6l12 12" />
+                              <span className={`text-[13px] font-semibold ${ci === 1 ? 'text-primary' : 'text-body'}`}>
+                                {val}
+                              </span>
                             )}
-                          </svg>
-                        ) : (
-                          <span className={`text-[13px] font-semibold ${ci === 1 ? 'text-primary' : 'text-body'}`}>
-                            {val}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
             </div>
           </div>
 
           {/* Free cases banner */}
           <div
-            className="mb-16 p-8 rounded-2xl text-center border border-black/[0.06]"
+            className="mb-16 p-6 sm:p-8 rounded-2xl text-center border border-black/[0.06]"
             style={{ background: 'rgba(22,163,74,0.03)' }}
           >
             <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-success mb-2 inline-block">

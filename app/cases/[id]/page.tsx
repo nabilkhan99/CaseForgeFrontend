@@ -196,6 +196,269 @@ function MarkdownContent({ content }: { content: string | null }) {
     );
 }
 
+interface MarkSchemeRow {
+    positive: string;
+    negative: string;
+}
+
+function parseMarkdownTable(content: string): MarkSchemeRow[] {
+    const rows: MarkSchemeRow[] = [];
+    const lines = content.split('\n');
+    let inBody = false;
+    let headerSeen = false;
+
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('|')) continue;
+
+        const cells = trimmed
+            .split('|')
+            .slice(1, -1)
+            .map(c => c.trim());
+
+        if (!headerSeen) {
+            headerSeen = true;
+            continue;
+        }
+
+        if (trimmed.match(/^\|[\s-:|]+\|$/)) {
+            inBody = true;
+            continue;
+        }
+
+        if (inBody && cells.length >= 2) {
+            const positive = cells[0].replace(/\*\*/g, '').trim();
+            const negative = cells[1].replace(/\*\*/g, '').trim();
+            if (positive || negative) {
+                rows.push({ positive, negative });
+            }
+        }
+    }
+
+    return rows;
+}
+
+function InteractiveMarkScheme({ content }: { content: string | null }) {
+    const [checked, setChecked] = useState<Record<string, boolean>>({});
+
+    if (!content) {
+        return (
+            <div className="flex flex-col items-center justify-center py-16 text-muted">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                <p className="text-sm font-medium">Content not available for this case</p>
+            </div>
+        );
+    }
+
+    const rows = parseMarkdownTable(content);
+
+    if (rows.length === 0) {
+        return <MarkdownContent content={content} />;
+    }
+
+    const totalIndicators = rows.reduce((count, row) => {
+        if (row.positive) count++;
+        if (row.negative) count++;
+        return count;
+    }, 0);
+
+    const checkedCount = Object.values(checked).filter(Boolean).length;
+
+    function toggleCheck(key: string) {
+        setChecked(prev => ({ ...prev, [key]: !prev[key] }));
+    }
+
+    const positiveChecked = rows.filter((_, i) => checked[`pos-${i}`]).length;
+    const negativeChecked = rows.filter((_, i) => checked[`neg-${i}`]).length;
+    const totalPositive = rows.filter(r => r.positive).length;
+    const totalNegative = rows.filter(r => r.negative).length;
+
+    return (
+        <div className="space-y-3">
+            {/* Tally badges */}
+            <div className="flex items-center gap-2 px-1 py-2 flex-wrap">
+                <span className="text-xs font-bold text-heading bg-primary/[0.07] px-3 py-1.5 rounded-lg">
+                    {checkedCount} / {totalIndicators} indicators checked
+                </span>
+                <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg">
+                    +{positiveChecked}
+                </span>
+                <span className="text-xs font-semibold text-red-700 bg-red-50 px-2.5 py-1 rounded-lg">
+                    &minus;{negativeChecked}
+                </span>
+            </div>
+
+            {/* Two-column grid: positive left, negative right */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0">
+                {/* Column headers */}
+                <div className="hidden sm:block text-[11px] font-bold text-emerald-700 uppercase tracking-wider px-1 pb-2">
+                    Positive ({positiveChecked}/{totalPositive})
+                </div>
+                <div className="hidden sm:block text-[11px] font-bold text-red-700 uppercase tracking-wider px-1 pb-2">
+                    Negative ({negativeChecked}/{totalNegative})
+                </div>
+
+                {/* Rows — each pair shares the same grid row for equal height */}
+                {rows.map((row, i) => (
+                    <div key={i} className="contents">
+                        {/* Positive cell */}
+                        <div className="pb-2">
+                            {row.positive ? (
+                                <button
+                                    type="button"
+                                    onClick={() => toggleCheck(`pos-${i}`)}
+                                    className={`w-full h-full flex items-start gap-2.5 p-2.5 rounded-xl text-left transition-all ${
+                                        checked[`pos-${i}`]
+                                            ? 'bg-emerald-50/80 border border-emerald-200'
+                                            : 'bg-emerald-50/40 border border-emerald-100 hover:bg-emerald-50/60'
+                                    }`}
+                                >
+                                    <span className={`mt-0.5 flex-shrink-0 w-4.5 h-4.5 w-[18px] h-[18px] rounded-md border-2 flex items-center justify-center transition-all ${
+                                        checked[`pos-${i}`]
+                                            ? 'bg-emerald-500 border-emerald-500'
+                                            : 'border-emerald-300 bg-white'
+                                    }`}>
+                                        {checked[`pos-${i}`] && (
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                                <polyline points="20 6 9 17 4 12" />
+                                            </svg>
+                                        )}
+                                    </span>
+                                    <span className={`text-[13px] leading-relaxed ${
+                                        checked[`pos-${i}`] ? 'text-emerald-800' : 'text-body'
+                                    }`}>
+                                        {row.positive}
+                                    </span>
+                                </button>
+                            ) : (
+                                <div className="h-full" />
+                            )}
+                        </div>
+
+                        {/* Negative cell */}
+                        <div className="pb-2">
+                            {row.negative ? (
+                                <button
+                                    type="button"
+                                    onClick={() => toggleCheck(`neg-${i}`)}
+                                    className={`w-full h-full flex items-start gap-2.5 p-2.5 rounded-xl text-left transition-all ${
+                                        checked[`neg-${i}`]
+                                            ? 'bg-red-50/80 border border-red-200'
+                                            : 'bg-red-50/40 border border-red-100 hover:bg-red-50/60'
+                                    }`}
+                                >
+                                    <span className={`mt-0.5 flex-shrink-0 w-[18px] h-[18px] rounded-md border-2 flex items-center justify-center transition-all ${
+                                        checked[`neg-${i}`]
+                                            ? 'bg-red-500 border-red-500'
+                                            : 'border-red-300 bg-white'
+                                    }`}>
+                                        {checked[`neg-${i}`] && (
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                                <polyline points="20 6 9 17 4 12" />
+                                            </svg>
+                                        )}
+                                    </span>
+                                    <span className={`text-[13px] leading-relaxed ${
+                                        checked[`neg-${i}`] ? 'text-red-800' : 'text-body'
+                                    }`}>
+                                        {row.negative}
+                                    </span>
+                                </button>
+                            ) : (
+                                <div className="h-full" />
+                            )}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+const LEARNING_POINT_COLORS = [
+    { bg: 'bg-blue-50', border: 'border-blue-300', number: 'text-blue-200' },
+    { bg: 'bg-emerald-50', border: 'border-emerald-300', number: 'text-emerald-200' },
+    { bg: 'bg-amber-50', border: 'border-amber-300', number: 'text-amber-200' },
+    { bg: 'bg-purple-50', border: 'border-purple-300', number: 'text-purple-200' },
+    { bg: 'bg-rose-50', border: 'border-rose-300', number: 'text-rose-200' },
+];
+
+function LearningPointsDisplay({ content }: { content: string | null }) {
+    if (!content) {
+        return (
+            <div className="flex flex-col items-center justify-center py-16 text-muted">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                <p className="text-sm font-medium">Content not available for this case</p>
+            </div>
+        );
+    }
+
+    const sectionRegex = /\*\*(\d+)\.\s+(.+?)\*\*/;
+    const lines = content.split('\n');
+    const sections: { number: string; title: string; content: string }[] = [];
+    let currentNumber = '';
+    let currentTitle = '';
+    let currentLines: string[] = [];
+
+    for (const line of lines) {
+        const match = line.match(sectionRegex);
+        if (match) {
+            if (currentTitle) {
+                sections.push({
+                    number: currentNumber,
+                    title: currentTitle,
+                    content: currentLines.join('\n').trim(),
+                });
+            }
+            currentNumber = match[1];
+            currentTitle = match[2];
+            const remainder = line.replace(sectionRegex, '').trim();
+            currentLines = remainder ? [remainder] : [];
+        } else {
+            currentLines.push(line);
+        }
+    }
+    if (currentTitle) {
+        sections.push({
+            number: currentNumber,
+            title: currentTitle,
+            content: currentLines.join('\n').trim(),
+        });
+    }
+
+    if (sections.length === 0) {
+        return <MarkdownContent content={content} />;
+    }
+
+    return (
+        <div className="space-y-4">
+            {sections.map((section, i) => {
+                const color = LEARNING_POINT_COLORS[i % LEARNING_POINT_COLORS.length];
+                return (
+                    <div
+                        key={i}
+                        className={`relative rounded-xl ${color.bg} border-l-[3px] ${color.border} p-5 overflow-hidden`}
+                    >
+                        <span className={`absolute top-2 left-3 text-5xl font-black ${color.number} select-none pointer-events-none`}>
+                            {section.number}
+                        </span>
+                        <div className="relative pl-8">
+                            <h4 className="text-sm font-bold text-heading mb-2">{section.title}</h4>
+                            <MarkdownContent content={section.content} />
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
 export default function CaseDetailPage() {
     const params = useParams();
     const id = params.id as string;
@@ -219,7 +482,7 @@ export default function CaseDetailPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-surface flex items-center justify-center">
+            <div className="min-h-[100dvh] bg-surface flex items-center justify-center">
                 <div className="animate-spin rounded-full h-10 w-10 border-2 border-black/[0.06] border-t-primary" />
             </div>
         );
@@ -227,7 +490,7 @@ export default function CaseDetailPage() {
 
     if (!caseData) {
         return (
-            <div className="min-h-screen bg-surface">
+            <div className="min-h-[100dvh] bg-surface">
                 <LandingNavbar user={user} />
                 <div className="flex flex-col items-center justify-center pt-40 gap-4">
                     <div className="w-16 h-16 rounded-2xl bg-white/60 border border-black/[0.06] flex items-center justify-center">
@@ -259,13 +522,6 @@ export default function CaseDetailPage() {
         : caseData.consultation_type === 'video'
             ? 'Video'
             : 'Face-to-Face';
-
-    const difficultyColors: Record<string, string> = {
-        advanced: 'bg-red-50 text-red-700 border-red-200',
-        beginner: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-        intermediate: 'bg-amber-50 text-amber-700 border-amber-200',
-    };
-    const diffBadge = difficultyColors[caseData.difficulty || 'intermediate'] || difficultyColors.intermediate;
 
     const candidateContent = (
         <div className="p-5 md:p-6 space-y-6">
@@ -347,10 +603,10 @@ export default function CaseDetailPage() {
             <div className="space-y-2">
                 <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-blue-500" />
-                    <h4 className="text-sm font-bold text-heading">Data Gathering</h4>
+                    <h4 className="text-sm font-bold text-heading">Domain 1: Data Gathering and Diagnosis</h4>
                 </div>
                 <div className="pl-4 border-l-2 border-blue-200">
-                    <MarkdownContent content={caseData.data_gathering} />
+                    <InteractiveMarkScheme content={caseData.data_gathering} />
                 </div>
             </div>
 
@@ -358,10 +614,10 @@ export default function CaseDetailPage() {
             <div className="space-y-2">
                 <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <h4 className="text-sm font-bold text-heading">Clinical Management</h4>
+                    <h4 className="text-sm font-bold text-heading">Domain 2: Clinical Management and Medical Complexity</h4>
                 </div>
                 <div className="pl-4 border-l-2 border-emerald-200">
-                    <MarkdownContent content={caseData.clinical_management} />
+                    <InteractiveMarkScheme content={caseData.clinical_management} />
                 </div>
             </div>
 
@@ -369,10 +625,10 @@ export default function CaseDetailPage() {
             <div className="space-y-2">
                 <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-primary" />
-                    <h4 className="text-sm font-bold text-heading">Interpersonal Skills</h4>
+                    <h4 className="text-sm font-bold text-heading">Domain 3: Relating to Others</h4>
                 </div>
                 <div className="pl-4 border-l-2 border-primary/20">
-                    <MarkdownContent content={caseData.relating_to_others} />
+                    <InteractiveMarkScheme content={caseData.relating_to_others} />
                 </div>
             </div>
         </div>
@@ -389,15 +645,15 @@ export default function CaseDetailPage() {
                 </div>
                 <h3 className="text-xs font-black uppercase tracking-widest text-muted">Clinical Learning Points</h3>
             </div>
-            <MarkdownContent content={caseData.clinical_learning_points} />
+            <LearningPointsDisplay content={caseData.clinical_learning_points} />
         </div>
     );
 
     return (
-        <div className="min-h-screen bg-surface">
+        <div className="min-h-[100dvh] bg-surface">
             <LandingNavbar user={user} />
 
-            <main className="max-w-7xl mx-auto px-4 md:px-6 pt-24 pb-12 md:pt-28 md:pb-16">
+            <main className="max-w-7xl mx-auto px-4 md:px-6 pt-24 pb-32 md:pt-28 md:pb-16 lg:pb-16">
                 {/* Breadcrumb + meta row */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
                     <div className="flex items-center gap-3 text-sm">
@@ -415,9 +671,6 @@ export default function CaseDetailPage() {
                             {caseData.domain_name}
                         </span>
                     </div>
-                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${diffBadge} w-fit`}>
-                        {caseData.difficulty || 'Intermediate'}
-                    </span>
                 </div>
 
                 {/* Title */}
@@ -428,38 +681,11 @@ export default function CaseDetailPage() {
                 {/* Layout: sidebar + content */}
                 <div className="flex flex-col lg:flex-row gap-6">
                     {/* Timer sidebar */}
-                    <div className="lg:w-[260px] flex-shrink-0">
+                    <div className="lg:w-[260px] flex-shrink-0 lg:sticky lg:top-28 lg:self-start">
                         <Container padding="none">
                             <CaseTimer totalSeconds={caseData.consultation_duration_seconds} />
                         </Container>
 
-                        {/* Start station link */}
-                        <Link
-                            href={user
-                                ? `/clinical-master/station/${caseData.id}`
-                                : `/auth/sign-in?redirect=/clinical-master/station/${caseData.id}`
-                            }
-                            className="mt-4 w-full py-3.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-                            style={{ background: 'linear-gradient(135deg, #B45309, #D97706)', color: '#fff', boxShadow: '0 2px 8px rgba(180,83,9,0.2)' }}
-                        >
-                            {user ? (
-                                <>
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <polygon points="5 3 19 12 5 21 5 3" />
-                                    </svg>
-                                    Start Consultation &rarr;
-                                </>
-                            ) : (
-                                <>
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
-                                        <polyline points="10 17 15 12 10 7" />
-                                        <line x1="15" y1="12" x2="3" y2="12" />
-                                    </svg>
-                                    Sign in to start &rarr;
-                                </>
-                            )}
-                        </Link>
                     </div>
 
                     {/* Main content */}

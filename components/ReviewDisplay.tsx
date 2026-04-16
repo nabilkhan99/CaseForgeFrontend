@@ -1,7 +1,7 @@
 // src/components/ReviewDisplay.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { CaseReviewResponse } from '@/lib/types';
 import { api } from '@/lib/api';
 import { motion } from 'framer-motion';
@@ -46,6 +46,7 @@ export function ReviewDisplay({
   onNewCase,
   onUpdate,
 }: ReviewDisplayProps) {
+  const rootRef = useRef<HTMLDivElement>(null);
   const [editableContent, setEditableContent] = useState(review);
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
   const [improvingSectionKey, setImprovingSectionKey] = useState<string | null>(null);
@@ -54,13 +55,12 @@ export function ReviewDisplay({
   const [titleCopied, setTitleCopied] = useState(false);
 
   useEffect(() => {
-    console.log('Review prop changed:', review);
     setEditableContent(review);
   }, [review]);
 
   useEffect(() => {
     const adjustTextareas = () => {
-      const textareas = document.querySelectorAll('textarea');
+      const textareas = rootRef.current?.querySelectorAll('textarea') ?? [];
       textareas.forEach(textarea => {
         textarea.style.height = 'auto';
         textarea.style.height = `${textarea.scrollHeight}px`;
@@ -164,7 +164,7 @@ export function ReviewDisplay({
           {Object.entries(content).map(([capKey, capContent]) => (
             <div key={capKey} className="space-y-2">
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-                <h4 className="text-white/80">{capKey}</h4>
+                <h4 className="text-heading">{capKey}</h4>
                 <div className="flex justify-end items-center gap-2">
                   <motion.button
                     whileHover={{ scale: 1.05 }}
@@ -198,7 +198,7 @@ export function ReviewDisplay({
                   value={sectionImprovementPrompt}
                   onChange={(e) => setSectionImprovementPrompt(e.target.value)}
                   placeholder="Enter improvement instructions..."
-                  className="glass-input w-full text-sm py-1"
+                  className="glass-input w-full text-base md:text-sm py-1"
                   rows={2}
                   disabled={isSectionImproving}
                 />
@@ -303,7 +303,8 @@ export function ReviewDisplay({
           "Finalising updates..."
         ]}
       />
-      <motion.article 
+      <motion.article
+        ref={rootRef}
         className="space-y-6"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -316,10 +317,10 @@ export function ReviewDisplay({
         transition={{ delay: 0.1 }}
       >
         <div className="flex items-start gap-3 flex-1 min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold text-white break-words">{editableContent.case_title}</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-heading break-words">{editableContent.case_title}</h1>
           <button
             onClick={handleCopyTitle}
-            className="p-2 text-white/50 hover:text-white hover:bg-white/10 rounded-lg transition-all flex-shrink-0 mt-0.5"
+            className="p-2 text-muted hover:text-heading hover:bg-black/[0.04] rounded-lg transition-all flex-shrink-0 mt-0.5"
             title="Copy title"
           >
             {titleCopied ? (
@@ -352,11 +353,11 @@ export function ReviewDisplay({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
         >
-          <span className="text-white/60 text-sm self-center mr-1">Clinical Experience Groups:</span>
+          <span className="text-muted text-sm self-center mr-1">Clinical Experience Groups:</span>
           {experienceGroups.map((group, index) => (
             <span
               key={index}
-              className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-teal-500/20 text-teal-300 border border-teal-500/30"
+              className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-teal-50 text-teal-700 border border-teal-200"
             >
               🏥 {group}
             </span>

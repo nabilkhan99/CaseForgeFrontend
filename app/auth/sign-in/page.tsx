@@ -120,18 +120,18 @@ function SignInForm() {
 
                 {/* Forgot Password Link */}
                 <div className="mt-4 text-center">
-                    <Link href="/auth/forgot-password" className="text-primary hover:text-primary-light text-sm transition-colors">
+                    <Link href="/auth/forgot-password" className="inline-flex items-center min-h-[44px] text-primary hover:text-primary-light text-sm transition-colors">
                         Forgot Password?
                     </Link>
                 </div>
 
                 {/* Sign Up Link */}
-                <p className="mt-6 text-center text-muted text-sm">
-                    Don&apos;t have an account?{' '}
-                    <Link href="/auth/sign-up" className="text-primary hover:text-primary-light font-medium transition-colors">
+                <div className="mt-6 text-center text-muted text-sm flex items-center justify-center gap-1">
+                    <span>Don&apos;t have an account?</span>
+                    <Link href="/auth/sign-up" className="inline-flex items-center min-h-[44px] text-primary hover:text-primary-light font-medium transition-colors">
                         Sign Up
                     </Link>
-                </p>
+                </div>
             </AuthCard>
         </AuthLayout>
     );

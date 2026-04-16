@@ -1,5 +1,3 @@
-import Link from 'next/link';
-
 export default function LandingFooter() {
   return (
     <footer className="border-t border-black/[0.06] py-12 px-6">
@@ -10,26 +8,16 @@ export default function LandingFooter() {
             Built by GP trainees, for GP trainees. © {new Date().getFullYear()}
           </div>
         </div>
-        <div className="flex items-center gap-6">
-          <Link
-            href="/privacy"
-            className="text-[13px] text-stone-500 hover:text-heading transition-colors"
-          >
-            Privacy
-          </Link>
-          <Link
-            href="/terms"
-            className="text-[13px] text-stone-500 hover:text-heading transition-colors"
-          >
-            Terms
-          </Link>
-          <Link
-            href="/contact"
-            className="text-[13px] text-stone-500 hover:text-heading transition-colors"
-          >
-            Contact
-          </Link>
-        </div>
+        <a
+          href="mailto:hello@fourteenfisherman.com"
+          className="flex items-center gap-1.5 text-[13px] text-stone-500 hover:text-heading transition-colors"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="4" width="20" height="16" rx="2" />
+            <path d="M22 4L12 13L2 4" />
+          </svg>
+          hello@fourteenfisherman.com
+        </a>
       </div>
     </footer>
   );

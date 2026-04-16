@@ -40,7 +40,7 @@ export default function TryCasePickerPage() {
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6 py-16">
+    <div className="min-h-[100dvh] flex flex-col items-center justify-center px-6 py-16">
       {/* Header */}
       <motion.div
         className="text-center mb-10 max-w-lg"
@@ -81,7 +81,7 @@ export default function TryCasePickerPage() {
                 transition={{ delay: i * 0.08 }}
               >
                 <Container>
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="text-[16px] font-semibold text-heading mb-1">{station.title}</div>
                       <div className="flex items-center gap-2 mb-2">

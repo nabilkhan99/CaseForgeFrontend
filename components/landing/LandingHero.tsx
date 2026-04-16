@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import Link from 'next/link';
+
 import CaseCard from './CaseCard';
 
 const HEADLINE_WORDS = ['Your', 'SCA', 'exam,'];
@@ -25,7 +25,7 @@ const wordVariant = {
 
 export default function LandingHero() {
   return (
-    <section className="relative min-h-[90vh] flex flex-col items-center justify-center pt-28 pb-12 px-6 overflow-hidden">
+    <section className="relative min-h-[90dvh] flex flex-col items-center justify-center pt-28 pb-12 px-6 overflow-hidden">
       {/* Ambient orb */}
       <div
         className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full pointer-events-none"
@@ -49,7 +49,7 @@ export default function LandingHero() {
 
         {/* Headline */}
         <motion.h1
-          className="text-[clamp(48px,5vw+1rem,72px)] font-bold text-heading tracking-[-0.03em] leading-[1.05] mb-7"
+          className="text-[clamp(36px,5vw+1rem,72px)] font-bold text-heading tracking-[-0.03em] leading-[1.05] mb-7"
           variants={containerVariants}
           initial="hidden"
           animate="show"
@@ -91,37 +91,6 @@ export default function LandingHero() {
       {/* Case card */}
       <CaseCard className="relative z-10" />
 
-      {/* Browse all cases link */}
-      <motion.div
-        className="mt-4"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1.2, duration: 0.5 }}
-      >
-        <Link
-          href="/cases"
-          className="text-[13px] text-muted hover:text-primary transition-colors duration-150"
-        >
-          or browse all 78 cases →
-        </Link>
-      </motion.div>
-
-      {/* Scroll indicator */}
-      <motion.div
-        className="absolute bottom-8 left-1/2 -translate-x-1/2"
-        animate={{ y: [0, 6, 0] }}
-        transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-      >
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="text-muted">
-          <path
-            d="M10 4v12M5 11l5 5 5-5"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </motion.div>
     </section>
   );
 }

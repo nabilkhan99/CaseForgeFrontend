@@ -8,15 +8,11 @@ import LandingNavbar from '@/components/landing/LandingNavbar';
 import { BlurFade } from '@/components/magicui/blur-fade';
 import { createClient } from '@/lib/supabase/client';
 
-const difficultyFilters = ['all', 'beginner', 'intermediate', 'advanced'] as const;
-type DifficultyFilter = (typeof difficultyFilters)[number];
-
 export default function CaseBankPage() {
     const [user, setUser] = useState<{ id: string } | null>(null);
     const [domains, setDomains] = useState<CaseBankDomain[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
-    const [difficultyFilter, setDifficultyFilter] = useState<DifficultyFilter>('all');
 
     useEffect(() => {
         const supabase = createClient();
@@ -49,21 +45,16 @@ export default function CaseBankPage() {
                     );
                 }
 
-                // Difficulty filter
-                if (difficultyFilter !== 'all') {
-                    cases = cases.filter(c => c.difficulty === difficultyFilter);
-                }
-
                 return { ...domain, cases };
             })
             .filter(domain => domain.cases.length > 0);
-    }, [domains, searchQuery, difficultyFilter]);
+    }, [domains, searchQuery]);
 
     const totalCases = domains.reduce((sum, d) => sum + d.cases.length, 0);
     const totalDomains = domains.length;
 
     return (
-        <div className="min-h-screen bg-surface">
+        <div className="min-h-[100dvh] bg-surface">
             <LandingNavbar user={user} />
 
             <main className="relative z-10 max-w-7xl mx-auto px-4 md:px-6 pt-24 pb-12 md:pt-28 md:pb-16">
@@ -98,28 +89,11 @@ export default function CaseBankPage() {
                             </span>
                             <input
                                 type="text"
-                                placeholder="Search by case name, patient, or specialty..."
+                                placeholder="Search by specialty, case title..."
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
-                                className="w-full pl-11 pr-4 py-3 rounded-xl bg-white/70 backdrop-blur-sm border border-black/[0.06] text-heading placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/30 transition-all text-sm"
+                                className="w-full pl-11 pr-4 py-3 rounded-xl bg-white/70 backdrop-blur-sm border border-black/[0.06] text-heading placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/30 transition-all text-base md:text-sm"
                             />
-                        </div>
-
-                        {/* Difficulty pills */}
-                        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-                            {difficultyFilters.map(f => (
-                                <button
-                                    key={f}
-                                    onClick={() => setDifficultyFilter(f)}
-                                    className={`px-4 py-2.5 min-h-[44px] rounded-lg text-xs font-semibold uppercase tracking-wider transition-all whitespace-nowrap ${difficultyFilter === f
-                                        ? 'shadow-[0_2px_8px_rgba(180,83,9,0.2)]'
-                                        : 'bg-white/60 border border-black/[0.06] text-body hover:border-black/[0.1]'
-                                        }`}
-                                    style={difficultyFilter === f ? { background: 'linear-gradient(135deg, #B45309, #D97706)', color: '#fff' } : undefined}
-                                >
-                                    {f === 'all' ? 'All' : f}
-                                </button>
-                            ))}
                         </div>
                     </div>
                 </BlurFade>
@@ -173,7 +147,7 @@ export default function CaseBankPage() {
                                             },
                                         }}
                                     >
-                                        {domain.cases.map((station, i) => (
+                                        {domain.cases.map((station) => (
                                             <motion.div
                                                 key={station.id}
                                                 variants={{
@@ -183,7 +157,6 @@ export default function CaseBankPage() {
                                             >
                                                 <CaseBankCard
                                                     station={station}
-                                                    index={i}
                                                 />
                                             </motion.div>
                                         ))}

@@ -14,9 +14,9 @@ interface PrimaryButtonProps {
 }
 
 const sizeMap = {
-  sm: 'px-5 py-2 text-[13px]',
-  md: 'px-6 py-3 text-[14px]',
-  lg: 'px-8 py-4 text-[15px]',
+  sm: 'px-5 py-2 text-[13px] min-h-[40px]',
+  md: 'px-6 py-3 text-[14px] min-h-[44px]',
+  lg: 'px-8 py-4 text-[15px] min-h-[52px]',
 };
 
 export default function PrimaryButton({

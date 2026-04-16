@@ -179,7 +179,7 @@ export default function DashboardPage() {
       <div className="mb-8">
         {lastStation ? (
           <Container>
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex-1 min-w-0">
                 <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-1.5">
                   Resume Session
@@ -193,8 +193,8 @@ export default function DashboardPage() {
                   </span>
                 </div>
               </div>
-              <Link href={`/clinical-master/session/${lastStation.sessionId}?stationId=${lastStation.id}`}>
-                <PrimaryButton size="sm">Continue</PrimaryButton>
+              <Link href={`/clinical-master/session/${lastStation.sessionId}?stationId=${lastStation.id}`} className="sm:w-auto">
+                <PrimaryButton size="sm" fullWidth>Continue</PrimaryButton>
               </Link>
             </div>
           </Container>

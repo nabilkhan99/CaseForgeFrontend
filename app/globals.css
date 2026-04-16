@@ -145,6 +145,7 @@ body {
   .glass-input {
     @apply bg-white/70 border border-black/[0.06] rounded-xl p-4 transition-all duration-200;
     color: #1C1917;
+    font-size: 16px; /* Prevent iOS auto-zoom */
   }
   .glass-input::placeholder {
     color: #A8A29E;
@@ -153,9 +154,6 @@ body {
     outline: none;
     box-shadow: 0 0 0 2px rgba(180, 83, 9, 0.3);
     border-color: rgba(180, 83, 9, 0.3);
-  }
-  .glass-input.text-sm {
-    @apply px-3 py-1.5;
   }
 
   .primary-button {
@@ -189,6 +187,13 @@ body {
 
   .error-alert {
     @apply rounded-lg bg-red-50 p-4 mt-4 border border-red-200 text-red-700;
+  }
+}
+
+@media (min-width: 768px) {
+  .glass-input.text-sm {
+    @apply px-3 py-1.5;
+    font-size: 14px;
   }
 }
 
@@ -261,4 +266,56 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(180, 83, 9, 0.3);
+}
+
+@keyframes scroll-left {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes scroll-right {
+  0% { transform: translateX(-50%); }
+  100% { transform: translateX(0); }
+}
+
+.animate-scroll-left {
+  animation: scroll-left 30s linear infinite;
+}
+
+.animate-scroll-right {
+  animation: scroll-right 30s linear infinite;
+}
+
+@layer utilities {
+  /* Mobile viewport helpers */
+  .min-h-dvh {
+    min-height: 100dvh;
+  }
+
+  .h-dvh {
+    height: 100dvh;
+  }
+
+  /* Safe-area insets */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .pb-safe-max {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .pt-safe-max {
+    padding-top: max(1rem, env(safe-area-inset-top));
+  }
+
+  /* Expanded touch target — for icon buttons that need 44px hit area but smaller visual */
+  .tap-target-44 {
+    min-height: 44px;
+    min-width: 44px;
+  }
 }

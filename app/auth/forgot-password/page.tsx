@@ -94,15 +94,15 @@ export default function ForgotPasswordPage() {
                             Back to Log In
                         </Link>
 
-                        <p className="text-center text-muted text-sm">
-                            Didn&apos;t receive the email?{' '}
+                        <div className="text-center text-muted text-sm flex items-center justify-center gap-1">
+                            <span>Didn&apos;t receive the email?</span>
                             <button
                                 onClick={handleResend}
-                                className="text-primary hover:text-primary-light font-medium transition-colors"
+                                className="inline-flex items-center min-h-[44px] text-primary hover:text-primary-light font-medium transition-colors cursor-pointer"
                             >
                                 Click to resend
                             </button>
-                        </p>
+                        </div>
                     </div>
                 </AuthCard>
             </AuthLayout>
@@ -156,7 +156,7 @@ export default function ForgotPasswordPage() {
 
                 {/* Back to Login Link */}
                 <div className="mt-6 text-center">
-                    <Link href="/auth/sign-in" className="text-muted hover:text-primary text-sm transition-colors inline-flex items-center gap-2">
+                    <Link href="/auth/sign-in" className="text-muted hover:text-primary text-sm transition-colors inline-flex items-center min-h-[44px] gap-2">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                         </svg>

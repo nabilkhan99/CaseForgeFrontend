@@ -98,7 +98,7 @@ function ReadingPhaseContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-surface flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-surface flex items-center justify-center">
         <motion.div
           className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent"
           animate={{ rotate: 360 }}
@@ -110,7 +110,7 @@ function ReadingPhaseContent() {
 
   if (!station) {
     return (
-      <div className="min-h-screen bg-surface flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-surface flex items-center justify-center">
         <div className="text-center">
           <p className="text-muted mb-4">Station not found</p>
           <Link href={from ? `/dashboard/library/${from}` : '/dashboard/library'} className="text-primary hover:underline text-sm">
@@ -122,9 +122,9 @@ function ReadingPhaseContent() {
   }
 
   return (
-    <div className="min-h-screen bg-surface font-sans">
+    <div className="min-h-[100dvh] bg-surface font-sans">
       {/* Top bar */}
-      <div className="sticky top-0 z-40 bg-surface/80 backdrop-blur-xl border-b border-black/[0.06]">
+      <div className="sticky top-0 z-40 bg-surface/80 backdrop-blur-xl border-b border-black/[0.06] pt-[env(safe-area-inset-top)]">
         <div className="max-w-[640px] mx-auto px-6 h-14 flex items-center justify-between">
           <Link
             href={from ? `/dashboard/library/${from}` : '/dashboard/library'}
@@ -138,7 +138,7 @@ function ReadingPhaseContent() {
             autoStart={true}
             onComplete={() => {}}
           />
-          <span className="text-[12px] text-muted">{station.title}</span>
+          <span className="hidden sm:inline text-[12px] text-muted">{station.title}</span>
         </div>
       </div>
 
@@ -223,7 +223,7 @@ function ReadingPhaseContent() {
 
 export default function ReadingPhasePage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-surface flex items-center justify-center"><div className="text-muted text-sm">Loading...</div></div>}>
+    <Suspense fallback={<div className="min-h-[100dvh] bg-surface flex items-center justify-center"><div className="text-muted text-sm">Loading...</div></div>}>
       <ReadingPhaseContent />
     </Suspense>
   );

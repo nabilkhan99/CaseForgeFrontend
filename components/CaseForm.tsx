@@ -99,14 +99,14 @@ export function CaseForm({ onReviewGenerated }: CaseFormProps) {
           animate={{ x: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <label className="text-white/80 flex items-center gap-2">
+          <label className="text-body flex items-center gap-2">
             <svg className="h-5 w-5 text-medical-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             Case Description
           </label>
           <textarea
-            className="glass-input w-full h-40"
+            className="glass-input w-full h-40 text-base md:text-[15px]"
             value={caseDescription}
             onChange={(e) => setCaseDescription(e.target.value)}
             placeholder="Describe your medical case here..."

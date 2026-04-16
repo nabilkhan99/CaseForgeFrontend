@@ -69,13 +69,13 @@ export default function CaseDetailTabs({
                             <span className="w-1.5 h-1.5 rounded-full bg-primary" />
                         )}
                         <tab.Icon />
-                        <span className="hidden sm:inline">{tab.label}</span>
+                        <span className="text-[11px] sm:text-sm">{tab.label.split(' ')[0]}</span>
                     </button>
                 ))}
             </div>
 
             {/* Tab content */}
-            <div className="bg-white/70 border border-black/[0.06] rounded-2xl rounded-tl-none mx-3 md:mx-4 mb-4 overflow-y-auto no-scrollbar max-h-[70vh]">
+            <div className="bg-white/70 border border-black/[0.06] rounded-2xl rounded-tl-none mx-3 md:mx-4 mb-4">
                 {activeTab === 'candidate' && candidateContent}
                 {activeTab === 'markscheme' && markSchemeContent}
                 {activeTab === 'learning' && learningPointsContent}

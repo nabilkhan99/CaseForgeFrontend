@@ -23,6 +23,8 @@ module.exports = {
         },
         success: '#16A34A',
         danger: '#DC2626',
+        // Legacy CCR portfolio tool color — kept for compat
+        'medical-blue': '#0EA5E9',
         border: {
           DEFAULT: 'rgba(0,0,0,0.06)',
           hover: 'rgba(0,0,0,0.10)',

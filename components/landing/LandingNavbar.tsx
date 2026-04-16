@@ -1,6 +1,7 @@
 'use client';
 
 import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
 
@@ -33,38 +34,34 @@ export default function LandingNavbar({ user }: LandingNavbarProps) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 120, damping: 20, delay: 0.1 }}
       >
-        {/* Wordmark */}
+        {/* Brand logo */}
         <Link href="/" className="flex items-center group cursor-pointer">
-          <span className="text-[14px] font-semibold text-heading tracking-tight">
-            Fourteen Fisherman
-          </span>
+          <Image
+            src="/fourteenfishermann.png"
+            alt="Fourteen Fisherman"
+            width={280}
+            height={32}
+            priority
+            className="h-7 w-auto brightness-0"
+          />
         </Link>
 
         {/* Desktop nav */}
         <div className="hidden md:flex items-center gap-6">
-          <a
-            href="#journey"
-            className="text-[13px] text-body hover:text-heading transition-colors duration-150"
-          >
-            How it works
-          </a>
-          <Link
-            href="/pricing"
-            className="text-[13px] text-body hover:text-heading transition-colors duration-150"
-          >
-            Pricing
-          </Link>
           <Link
             href="/cases"
             className="text-[13px] text-body hover:text-heading transition-colors duration-150"
           >
-            Cases
+            Case Library
           </Link>
           <Link
             href="/portfolio"
-            className="text-[13px] text-body hover:text-heading transition-colors duration-150"
+            className="text-[13px] text-body hover:text-heading transition-colors duration-150 flex items-baseline gap-2"
           >
-            Portfolio
+            Portfolio AI tool
+            <span className="text-[9px] font-semibold px-2 py-[3px] rounded-full bg-primary/10 text-primary border border-primary/15 leading-none inline-flex items-center gap-1">
+              <span className="text-[8px]">✦</span> The original
+            </span>
           </Link>
           <div className="w-px h-4 bg-black/10" />
           {user ? (
@@ -100,7 +97,7 @@ export default function LandingNavbar({ user }: LandingNavbarProps) {
 
         {/* Mobile hamburger */}
         <motion.button
-          className="md:hidden w-8 h-8 flex flex-col items-center justify-center gap-[5px] cursor-pointer"
+          className="md:hidden min-h-[44px] min-w-[44px] flex flex-col items-center justify-center gap-[5px] cursor-pointer"
           onClick={() => setMobileOpen((o) => !o)}
           aria-label="Toggle menu"
         >
@@ -133,33 +130,22 @@ export default function LandingNavbar({ user }: LandingNavbarProps) {
             className="absolute top-16 left-0 right-0 mx-4 glass-panel rounded-2xl p-4 flex flex-col gap-1"
             style={{ maxWidth: 'min(92%, 1200px)', margin: '0 auto' }}
           >
-            <a
-              href="#journey"
-              onClick={() => setMobileOpen(false)}
-              className="px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
-            >
-              How it works
-            </a>
-            <Link
-              href="/pricing"
-              onClick={() => setMobileOpen(false)}
-              className="px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
-            >
-              Pricing
-            </Link>
             <Link
               href="/cases"
               onClick={() => setMobileOpen(false)}
-              className="px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
+              className="min-h-[44px] flex items-center px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
             >
-              Cases
+              Case Library
             </Link>
             <Link
               href="/portfolio"
               onClick={() => setMobileOpen(false)}
-              className="px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
+              className="min-h-[44px] flex items-baseline px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150 gap-2"
             >
-              Portfolio
+              Portfolio AI tool
+              <span className="text-[9px] font-semibold px-2 py-[3px] rounded-full bg-primary/10 text-primary border border-primary/15 leading-none inline-flex items-center gap-1">
+                <span className="text-[8px]">✦</span> The original
+              </span>
             </Link>
             <div className="my-1 border-t border-black/[0.06]" />
             {user ? (
@@ -171,7 +157,7 @@ export default function LandingNavbar({ user }: LandingNavbarProps) {
                 <Link
                   href="/auth/sign-in"
                   onClick={() => setMobileOpen(false)}
-                  className="px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
+                  className="min-h-[44px] flex items-center px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
                 >
                   Sign in
                 </Link>

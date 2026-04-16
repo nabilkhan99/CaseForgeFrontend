@@ -95,7 +95,7 @@ export default function TryReadingPhasePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-surface flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-surface flex items-center justify-center">
         <motion.div
           className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent"
           animate={{ rotate: 360 }}
@@ -107,7 +107,7 @@ export default function TryReadingPhasePage() {
 
   if (!station) {
     return (
-      <div className="min-h-screen bg-surface flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-surface flex items-center justify-center">
         <div className="text-center">
           <p className="text-muted mb-4">Station not found</p>
           <Link href="/try" className="text-primary hover:underline text-sm">
@@ -119,9 +119,9 @@ export default function TryReadingPhasePage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface font-sans">
+    <div className="min-h-[100dvh] bg-surface font-sans">
       {/* Top bar */}
-      <div className="sticky top-0 z-40 bg-surface/80 backdrop-blur-xl border-b border-black/[0.06]">
+      <div className="sticky top-0 z-40 bg-surface/80 backdrop-blur-xl border-b border-black/[0.06] pt-[env(safe-area-inset-top)]">
         <div className="max-w-[640px] mx-auto px-6 h-14 flex items-center justify-between">
           <Link
             href="/try"
@@ -135,7 +135,7 @@ export default function TryReadingPhasePage() {
             autoStart={true}
             onComplete={() => {}}
           />
-          <span className="text-[12px] text-muted">{station.title}</span>
+          <span className="hidden sm:inline text-[12px] text-muted">{station.title}</span>
         </div>
       </div>
 

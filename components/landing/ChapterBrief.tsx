@@ -11,42 +11,6 @@ const MEDICAL_HISTORY = [
 export default function ChapterBrief() {
   return (
     <div className="p-5">
-      {/* Patient identity — richer layout */}
-      <div className="flex items-start gap-4 mb-5">
-        <div
-          className="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-[18px] font-semibold flex-shrink-0"
-          style={{
-            background: 'linear-gradient(135deg, #F59E0B, #B45309)',
-            boxShadow: '0 4px 16px rgba(180,83,9,0.2)',
-          }}
-        >
-          MT
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-[16px] font-semibold text-heading mb-0.5">
-            Mrs. Margaret Thompson
-          </div>
-          <div className="text-[12px] text-muted mb-2">62 · Female · Retired teacher</div>
-          <div className="flex items-center gap-2">
-            <div
-              className="px-2.5 py-1 rounded-md text-[10px] font-semibold font-mono"
-              style={{ background: 'rgba(180,83,9,0.08)', color: '#B45309' }}
-            >
-              12 min
-            </div>
-            <div className="px-2.5 py-1 rounded-md text-[10px] font-semibold bg-black/[0.03] text-stone-500">
-              Station 14
-            </div>
-            <div className="px-2.5 py-1 rounded-md text-[10px] font-semibold bg-amber-50 text-amber-700">
-              Neurology
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Divider */}
-      <div className="border-t border-black/[0.05] mb-4" />
-
       {/* Presenting complaint — highlighted */}
       <div className="mb-4">
         <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-2">

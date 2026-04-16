@@ -171,7 +171,7 @@ export default function ChapterConsultation() {
             <span className="font-mono">Recording</span>
           </div>
           <div className="w-px h-3 bg-black/[0.08]" />
-          <span className="font-mono">03:34 / 08:00</span>
+          <span className="font-mono">03:34 / 12:00</span>
           <div className="w-px h-3 bg-black/[0.08]" />
           <span className="font-mono text-primary font-semibold">54% remaining</span>
         </div>

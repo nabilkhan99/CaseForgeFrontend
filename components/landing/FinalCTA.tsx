@@ -8,7 +8,7 @@ export default function FinalCTA() {
     <section className="py-[60px] px-6">
       <div className="max-w-[560px] mx-auto text-center">
         <motion.h2
-          className="text-[40px] font-bold text-heading tracking-[-0.02em] mb-3"
+          className="text-[clamp(28px,6vw,40px)] font-bold text-heading tracking-[-0.02em] mb-3"
           initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}

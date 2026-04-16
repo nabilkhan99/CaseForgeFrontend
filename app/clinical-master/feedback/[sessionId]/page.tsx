@@ -78,7 +78,7 @@ function FeedbackContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-surface flex flex-col items-center justify-center gap-4">
+      <div className="min-h-[100dvh] bg-surface flex flex-col items-center justify-center gap-4">
         <motion.div
           className="w-10 h-10 rounded-full border-2 border-primary border-t-transparent"
           animate={{ rotate: 360 }}
@@ -91,7 +91,7 @@ function FeedbackContent() {
 
   if (timedOut) {
     return (
-      <div className="min-h-screen bg-surface flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-surface flex items-center justify-center">
         <div className="text-center max-w-md px-6">
           <p className="text-heading font-medium mb-2">This is taking longer than expected.</p>
           <p className="text-muted text-sm mb-6">
@@ -107,7 +107,7 @@ function FeedbackContent() {
 
   if (error || !feedback) {
     return (
-      <div className="min-h-screen bg-surface flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-surface flex items-center justify-center">
         <div className="text-center">
           <p className="text-muted mb-4">Unable to load feedback. Please try again later.</p>
           <Link href="/dashboard" className="text-primary hover:underline text-sm">Return to Dashboard</Link>
@@ -140,7 +140,7 @@ function FeedbackContent() {
   ];
 
   return (
-    <div className="min-h-screen bg-surface font-sans">
+    <div className="min-h-[100dvh] bg-surface font-sans">
       <div className="max-w-[720px] mx-auto px-6 py-12">
         {/* Score hero */}
         <motion.div
@@ -215,7 +215,7 @@ function FeedbackContent() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.9 + i * 0.12 }}
               >
-                <span className="text-[13px] text-stone-600 font-medium w-[160px] flex-shrink-0">{d.label}</span>
+                <span className="text-[13px] text-stone-600 font-medium w-[130px] sm:w-[160px] flex-shrink-0">{d.label}</span>
                 <div className="flex-1 h-2.5 bg-black/[0.04] rounded-full overflow-hidden">
                   <motion.div
                     className="h-full rounded-full"
@@ -315,7 +315,7 @@ function FeedbackContent() {
 
 export default function FeedbackPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-surface flex items-center justify-center"><div className="text-muted text-sm">Loading...</div></div>}>
+    <Suspense fallback={<div className="min-h-[100dvh] bg-surface flex items-center justify-center"><div className="text-muted text-sm">Loading...</div></div>}>
       <FeedbackContent />
     </Suspense>
   );

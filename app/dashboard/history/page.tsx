@@ -149,15 +149,16 @@ export default function HistoryPage() {
                     </div>
                   </div>
 
-                  {/* Pass/Refer label */}
-                  <span
-                    className="text-[11px] font-semibold uppercase"
-                    style={{ color: session.passed ? '#16A34A' : '#DC2626' }}
-                  >
-                    {session.passed ? 'Pass' : 'Refer'}
-                  </span>
-
-                  <ScoreBadge score={session.overallScore} />
+                  {/* Pass/Refer label + score — flex-shrink-0 so they never get clipped */}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span
+                      className="text-[11px] font-semibold uppercase"
+                      style={{ color: session.passed ? '#16A34A' : '#DC2626' }}
+                    >
+                      {session.passed ? 'Pass' : 'Refer'}
+                    </span>
+                    <ScoreBadge score={session.overallScore} />
+                  </div>
                 </Link>
               </motion.div>
             ))}

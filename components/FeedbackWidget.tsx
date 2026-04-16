@@ -47,9 +47,9 @@ export function FeedbackWidget() {
           >
             <div className="p-4 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
               <h3 className="font-semibold text-gray-900">Send Feedback</h3>
-              <button 
+              <button
                 onClick={() => setIsOpen(false)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-600 min-h-[44px] min-w-[44px] flex items-center justify-center"
               >
                 ✕
               </button>
@@ -71,7 +71,7 @@ export function FeedbackWidget() {
                     id="feedback-comment"
                     required
                     rows={3}
-                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border text-gray-900"
+                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-base sm:text-sm p-2 border text-gray-900"
                     placeholder="What's on your mind?"
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
@@ -84,7 +84,7 @@ export function FeedbackWidget() {
                   <input
                     type="email"
                     id="feedback-email"
-                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border text-gray-900"
+                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-base sm:text-sm p-2 border text-gray-900"
                     placeholder="you@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -108,7 +108,7 @@ export function FeedbackWidget() {
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={() => setIsOpen(true)}
-          className="px-5 py-2.5 rounded-full border border-indigo-400/30 text-indigo-300 hover:bg-indigo-500/10 hover:text-white hover:border-indigo-400 transition-all duration-200 flex items-center gap-2 text-sm font-medium backdrop-blur-sm"
+          className="px-5 py-2.5 min-h-[44px] rounded-full border border-primary/20 text-primary bg-white/70 hover:bg-white hover:border-primary/40 transition-all duration-200 flex items-center gap-2 text-sm font-medium backdrop-blur-sm"
         >
           <span>💬</span>
           <span>Feedback</span>

@@ -97,7 +97,7 @@ function StationRow({ station, onStart, onViewFeedback }: {
         {!hasAttempts && (
           <button
             onClick={(e) => { e.stopPropagation(); onStart(station.id); }}
-            className="text-[12px] font-semibold text-primary hover:underline cursor-pointer"
+            className="text-[12px] font-semibold text-primary hover:underline cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
             Start
           </button>
@@ -134,7 +134,7 @@ function StationRow({ station, onStart, onViewFeedback }: {
                 <div
                   key={attempt.sessionId}
                   onClick={() => onViewFeedback(attempt.sessionId)}
-                  className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-lg hover:bg-black/[0.02] cursor-pointer transition-colors"
+                  className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-lg hover:bg-black/[0.02] cursor-pointer transition-colors min-h-[44px]"
                 >
                   <span className="text-[11px] text-muted font-mono w-5">
                     #{station.attempts.length - i}
@@ -149,7 +149,7 @@ function StationRow({ station, onStart, onViewFeedback }: {
               ))}
               <button
                 onClick={(e) => { e.stopPropagation(); onStart(station.id); }}
-                className="flex items-center gap-1.5 py-2 px-2 -mx-2 text-[13px] font-semibold text-primary hover:underline cursor-pointer"
+                className="flex items-center gap-1.5 py-2 px-2 -mx-2 text-[13px] font-semibold text-primary hover:underline cursor-pointer min-h-[44px]"
               >
                 Try Again
               </button>

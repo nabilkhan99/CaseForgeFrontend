@@ -169,7 +169,7 @@ export default function TryFeedbackAuthGatePage() {
 
   if (checkingAuth) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-[100dvh] flex items-center justify-center">
         <motion.div
           className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent"
           animate={{ rotate: 360 }}
@@ -181,7 +181,7 @@ export default function TryFeedbackAuthGatePage() {
 
   if (emailConfirmationSent) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6">
+      <div className="min-h-[100dvh] flex items-center justify-center p-6">
         <div className="max-w-md w-full">
           <AuthCard
             icon={
@@ -226,7 +226,7 @@ export default function TryFeedbackAuthGatePage() {
   ] : [];
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6 py-16">
+    <div className="min-h-[100dvh] flex flex-col items-center justify-center px-6 py-16">
       {/* Header */}
       <motion.div
         className="text-center mb-8"
@@ -342,7 +342,7 @@ export default function TryFeedbackAuthGatePage() {
             <div className="flex bg-black/[0.03] rounded-xl p-1 mb-5">
               <button
                 onClick={() => setAuthMode('sign-up')}
-                className={`flex-1 py-2 rounded-lg text-[13px] font-semibold transition-all cursor-pointer ${
+                className={`flex-1 min-h-[44px] py-2 rounded-lg text-[13px] font-semibold transition-all cursor-pointer ${
                   authMode === 'sign-up'
                     ? 'bg-white shadow-sm text-heading'
                     : 'text-muted hover:text-heading'
@@ -352,7 +352,7 @@ export default function TryFeedbackAuthGatePage() {
               </button>
               <button
                 onClick={() => setAuthMode('sign-in')}
-                className={`flex-1 py-2 rounded-lg text-[13px] font-semibold transition-all cursor-pointer ${
+                className={`flex-1 min-h-[44px] py-2 rounded-lg text-[13px] font-semibold transition-all cursor-pointer ${
                   authMode === 'sign-in'
                     ? 'bg-white shadow-sm text-heading'
                     : 'text-muted hover:text-heading'

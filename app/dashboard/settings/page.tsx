@@ -124,7 +124,7 @@ export default function SettingsPage() {
               type="text"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl bg-white/70 border border-black/[0.06] text-heading placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-[14px]"
+              className="w-full px-4 py-3 rounded-xl bg-white/70 border border-black/[0.06] text-heading placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-base md:text-[14px]"
               placeholder="Your full name"
             />
           </div>
@@ -150,7 +150,7 @@ export default function SettingsPage() {
               type="date"
               value={examDate}
               onChange={(e) => setExamDate(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl bg-white/70 border border-black/[0.06] text-heading placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-[14px]"
+              className="w-full px-4 py-3 rounded-xl bg-white/70 border border-black/[0.06] text-heading placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-base md:text-[14px]"
             />
             <p className="text-[12px] text-muted mt-2">
               Set your exam date to see a countdown on your dashboard.

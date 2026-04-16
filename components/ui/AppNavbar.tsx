@@ -134,7 +134,7 @@ export default function AppNavbar() {
 
         {/* Mobile hamburger */}
         <motion.button
-          className="md:hidden w-8 h-8 flex flex-col items-center justify-center gap-[5px] cursor-pointer"
+          className="md:hidden min-w-[44px] min-h-[44px] flex flex-col items-center justify-center gap-[5px] cursor-pointer"
           onClick={() => setMobileOpen((o) => !o)}
           aria-label="Toggle menu"
         >
@@ -172,7 +172,7 @@ export default function AppNavbar() {
                 key={link.href}
                 href={link.href}
                 onClick={() => setMobileOpen(false)}
-                className={`px-3 py-2.5 rounded-xl text-[14px] transition-all duration-150 ${
+                className={`min-h-[44px] flex items-center px-3 py-2.5 rounded-xl text-[14px] transition-all duration-150 ${
                   isActive(link.href, link.exact)
                     ? 'text-primary bg-primary/[0.06] font-medium'
                     : 'text-body hover:text-heading hover:bg-black/[0.03]'
@@ -185,13 +185,13 @@ export default function AppNavbar() {
             <Link
               href="/dashboard/settings"
               onClick={() => setMobileOpen(false)}
-              className="px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
+              className="min-h-[44px] flex items-center px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
             >
               Settings
             </Link>
             <button
               onClick={handleSignOut}
-              className="px-3 py-2.5 rounded-xl text-[14px] text-left text-danger hover:bg-red-50 transition-all duration-150 cursor-pointer"
+              className="min-h-[44px] flex items-center w-full px-3 py-2.5 rounded-xl text-[14px] text-left text-danger hover:bg-red-50 transition-all duration-150 cursor-pointer"
             >
               Sign out
             </button>

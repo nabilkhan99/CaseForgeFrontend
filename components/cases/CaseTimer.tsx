@@ -35,7 +35,7 @@ const STAGES: Stage[] = [
         barColor: 'bg-blue-400',
         tips: ['Discover ICE', 'Discover psycho-social context', 'Ask open and closed questions', 'Rule out Red Flags', 'Use a summary'],
         startSecond: 60,
-        endSecond: 300,
+        endSecond: 360,
     },
     {
         name: 'Clinical Management',
@@ -45,8 +45,8 @@ const STAGES: Stage[] = [
         borderColor: 'border-emerald-200',
         barColor: 'bg-emerald-400',
         tips: ['Share your working diagnosis', 'Explain management plan', 'Shared decision making'],
-        startSecond: 300,
-        endSecond: 480,
+        startSecond: 360,
+        endSecond: 660,
     },
     {
         name: 'Safety Net',
@@ -56,8 +56,8 @@ const STAGES: Stage[] = [
         borderColor: 'border-red-200',
         barColor: 'bg-red-400',
         tips: ['Safety-net advice', 'Follow-up plan', 'Check understanding'],
-        startSecond: 480,
-        endSecond: 600,
+        startSecond: 660,
+        endSecond: 720,
     },
 ];
 
@@ -65,7 +65,7 @@ interface CaseTimerProps {
     totalSeconds?: number;
 }
 
-export default function CaseTimer({ totalSeconds = 600 }: CaseTimerProps) {
+export default function CaseTimer({ totalSeconds = 720 }: CaseTimerProps) {
     const [elapsed, setElapsed] = useState(0);
     const [running, setRunning] = useState(false);
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -229,7 +229,7 @@ export default function CaseTimer({ totalSeconds = 600 }: CaseTimerProps) {
                         {String(seconds).padStart(2, '0')}
                     </div>
                     {STAGES[activeStage] && (
-                        <span className="text-[10px] text-muted font-medium">
+                        <span className="text-[11px] text-muted font-medium">
                             {STAGES[activeStage].name}
                         </span>
                     )}

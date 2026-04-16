@@ -15,9 +15,9 @@ interface SecondaryButtonProps {
 }
 
 const sizeMap = {
-  sm: 'px-4 py-2 text-[13px]',
-  md: 'px-5 py-2.5 text-[14px]',
-  lg: 'px-6 py-3 text-[15px]',
+  sm: 'px-4 py-2 text-[13px] min-h-[40px]',
+  md: 'px-5 py-2.5 text-[14px] min-h-[44px]',
+  lg: 'px-6 py-3 text-[15px] min-h-[52px]',
 };
 
 const variantMap = {

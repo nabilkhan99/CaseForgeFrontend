@@ -131,7 +131,7 @@ function LiveConsultationContent() {
 
   if (isProcessing) {
     return (
-      <div className="min-h-screen bg-surface flex flex-col items-center justify-center gap-6">
+      <div className="min-h-[100dvh] bg-surface flex flex-col items-center justify-center gap-6">
         <motion.div
           className="w-12 h-12 rounded-full border-2 border-primary border-t-transparent"
           animate={{ rotate: 360 }}
@@ -147,7 +147,7 @@ function LiveConsultationContent() {
 
   if (!stationId) {
     return (
-      <div className="min-h-screen bg-surface flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-surface flex items-center justify-center">
         <div className="text-center">
           <p className="text-muted mb-4">Missing station information</p>
           <Link href="/dashboard/library" className="text-primary hover:underline text-sm">Back to Library</Link>
@@ -157,10 +157,10 @@ function LiveConsultationContent() {
   }
 
   return (
-    <div className="min-h-screen bg-surface font-sans flex flex-col">
+    <div className="min-h-[100dvh] bg-surface font-sans flex flex-col">
       {/* Top bar */}
       <div className="h-12 flex items-center justify-between px-6 border-b border-black/[0.06] bg-surface/80 backdrop-blur-xl flex-shrink-0">
-        <div className="text-[13px] text-muted truncate max-w-[200px]">
+        <div className="hidden sm:block text-[13px] text-muted truncate max-w-[200px]">
           {station?.patient_name || 'Loading...'}
         </div>
         <ConsultationTimer
@@ -226,7 +226,7 @@ function LiveConsultationContent() {
       </div>
 
       {/* Controls bar */}
-      <div className="h-20 flex items-center justify-center gap-6 px-6 border-t border-black/[0.06] flex-shrink-0">
+      <div className="min-h-[80px] flex items-center justify-center gap-6 px-6 border-t border-black/[0.06] flex-shrink-0 pb-[env(safe-area-inset-bottom)]">
         <button
           onClick={handleToggleMute}
           disabled={!isConnected}
@@ -255,7 +255,7 @@ function LiveConsultationContent() {
 
         <button
           onClick={() => setShowEndModal(true)}
-          className="px-5 py-2.5 rounded-xl text-[13px] font-medium text-danger bg-red-50 border border-red-200 hover:bg-red-100 transition-colors cursor-pointer"
+          className="min-h-[44px] px-5 py-2.5 rounded-xl text-[13px] font-medium text-danger bg-red-50 border border-red-200 hover:bg-red-100 transition-colors cursor-pointer"
         >
           End Consultation
         </button>
@@ -277,7 +277,7 @@ function LiveConsultationContent() {
 
 export default function LiveConsultationPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-surface flex items-center justify-center"><div className="text-muted text-sm">Loading...</div></div>}>
+    <Suspense fallback={<div className="min-h-[100dvh] bg-surface flex items-center justify-center"><div className="text-muted text-sm">Loading...</div></div>}>
       <LiveConsultationContent />
     </Suspense>
   );

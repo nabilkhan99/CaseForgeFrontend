@@ -97,15 +97,15 @@ function SignUpForm() {
               Back to Log In
             </Link>
 
-            <p className="text-center text-muted text-sm">
-              Didn&apos;t receive the email?{' '}
+            <div className="text-center text-muted text-sm flex items-center justify-center gap-1">
+              <span>Didn&apos;t receive the email?</span>
               <button
                 onClick={handleResend}
-                className="text-primary hover:text-primary-light font-medium transition-colors cursor-pointer"
+                className="inline-flex items-center min-h-[44px] text-primary hover:text-primary-light font-medium transition-colors cursor-pointer"
               >
                 Click to resend
               </button>
-            </p>
+            </div>
           </div>
         </AuthCard>
       </AuthLayout>
@@ -186,12 +186,12 @@ function SignUpForm() {
           </button>
         </form>
 
-        <p className="mt-6 text-center text-muted text-sm">
-          Already have an account?{' '}
-          <Link href="/auth/sign-in" className="text-primary hover:text-primary-light font-medium transition-colors">
+        <div className="mt-6 text-center text-muted text-sm flex items-center justify-center gap-1">
+          <span>Already have an account?</span>
+          <Link href="/auth/sign-in" className="inline-flex items-center min-h-[44px] text-primary hover:text-primary-light font-medium transition-colors">
             Sign In
           </Link>
-        </p>
+        </div>
       </AuthCard>
     </AuthLayout>
   );

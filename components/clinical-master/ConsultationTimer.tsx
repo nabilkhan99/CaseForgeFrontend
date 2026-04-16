@@ -71,7 +71,7 @@ export default function ConsultationTimer({
   return (
     <div className={`flex items-center gap-2 ${className}`}>
       {label && <span className="text-[12px] text-muted">{label}</span>}
-      <span className={`font-mono text-[16px] font-semibold tabular-nums ${colorClass}`}>
+      <span className={`font-mono text-[18px] md:text-[16px] font-semibold tabular-nums ${colorClass}`}>
         {timeString}
       </span>
     </div>
