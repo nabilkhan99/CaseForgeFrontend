@@ -108,7 +108,7 @@ function FAQItem({ faq, index }: { faq: { q: string; a: string }; index: number 
     >
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between py-4 text-left cursor-pointer"
+        className="w-full flex items-center justify-between py-4 min-h-[44px] text-left cursor-pointer"
         aria-expanded={open}
       >
         <h4 className="text-[14px] font-semibold text-heading pr-4">{faq.q}</h4>
