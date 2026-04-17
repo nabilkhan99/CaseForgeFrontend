@@ -304,6 +304,14 @@ function FeedbackContent() {
           <Link href={from ? `/dashboard/library/${from}` : '/dashboard/library'}>
             <PrimaryButton>Practice Another Case &rarr;</PrimaryButton>
           </Link>
+          {feedback.station_id && (
+            <Link
+              href={`/clinical-master/station/${feedback.station_id}${from ? `?from=${from}` : ''}`}
+              className="text-[13px] font-medium text-primary hover:underline transition-colors"
+            >
+              Retry This Case
+            </Link>
+          )}
           <Link href="/dashboard" className="text-[13px] text-muted hover:text-heading transition-colors">
             Back to Dashboard
           </Link>

@@ -111,7 +111,7 @@ export default function CaseCard({ className = '' }: CaseCardProps) {
               whileHover={{ y: -2 }}
               whileTap={{ scale: 0.98 }}
             >
-              Start consultation →
+              Try a free case →
             </motion.div>
           </Link>
         </div>
