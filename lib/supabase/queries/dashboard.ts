@@ -1,6 +1,6 @@
 /**
  * Dashboard data queries for Supabase
- * 
+ *
  * Functions to fetch real user data from the database:
  * - User stats (streak, completed stations, exam countdown)
  * - Performance metrics (domain scores)
@@ -180,7 +180,7 @@ export async function getBlueprintDomains(userId: string): Promise<BlueprintDoma
 export async function getLastStation(userId: string): Promise<LastStation | null> {
     const supabase = createClient();
 
-    // Get most recent session that's not completed
+    // Get most recent session that's not completed, abandoned, or processing
     const { data: session } = await supabase
         .from('clinical_sessions')
         .select(`
@@ -198,6 +198,7 @@ export async function getLastStation(userId: string): Promise<LastStation | null
         .eq('user_id', userId)
         .neq('status', 'completed')
         .neq('status', 'abandoned')
+        .neq('status', 'processing')
         .order('started_at', { ascending: false })
         .limit(1)
         .single();
@@ -270,7 +271,7 @@ export async function getSessionHistory(
             )
         `)
         .eq('user_id', userId)
-        .eq('status', 'completed')
+        .in('status', ['completed', 'processing'])
         .order('completed_at', { ascending: false })
         .range(offset, offset + limit - 1);
 

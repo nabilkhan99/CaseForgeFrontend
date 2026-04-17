@@ -15,6 +15,8 @@ import {
   getLastStation,
   getSessionHistory,
 } from '@/lib/supabase/queries/dashboard';
+import { getRandomStation } from '@/lib/supabase/queries/station-library';
+import type { Station } from '@/lib/supabase/queries/station-library';
 import type {
   UserStats,
   PerformanceMetrics,
@@ -49,6 +51,7 @@ export default function DashboardPage() {
   const [metrics, setMetrics] = useState<PerformanceMetrics>(defaultMetrics);
   const [lastStation, setLastStation] = useState<LastStation | null>(null);
   const [recentSessions, setRecentSessions] = useState<SessionHistoryItem[]>([]);
+  const [randomStation, setRandomStation] = useState<Station | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -65,17 +68,19 @@ export default function DashboardPage() {
       }
 
       try {
-        const [statsData, metricsData, lastStationData, recentData] = await Promise.all([
+        const [statsData, metricsData, lastStationData, recentData, randomStationData] = await Promise.all([
           getUserStats(user.id),
           getPerformanceMetrics(user.id),
           getLastStation(user.id),
           getSessionHistory(user.id, 3, 0),
+          getRandomStation(),
         ]);
 
         setStats(statsData);
         setMetrics(metricsData);
         setLastStation(lastStationData);
         setRecentSessions(recentData);
+        setRandomStation(randomStationData);
       } catch (error) {
         if (error instanceof Error) {
           // Silently handle dashboard data errors
@@ -187,11 +192,23 @@ export default function DashboardPage() {
             </div>
           </Container>
         ) : (
-          <Link href="/dashboard/library">
-            <PrimaryButton size="lg" fullWidth>
-              Start a New Session
-            </PrimaryButton>
-          </Link>
+          <div>
+            <Link href="/dashboard/library">
+              <PrimaryButton size="lg" fullWidth>
+                Start a New Session
+              </PrimaryButton>
+            </Link>
+            {randomStation && (
+              <div className="text-center mt-2">
+                <Link
+                  href={`/clinical-master/station/${randomStation.id}`}
+                  className="text-[13px] text-primary hover:underline"
+                >
+                  or pick a random case &rarr;
+                </Link>
+              </div>
+            )}
+          </div>
         )}
       </div>
 

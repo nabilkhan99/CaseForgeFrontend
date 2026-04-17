@@ -24,4 +24,5 @@ export interface ConsultationFeedback {
   key_learning_points: string[];
   overall_score?: number;
   station_title?: string;
+  station_id?: string;
 }

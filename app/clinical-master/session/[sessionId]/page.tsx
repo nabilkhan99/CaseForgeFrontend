@@ -30,7 +30,9 @@ function LiveConsultationContent() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [showEndModal, setShowEndModal] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [userId, setUserId] = useState<string | undefined>(undefined);
+  const [showTranscript, setShowTranscript] = useState(false);
 
   useEffect(() => {
     async function fetchUser() {
@@ -54,8 +56,6 @@ function LiveConsultationContent() {
     }
     fetchStation();
   }, [stationId]);
-
-  const [showTranscript, setShowTranscript] = useState(false);
 
   const { isConnected, isSpeaking, transcript, connect, endConsultation, setMicMuted, error, status } =
     useLiveKitSession({
@@ -89,6 +89,15 @@ function LiveConsultationContent() {
     setIsMuted(newMuted);
     setMicMuted(newMuted);
   };
+
+  const handleLeaveWithoutFinishing = useCallback(async () => {
+    try {
+      await endConsultation();
+    } catch {
+      // Continue navigating even if disconnect fails
+    }
+    router.push('/dashboard/library');
+  }, [endConsultation, router]);
 
   const patientInitials = station
     ? station.patient_name.split(' ').map(n => n[0]).join('').slice(0, 2)
@@ -125,8 +134,16 @@ function LiveConsultationContent() {
     <div className="min-h-[100dvh] bg-surface font-sans flex flex-col">
       {/* Top bar */}
       <div className="h-12 flex items-center justify-between px-6 border-b border-black/[0.06] bg-surface/80 backdrop-blur-xl flex-shrink-0">
-        <div className="hidden sm:block text-[13px] text-muted truncate max-w-[200px]">
-          {station?.patient_name || 'Loading...'}
+        <div className="flex items-center gap-3 min-w-0">
+          <button
+            onClick={() => setShowLeaveModal(true)}
+            className="text-[12px] text-muted hover:text-heading transition-colors flex items-center gap-1 flex-shrink-0 cursor-pointer"
+          >
+            &larr; Exit
+          </button>
+          <span className="hidden sm:block text-[13px] text-muted truncate max-w-[160px]">
+            {station?.patient_name || 'Loading...'}
+          </span>
         </div>
         <ConsultationTimer
           durationSeconds={station?.consultation_duration_seconds || 480}
@@ -251,6 +268,17 @@ function LiveConsultationContent() {
         variant="danger"
         onConfirm={() => { setShowEndModal(false); finishConsultation(); }}
         onCancel={() => setShowEndModal(false)}
+      />
+
+      <ConfirmModal
+        open={showLeaveModal}
+        title="Leave Consultation"
+        message="Leave without finishing? Your progress won't be saved."
+        confirmLabel="Leave"
+        cancelLabel="Stay"
+        variant="danger"
+        onConfirm={() => { setShowLeaveModal(false); handleLeaveWithoutFinishing(); }}
+        onCancel={() => setShowLeaveModal(false)}
       />
     </div>
   );

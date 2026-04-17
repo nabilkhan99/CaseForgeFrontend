@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
@@ -29,6 +29,9 @@ export default function TryReadingPhasePage() {
   const [station, setStation] = useState<StationData | null>(null);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [readingComplete, setReadingComplete] = useState(false);
+  const ctaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     async function fetchStation() {
@@ -71,6 +74,7 @@ export default function TryReadingPhasePage() {
   const handleStartConsultation = useCallback(async () => {
     if (starting) return;
     setStarting(true);
+    setError(null);
 
     const sessionId = crypto.randomUUID();
 
@@ -82,14 +86,14 @@ export default function TryReadingPhasePage() {
       });
 
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to create session');
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to create session');
       }
 
       router.push(`/try/session/${sessionId}?stationId=${stationId}`);
     } catch (err) {
       setStarting(false);
-      alert(err instanceof Error ? err.message : 'Failed to start consultation');
+      setError(err instanceof Error ? err.message : 'Failed to start consultation');
     }
   }, [stationId, router, starting]);
 
@@ -133,7 +137,10 @@ export default function TryReadingPhasePage() {
             durationSeconds={station.reading_duration_seconds}
             label="Reading Time"
             autoStart={true}
-            onComplete={() => {}}
+            onComplete={() => {
+              setReadingComplete(true);
+              ctaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }}
           />
           <span className="hidden sm:inline text-[12px] text-muted">{station.title}</span>
         </div>
@@ -188,7 +195,7 @@ export default function TryReadingPhasePage() {
                     ol: ({ children }) => <ol className="space-y-1 my-2 pl-1 list-decimal list-inside">{children}</ol>,
                     li: ({ children }) => (
                       <li className="text-[14px] text-body leading-relaxed flex items-start gap-2">
-                        <span className="text-primary mt-1.5 text-[6px] shrink-0">●</span>
+                        <span className="text-primary mt-1.5 text-[6px] shrink-0">&#9679;</span>
                         <span>{children}</span>
                       </li>
                     ),
@@ -202,15 +209,34 @@ export default function TryReadingPhasePage() {
               </div>
             </div>
 
+            {/* Error */}
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-4 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-[13px] text-danger leading-relaxed"
+              >
+                {error}
+              </motion.div>
+            )}
+
             {/* CTA */}
-            <PrimaryButton
-              fullWidth
-              size="lg"
-              disabled={starting}
-              onClick={handleStartConsultation}
-            >
-              {starting ? 'Starting...' : 'Begin Consultation \u2192'}
-            </PrimaryButton>
+            <div ref={ctaRef}>
+              <motion.div
+                animate={readingComplete ? { boxShadow: ['0 0 0 0 rgba(180,83,9,0)', '0 0 0 8px rgba(180,83,9,0.15)', '0 0 0 0 rgba(180,83,9,0)'] } : {}}
+                transition={readingComplete ? { duration: 2, repeat: Infinity } : {}}
+                className="rounded-xl"
+              >
+                <PrimaryButton
+                  fullWidth
+                  size="lg"
+                  disabled={starting}
+                  onClick={handleStartConsultation}
+                >
+                  {starting ? 'Starting...' : 'Begin Consultation →'}
+                </PrimaryButton>
+              </motion.div>
+            </div>
           </Container>
         </motion.div>
       </div>
