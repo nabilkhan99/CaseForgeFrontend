@@ -52,7 +52,7 @@ export default function LandingNavbar({ user }: LandingNavbarProps) {
             href="/cases"
             className="text-[13px] text-body hover:text-heading transition-colors duration-150"
           >
-            Case Library
+            Browse Cases
           </Link>
           <Link
             href="/portfolio"
@@ -135,7 +135,7 @@ export default function LandingNavbar({ user }: LandingNavbarProps) {
               onClick={() => setMobileOpen(false)}
               className="min-h-[44px] flex items-center px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
             >
-              Case Library
+              Browse Cases
             </Link>
             <Link
               href="/portfolio"
