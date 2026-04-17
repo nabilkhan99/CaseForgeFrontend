@@ -117,13 +117,13 @@ export default function AppNavbar() {
                 <Link
                   href="/dashboard/settings"
                   onClick={() => setDropdownOpen(false)}
-                  className="block px-3 py-2 text-[13px] text-body hover:text-heading hover:bg-black/[0.03] transition-colors"
+                  className="flex items-center px-3 py-2 min-h-[44px] text-[13px] text-body hover:text-heading hover:bg-black/[0.03] transition-colors"
                 >
                   Settings
                 </Link>
                 <button
                   onClick={handleSignOut}
-                  className="w-full text-left px-3 py-2 text-[13px] text-danger hover:bg-red-50 transition-colors cursor-pointer"
+                  className="w-full text-left px-3 py-2 min-h-[44px] flex items-center text-[13px] text-danger hover:bg-red-50 transition-colors cursor-pointer"
                 >
                   Sign out
                 </button>

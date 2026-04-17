@@ -38,32 +38,36 @@ export default function ConfirmModal({
             onClick={onCancel}
           />
 
-          {/* Modal */}
+          {/* Modal — slides up from bottom on mobile, centers on desktop */}
           <motion.div
-            className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2"
-            initial={{ opacity: 0, scale: 0.95, y: 8 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 8 }}
-            transition={{ type: 'spring', stiffness: 200, damping: 24 }}
+            className="fixed inset-x-0 bottom-0 sm:inset-0 z-50 flex items-end sm:items-center sm:justify-center p-4 pointer-events-none"
           >
-            <div className="rounded-2xl bg-surface-raised border border-black/[0.06] p-6 shadow-elevation-4">
-              <h3 className="text-[18px] font-semibold text-heading mb-2">{title}</h3>
-              <p className="text-[14px] text-muted mb-6 leading-relaxed">{message}</p>
-              <div className="flex items-center gap-3 justify-end">
-                <SecondaryButton onClick={onCancel} size="sm">
-                  {cancelLabel}
-                </SecondaryButton>
-                {variant === 'danger' ? (
-                  <SecondaryButton onClick={onConfirm} variant="danger" size="sm">
-                    {confirmLabel}
+            <motion.div
+              className="w-full sm:max-w-sm pointer-events-auto"
+              initial={{ opacity: 0, y: 48 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 48 }}
+              transition={{ type: 'spring', stiffness: 200, damping: 24 }}
+            >
+              <div className="rounded-2xl bg-surface-raised border border-black/[0.06] p-6 shadow-elevation-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+                <h3 className="text-[18px] font-semibold text-heading mb-2">{title}</h3>
+                <p className="text-[14px] text-muted mb-6 leading-relaxed">{message}</p>
+                <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
+                  <SecondaryButton onClick={onCancel} size="sm">
+                    {cancelLabel}
                   </SecondaryButton>
-                ) : (
-                  <PrimaryButton onClick={onConfirm} size="sm">
-                    {confirmLabel}
-                  </PrimaryButton>
-                )}
+                  {variant === 'danger' ? (
+                    <SecondaryButton onClick={onConfirm} variant="danger" size="sm">
+                      {confirmLabel}
+                    </SecondaryButton>
+                  ) : (
+                    <PrimaryButton onClick={onConfirm} size="sm">
+                      {confirmLabel}
+                    </PrimaryButton>
+                  )}
+                </div>
               </div>
-            </div>
+            </motion.div>
           </motion.div>
         </>
       )}

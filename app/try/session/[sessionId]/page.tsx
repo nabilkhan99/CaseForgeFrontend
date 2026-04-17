@@ -131,18 +131,13 @@ function GuestLiveConsultationContent() {
   return (
     <div className="min-h-[100dvh] bg-surface font-sans flex flex-col">
       {/* Top bar */}
-      <div className="h-12 flex items-center justify-between px-6 border-b border-black/[0.06] bg-surface/80 backdrop-blur-xl flex-shrink-0">
-        <div className="flex items-center gap-3 min-w-0">
-          <button
-            onClick={() => setShowLeaveModal(true)}
-            className="text-[12px] text-muted hover:text-heading transition-colors flex items-center gap-1 flex-shrink-0 cursor-pointer"
-          >
-            &larr; Exit
-          </button>
-          <span className="hidden sm:block text-[13px] text-muted truncate max-w-[160px]">
-            {station?.patient_name || 'Loading...'}
-          </span>
-        </div>
+      <div className="h-14 flex items-center justify-between px-4 sm:px-6 border-b border-black/[0.06] bg-surface/80 backdrop-blur-xl flex-shrink-0">
+        <button
+          onClick={() => setShowLeaveModal(true)}
+          className="min-h-[44px] min-w-[44px] text-[13px] text-muted hover:text-heading transition-colors flex items-center gap-1 flex-shrink-0 cursor-pointer"
+        >
+          &larr; <span className="hidden sm:inline">Exit</span>
+        </button>
         <ConsultationTimer
           durationSeconds={station?.consultation_duration_seconds || 300}
           autoStart={isConnected}
@@ -210,11 +205,11 @@ function GuestLiveConsultationContent() {
       </div>
 
       {/* Controls bar */}
-      <div className="min-h-[80px] flex items-center justify-center gap-4 px-6 border-t border-black/[0.06] flex-shrink-0 pb-[env(safe-area-inset-bottom)]">
+      <div className="min-h-[80px] flex items-center justify-center gap-3 sm:gap-4 px-4 sm:px-6 border-t border-black/[0.06] flex-shrink-0 pb-[env(safe-area-inset-bottom)]">
         <button
           onClick={handleToggleMute}
           disabled={!isConnected}
-          className="w-11 h-11 rounded-full flex items-center justify-center border border-black/[0.08] cursor-pointer hover:bg-black/[0.02] transition-colors disabled:opacity-40"
+          className="w-11 h-11 rounded-full flex items-center justify-center border border-black/[0.08] cursor-pointer hover:bg-black/[0.02] transition-colors disabled:opacity-40 flex-shrink-0"
         >
           <svg width="16" height="16" viewBox="0 0 14 14" fill="none" className={isMuted ? 'text-danger' : 'text-muted'}>
             {isMuted ? (
@@ -251,9 +246,10 @@ function GuestLiveConsultationContent() {
 
         <button
           onClick={() => setShowEndModal(true)}
-          className="min-h-[44px] px-5 py-2.5 rounded-xl text-[13px] font-medium text-danger bg-red-50 border border-red-200 hover:bg-red-100 transition-colors cursor-pointer"
+          className="min-h-[44px] px-3 sm:px-5 py-2.5 rounded-xl text-[13px] font-medium text-danger bg-red-50 border border-red-200 hover:bg-red-100 transition-colors cursor-pointer whitespace-nowrap flex-shrink-0"
         >
-          End Consultation
+          <span className="hidden sm:inline">End Consultation</span>
+          <span className="sm:hidden">End</span>
         </button>
       </div>
 
