@@ -19,8 +19,9 @@ import type {
   UserStats,
   PerformanceMetrics,
   LastStation,
-} from '@/lib/dashboard/mock-data';
+} from '@/lib/dashboard/types';
 import type { SessionHistoryItem } from '@/lib/supabase/queries/dashboard';
+import { formatRelativeDate } from '@/lib/utils';
 
 const defaultStats: UserStats = {
   currentStreak: 0,
@@ -34,19 +35,6 @@ const defaultMetrics: PerformanceMetrics = {
   clinicalManagement: 0,
   interpersonalSkills: 0,
 };
-
-function formatRelativeDate(dateStr: string): string {
-  if (!dateStr) return '';
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7) return `${diffDays}d ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
-  return `${Math.floor(diffDays / 30)}mo ago`;
-}
 
 const DOMAIN_LABELS: Record<string, string> = {
   dataGathering: 'Data Gathering',

@@ -14,7 +14,7 @@ import type {
     PerformanceMetrics,
     BlueprintDomain,
     LastStation,
-} from '@/lib/dashboard/mock-data';
+} from '@/lib/dashboard/types';
 
 /**
  * Fetch user stats: streak, completed stations count, exam countdown

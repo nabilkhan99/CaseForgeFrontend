@@ -214,7 +214,6 @@ export async function getAllStations(): Promise<Station[]> {
     }
 
     if (!stations || stations.length === 0) {
-        console.log('No stations found');
         return [];
     }
 
