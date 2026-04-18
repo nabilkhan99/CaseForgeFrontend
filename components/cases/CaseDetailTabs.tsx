@@ -86,7 +86,7 @@ export default function CaseDetailTabs({
                             <span className="w-1.5 h-1.5 rounded-full bg-primary" />
                         )}
                         <tab.Icon />
-                        <span className="text-[11px] sm:text-sm">{tab.label.split(' ')[0]}</span>
+                        <span className="text-[11px] sm:text-sm">{tab.label}</span>
                     </button>
                 ))}
             </div>
