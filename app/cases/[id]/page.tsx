@@ -642,6 +642,49 @@ export default function CaseDetailPage() {
         </div>
     );
 
+    const patientScriptContent = caseData.station_script ? (
+        <div className="p-5 md:p-6 space-y-4">
+            <div className="flex items-center gap-3 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-violet-500/[0.07] border border-violet-500/[0.12] flex items-center justify-center">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-violet-600">
+                        <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                        <path d="m15 5 4 4" />
+                    </svg>
+                </div>
+                <div>
+                    <h3 className="text-xs font-black uppercase tracking-widest text-muted">Patient Script</h3>
+                    <p className="text-[11px] text-muted/70">For the friend playing the patient role</p>
+                </div>
+            </div>
+            <div
+                className="rounded-xl border border-violet-200/50 p-4 text-[14px] text-body leading-[1.8]"
+                style={{ background: 'linear-gradient(135deg, rgba(139,92,246,0.03), rgba(167,139,250,0.03))' }}
+            >
+                <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                        p: ({ children }) => <p className="text-[14px] text-body leading-relaxed mb-3 last:mb-0">{children}</p>,
+                        strong: ({ children }) => <strong className="font-semibold text-heading">{children}</strong>,
+                        em: ({ children }) => <em className="italic">{children}</em>,
+                        ul: ({ children }) => <ul className="space-y-1 my-2 pl-1">{children}</ul>,
+                        ol: ({ children }) => <ol className="space-y-1 my-2 pl-1 list-decimal list-inside">{children}</ol>,
+                        li: ({ children }) => (
+                            <li className="text-[14px] text-body leading-relaxed flex items-start gap-2">
+                                <span className="text-violet-400 mt-1.5 text-[6px] shrink-0">●</span>
+                                <span>{children}</span>
+                            </li>
+                        ),
+                        h1: ({ children }) => <h3 className="text-[15px] font-bold text-heading mt-4 mb-2 first:mt-0">{children}</h3>,
+                        h2: ({ children }) => <h3 className="text-[15px] font-bold text-heading mt-4 mb-2 first:mt-0">{children}</h3>,
+                        h3: ({ children }) => <h4 className="text-[14px] font-bold text-heading mt-3 mb-1">{children}</h4>,
+                    }}
+                >
+                    {caseData.station_script}
+                </ReactMarkdown>
+            </div>
+        </div>
+    ) : null;
+
     const learningPointsContent = (
         <div className="p-5 md:p-6 space-y-4">
             <div className="flex items-center gap-3 mb-4">
@@ -701,6 +744,7 @@ export default function CaseDetailPage() {
                         <Container padding="none">
                             <CaseDetailTabs
                                 candidateContent={candidateContent}
+                                patientScriptContent={patientScriptContent}
                                 markSchemeContent={markSchemeContent}
                                 learningPointsContent={learningPointsContent}
                             />
