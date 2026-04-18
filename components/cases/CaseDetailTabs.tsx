@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 interface CaseDetailTabsProps {
     candidateContent: React.ReactNode;
+    patientScriptContent?: React.ReactNode;
     markSchemeContent: React.ReactNode;
     learningPointsContent: React.ReactNode;
 }
@@ -28,6 +29,15 @@ function GradingIcon() {
     );
 }
 
+function ScriptIcon() {
+    return (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+            <path d="m15 5 4 4" />
+        </svg>
+    );
+}
+
 function SchoolIcon() {
     return (
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -37,19 +47,26 @@ function SchoolIcon() {
     );
 }
 
-const tabs = [
+const ALL_TABS = [
     { id: 'candidate', label: 'Candidate', Icon: CandidateIcon },
+    { id: 'script', label: 'Patient Script', Icon: ScriptIcon },
     { id: 'markscheme', label: 'Mark Scheme', Icon: GradingIcon },
     { id: 'learning', label: 'Learning Points', Icon: SchoolIcon },
 ] as const;
 
-type TabId = (typeof tabs)[number]['id'];
+type TabId = (typeof ALL_TABS)[number]['id'];
 
 export default function CaseDetailTabs({
     candidateContent,
+    patientScriptContent,
     markSchemeContent,
     learningPointsContent,
 }: CaseDetailTabsProps) {
+    // Only show the script tab if content is provided
+    const tabs = patientScriptContent
+        ? ALL_TABS
+        : ALL_TABS.filter(t => t.id !== 'script');
+
     const [activeTab, setActiveTab] = useState<TabId>('candidate');
 
     return (
@@ -60,7 +77,7 @@ export default function CaseDetailTabs({
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
-                        className={`flex items-center gap-2 px-4 md:px-5 py-2.5 rounded-t-xl text-sm font-semibold transition-all whitespace-nowrap min-h-[44px] ${activeTab === tab.id
+                        className={`flex items-center gap-2 px-3 md:px-5 py-2.5 rounded-t-xl text-sm font-semibold transition-all whitespace-nowrap min-h-[44px] ${activeTab === tab.id
                                 ? 'bg-white/70 text-heading border border-black/[0.06] border-b-transparent'
                                 : 'text-muted hover:text-body hover:bg-black/[0.02]'
                             }`}
@@ -77,6 +94,7 @@ export default function CaseDetailTabs({
             {/* Tab content */}
             <div className="bg-white/70 border border-black/[0.06] rounded-2xl rounded-tl-none mx-3 md:mx-4 mb-4">
                 {activeTab === 'candidate' && candidateContent}
+                {activeTab === 'script' && patientScriptContent}
                 {activeTab === 'markscheme' && markSchemeContent}
                 {activeTab === 'learning' && learningPointsContent}
             </div>
