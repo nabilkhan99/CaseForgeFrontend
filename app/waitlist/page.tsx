@@ -135,7 +135,7 @@ export default function WaitlistPage() {
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@nhs.net"
+                      placeholder="you@email.com"
                       disabled={formState === 'loading'}
                       className="w-full bg-white/70 border border-black/[0.06] rounded-xl pl-11 pr-4 py-3.5 text-[14px] text-heading placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/30 transition-all disabled:opacity-60"
                     />
