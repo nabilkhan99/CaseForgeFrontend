@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { getCaseById, type CaseDetail } from '@/lib/supabase/queries/cases';
+import { type CaseDetail } from '@/lib/supabase/queries/cases';
 import CaseTimer from '@/components/cases/CaseTimer';
 import CaseDetailTabs from '@/components/cases/CaseDetailTabs';
 import LandingNavbar from '@/components/landing/LandingNavbar';
@@ -473,9 +473,17 @@ export default function CaseDetailPage() {
 
     useEffect(() => {
         async function fetchCase() {
-            const data = await getCaseById(id);
-            setCaseData(data);
-            setLoading(false);
+            try {
+                const res = await fetch(`/api/cases/${id}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setCaseData(data.case || null);
+                }
+            } catch {
+                // Handle silently
+            } finally {
+                setLoading(false);
+            }
         }
         fetchCase();
     }, [id]);

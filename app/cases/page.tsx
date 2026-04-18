@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { getCasesGroupedByDomain, type CaseBankDomain } from '@/lib/supabase/queries/cases';
+import { type CaseBankDomain } from '@/lib/supabase/queries/cases';
 import CaseBankCard from '@/components/cases/CaseBankCard';
 import LandingNavbar from '@/components/landing/LandingNavbar';
 import { BlurFade } from '@/components/magicui/blur-fade';
@@ -21,9 +21,17 @@ export default function CaseBankPage() {
 
     useEffect(() => {
         async function fetchData() {
-            const data = await getCasesGroupedByDomain();
-            setDomains(data);
-            setLoading(false);
+            try {
+                const res = await fetch('/api/cases');
+                if (res.ok) {
+                    const data = await res.json();
+                    setDomains(data.domains || []);
+                }
+            } catch {
+                // Handle silently
+            } finally {
+                setLoading(false);
+            }
         }
         fetchData();
     }, []);
