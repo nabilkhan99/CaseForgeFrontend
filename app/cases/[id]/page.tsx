@@ -44,34 +44,36 @@ function parseInstructions(raw: string) {
 function SectionIcon({ title }: { title: string }) {
     const lower = title.toLowerCase();
 
-    if (lower.includes('situation') || lower.includes('current'))
+    if (lower.includes('age') || lower.includes('dob') || lower.includes('patient name'))
         return (
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="16" y1="13" x2="8" y2="13" />
-                <line x1="16" y1="17" x2="8" y2="17" />
-                <polyline points="10 9 9 9 8 9" />
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
             </svg>
         );
     if (lower.includes('history') || lower.includes('past'))
         return (
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="12" y1="13" x2="12" y2="17" />
+                <line x1="10" y1="11" x2="14" y2="11" />
             </svg>
         );
     if (lower.includes('medication') || lower.includes('drug'))
         return (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-600">
-                <path d="M10.5 1.5H8.25A2.25 2.25 0 0 0 6 3.75v16.5a2.25 2.25 0 0 0 2.25 2.25h7.5A2.25 2.25 0 0 0 18 20.25V3.75a2.25 2.25 0 0 0-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-6 18h9" />
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
+                <path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z" />
+                <path d="m8.5 8.5 7 7" />
             </svg>
         );
     if (lower.includes('recent') || lower.includes('notes'))
         return (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-600">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
+                <rect x="4" y="2" width="16" height="20" rx="2" />
+                <line x1="8" y1="8" x2="16" y2="8" />
+                <line x1="8" y1="12" x2="16" y2="12" />
+                <line x1="8" y1="16" x2="12" y2="16" />
             </svg>
         );
     if (lower.includes('allerg'))
@@ -91,11 +93,22 @@ function SectionIcon({ title }: { title: string }) {
                 <path d="M16 3.13a4 4 0 0 1 0 7.75" />
             </svg>
         );
+    if (lower.includes('situation') || lower.includes('current'))
+        return (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="16" y1="13" x2="8" y2="13" />
+                <line x1="16" y1="17" x2="8" y2="17" />
+                <polyline points="10 9 9 9 8 9" />
+            </svg>
+        );
+    // Default: stethoscope
     return (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="16" x2="12" y2="12" />
-            <line x1="12" y1="8" x2="12.01" y2="8" />
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
+            <path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3" />
+            <path d="M8 15v1a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6v-4" />
+            <circle cx="20" cy="10" r="2" />
         </svg>
     );
 }
@@ -259,14 +272,6 @@ function InteractiveMarkScheme({ content }: { content: string | null }) {
         return <MarkdownContent content={content} />;
     }
 
-    const totalIndicators = rows.reduce((count, row) => {
-        if (row.positive) count++;
-        if (row.negative) count++;
-        return count;
-    }, 0);
-
-    const checkedCount = Object.values(checked).filter(Boolean).length;
-
     function toggleCheck(key: string) {
         setChecked(prev => ({ ...prev, [key]: !prev[key] }));
     }
@@ -275,13 +280,14 @@ function InteractiveMarkScheme({ content }: { content: string | null }) {
     const negativeChecked = rows.filter((_, i) => checked[`neg-${i}`]).length;
     const totalPositive = rows.filter(r => r.positive).length;
     const totalNegative = rows.filter(r => r.negative).length;
+    const cumulativeScore = Math.max(0, positiveChecked - negativeChecked);
 
     return (
         <div className="space-y-3">
             {/* Tally badges */}
             <div className="flex items-center gap-2 px-1 py-2 flex-wrap">
                 <span className="text-xs font-bold text-heading bg-primary/[0.07] px-3 py-1.5 rounded-lg">
-                    {checkedCount} / {totalIndicators} indicators checked
+                    {cumulativeScore} / {totalPositive} indicators
                 </span>
                 <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg">
                     +{positiveChecked}

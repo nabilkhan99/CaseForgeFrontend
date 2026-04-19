@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import LandingNavbar from '@/components/landing/LandingNavbar';
 import LandingHero from '@/components/landing/LandingHero';
 import ProductJourney from '@/components/landing/ProductJourney';
-import SocialProof from '@/components/landing/SocialProof';
+
 import BottomFeatures from '@/components/landing/BottomFeatures';
 import FinalCTA from '@/components/landing/FinalCTA';
 import LandingFooter from '@/components/landing/LandingFooter';
@@ -23,7 +23,7 @@ export default function LandingPage() {
       <LandingNavbar user={user} />
       <LandingHero />
       <ProductJourney />
-      <SocialProof />
+
       <BottomFeatures />
       <FinalCTA />
       <LandingFooter />

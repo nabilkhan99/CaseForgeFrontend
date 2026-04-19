@@ -3,12 +3,12 @@
 import { motion } from 'framer-motion';
 
 const SESSIONS = [
-  { id: 'S1', station: 'Station 8', patient: 'Mr. Davies', score: 52, date: '2 weeks ago' },
-  { id: 'S2', station: 'Station 3', patient: 'Mrs. Khan', score: 58, date: '12 days ago' },
-  { id: 'S3', station: 'Station 11', patient: 'Mr. Okafor', score: 64, date: '10 days ago' },
-  { id: 'S4', station: 'Station 6', patient: 'Ms. Williams', score: 69, date: '1 week ago' },
-  { id: 'S5', station: 'Station 2', patient: 'Mrs. Begum', score: 72, date: '4 days ago' },
-  { id: 'S6', station: 'Station 14', patient: 'Mrs. Thompson', score: 78, date: 'Today' },
+  { id: 'S1', date: '2 weeks ago', score: 52 },
+  { id: 'S2', date: '12 days ago', score: 58 },
+  { id: 'S3', date: '10 days ago', score: 64 },
+  { id: 'S4', date: '1 week ago', score: 69 },
+  { id: 'S5', date: '4 days ago', score: 72 },
+  { id: 'S6', date: 'Today', score: 78 },
 ];
 
 const DOMAINS = [
@@ -61,13 +61,13 @@ export default function ChapterProgress() {
               transition={{ delay: 0.5 }}
             >
               ↑ 26pts
-              <span className="text-[10px] text-muted font-normal ml-1">from first session</span>
+              <span className="text-[10px] text-muted font-normal ml-1">from first station</span>
             </motion.span>
           </div>
         </div>
         <div className="text-right">
           <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-1">
-            Sessions
+            Stations completed
           </div>
           <div className="text-[28px] font-bold text-heading leading-none">6</div>
         </div>
@@ -170,10 +170,10 @@ export default function ChapterProgress() {
 
         <div className="border-t border-black/[0.05] mb-4" />
 
-        {/* Recent sessions list */}
+        {/* Recent stations list */}
         <div>
           <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-2.5">
-            Recent Sessions
+            Recent Stations
           </div>
           <div className="flex flex-col gap-1.5">
             {SESSIONS.slice(-3).reverse().map((s, i) => (
@@ -186,8 +186,7 @@ export default function ChapterProgress() {
               >
                 <div className="text-[11px] font-mono text-muted w-6">{s.id}</div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[12px] font-medium text-heading truncate">{s.patient}</div>
-                  <div className="text-[10px] text-muted">{s.station} · {s.date}</div>
+                  <div className="text-[12px] text-muted">{s.date}</div>
                 </div>
                 <ScorePill score={s.score} />
               </motion.div>

@@ -26,7 +26,7 @@ const getIcon = (sectionKey: string) => {
       return '📒';
     case 'reflection':
       return (
-        <svg className="h-5 w-5 text-medical-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg className="h-5 w-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path 
             strokeLinecap="round" 
             strokeLinejoin="round" 

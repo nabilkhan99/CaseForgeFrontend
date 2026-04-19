@@ -51,7 +51,7 @@ function AudioVisualizer() {
         animate={{ scale: [1, 1.05, 1] }}
         transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
       >
-        MT
+        JT
       </motion.div>
     </div>
   );
@@ -103,11 +103,11 @@ export default function ChapterConsultation() {
           className="w-10 h-10 rounded-full flex items-center justify-center text-white text-[12px] font-semibold flex-shrink-0"
           style={{ background: 'linear-gradient(135deg, #F59E0B, #B45309)' }}
         >
-          MT
+          JT
         </div>
         <div>
-          <div className="text-[13px] font-semibold text-heading">Mrs. Thompson</div>
-          <div className="text-[11px] text-muted">Headache · 3 days</div>
+          <div className="text-[13px] font-semibold text-heading">Jack Thompson</div>
+          <div className="text-[11px] text-muted">ECG request · Running club</div>
         </div>
         <div className="ml-auto flex items-center gap-2">
           <motion.div
@@ -147,7 +147,7 @@ export default function ChapterConsultation() {
           >
             Patient Speaking
           </motion.div>
-          <div className="text-[12px] text-muted">Mrs. Thompson is responding...</div>
+          <div className="text-[12px] text-muted">David Thompson is responding...</div>
         </motion.div>
 
         {/* Bar waveform — full width */}
@@ -192,11 +192,6 @@ export default function ChapterConsultation() {
 
         {/* Center: mic */}
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full flex items-center justify-center border border-black/[0.08] cursor-pointer hover:bg-black/[0.02] transition-colors">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="text-muted">
-              <path d="M7 1v12M4 4v6M10 3v8M1 6v2M13 5v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-          </div>
           <motion.div
             className="w-11 h-11 rounded-full flex items-center justify-center cursor-pointer"
             style={{
@@ -217,19 +212,14 @@ export default function ChapterConsultation() {
               <path d="M3 6.5v.5a4 4 0 0 0 8 0v-.5M7 11v2M5 13h4" stroke="white" strokeWidth="1.2" strokeLinecap="round" />
             </svg>
           </motion.div>
-          <div className="w-9 h-9 rounded-full flex items-center justify-center border border-black/[0.08] cursor-pointer hover:bg-black/[0.02] transition-colors">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="text-muted">
-              <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.3" />
-              <path d="M7 4.5v3l2 1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-            </svg>
-          </div>
         </div>
 
-        {/* Right: end */}
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-red-50 border border-red-200 cursor-pointer hover:bg-red-100 transition-colors">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M1.5 1.5l9 9M10.5 1.5l-9 9" stroke="#DC2626" strokeWidth="1.5" strokeLinecap="round" />
+        {/* Right: End consultation button */}
+        <div className="px-3.5 py-2.5 rounded-xl flex items-center justify-center gap-1.5 bg-red-50 border border-red-200 cursor-pointer hover:bg-red-100 transition-colors">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2" strokeLinecap="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
           </svg>
+          <span className="text-[11px] font-semibold text-red-600">End consultation</span>
         </div>
       </div>
     </div>

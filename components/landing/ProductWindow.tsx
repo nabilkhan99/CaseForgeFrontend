@@ -8,7 +8,7 @@ interface ProductWindowProps {
   children: ReactNode;
 }
 
-export default function ProductWindow({ timer, children }: ProductWindowProps) {
+export default function ProductWindow({ children }: ProductWindowProps) {
   return (
     <div
       className="rounded-[20px] overflow-hidden border border-black/[0.06]"
@@ -17,14 +17,6 @@ export default function ProductWindow({ timer, children }: ProductWindowProps) {
         boxShadow: '0 24px 64px rgba(180,83,9,0.06), 0 2px 4px rgba(0,0,0,0.04)',
       }}
     >
-      {/* Top bar */}
-      <div className="h-12 flex items-center justify-between px-5 border-b border-black/[0.05]">
-        <div className="flex items-center gap-2.5">
-          <div className="w-2 h-2 rounded-full bg-primary" />
-        </div>
-        <span className="text-[12px] font-mono text-primary">{timer}</span>
-      </div>
-
       {/* Content */}
       <div>{children}</div>
     </div>

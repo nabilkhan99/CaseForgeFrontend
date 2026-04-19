@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import LandingNavbar from '@/components/landing/LandingNavbar';
@@ -9,12 +9,61 @@ import { NumberTicker } from '@/components/magicui/number-ticker';
 
 type FormState = 'idle' | 'loading' | 'success';
 
+interface FormData {
+  fullName: string;
+  email: string;
+  trainingStage: string;
+  scaDate: string;
+}
+
+interface FormErrors {
+  fullName?: string;
+  email?: string;
+  trainingStage?: string;
+  scaDate?: string;
+}
+
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+function generateScaDateOptions(): { value: string; label: string }[] {
+  const options: { value: string; label: string }[] = [{ value: 'not_sure', label: 'Not sure' }];
+  const now = new Date();
+  const startMonth = now.getMonth();
+  const startYear = now.getFullYear();
+
+  for (let i = 1; i <= 24; i++) {
+    const totalMonths = startMonth + i;
+    const month = totalMonths % 12;
+    const year = startYear + Math.floor(totalMonths / 12);
+    const label = `${MONTH_NAMES[month]} ${year}`;
+    const value = `${year}-${String(month + 1).padStart(2, '0')}`;
+    options.push({ value, label });
+  }
+
+  return options;
+}
+
+const inputBase =
+  'w-full bg-white/70 border border-black/[0.06] rounded-xl text-[14px] text-heading placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/30 transition-all disabled:opacity-60';
+
+const iconClass = 'absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none';
+
 export default function WaitlistPage() {
   const [user, setUser] = useState<{ id: string } | null>(null);
-  const [email, setEmail] = useState('');
+  const [formData, setFormData] = useState<FormData>({
+    fullName: '',
+    email: '',
+    trainingStage: '',
+    scaDate: '',
+  });
   const [formState, setFormState] = useState<FormState>('idle');
-  const [error, setError] = useState('');
+  const [errors, setErrors] = useState<FormErrors>({});
   const [waitlistCount, setWaitlistCount] = useState(0);
+
+  const scaDateOptions = useMemo(() => generateScaDateOptions(), []);
 
   useEffect(() => {
     const supabase = createClient();
@@ -28,12 +77,41 @@ export default function WaitlistPage() {
       .catch(() => {});
   }, []);
 
+  function validate(): FormErrors {
+    const newErrors: FormErrors = {};
+
+    if (!formData.fullName.trim()) {
+      newErrors.fullName = 'Please enter your full name.';
+    }
+
+    if (!formData.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      newErrors.email = 'Please enter a valid email address.';
+    }
+
+    if (!formData.trainingStage) {
+      newErrors.trainingStage = 'Please select your training stage.';
+    }
+
+    if (!formData.scaDate) {
+      newErrors.scaDate = 'Please select your planned SCA date.';
+    }
+
+    return newErrors;
+  }
+
+  function handleChange(field: keyof FormData, value: string) {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors((prev) => ({ ...prev, [field]: undefined }));
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
 
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError('Please enter a valid email address.');
+    const validationErrors = validate();
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
       return;
     }
 
@@ -43,7 +121,12 @@ export default function WaitlistPage() {
       const res = await fetch('/api/waitlist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({
+          email: formData.email,
+          full_name: formData.fullName,
+          training_stage: formData.trainingStage,
+          sca_date: formData.scaDate,
+        }),
       });
 
       if (!res.ok) {
@@ -54,20 +137,24 @@ export default function WaitlistPage() {
       setFormState('success');
       setWaitlistCount((prev) => prev + 1);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+      setErrors({
+        email: err instanceof Error ? err.message : 'Something went wrong. Please try again.',
+      });
       setFormState('idle');
     }
   };
 
+  const springTransition = { type: 'spring' as const, stiffness: 60, damping: 20 };
+
   return (
     <div className="min-h-[100dvh] bg-surface relative overflow-hidden">
-      {/* Warm ambient orb */}
+      {/* Ambient orbs */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_30%,rgba(180,83,9,0.05)_0%,transparent_55%)] pointer-events-none" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,rgba(180,83,9,0.03)_0%,transparent_45%)] pointer-events-none" />
 
       <LandingNavbar user={user} hideAuth />
 
-      <main className="flex items-center justify-center px-4 pt-32 pb-16 min-h-[100dvh]">
+      <main className="flex items-center justify-center px-4 pt-28 pb-16 min-h-[100dvh]">
         <div className="w-full max-w-lg relative z-10">
           <AnimatePresence mode="wait">
             {formState !== 'success' ? (
@@ -76,7 +163,7 @@ export default function WaitlistPage() {
                 initial={{ opacity: 0, y: 24 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -16 }}
-                transition={{ type: 'spring', stiffness: 60, damping: 20 }}
+                transition={springTransition}
                 className="bg-white/60 backdrop-blur-xl border border-black/[0.04] rounded-2xl p-6 sm:p-10 shadow-elevation-2"
               >
                 {/* Eyebrow */}
@@ -94,9 +181,9 @@ export default function WaitlistPage() {
                   className="text-[28px] sm:text-[36px] font-bold text-heading tracking-[-0.02em] leading-[1.15] mb-3"
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.15, type: 'spring', stiffness: 60, damping: 20 }}
+                  transition={{ delay: 0.15, ...springTransition }}
                 >
-                  Be the first to practise with AI patients
+                  Join the Waitlist
                 </motion.h1>
 
                 {/* Subtext */}
@@ -104,46 +191,218 @@ export default function WaitlistPage() {
                   className="text-[15px] text-muted leading-[1.7] mb-8"
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2, type: 'spring', stiffness: 60, damping: 20 }}
+                  transition={{ delay: 0.2, ...springTransition }}
                 >
-                  AI patients that talk back, push back, and score you on every SCA domain. Be the first to try it.
+                  Stop waiting for study group sessions. Practice SCA consultations with our AI patients, whenever you need.
                 </motion.p>
 
-                {/* Email form */}
+                {/* Form */}
                 <motion.form
                   onSubmit={handleSubmit}
-                  className="flex flex-col sm:flex-row gap-3 mb-4"
+                  className="flex flex-col gap-4 mb-4"
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.25, type: 'spring', stiffness: 60, damping: 20 }}
+                  transition={{ delay: 0.25, ...springTransition }}
+                  noValidate
                 >
-                  <div className="flex-1 relative">
-                    <svg
-                      className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                  {/* Full name */}
+                  <div className="flex flex-col gap-1">
+                    <div className="relative">
+                      {/* Person icon */}
+                      <svg
+                        className={iconClass}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                        />
+                      </svg>
+                      <input
+                        type="text"
+                        value={formData.fullName}
+                        onChange={(e) => handleChange('fullName', e.target.value)}
+                        placeholder="Your full name"
+                        disabled={formState === 'loading'}
+                        className={`${inputBase} pl-11 pr-4 py-3.5 min-h-[44px]${errors.fullName ? ' ring-2 ring-red-400/40 border-red-300' : ''}`}
                       />
-                    </svg>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@email.com"
-                      disabled={formState === 'loading'}
-                      className="w-full bg-white/70 border border-black/[0.06] rounded-xl pl-11 pr-4 py-3.5 text-[14px] text-heading placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/30 transition-all disabled:opacity-60"
-                    />
+                    </div>
+                    <AnimatePresence>
+                      {errors.fullName && (
+                        <motion.p
+                          initial={{ opacity: 0, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -4 }}
+                          className="text-[12px] text-red-600 pl-1"
+                        >
+                          {errors.fullName}
+                        </motion.p>
+                      )}
+                    </AnimatePresence>
                   </div>
+
+                  {/* Email */}
+                  <div className="flex flex-col gap-1">
+                    <div className="relative">
+                      {/* Email icon */}
+                      <svg
+                        className={iconClass}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                        />
+                      </svg>
+                      <input
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => handleChange('email', e.target.value)}
+                        placeholder="you@email.com"
+                        disabled={formState === 'loading'}
+                        className={`${inputBase} pl-11 pr-4 py-3.5 min-h-[44px]${errors.email ? ' ring-2 ring-red-400/40 border-red-300' : ''}`}
+                      />
+                    </div>
+                    <AnimatePresence>
+                      {errors.email && (
+                        <motion.p
+                          initial={{ opacity: 0, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -4 }}
+                          className="text-[12px] text-red-600 pl-1"
+                        >
+                          {errors.email}
+                        </motion.p>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* GP training stage */}
+                  <div className="flex flex-col gap-1">
+                    <div className="relative">
+                      {/* Graduation icon */}
+                      <svg
+                        className={iconClass}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M12 14l9-5-9-5-9 5 9 5z"
+                        />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"
+                        />
+                      </svg>
+                      <select
+                        value={formData.trainingStage}
+                        onChange={(e) => handleChange('trainingStage', e.target.value)}
+                        disabled={formState === 'loading'}
+                        className={`${inputBase} pl-11 pr-8 py-3.5 min-h-[44px] appearance-none cursor-pointer${errors.trainingStage ? ' ring-2 ring-red-400/40 border-red-300' : ''}`}
+                      >
+                        <option value="" disabled>GP training stage</option>
+                        <option value="ST1">ST1</option>
+                        <option value="ST2">ST2</option>
+                        <option value="ST3">ST3</option>
+                      </select>
+                      {/* Chevron */}
+                      <svg
+                        className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                    <AnimatePresence>
+                      {errors.trainingStage && (
+                        <motion.p
+                          initial={{ opacity: 0, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -4 }}
+                          className="text-[12px] text-red-600 pl-1"
+                        >
+                          {errors.trainingStage}
+                        </motion.p>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* SCA date */}
+                  <div className="flex flex-col gap-1">
+                    <div className="relative">
+                      {/* Calendar icon */}
+                      <svg
+                        className={iconClass}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                        />
+                      </svg>
+                      <select
+                        value={formData.scaDate}
+                        onChange={(e) => handleChange('scaDate', e.target.value)}
+                        disabled={formState === 'loading'}
+                        className={`${inputBase} pl-11 pr-8 py-3.5 min-h-[44px] appearance-none cursor-pointer${errors.scaDate ? ' ring-2 ring-red-400/40 border-red-300' : ''}`}
+                      >
+                        <option value="" disabled>When are you planning to sit your SCA?</option>
+                        {scaDateOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                      {/* Chevron */}
+                      <svg
+                        className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                    <AnimatePresence>
+                      {errors.scaDate && (
+                        <motion.p
+                          initial={{ opacity: 0, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -4 }}
+                          className="text-[12px] text-red-600 pl-1"
+                        >
+                          {errors.scaDate}
+                        </motion.p>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Submit */}
                   <motion.button
                     type="submit"
                     disabled={formState === 'loading'}
-                    className="px-7 py-3.5 rounded-xl text-[14px] font-semibold text-white whitespace-nowrap disabled:opacity-70 cursor-pointer"
+                    className="w-full mt-1 px-7 py-3.5 rounded-xl text-[14px] font-semibold text-white min-h-[44px] disabled:opacity-70 cursor-pointer"
                     style={{
                       background: 'linear-gradient(135deg, #B45309, #D97706)',
                       boxShadow: '0 4px 16px rgba(180,83,9,0.18)',
@@ -152,34 +411,23 @@ export default function WaitlistPage() {
                     whileTap={{ scale: 0.98 }}
                   >
                     {formState === 'loading' ? (
-                      <span className="flex items-center gap-2">
+                      <span className="flex items-center justify-center gap-2">
                         <motion.span
                           animate={{ rotate: 360 }}
                           transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
                           className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
                         />
-                        Joining...
+                        Reserving your spot...
                       </span>
                     ) : (
-                      'Join the waitlist'
+                      'Reserve My Spot'
                     )}
                   </motion.button>
                 </motion.form>
 
-                {/* Error message */}
-                {error && (
-                  <motion.p
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="text-[13px] text-red-600 mb-3"
-                  >
-                    {error}
-                  </motion.p>
-                )}
-
                 {/* Fine print */}
                 <motion.p
-                  className="text-[12px] text-muted text-center sm:text-left mb-6"
+                  className="text-[12px] text-muted text-center mb-5"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.35 }}
@@ -190,7 +438,7 @@ export default function WaitlistPage() {
                 {/* Counter */}
                 {waitlistCount > 0 && (
                   <motion.div
-                    className="flex items-center justify-center sm:justify-start gap-2 text-[13px] text-body mb-4"
+                    className="flex items-center justify-center gap-2 text-[13px] text-body"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.4 }}
@@ -206,17 +454,16 @@ export default function WaitlistPage() {
                     </span>
                   </motion.div>
                 )}
-
               </motion.div>
             ) : (
               <motion.div
                 key="success"
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ type: 'spring', stiffness: 60, damping: 20 }}
+                transition={springTransition}
                 className="bg-white/60 backdrop-blur-xl border border-black/[0.04] rounded-2xl p-6 sm:p-10 shadow-elevation-2 text-center"
               >
-                {/* Animated checkmark circle */}
+                {/* Animated checkmark */}
                 <motion.div
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
@@ -244,14 +491,13 @@ export default function WaitlistPage() {
                   </motion.svg>
                 </motion.div>
 
-                {/* Success heading */}
                 <motion.h2
-                  className="text-[24px] sm:text-[28px] font-bold text-heading tracking-[-0.02em] mb-2"
+                  className="text-[24px] sm:text-[28px] font-bold text-heading tracking-[-0.02em] mb-3"
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.25 }}
                 >
-                  You&apos;re on the list!
+                  Spot reserved.
                 </motion.h2>
 
                 <motion.p
@@ -260,10 +506,9 @@ export default function WaitlistPage() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3 }}
                 >
-                  We&apos;ll email you the moment AI consultations go live.
+                  We&apos;ll notify you when we go live — and send you high-yield SCA tips while you wait.
                 </motion.p>
 
-                {/* Updated counter */}
                 {waitlistCount > 0 && (
                   <motion.div
                     className="flex items-center justify-center gap-2 text-[13px] text-body mb-6"
@@ -282,7 +527,6 @@ export default function WaitlistPage() {
                   </motion.div>
                 )}
 
-                {/* Back to home */}
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}

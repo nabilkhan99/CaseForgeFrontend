@@ -35,7 +35,7 @@ const CHAPTERS = [
   },
   {
     number: '04',
-    heading: 'Improve with every session',
+    heading: 'Improve with every station',
     body: 'Your consultation history builds a picture of your growth. See trends across domains, revisit feedback, and focus your practice where it matters most.',
     timer: '—',
     details: null,
