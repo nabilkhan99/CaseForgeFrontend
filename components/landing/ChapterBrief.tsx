@@ -63,19 +63,19 @@ export default function ChapterBrief() {
         </div>
         <div className="flex flex-col gap-1.5">
           <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-black/[0.02]">
-            <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide w-[40px] flex-shrink-0 pt-0.5">
+            <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide w-[70px] flex-shrink-0 pt-0.5">
               PMH
             </span>
             <span className="text-[12px] text-stone-600">Fit and well. No regular medications.</span>
           </div>
           <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-black/[0.02]">
-            <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide w-[40px] flex-shrink-0 pt-0.5">
+            <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide w-[70px] flex-shrink-0 pt-0.5">
               Allergies
             </span>
             <span className="text-[12px] text-stone-600">NKDA.</span>
           </div>
           <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-black/[0.02]">
-            <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide w-[40px] flex-shrink-0 pt-0.5">
+            <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide w-[70px] flex-shrink-0 pt-0.5">
               FHx
             </span>
             <span className="text-[12px] text-stone-600">
