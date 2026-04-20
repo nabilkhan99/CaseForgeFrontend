@@ -122,7 +122,7 @@ export default function ChapterConsultation() {
       </div>
 
       {/* Main voice area */}
-      <div className="flex flex-col items-center justify-center px-6 py-8 min-h-[340px]">
+      <div className="flex flex-col items-center justify-center px-6 py-5 min-h-[300px]">
         {/* Circular audio visualizer */}
         <motion.div
           className="mb-4"
@@ -215,10 +215,7 @@ export default function ChapterConsultation() {
         </div>
 
         {/* Right: End consultation button */}
-        <div className="px-3.5 py-2.5 rounded-xl flex items-center justify-center gap-1.5 bg-red-50 border border-red-200 cursor-pointer hover:bg-red-100 transition-colors">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2" strokeLinecap="round">
-            <rect x="3" y="3" width="18" height="18" rx="2" />
-          </svg>
+        <div className="px-2.5 py-2.5 rounded-xl flex items-center justify-center bg-red-50 border border-red-200 cursor-pointer hover:bg-red-100 transition-colors">
           <span className="text-[11px] font-semibold text-red-600">End consultation</span>
         </div>
       </div>

@@ -22,7 +22,7 @@ const STAGES: Stage[] = [
         bgColor: 'bg-amber-50',
         borderColor: 'border-amber-200',
         barColor: 'bg-amber-400',
-        tips: ['Introduce yourself', 'Ask an open question — "What\'s brought you in today?"', 'Listen — don\'t interrupt', 'Catch early cues'],
+        tips: ['Introduce yourself', 'Ask an open question — "How can I help you today?"', 'Listen — don\'t interrupt', 'Catch early cues'],
         startSecond: 0,
         endSecond: 60,
     },

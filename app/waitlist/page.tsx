@@ -399,41 +399,33 @@ export default function WaitlistPage() {
                   </div>
 
                   {/* Submit */}
-                  <motion.button
-                    type="submit"
-                    disabled={formState === 'loading'}
-                    className="w-full mt-1 px-7 py-3.5 rounded-xl text-[14px] font-semibold text-white min-h-[44px] disabled:opacity-70 cursor-pointer"
-                    style={{
-                      background: 'linear-gradient(135deg, #B45309, #D97706)',
-                      boxShadow: '0 4px 16px rgba(180,83,9,0.18)',
-                    }}
-                    whileHover={{ y: -2, boxShadow: '0 8px 24px rgba(180,83,9,0.25)' }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    {formState === 'loading' ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <motion.span
-                          animate={{ rotate: 360 }}
-                          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                          className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
-                        />
-                        Reserving your spot...
-                      </span>
-                    ) : (
-                      'Reserve My Spot'
-                    )}
-                  </motion.button>
+                  <div className="flex justify-center mt-1">
+                    <motion.button
+                      type="submit"
+                      disabled={formState === 'loading'}
+                      className="min-w-fit px-7 py-3.5 rounded-xl text-[14px] font-semibold text-white min-h-[44px] disabled:opacity-70 cursor-pointer"
+                      style={{
+                        background: 'linear-gradient(135deg, #B45309, #D97706)',
+                        boxShadow: '0 4px 16px rgba(180,83,9,0.18)',
+                      }}
+                      whileHover={{ y: -2, boxShadow: '0 8px 24px rgba(180,83,9,0.25)' }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      {formState === 'loading' ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <motion.span
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                            className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
+                          />
+                          Joining...
+                        </span>
+                      ) : (
+                        'Join the waitlist'
+                      )}
+                    </motion.button>
+                  </div>
                 </motion.form>
-
-                {/* Fine print */}
-                <motion.p
-                  className="text-[12px] text-muted text-center mb-5"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.35 }}
-                >
-                  No spam, ever. Just one email when we launch.
-                </motion.p>
 
                 {/* Counter */}
                 {waitlistCount > 0 && (

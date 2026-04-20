@@ -176,7 +176,7 @@ export function ReviewDisplay({
                         setImprovingSectionKey(`capabilities.${capKey}`);
                       }
                     }}
-                    className="button-secondary text-sm px-3 py-1 whitespace-nowrap"
+                    className="rounded-lg border border-black/[0.08] bg-black/[0.02] hover:bg-black/[0.04] text-body text-sm px-3 py-1 whitespace-nowrap transition-colors"
                   >
                     <span className="flex items-center gap-1">
                       <span>🪄</span>
@@ -187,7 +187,7 @@ export function ReviewDisplay({
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => copyToClipboard(capContent, `capabilities.${capKey}`)}
-                    className="button-secondary text-sm px-3 py-1"
+                    className="rounded-lg border border-black/[0.08] bg-black/[0.02] hover:bg-black/[0.04] text-body text-sm px-3 py-1 transition-colors"
                   >
                     {copiedSection === `capabilities.${capKey}` ? '✓ Copied!' : 'Copy'}
                   </motion.button>
@@ -240,7 +240,7 @@ export function ReviewDisplay({
                     setImprovingSectionKey(key);
                   }
                 }}
-                className="button-secondary text-sm px-3 py-1 whitespace-nowrap"
+                className="rounded-lg border border-black/[0.08] bg-black/[0.02] hover:bg-black/[0.04] text-body text-sm px-3 py-1 whitespace-nowrap transition-colors"
               >
                 <span className="flex items-center gap-1">
                   <span>🪄</span>
@@ -251,7 +251,7 @@ export function ReviewDisplay({
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => copyToClipboard(content, key)}
-                className="button-secondary text-sm px-3 py-1"
+                className="rounded-lg border border-black/[0.08] bg-black/[0.02] hover:bg-black/[0.04] text-body text-sm px-3 py-1 transition-colors"
               >
                 {copiedSection === key ? '✓ Copied!' : 'Copy'}
               </motion.button>

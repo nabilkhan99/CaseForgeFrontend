@@ -3,12 +3,12 @@
 import { motion } from 'framer-motion';
 
 const SESSIONS = [
-  { id: 'S1', date: '2 weeks ago', score: 52 },
-  { id: 'S2', date: '12 days ago', score: 58 },
-  { id: 'S3', date: '10 days ago', score: 64 },
-  { id: 'S4', date: '1 week ago', score: 69 },
-  { id: 'S5', date: '4 days ago', score: 72 },
-  { id: 'S6', date: 'Today', score: 78 },
+  { id: 'S1', title: 'Chest Pain — New Onset', date: '2 weeks ago', score: 52 },
+  { id: 'S2', title: 'Child Eczema — Steroid Concerns', date: '12 days ago', score: 58 },
+  { id: 'S3', title: 'Low Mood — Work Stress', date: '10 days ago', score: 64 },
+  { id: 'S4', title: 'Knee Pain — Sports Injury', date: '1 week ago', score: 69 },
+  { id: 'S5', title: 'Breathlessness — Smoker', date: '4 days ago', score: 72 },
+  { id: 'S6', title: 'ECG Request — Running Club', date: 'Today', score: 78 },
 ];
 
 const DOMAINS = [
@@ -184,9 +184,9 @@ export default function ChapterProgress() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 1.2 + i * 0.08 }}
               >
-                <div className="text-[11px] font-mono text-muted w-6">{s.id}</div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[12px] text-muted">{s.date}</div>
+                  <div className="text-[12px] text-heading font-medium truncate">{s.title}</div>
+                  <div className="text-[10px] text-muted">{s.date}</div>
                 </div>
                 <ScorePill score={s.score} />
               </motion.div>

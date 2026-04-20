@@ -11,7 +11,7 @@ const CHAPTERS = [
   {
     number: '01',
     heading: 'Read your patient brief',
-    body: 'Every station starts with a scenario. You get the same information a real SCA candidate gets — presenting complaint, patient background, and your task.',
+    body: 'Every station starts with a scenario. You get the same information a real SCA candidate gets — presenting complaint, patient background and your task.',
     timer: '12:00',
     details: null,
   },
@@ -114,7 +114,7 @@ export default function ProductJourney() {
                 </div>
                 <p className="text-[14px] text-muted leading-[1.7]">{chapter.body}</p>
                 {chapter.details && (
-                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+                  <div className="mt-3 hidden lg:flex flex-wrap gap-x-4 gap-y-1">
                     {chapter.details.map((detail, j) => (
                       <span key={j} className="text-[11px] text-muted flex items-center gap-1.5">
                         <span className="w-1 h-1 rounded-full bg-primary/30 flex-shrink-0" />

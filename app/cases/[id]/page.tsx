@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
@@ -251,8 +251,19 @@ function parseMarkdownTable(content: string): MarkSchemeRow[] {
     return rows;
 }
 
-function InteractiveMarkScheme({ content }: { content: string | null }) {
+function InteractiveMarkScheme({ content, onScoreChange }: { content: string | null; onScoreChange?: (positiveChecked: number, negativeChecked: number) => void }) {
     const [checked, setChecked] = useState<Record<string, boolean>>({});
+    const rows = content ? parseMarkdownTable(content) : [];
+
+    const positiveChecked = rows.filter((_, i) => checked[`pos-${i}`]).length;
+    const negativeChecked = rows.filter((_, i) => checked[`neg-${i}`]).length;
+    const totalPositive = rows.filter(r => r.positive).length;
+    const totalNegative = rows.filter(r => r.negative).length;
+    const cumulativeScore = Math.max(0, positiveChecked - negativeChecked);
+
+    useEffect(() => {
+        onScoreChange?.(positiveChecked, negativeChecked);
+    }, [positiveChecked, negativeChecked, onScoreChange]);
 
     if (!content) {
         return (
@@ -266,8 +277,6 @@ function InteractiveMarkScheme({ content }: { content: string | null }) {
         );
     }
 
-    const rows = parseMarkdownTable(content);
-
     if (rows.length === 0) {
         return <MarkdownContent content={content} />;
     }
@@ -276,18 +285,12 @@ function InteractiveMarkScheme({ content }: { content: string | null }) {
         setChecked(prev => ({ ...prev, [key]: !prev[key] }));
     }
 
-    const positiveChecked = rows.filter((_, i) => checked[`pos-${i}`]).length;
-    const negativeChecked = rows.filter((_, i) => checked[`neg-${i}`]).length;
-    const totalPositive = rows.filter(r => r.positive).length;
-    const totalNegative = rows.filter(r => r.negative).length;
-    const cumulativeScore = Math.max(0, positiveChecked - negativeChecked);
-
     return (
         <div className="space-y-3">
             {/* Tally badges */}
             <div className="flex items-center gap-2 px-1 py-2 flex-wrap">
                 <span className="text-xs font-bold text-heading bg-primary/[0.07] px-3 py-1.5 rounded-lg">
-                    {cumulativeScore} / {totalPositive} indicators
+                    {cumulativeScore} / {totalPositive} score
                 </span>
                 <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg">
                     +{positiveChecked}
@@ -472,6 +475,13 @@ export default function CaseDetailPage() {
     const [caseData, setCaseData] = useState<CaseDetail | null>(null);
     const [loading, setLoading] = useState(true);
 
+    // Domain scores for live total score calculation
+    const [domainScores, setDomainScores] = useState({ d1: { pos: 0, neg: 0 }, d2: { pos: 0, neg: 0 }, d3: { pos: 0, neg: 0 } });
+    const totalScore = (domainScores.d1.pos - domainScores.d1.neg) + (domainScores.d2.pos - domainScores.d2.neg) + (domainScores.d3.pos - domainScores.d3.neg);
+    const onD1ScoreChange = useCallback((pos: number, neg: number) => setDomainScores(prev => ({ ...prev, d1: { pos, neg } })), []);
+    const onD2ScoreChange = useCallback((pos: number, neg: number) => setDomainScores(prev => ({ ...prev, d2: { pos, neg } })), []);
+    const onD3ScoreChange = useCallback((pos: number, neg: number) => setDomainScores(prev => ({ ...prev, d3: { pos, neg } })), []);
+
     useEffect(() => {
         const supabase = createClient();
         supabase.auth.getUser().then(({ data }) => setUser(data.user as { id: string } | null));
@@ -603,14 +613,20 @@ export default function CaseDetailPage() {
 
     const markSchemeContent = (
         <div className="p-5 md:p-6 space-y-8">
-            <div className="flex items-center gap-3 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-amber-500/[0.07] border border-amber-500/[0.12] flex items-center justify-center">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-600">
-                        <path d="M12 20h9" />
-                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-                    </svg>
+            <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-amber-500/[0.07] border border-amber-500/[0.12] flex items-center justify-center">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-600">
+                            <path d="M12 20h9" />
+                            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                        </svg>
+                    </div>
+                    <h3 className="text-xs font-black uppercase tracking-widest text-muted">Mark Scheme</h3>
                 </div>
-                <h3 className="text-xs font-black uppercase tracking-widest text-muted">Mark Scheme</h3>
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/[0.07] border border-primary/[0.12]">
+                    <span className="text-[10px] font-bold text-muted uppercase tracking-wider">Total Score</span>
+                    <span className="text-sm font-black text-heading tabular-nums">{Math.max(0, totalScore)}</span>
+                </div>
             </div>
 
             {/* Data Gathering */}
@@ -620,7 +636,7 @@ export default function CaseDetailPage() {
                     <h4 className="text-sm font-bold text-heading">Domain 1: Data Gathering and Diagnosis</h4>
                 </div>
                 <div className="pl-4 border-l-2 border-blue-200">
-                    <InteractiveMarkScheme content={caseData.data_gathering} />
+                    <InteractiveMarkScheme content={caseData.data_gathering} onScoreChange={onD1ScoreChange} />
                 </div>
             </div>
 
@@ -631,7 +647,7 @@ export default function CaseDetailPage() {
                     <h4 className="text-sm font-bold text-heading">Domain 2: Clinical Management and Medical Complexity</h4>
                 </div>
                 <div className="pl-4 border-l-2 border-emerald-200">
-                    <InteractiveMarkScheme content={caseData.clinical_management} />
+                    <InteractiveMarkScheme content={caseData.clinical_management} onScoreChange={onD2ScoreChange} />
                 </div>
             </div>
 
@@ -642,7 +658,7 @@ export default function CaseDetailPage() {
                     <h4 className="text-sm font-bold text-heading">Domain 3: Relating to Others</h4>
                 </div>
                 <div className="pl-4 border-l-2 border-primary/20">
-                    <InteractiveMarkScheme content={caseData.relating_to_others} />
+                    <InteractiveMarkScheme content={caseData.relating_to_others} onScoreChange={onD3ScoreChange} />
                 </div>
             </div>
         </div>
