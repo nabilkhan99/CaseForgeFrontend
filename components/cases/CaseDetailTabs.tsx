@@ -74,25 +74,27 @@ export default function CaseDetailTabs({
     return (
         <div className="flex flex-col">
             {/* Tab bar */}
-            <div className="flex items-center gap-1 px-4 md:px-5 pt-4 pb-0 overflow-x-auto no-scrollbar">
-                {tabs.map(tab => (
-                    <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
-                        className={`flex items-center gap-2 px-3 md:px-5 py-2.5 rounded-t-xl text-sm font-semibold transition-all whitespace-nowrap min-h-[44px] ${activeTab === tab.id
-                                ? 'bg-white/70 text-heading border border-black/[0.06] border-b-transparent'
-                                : 'text-muted hover:text-body hover:bg-black/[0.02]'
-                            }`}
-                    >
-                        {activeTab === tab.id && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                        )}
-                        <tab.Icon />
-                        <span className="text-[11px] sm:text-sm">{tab.label}</span>
-                    </button>
-                ))}
+            <div className="flex items-center px-4 md:px-5 pt-4 pb-0">
+                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+                    {tabs.map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`flex items-center gap-2 px-3 md:px-5 py-2.5 rounded-t-xl text-sm font-semibold transition-all whitespace-nowrap min-h-[44px] ${activeTab === tab.id
+                                    ? 'bg-white/70 text-heading border border-black/[0.06] border-b-transparent'
+                                    : 'text-muted hover:text-body hover:bg-black/[0.02]'
+                                }`}
+                        >
+                            {activeTab === tab.id && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                            )}
+                            <tab.Icon />
+                            <span className="text-[11px] sm:text-sm">{tab.label}</span>
+                        </button>
+                    ))}
+                </div>
                 {feedbackButton && (
-                    <div className="ml-auto flex-shrink-0 hidden lg:block">
+                    <div className="ml-auto flex-shrink-0 hidden lg:block pl-3">
                         {feedbackButton}
                     </div>
                 )}
