@@ -67,7 +67,10 @@ export default function ProductJourney() {
 
   return (
     <section id="journey" className="py-14 lg:py-0">
-      <div className="max-w-[1200px] mx-auto px-6 lg:px-5">
+      <div className="max-w-[1200px] mx-auto px-6 lg:px-5 relative">
+        {/* Continuous vertical thread — desktop only */}
+        <div className="hidden lg:block absolute w-px bg-border-card" style={{ left: 33, top: 96, bottom: 96 }} />
+
         {CHAPTERS.map((chapter, i) => (
           <div
             key={i}
@@ -82,22 +85,17 @@ export default function ProductJourney() {
             >
               {/* ==================== DESKTOP ==================== */}
               <div className="hidden lg:grid lg:grid-cols-[440px_420px] gap-24 items-center justify-between">
-                {/* Left column: thread + text */}
+                {/* Left column: thread dot + text */}
                 <div className="flex gap-6">
-                  {/* Thread strip — the line + node */}
+                  {/* Thread node */}
                   <div className="flex flex-col items-center pt-1 shrink-0" style={{ width: 28 }}>
-                    {/* Node: dot when active, hollow when not */}
                     <div
-                      className={`w-3 h-3 rounded-full border-2 transition-all duration-300 ${
+                      className={`w-3 h-3 rounded-full border-2 transition-all duration-300 z-10 ${
                         activeSection === i
                           ? 'bg-accent-soft border-accent-soft scale-110'
-                          : 'bg-transparent border-border-card'
+                          : 'bg-bg-page border-border-card'
                       }`}
                     />
-                    {/* Thread line segment below the node */}
-                    {i < CHAPTERS.length - 1 && (
-                      <div className="flex-1 w-px bg-border-card mt-2" />
-                    )}
                   </div>
 
                   {/* Text content */}
