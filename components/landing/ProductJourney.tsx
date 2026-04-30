@@ -67,7 +67,7 @@ export default function ProductJourney() {
 
   return (
     <section id="journey" className="py-14 lg:py-0">
-      <div className="max-w-[1200px] mx-auto px-6 relative">
+      <div className="max-w-[1200px] mx-auto px-6 lg:px-5 relative">
         {/* Vertical thread — desktop only */}
         <div className="hidden lg:block absolute left-[38px] top-24 bottom-24 w-px bg-border-card" />
 

@@ -7,7 +7,7 @@ import Link from 'next/link';
 export default function LandingHero() {
   return (
     <section className="relative overflow-hidden pt-24 pb-4 lg:min-h-screen lg:flex lg:items-center lg:pb-0">
-      <main className="max-w-[1400px] mx-auto px-6 sm:px-8 py-4 lg:py-8 w-full">
+      <main className="max-w-[1200px] mx-auto px-6 lg:px-5 py-4 lg:py-8 w-full">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.4fr] gap-4 lg:gap-8 xl:gap-16 items-center">
           {/* Left Column: Text */}
           <div className="space-y-5 lg:space-y-8 z-10 text-center lg:text-left">

@@ -57,7 +57,7 @@ export default function CaseBankCard({ station }: CaseBankCardProps) {
                 </h3>
 
                 {/* Description */}
-                <p className="text-xs text-muted mb-4 line-clamp-1">
+                <p className="text-xs text-text-secondary mb-4 line-clamp-1">
                     {shortDesc}
                 </p>
 

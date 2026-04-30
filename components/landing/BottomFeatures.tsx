@@ -37,7 +37,7 @@ function FeatureRow({
           <h2 className="text-[32px] font-bold text-heading tracking-[-0.02em] leading-[1.15] mb-4">
             {heading}
           </h2>
-          <p className="text-[16px] text-muted leading-[1.7] max-w-[420px] mb-6">
+          <p className="text-[16px] text-text-secondary leading-[1.7] max-w-[420px] mb-6">
             {body}
           </p>
           <Link href={href}>
@@ -65,7 +65,7 @@ function FeatureRow({
         <h2 className="text-[24px] font-bold text-heading tracking-[-0.02em] leading-[1.15] mb-3">
           {heading}
         </h2>
-        <p className="text-[14px] text-muted leading-[1.7] mb-5">
+        <p className="text-[14px] text-text-secondary leading-[1.7] mb-5">
           {body}
         </p>
         <div className="mb-5">{children}</div>
@@ -82,8 +82,7 @@ function FeatureRow({
 function PracticeVisual() {
   return (
     <div
-      className="rounded-[20px] overflow-hidden border border-black/[0.06] p-6"
-      style={{ background: '#FFFCF8', boxShadow: '0 24px 64px rgba(180,83,9,0.06)' }}
+      className="rounded-2xl overflow-hidden border border-border-card bg-bg-card shadow-card-chrome p-6"
     >
       <div className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-4">
         Built-in tools
@@ -167,8 +166,7 @@ function PortfolioVisual() {
 
   return (
     <div
-      className="rounded-[20px] overflow-hidden border border-black/[0.06]"
-      style={{ background: '#FFFCF8', boxShadow: '0 24px 64px rgba(180,83,9,0.06)' }}
+      className="rounded-2xl overflow-hidden border border-border-card bg-bg-card shadow-card-chrome"
     >
       {/* Header */}
       <div className="px-5 py-3 border-b border-black/[0.05] flex items-center justify-between">
@@ -236,7 +234,7 @@ function PortfolioVisual() {
 export default function BottomFeatures() {
   return (
     <section className="py-16 lg:py-24">
-      <div className="max-w-[1200px] mx-auto px-6 space-y-16 lg:space-y-28">
+      <div className="max-w-[1200px] mx-auto px-6 lg:px-5 space-y-16 lg:space-y-28">
         <FeatureRow
           index={0}
           label="Free Forever"
