@@ -10,7 +10,7 @@ const DOMAINS = [
 
 export default function ChapterScore() {
   return (
-    <div className="p-5">
+    <div className="p-5 lg:p-6">
       {/* Score + pass — compact horizontal layout */}
       <div className="flex items-center gap-4 mb-4">
         <div className="relative flex-shrink-0">

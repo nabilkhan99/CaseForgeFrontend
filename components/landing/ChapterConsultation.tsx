@@ -122,7 +122,7 @@ export default function ChapterConsultation() {
       </div>
 
       {/* Main voice area */}
-      <div className="flex flex-col items-center justify-center px-6 py-5 min-h-[200px]">
+      <div className="flex flex-col items-center justify-center px-6 pt-1 pb-4 min-h-[200px]">
         {/* Circular audio visualizer */}
         <motion.div
           className="mb-0"
@@ -152,7 +152,7 @@ export default function ChapterConsultation() {
 
         {/* Bar waveform — full width */}
         <motion.div
-          className="w-full mb-6"
+          className="w-full mb-3"
           initial={{ opacity: 0, scaleY: 0.5 }}
           animate={{ opacity: 1, scaleY: 1 }}
           transition={{ delay: 0.4, type: 'spring', stiffness: 80, damping: 16 }}

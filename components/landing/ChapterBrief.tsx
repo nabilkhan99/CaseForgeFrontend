@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 
 export default function ChapterBrief() {
   return (
-    <div className="p-5">
+    <div className="p-5 lg:p-6">
       {/* Patient identity */}
       <div className="mb-4">
         <div className="grid grid-cols-1 gap-1.5">

@@ -57,7 +57,7 @@ export default function ProductJourney() {
         ([entry]) => {
           if (entry.isIntersecting) setActiveSection(i);
         },
-        { threshold: 0.5 }
+        { threshold: 0.4 }
       );
       observer.observe(ref);
       return observer;
@@ -67,10 +67,7 @@ export default function ProductJourney() {
 
   return (
     <section id="journey" className="py-14 lg:py-0">
-      <div className="max-w-[1200px] mx-auto px-6 lg:px-5 relative">
-        {/* Vertical thread — desktop only */}
-        <div className="hidden lg:block absolute left-[38px] top-24 bottom-24 w-px bg-border-card" />
-
+      <div className="max-w-[1200px] mx-auto px-6 lg:px-5">
         {CHAPTERS.map((chapter, i) => (
           <div
             key={i}
@@ -83,47 +80,60 @@ export default function ProductJourney() {
               viewport={{ once: true, margin: '-80px' }}
               transition={{ type: 'spring', stiffness: 50, damping: 20 }}
             >
-              {/* Desktop: two columns */}
-              <div className="hidden lg:grid lg:grid-cols-[440px_1fr] gap-24 items-center">
-                {/* Left: step number + eyebrow + headline + body */}
-                <div className="relative">
-                  {/* Step number with thread node */}
-                  <div className="relative">
+              {/* ==================== DESKTOP ==================== */}
+              <div className="hidden lg:grid lg:grid-cols-[440px_420px] gap-24 items-center justify-between">
+                {/* Left column: thread + text */}
+                <div className="flex gap-6">
+                  {/* Thread strip — the line + node */}
+                  <div className="flex flex-col items-center pt-1 shrink-0" style={{ width: 28 }}>
+                    {/* Node: dot when active, hollow when not */}
+                    <div
+                      className={`w-3 h-3 rounded-full border-2 transition-all duration-300 ${
+                        activeSection === i
+                          ? 'bg-accent-soft border-accent-soft scale-110'
+                          : 'bg-transparent border-border-card'
+                      }`}
+                    />
+                    {/* Thread line segment below the node */}
+                    {i < CHAPTERS.length - 1 && (
+                      <div className="flex-1 w-px bg-border-card mt-2" />
+                    )}
+                  </div>
+
+                  {/* Text content */}
+                  <div className="flex-1 min-w-0">
+                    {/* Step number */}
                     <span
-                      className={`text-[28px] font-medium transition-opacity duration-300 ${
-                        activeSection === i ? 'text-accent-soft opacity-100' : 'text-accent-soft/50'
+                      className={`text-[28px] font-medium block leading-none transition-opacity duration-300 ${
+                        activeSection === i ? 'text-accent-soft' : 'text-accent-soft/40'
                       }`}
                     >
                       {chapter.number}
                     </span>
-                    {/* Active dot on thread */}
-                    {activeSection === i && (
-                      <span className="absolute -left-[26px] top-[14px] w-[9px] h-[9px] rounded-full bg-accent-soft hidden lg:block" />
-                    )}
+                    {/* Eyebrow */}
+                    <span className="block text-xs font-semibold uppercase tracking-[0.08em] text-accent-primary mt-3 mb-3">
+                      {chapter.eyebrow}
+                    </span>
+                    {/* Headline */}
+                    <h2 className="text-[44px] font-semibold text-text-primary leading-[1.1] mb-5">
+                      {chapter.heading}<strong className="font-bold">{chapter.headingBold}</strong>
+                    </h2>
+                    {/* Body */}
+                    <p className="text-lg text-text-secondary leading-[1.5] max-w-[400px]">
+                      {chapter.body}
+                    </p>
                   </div>
-                  {/* Eyebrow */}
-                  <span className="block text-xs font-semibold uppercase tracking-[0.08em] text-accent-primary mt-2 mb-3">
-                    {chapter.eyebrow}
-                  </span>
-                  {/* Headline */}
-                  <h2 className="text-[44px] font-semibold text-text-primary leading-[1.1] mb-5">
-                    {chapter.heading}<strong className="font-bold">{chapter.headingBold}</strong>
-                  </h2>
-                  {/* Body */}
-                  <p className="text-lg text-text-secondary leading-relaxed max-w-[400px]">
-                    {chapter.body}
-                  </p>
                 </div>
 
-                {/* Right: card */}
-                <div className="max-w-[420px]">
-                  <ProductWindow label="Fourteen Fisherman" timer="">
+                {/* Right column: card */}
+                <div>
+                  <ProductWindow label="" timer="">
                     {CHAPTER_CONTENT[i]}
                   </ProductWindow>
                 </div>
               </div>
 
-              {/* Mobile: stacked */}
+              {/* ==================== MOBILE ==================== */}
               <div className="lg:hidden flex flex-col gap-4">
                 {/* Inline step number + eyebrow */}
                 <div className="flex items-center gap-2">
@@ -137,12 +147,12 @@ export default function ProductJourney() {
                   {chapter.heading}<strong className="font-bold">{chapter.headingBold}</strong>
                 </h2>
                 {/* Body */}
-                <p className="text-base text-text-secondary leading-relaxed">
+                <p className="text-base text-text-secondary leading-[1.5]">
                   {chapter.body}
                 </p>
                 {/* Card */}
                 <div className="w-full">
-                  <ProductWindow label="Fourteen Fisherman" timer="">
+                  <ProductWindow label="" timer="">
                     {CHAPTER_CONTENT[i]}
                   </ProductWindow>
                 </div>

@@ -19,7 +19,7 @@ const DOMAINS = [
 
 export default function ChapterProgress() {
   return (
-    <div className="p-5">
+    <div className="p-5 lg:p-6">
       {/* Top row: big stat + trend */}
       <div className="flex items-center gap-4 mb-5">
         <div className="flex-1">

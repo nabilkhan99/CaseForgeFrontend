@@ -12,7 +12,7 @@ import {
     Bug, Puzzle, Baby, Smile, Bone, Brain, Sparkles, Armchair, Ribbon,
     Backpack, FlaskConical, Wind, Heart, Wine, Siren,
     Dna, CircleDot, Stethoscope, Globe, MessageSquare, Pill,
-    Users, ShieldPlus, Flame, BookOpen,
+    Users, ShieldPlus, Flame, BookOpen, HeartHandshake, ShieldCheck,
     type LucideIcon,
 } from 'lucide-react';
 
@@ -33,10 +33,10 @@ const DOMAIN_ICON_MAP: [string, LucideIcon][] = [
     ['musculoskeletal', Bone],
     ['neurodiversity', Sparkles],
     ['neurology', Brain],
-    ['older adults & frailty', Armchair],
+    ['older adults & frailty', HeartHandshake],
     ['older adults', Armchair],
     ['end of life', Ribbon],
-    ['long-term conditions', Ribbon],
+    ['long-term conditions', ShieldCheck],
     ['patient < 19', Backpack],
     ['renal', FlaskConical],
     ['respiratory', Wind],
