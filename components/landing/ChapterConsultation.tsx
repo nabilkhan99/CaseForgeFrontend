@@ -122,10 +122,10 @@ export default function ChapterConsultation() {
       </div>
 
       {/* Main voice area */}
-      <div className="flex flex-col items-center justify-center px-6 py-5 min-h-[300px]">
+      <div className="flex flex-col items-center justify-center px-6 py-5 min-h-[200px]">
         {/* Circular audio visualizer */}
         <motion.div
-          className="mb-4"
+          className="mb-0"
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ type: 'spring', stiffness: 80, damping: 16 }}
@@ -135,7 +135,7 @@ export default function ChapterConsultation() {
 
         {/* Speaking indicator */}
         <motion.div
-          className="text-center mb-6"
+          className="text-center mb-3"
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
@@ -173,7 +173,7 @@ export default function ChapterConsultation() {
           <div className="w-px h-3 bg-black/[0.08]" />
           <span className="font-mono">03:34 / 12:00</span>
           <div className="w-px h-3 bg-black/[0.08]" />
-          <span className="font-mono text-primary font-semibold">54% remaining</span>
+          <span className="font-mono text-primary font-semibold">70% remaining</span>
         </div>
       </div>
 

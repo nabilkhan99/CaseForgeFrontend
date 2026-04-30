@@ -29,6 +29,15 @@ module.exports = {
           DEFAULT: 'rgba(0,0,0,0.06)',
           hover: 'rgba(0,0,0,0.10)',
         },
+        // v4 design tokens (§1.2)
+        'bg-page': '#F5EEE3',
+        'bg-card': '#FBF7F1',
+        'text-primary': '#1F1A14',
+        'text-secondary': '#5A4F45',
+        'text-muted-warm': '#8A7E72',
+        'accent-primary': '#C2410C',
+        'accent-soft': '#F4A98A',
+        'border-card': 'rgba(31, 26, 20, 0.08)',
       },
       fontFamily: {
         sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
@@ -116,6 +125,7 @@ module.exports = {
         'elevation-2': '0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04)',
         'elevation-3': '0 12px 32px rgba(0,0,0,0.1), 0 4px 8px rgba(0,0,0,0.04)',
         'elevation-4': '0 24px 48px rgba(0,0,0,0.12), 0 8px 16px rgba(0,0,0,0.06)',
+        'card-chrome': '0 1px 2px rgba(31, 26, 20, 0.04), 0 4px 8px rgba(31, 26, 20, 0.04)',
       },
     },
   },

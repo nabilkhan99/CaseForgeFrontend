@@ -17,19 +17,6 @@ const DOMAINS = [
   { name: 'Interpersonal Skills', current: 88, previous: 76 },
 ];
 
-function ScorePill({ score }: { score: number }) {
-  const color = score >= 70 ? '#16A34A' : score >= 60 ? '#D97706' : '#DC2626';
-  const bg = score >= 70 ? 'rgba(34,197,94,0.1)' : score >= 60 ? 'rgba(217,119,6,0.1)' : 'rgba(220,38,38,0.1)';
-  return (
-    <span
-      className="text-[11px] font-bold font-mono px-2 py-0.5 rounded-md"
-      style={{ color, background: bg }}
-    >
-      {score}
-    </span>
-  );
-}
-
 export default function ChapterProgress() {
   return (
     <div className="p-5">
@@ -168,31 +155,6 @@ export default function ChapterProgress() {
           </div>
         </div>
 
-        <div className="border-t border-black/[0.05] mb-4" />
-
-        {/* Recent stations list */}
-        <div>
-          <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-2.5">
-            Recent Stations
-          </div>
-          <div className="flex flex-col gap-1.5">
-            {SESSIONS.slice(-3).reverse().map((s, i) => (
-              <motion.div
-                key={s.id}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-black/[0.02] transition-colors"
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 1.2 + i * 0.08 }}
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="text-[12px] text-heading font-medium truncate">{s.title}</div>
-                  <div className="text-[10px] text-muted">{s.date}</div>
-                </div>
-                <ScorePill score={s.score} />
-              </motion.div>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   );

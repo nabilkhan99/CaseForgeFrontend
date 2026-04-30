@@ -10,6 +10,7 @@ import CaseTimer from '@/components/cases/CaseTimer';
 import CaseDetailTabs from '@/components/cases/CaseDetailTabs';
 import LandingNavbar from '@/components/landing/LandingNavbar';
 import Container from '@/components/ui/Container';
+import FeedbackModal from '@/components/ui/FeedbackModal';
 import { createClient } from '@/lib/supabase/client';
 
 // Parse the candidate_instructions markdown into structured sections
@@ -251,8 +252,12 @@ function parseMarkdownTable(content: string): MarkSchemeRow[] {
     return rows;
 }
 
-function InteractiveMarkScheme({ content, onScoreChange }: { content: string | null; onScoreChange?: (positiveChecked: number, negativeChecked: number) => void }) {
-    const [checked, setChecked] = useState<Record<string, boolean>>({});
+function InteractiveMarkScheme({ content, onScoreChange, checked, onToggle }: {
+    content: string | null;
+    onScoreChange?: (positiveChecked: number, negativeChecked: number) => void;
+    checked: Record<string, boolean>;
+    onToggle: (key: string) => void;
+}) {
     const rows = content ? parseMarkdownTable(content) : [];
 
     const positiveChecked = rows.filter((_, i) => checked[`pos-${i}`]).length;
@@ -281,9 +286,6 @@ function InteractiveMarkScheme({ content, onScoreChange }: { content: string | n
         return <MarkdownContent content={content} />;
     }
 
-    function toggleCheck(key: string) {
-        setChecked(prev => ({ ...prev, [key]: !prev[key] }));
-    }
 
     return (
         <div className="space-y-3">
@@ -318,7 +320,7 @@ function InteractiveMarkScheme({ content, onScoreChange }: { content: string | n
                             {row.positive ? (
                                 <button
                                     type="button"
-                                    onClick={() => toggleCheck(`pos-${i}`)}
+                                    onClick={() => onToggle(`pos-${i}`)}
                                     className={`w-full h-full flex items-start gap-2.5 p-2.5 rounded-xl text-left transition-all ${
                                         checked[`pos-${i}`]
                                             ? 'bg-emerald-50/80 border border-emerald-200'
@@ -352,7 +354,7 @@ function InteractiveMarkScheme({ content, onScoreChange }: { content: string | n
                             {row.negative ? (
                                 <button
                                     type="button"
-                                    onClick={() => toggleCheck(`neg-${i}`)}
+                                    onClick={() => onToggle(`neg-${i}`)}
                                     className={`w-full h-full flex items-start gap-2.5 p-2.5 rounded-xl text-left transition-all ${
                                         checked[`neg-${i}`]
                                             ? 'bg-red-50/80 border border-red-200'
@@ -482,6 +484,17 @@ export default function CaseDetailPage() {
     const onD2ScoreChange = useCallback((pos: number, neg: number) => setDomainScores(prev => ({ ...prev, d2: { pos, neg } })), []);
     const onD3ScoreChange = useCallback((pos: number, neg: number) => setDomainScores(prev => ({ ...prev, d3: { pos, neg } })), []);
 
+    // Lifted mark scheme checked state — persists across tab switches
+    const [d1Checked, setD1Checked] = useState<Record<string, boolean>>({});
+    const [d2Checked, setD2Checked] = useState<Record<string, boolean>>({});
+    const [d3Checked, setD3Checked] = useState<Record<string, boolean>>({});
+    const toggleD1 = useCallback((key: string) => setD1Checked(prev => ({ ...prev, [key]: !prev[key] })), []);
+    const toggleD2 = useCallback((key: string) => setD2Checked(prev => ({ ...prev, [key]: !prev[key] })), []);
+    const toggleD3 = useCallback((key: string) => setD3Checked(prev => ({ ...prev, [key]: !prev[key] })), []);
+
+    // Feedback modal state
+    const [feedbackOpen, setFeedbackOpen] = useState(false);
+
     useEffect(() => {
         const supabase = createClient();
         supabase.auth.getUser().then(({ data }) => setUser(data.user as { id: string } | null));
@@ -532,6 +545,10 @@ export default function CaseDetailPage() {
             </div>
         );
     }
+
+    // Compute total positive indicators across all 3 domains for X/Y display
+    const countPositives = (content: string | null) => content ? parseMarkdownTable(content).filter(r => r.positive).length : 0;
+    const totalPositiveIndicators = countPositives(caseData.data_gathering) + countPositives(caseData.clinical_management) + countPositives(caseData.relating_to_others);
 
     const sections = parseInstructions(caseData.candidate_instructions);
 
@@ -625,7 +642,7 @@ export default function CaseDetailPage() {
                 </div>
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/[0.07] border border-primary/[0.12]">
                     <span className="text-[10px] font-bold text-muted uppercase tracking-wider">Total Score</span>
-                    <span className="text-sm font-black text-heading tabular-nums">{Math.max(0, totalScore)}</span>
+                    <span className="text-sm font-black text-heading tabular-nums">{Math.max(0, totalScore)} / {totalPositiveIndicators}</span>
                 </div>
             </div>
 
@@ -636,7 +653,7 @@ export default function CaseDetailPage() {
                     <h4 className="text-sm font-bold text-heading">Domain 1: Data Gathering and Diagnosis</h4>
                 </div>
                 <div className="pl-4 border-l-2 border-blue-200">
-                    <InteractiveMarkScheme content={caseData.data_gathering} onScoreChange={onD1ScoreChange} />
+                    <InteractiveMarkScheme content={caseData.data_gathering} onScoreChange={onD1ScoreChange} checked={d1Checked} onToggle={toggleD1} />
                 </div>
             </div>
 
@@ -647,7 +664,7 @@ export default function CaseDetailPage() {
                     <h4 className="text-sm font-bold text-heading">Domain 2: Clinical Management and Medical Complexity</h4>
                 </div>
                 <div className="pl-4 border-l-2 border-emerald-200">
-                    <InteractiveMarkScheme content={caseData.clinical_management} onScoreChange={onD2ScoreChange} />
+                    <InteractiveMarkScheme content={caseData.clinical_management} onScoreChange={onD2ScoreChange} checked={d2Checked} onToggle={toggleD2} />
                 </div>
             </div>
 
@@ -658,7 +675,7 @@ export default function CaseDetailPage() {
                     <h4 className="text-sm font-bold text-heading">Domain 3: Relating to Others</h4>
                 </div>
                 <div className="pl-4 border-l-2 border-primary/20">
-                    <InteractiveMarkScheme content={caseData.relating_to_others} onScoreChange={onD3ScoreChange} />
+                    <InteractiveMarkScheme content={caseData.relating_to_others} onScoreChange={onD3ScoreChange} checked={d3Checked} onToggle={toggleD3} />
                 </div>
             </div>
         </div>
@@ -746,10 +763,19 @@ export default function CaseDetailPage() {
                     </div>
                 </div>
 
-                {/* Title */}
-                <h1 className="text-2xl md:text-3xl font-bold text-heading tracking-tight mb-8">
-                    {caseData.title}
-                </h1>
+                {/* Title + mobile feedback */}
+                <div className="flex items-start justify-between gap-3 mb-8">
+                    <h1 className="text-2xl md:text-3xl font-bold text-heading tracking-tight">
+                        {caseData.title}
+                    </h1>
+                    <button
+                        onClick={() => setFeedbackOpen(true)}
+                        className="lg:hidden flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold text-white mt-1"
+                        style={{ background: '#C2410C' }}
+                    >
+                        Feedback
+                    </button>
+                </div>
 
                 {/* Layout: sidebar + content */}
                 <div className="flex flex-col lg:flex-row gap-6">
@@ -769,11 +795,27 @@ export default function CaseDetailPage() {
                                 patientScriptContent={patientScriptContent}
                                 markSchemeContent={markSchemeContent}
                                 learningPointsContent={learningPointsContent}
+                                feedbackButton={
+                                    <button
+                                        onClick={() => setFeedbackOpen(true)}
+                                        className="px-4 py-2 rounded-xl text-xs font-semibold transition-all hover:brightness-110 text-white"
+                                        style={{ background: '#C2410C' }}
+                                    >
+                                        Feedback
+                                    </button>
+                                }
                             />
                         </Container>
                     </div>
                 </div>
             </main>
+
+            <FeedbackModal
+                isOpen={feedbackOpen}
+                onClose={() => setFeedbackOpen(false)}
+                sourceType="case"
+                sourceId={id}
+            />
         </div>
     );
 }

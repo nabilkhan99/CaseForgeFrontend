@@ -7,6 +7,7 @@ interface CaseDetailTabsProps {
     patientScriptContent?: React.ReactNode;
     markSchemeContent: React.ReactNode;
     learningPointsContent: React.ReactNode;
+    feedbackButton?: React.ReactNode;
 }
 
 function CandidateIcon() {
@@ -61,6 +62,7 @@ export default function CaseDetailTabs({
     patientScriptContent,
     markSchemeContent,
     learningPointsContent,
+    feedbackButton,
 }: CaseDetailTabsProps) {
     // Only show the script tab if content is provided
     const tabs = patientScriptContent
@@ -89,6 +91,11 @@ export default function CaseDetailTabs({
                         <span className="text-[11px] sm:text-sm">{tab.label}</span>
                     </button>
                 ))}
+                {feedbackButton && (
+                    <div className="ml-auto flex-shrink-0 hidden lg:block">
+                        {feedbackButton}
+                    </div>
+                )}
             </div>
 
             {/* Tab content */}

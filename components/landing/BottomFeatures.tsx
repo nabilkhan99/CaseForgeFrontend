@@ -124,7 +124,7 @@ function PracticeVisual() {
             <span className="text-[10px] text-body leading-tight">Prescribes oral steroids or antibiotics without indication</span>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="hidden lg:flex gap-2">
           <div className="flex-1 flex items-start gap-2 p-2.5 rounded-lg bg-emerald-50/50 border border-emerald-100">
             <div className="w-4 h-4 mt-0.5 rounded border-2 border-emerald-300 bg-white flex-shrink-0" />
             <span className="text-[10px] text-body leading-tight">Explains why IgE blood tests are not indicated (NICE CKS)</span>
@@ -134,7 +134,7 @@ function PracticeVisual() {
             <span className="text-[10px] text-body leading-tight">Fails to offer a different emollient formulation</span>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="hidden lg:flex gap-2">
           <div className="flex-1 flex items-start gap-2 p-2.5 rounded-lg bg-emerald-50/50 border border-emerald-100">
             <div className="w-4 h-4 mt-0.5 rounded border-2 border-emerald-300 bg-white flex-shrink-0" />
             <span className="text-[10px] text-body leading-tight">Suggests supervised exclusion trial if dairy suspected</span>
@@ -192,9 +192,9 @@ function PortfolioVisual() {
           </div>
         </div>
 
-        {/* Brief Description — expanded */}
+        {/* Brief Description — expanded (hidden on mobile) */}
         <div
-          className="p-3 rounded-xl border border-primary/10"
+          className="hidden lg:block p-3 rounded-xl border border-primary/10"
           style={{ background: 'linear-gradient(135deg, rgba(180,83,9,0.04), rgba(245,158,11,0.06))' }}
         >
           <div className="flex items-center justify-between mb-1.5">

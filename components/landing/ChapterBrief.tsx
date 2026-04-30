@@ -56,51 +56,6 @@ export default function ChapterBrief() {
         </div>
       </div>
 
-      {/* Medical records */}
-      <div className="mb-5">
-        <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-2">
-          Medical Records
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-black/[0.02]">
-            <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide w-[70px] flex-shrink-0 pt-0.5">
-              PMH
-            </span>
-            <span className="text-[12px] text-stone-600">Fit and well. No regular medications.</span>
-          </div>
-          <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-black/[0.02]">
-            <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide w-[70px] flex-shrink-0 pt-0.5">
-              Allergies
-            </span>
-            <span className="text-[12px] text-stone-600">NKDA.</span>
-          </div>
-          <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-black/[0.02]">
-            <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide w-[70px] flex-shrink-0 pt-0.5">
-              FHx
-            </span>
-            <span className="text-[12px] text-stone-600">
-              Grandfather (Paternal) had MI aged 68. No known history of cardiomyopathy or sudden
-              death.
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Recent notes */}
-      <div className="mb-5">
-        <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-2">
-          Recent Notes
-        </div>
-        <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-black/[0.02]">
-          <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide w-[100px] flex-shrink-0 pt-0.5">
-            Last Consult
-          </span>
-          <span className="text-[12px] text-stone-600">
-            1 year ago — Sore throat. Antibiotics prescribed.
-          </span>
-        </div>
-      </div>
-
       {/* CTA */}
       <motion.div
         className="w-full py-3.5 rounded-xl text-center text-[14px] font-semibold text-white cursor-pointer"
