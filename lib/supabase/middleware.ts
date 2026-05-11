@@ -46,6 +46,30 @@ export async function updateSession(request: NextRequest) {
         return NextResponse.redirect(url);
     }
 
+    // Subscription-gated routes: /clinical-master/* requires an active plan
+    const requiresSubscription = request.nextUrl.pathname.startsWith('/clinical-master');
+    if (requiresSubscription && user) {
+        try {
+            const { data: subscription } = await supabase
+                .from('subscriptions')
+                .select('id')
+                .eq('user_id', user.id)
+                .eq('status', 'active')
+                .gt('expires_at', new Date().toISOString())
+                .limit(1)
+                .single();
+
+            if (!subscription) {
+                const url = request.nextUrl.clone();
+                url.pathname = '/pricing';
+                url.searchParams.set('upgrade', 'true');
+                return NextResponse.redirect(url);
+            }
+        } catch {
+            // Fail open — don't block paid users on transient DB errors
+        }
+    }
+
     // If user is authenticated and trying to access auth pages, redirect to dashboard
     const isAuthRoute = request.nextUrl.pathname.startsWith('/auth');
     if (isAuthRoute && user) {

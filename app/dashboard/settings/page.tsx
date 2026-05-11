@@ -5,10 +5,31 @@ import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import type { User } from '@supabase/supabase-js';
 import { motion } from 'framer-motion';
+import Link from 'next/link';
 import Container from '@/components/ui/Container';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import SecondaryButton from '@/components/ui/SecondaryButton';
 import PageHeader from '@/components/ui/PageHeader';
+
+interface SubscriptionInfo {
+  plan: string;
+  status: string;
+  expires_at: string;
+  purchased_at: string;
+  days_remaining: number;
+}
+
+const PLAN_NAMES: Record<string, string> = {
+  sprint: 'The Sprint',
+  standard: 'The Standard',
+  mastery: 'The Mastery',
+};
+
+const PLAN_DURATIONS: Record<string, number> = {
+  sprint: 30,
+  standard: 90,
+  mastery: 180,
+};
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -17,6 +38,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
 
   const [fullName, setFullName] = useState('');
   const [examDate, setExamDate] = useState('');
@@ -28,6 +50,12 @@ export default function SettingsPage() {
       setExamDate(user?.user_metadata?.exam_date || '');
       setLoading(false);
     });
+
+    fetch('/api/subscription')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.subscription) setSubscription(data.subscription);
+      });
   }, [supabase.auth]);
 
   const handleSave = async () => {
@@ -87,11 +115,73 @@ export default function SettingsPage() {
         subtitle="Manage your account preferences"
       />
 
-      {/* Profile Section */}
+      {/* Plan Section */}
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 80, damping: 20 }}
+      >
+        <Container className="mb-6">
+          <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-5">
+            Plan
+          </div>
+          {subscription ? (() => {
+            const totalDays = PLAN_DURATIONS[subscription.plan] || 90;
+            const elapsed = totalDays - subscription.days_remaining;
+            const progress = Math.min((elapsed / totalDays) * 100, 100);
+            const expiryDate = new Date(subscription.expires_at).toLocaleDateString('en-GB', {
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric',
+            });
+
+            return (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <span
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-white"
+                    style={{ background: 'linear-gradient(135deg, #B45309, #D97706)' }}
+                  >
+                    {PLAN_NAMES[subscription.plan] || subscription.plan}
+                  </span>
+                  <span className="text-[12px] text-success font-medium">Active</span>
+                </div>
+                <p className="text-[13px] text-muted mb-3">
+                  Expires in {subscription.days_remaining} day{subscription.days_remaining !== 1 ? 's' : ''} &middot; {expiryDate}
+                </p>
+                <div className="relative h-2 rounded-full bg-black/[0.04] overflow-hidden mb-3">
+                  <motion.div
+                    className="h-full rounded-full"
+                    style={{ background: 'linear-gradient(90deg, #B45309, #D97706)' }}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${progress}%` }}
+                    transition={{ type: 'spring', stiffness: 40, damping: 20 }}
+                  />
+                </div>
+                <Link href="/pricing" className="text-[13px] text-primary font-medium hover:underline">
+                  Extend or upgrade &rarr;
+                </Link>
+              </div>
+            );
+          })() : (
+            <div>
+              <p className="text-[15px] font-semibold text-heading mb-1">No active plan</p>
+              <p className="text-[13px] text-muted mb-4">
+                Purchase a plan to start AI consultations.
+              </p>
+              <Link href="/pricing">
+                <PrimaryButton size="sm">View Plans</PrimaryButton>
+              </Link>
+            </div>
+          )}
+        </Container>
+      </motion.div>
+
+      {/* Profile Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.06 }}
       >
         <Container className="mb-6">
           <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-5">
@@ -135,7 +225,7 @@ export default function SettingsPage() {
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.06 }}
+        transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.12 }}
       >
         <Container className="mb-6">
           <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-5">
@@ -164,7 +254,7 @@ export default function SettingsPage() {
         className="flex items-center gap-4 mb-8"
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.12 }}
+        transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.18 }}
       >
         <PrimaryButton onClick={handleSave} disabled={saving}>
           {saving ? 'Saving...' : 'Save Changes'}
@@ -188,7 +278,7 @@ export default function SettingsPage() {
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.18 }}
+        transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.24 }}
       >
         <Container className="mb-8">
           <div className="text-[10px] font-semibold text-danger uppercase tracking-[0.1em] mb-4">

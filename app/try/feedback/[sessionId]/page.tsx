@@ -38,6 +38,11 @@ export default function TryFeedbackAuthGatePage() {
 
   const supabase = createClient();
 
+  // Set free trial cookie — user completed a consultation
+  useEffect(() => {
+    document.cookie = 'ff_free_trial_used=true; path=/; max-age=31536000; SameSite=Lax';
+  }, []);
+
   // Try to load partial feedback from the session
   useEffect(() => {
     async function loadFeedback() {
