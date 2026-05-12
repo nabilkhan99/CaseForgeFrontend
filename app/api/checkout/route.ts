@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { stripe, PLAN_CONFIG, isValidPlan } from '@/lib/stripe';
+import { getStripe, PLAN_CONFIG, isValidPlan } from '@/lib/stripe';
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
     .eq('id', user.id)
     .single();
 
+  const stripe = getStripe();
   let stripeCustomerId = profile?.stripe_customer_id;
 
   if (!stripeCustomerId) {

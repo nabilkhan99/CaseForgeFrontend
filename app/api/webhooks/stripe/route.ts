@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { stripe, PLAN_CONFIG, isValidPlan } from '@/lib/stripe';
+import { getStripe, PLAN_CONFIG, isValidPlan } from '@/lib/stripe';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import type Stripe from 'stripe';
 
@@ -11,6 +11,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing stripe-signature header' }, { status: 400 });
   }
 
+  const stripe = getStripe();
   let event: Stripe.Event;
 
   try {
