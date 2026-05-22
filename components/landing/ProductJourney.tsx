@@ -66,16 +66,16 @@ export default function ProductJourney() {
   }, []);
 
   return (
-    <section id="journey" className="py-10 lg:py-0">
+    <section id="journey" className="py-8 lg:py-0">
       <div className="max-w-[1200px] mx-auto px-6 lg:px-5 relative">
         {/* Continuous vertical thread — desktop only */}
-        <div className="hidden lg:block absolute w-px bg-border-card" style={{ left: 33, top: 72, bottom: 72 }} />
+        <div className="hidden lg:block absolute w-px bg-border-card" style={{ left: 33, top: 48, bottom: 48 }} />
 
         {CHAPTERS.map((chapter, i) => (
           <div
             key={i}
             ref={el => { sectionRefs.current[i] = el; }}
-            className="py-10 lg:py-16"
+            className="py-5 lg:py-10"
           >
             <motion.div
               initial={{ opacity: 0, y: 48 }}
