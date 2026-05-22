@@ -99,7 +99,7 @@ export async function POST(request: Request) {
             <tr>
               <td style="padding:20px 40px 0 40px;">
                 <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">Hi ${firstName},</p>
-                <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">Thanks for joining the Fourteen Fisherman waitlist. We'll email you the moment we go live — and in the meantime we'll send the occasional high-yield SCA tip while you wait.</p>
+                <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">Thanks for joining the waitlist. We'll email you the moment we go live and in the meantime we'll send the occasional high-yield SCA tip while you wait.</p>
                 <p style="margin:0 0 28px 0;font-size:16px;line-height:1.6;color:#44403C;">Know another GP trainee who'd benefit? Forward this email, or share the link:</p>
               </td>
             </tr>
@@ -118,7 +118,7 @@ export async function POST(request: Request) {
             <tr>
               <td style="padding:24px 40px 36px 40px;">
                 <p style="margin:0 0 4px 0;font-size:15px;line-height:1.5;color:#44403C;">Speak soon,</p>
-                <p style="margin:0;font-size:15px;line-height:1.5;font-weight:600;color:#1C1917;">The Fourteen Fisherman team</p>
+                <p style="margin:0;font-size:15px;line-height:1.5;font-weight:600;color:#1C1917;">The Fourteen Fisherman Team</p>
               </td>
             </tr>
           </table>
@@ -137,12 +137,12 @@ export async function POST(request: Request) {
 
       const textBody = `Hi ${firstName},
 
-You're on the Fourteen Fisherman waitlist. We'll email you the moment we go live — and in the meantime we'll send the occasional high-yield SCA tip while you wait.
+You're on the waitlist. We'll email you the moment we go live and in the meantime we'll send the occasional high-yield SCA tip while you wait.
 
 Know another GP trainee who'd benefit? Forward this email, or share the link: https://www.fourteenfisherman.com
 
 Speak soon,
-The Fourteen Fisherman team
+The Fourteen Fisherman Team
 
 —
 Fourteen Fisherman · The gold standard for SCA prep
