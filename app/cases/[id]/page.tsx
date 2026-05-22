@@ -5,6 +5,12 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import {
+    User, Calendar, FolderClosed, ClipboardList, MessageSquare, NotebookPen,
+    Pill, AlertTriangle, Users, Phone, Info, Briefcase, Search, Camera,
+    Activity, UsersRound, Clock, Stethoscope,
+    type LucideIcon,
+} from 'lucide-react';
 import { type CaseDetail } from '@/lib/supabase/queries/cases';
 import CaseTimer from '@/components/cases/CaseTimer';
 import CaseDetailTabs from '@/components/cases/CaseDetailTabs';
@@ -42,76 +48,58 @@ function parseInstructions(raw: string) {
     return sections;
 }
 
+// Distinct icon for each Candidate Brief subheading. Order matters — longer/more
+// specific keys must come first so substring matches don't collide.
+const SECTION_ICON_MAP: [string, LucideIcon][] = [
+    ['reason for encounter', MessageSquare],
+    ['medical records', ClipboardList],
+    ['medication history', Pill],
+    ['family history', UsersRound],
+    ['past medical history', FolderClosed],
+    ['recent notes', NotebookPen],
+    ['current situation', Info],
+    ['examination', Search],
+    ['photograph', Camera],
+    ['visuals', Camera],
+    ['accompanying', UsersRound],
+    ['occupation', Briefcase],
+    ['lifestyle', Activity],
+    ['bp', Activity],
+    ['bmi', Activity],
+    ['vitals', Activity],
+    ['observations', Activity],
+    ['allerg', AlertTriangle],
+    ['medication', Pill],
+    ['caller', Phone],
+    ['social', Users],
+    ['situation', Info],
+    ['notes', NotebookPen],
+    ['history', FolderClosed],
+    ['past', FolderClosed],
+    ['pmh', FolderClosed],
+    ['name', User],
+    ['mother', User],
+    ['father', User],
+    ['age', Calendar],
+    ['dob', Calendar],
+    ['year ago', Clock],
+    ['years ago', Clock],
+    ['month ago', Clock],
+    ['months ago', Clock],
+    ['week ago', Clock],
+    ['weeks ago', Clock],
+    ['day ago', Clock],
+    ['days ago', Clock],
+    ['last month', Clock],
+    ['last year', Clock],
+];
+
 function SectionIcon({ title }: { title: string }) {
     const lower = title.toLowerCase();
-
-    if (lower.includes('age') || lower.includes('dob') || lower.includes('patient name'))
-        return (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
-            </svg>
-        );
-    if (lower.includes('history') || lower.includes('past'))
-        return (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="12" y1="13" x2="12" y2="17" />
-                <line x1="10" y1="11" x2="14" y2="11" />
-            </svg>
-        );
-    if (lower.includes('medication') || lower.includes('drug'))
-        return (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
-                <path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z" />
-                <path d="m8.5 8.5 7 7" />
-            </svg>
-        );
-    if (lower.includes('recent') || lower.includes('notes'))
-        return (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
-                <rect x="4" y="2" width="16" height="20" rx="2" />
-                <line x1="8" y1="8" x2="16" y2="8" />
-                <line x1="8" y1="12" x2="16" y2="12" />
-                <line x1="8" y1="16" x2="12" y2="16" />
-            </svg>
-        );
-    if (lower.includes('allerg'))
-        return (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-red-500">
-                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-                <line x1="12" y1="9" x2="12" y2="13" />
-                <line x1="12" y1="17" x2="12.01" y2="17" />
-            </svg>
-        );
-    if (lower.includes('social') || lower.includes('family'))
-        return (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-        );
-    if (lower.includes('situation') || lower.includes('current'))
-        return (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="16" y1="13" x2="8" y2="13" />
-                <line x1="16" y1="17" x2="8" y2="17" />
-                <polyline points="10 9 9 9 8 9" />
-            </svg>
-        );
-    // Default: stethoscope
-    return (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
-            <path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3" />
-            <path d="M8 15v1a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6v-4" />
-            <circle cx="20" cy="10" r="2" />
-        </svg>
-    );
+    const match = SECTION_ICON_MAP.find(([key]) => lower.includes(key));
+    const Icon = match ? match[1] : Stethoscope;
+    const className = match && match[1] === AlertTriangle ? 'text-red-500' : 'text-primary';
+    return <Icon size={18} strokeWidth={1.5} className={className} />;
 }
 
 function MarkdownContent({ content }: { content: string | null }) {
@@ -410,10 +398,10 @@ function LearningPointsDisplay({ content }: { content: string | null }) {
         );
     }
 
-    // Accept any of:  **N. Title**  |  ## N. Title  |  ### N. Title  |  #### N. Title
+    // Accept any of:  **N. Title**  |  ## N. Title  |  ### N. Title  |  ### **N. Title**
     // The heading must occupy the whole line (after trimming) — avoids false positives on
     // ordered-list items embedded in paragraph content.
-    const headingRegex = /^(?:#{2,6}\s+|\*\*)(\d+)\.\s+(.+?)(?:\*\*)?$/;
+    const headingRegex = /^(?:#{2,6}\s+(?:\*\*)?|\*\*)(\d+)\.\s+(.+?)(?:\*\*)?$/;
     const lines = content.split('\n');
     const sections: { number: string; title: string; content: string }[] = [];
     let currentNumber = '';
