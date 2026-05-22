@@ -292,7 +292,7 @@ function InteractiveMarkScheme({ content, onScoreChange, checked, onToggle }: {
             {/* Tally badges */}
             <div className="flex items-center gap-2 px-1 py-2 flex-wrap">
                 <span className="text-xs font-bold text-heading bg-primary/[0.07] px-3 py-1.5 rounded-lg">
-                    {cumulativeScore} / {totalPositive} score
+                    Score: {cumulativeScore} / {totalPositive}
                 </span>
                 <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg">
                     +{positiveChecked}
@@ -410,7 +410,10 @@ function LearningPointsDisplay({ content }: { content: string | null }) {
         );
     }
 
-    const sectionRegex = /\*\*(\d+)\.\s+(.+?)\*\*/;
+    // Accept any of:  **N. Title**  |  ## N. Title  |  ### N. Title  |  #### N. Title
+    // The heading must occupy the whole line (after trimming) — avoids false positives on
+    // ordered-list items embedded in paragraph content.
+    const headingRegex = /^(?:#{2,6}\s+|\*\*)(\d+)\.\s+(.+?)(?:\*\*)?$/;
     const lines = content.split('\n');
     const sections: { number: string; title: string; content: string }[] = [];
     let currentNumber = '';
@@ -418,7 +421,8 @@ function LearningPointsDisplay({ content }: { content: string | null }) {
     let currentLines: string[] = [];
 
     for (const line of lines) {
-        const match = line.match(sectionRegex);
+        const trimmed = line.trim();
+        const match = trimmed.match(headingRegex);
         if (match) {
             if (currentTitle) {
                 sections.push({
@@ -428,9 +432,8 @@ function LearningPointsDisplay({ content }: { content: string | null }) {
                 });
             }
             currentNumber = match[1];
-            currentTitle = match[2];
-            const remainder = line.replace(sectionRegex, '').trim();
-            currentLines = remainder ? [remainder] : [];
+            currentTitle = match[2].replace(/\*\*$/, '').trim();
+            currentLines = [];
         } else {
             currentLines.push(line);
         }
@@ -552,11 +555,20 @@ export default function CaseDetailPage() {
 
     const sections = parseInstructions(caseData.candidate_instructions);
 
-    const detailSections = sections.filter(
-        s =>
-            !s.title.toLowerCase().includes('patient name') &&
-            !s.title.toLowerCase().includes('dob')
-    );
+    const detailSections = sections.filter(s => {
+        const t = s.title.toLowerCase().trim();
+        if (t.includes('patient name') || t.includes('dob')) return false;
+        // Drop the standalone "Age" subheading — age is shown in the Patient Profile card.
+        if (t === 'age') return false;
+        // Drop the redundant Situation field when it only states the consultation type.
+        if (t === 'situation') {
+            const content = s.content.replace(/\s+/g, ' ').trim().replace(/\.$/, '');
+            if (/^(telephone|video|face[\s-]*to[\s-]*face|video or telephone|telephone or video)\s*consultation$/i.test(content)) {
+                return false;
+            }
+        }
+        return true;
+    });
 
     const consultTypeLabel = caseData.consultation_type === 'telephone'
         ? 'Telephone'
@@ -716,6 +728,7 @@ export default function CaseDetailPage() {
                         h1: ({ children }) => <h3 className="text-[15px] font-bold text-heading mt-4 mb-2 first:mt-0">{children}</h3>,
                         h2: ({ children }) => <h3 className="text-[15px] font-bold text-heading mt-4 mb-2 first:mt-0">{children}</h3>,
                         h3: ({ children }) => <h4 className="text-[14px] font-bold text-heading mt-3 mb-1">{children}</h4>,
+                        hr: () => null,
                     }}
                 >
                     {caseData.station_script}

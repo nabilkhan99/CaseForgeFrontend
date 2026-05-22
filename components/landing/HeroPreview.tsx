@@ -1,6 +1,10 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { useLayoutEffect, useRef, useState } from 'react';
+
+const TABLET_W = 880;
+const TABLET_H = 568;
 
 interface TimelinePoint {
   label: string;
@@ -36,29 +40,51 @@ const WAVE_BARS = [
 ];
 
 export default function HeroPreview() {
+  const outerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+
+  useLayoutEffect(() => {
+    const el = outerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? 0;
+      setScale(Math.min(1, w / TABLET_W));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   return (
     <motion.div
+      ref={outerRef}
       initial={{ opacity: 0, y: 32 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.8, delay: 0.35, ease: [0.22, 1, 0.36, 1] }}
-      className="relative mx-auto mt-16 sm:mt-20"
-      style={{ maxWidth: 880 }}
+      className="relative mx-auto mt-16 sm:mt-20 w-full"
+      style={{
+        maxWidth: TABLET_W,
+        aspectRatio: `${TABLET_W} / ${TABLET_H}`,
+      }}
     >
       <div
-        className="relative rounded-[18px] p-3"
+        className="absolute top-0 left-0 rounded-[18px] p-3"
         style={{
+          width: TABLET_W,
+          height: TABLET_H,
           background: '#1f1a14',
           boxShadow:
             '0 30px 80px -30px rgba(40,20,4,.55), 0 1px 0 rgba(255,255,255,.05) inset',
+          transformOrigin: 'top left',
+          transform: `scale(${scale})`,
         }}
       >
         <div
-          className="grid grid-cols-1 md:grid-cols-[36%_1fr] rounded-xl overflow-hidden"
-          style={{ background: '#fbf7ee', minHeight: 540 }}
+          className="grid grid-cols-[36%_1fr] rounded-xl overflow-hidden h-full"
+          style={{ background: '#fbf7ee' }}
         >
           {/* LEFT — progress dashboard */}
           <div
-            className="flex flex-col gap-[18px] p-[22px] md:border-r"
+            className="flex flex-col gap-[18px] p-[22px] border-r"
             style={{ background: '#fdf9ef', borderColor: '#ece2cb' }}
           >
             {/* Score hero */}
