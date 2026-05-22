@@ -19,7 +19,7 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div className="min-h-[100dvh] bg-surface font-sans">
+    <div className="min-h-[100dvh] bg-[#f3ebdb] font-sans">
       <LandingNavbar user={user} />
       <LandingHero />
       <ProductJourney />

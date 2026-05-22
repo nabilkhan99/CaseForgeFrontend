@@ -17,12 +17,15 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
   const navBg = useTransform(
     scrollYProgress,
     [0, 0.08],
-    ['rgba(255,255,255,0.72)', 'rgba(255,255,255,0.95)']
+    ['rgba(255,250,238,0.78)', 'rgba(255,250,238,0.94)']
   );
   const navShadow = useTransform(
     scrollYProgress,
     [0, 0.08],
-    ['0 1px 0 rgba(0,0,0,0)', '0 1px 0 rgba(0,0,0,0.06)']
+    [
+      '0 1px 0 rgba(255,255,255,0.7) inset, 0 8px 24px -16px rgba(60,30,8,0.18)',
+      '0 1px 0 rgba(255,255,255,0.7) inset, 0 12px 28px -16px rgba(60,30,8,0.28)',
+    ]
   );
 
   return (
@@ -30,7 +33,7 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
       <motion.nav
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         style={{ maxWidth: 'min(92%, 1200px)', backgroundColor: navBg, boxShadow: navShadow } as any}
-        className="w-full backdrop-blur-2xl border border-black/[0.06] rounded-[14px] px-5 py-3 flex items-center justify-between"
+        className="w-full backdrop-blur-2xl border border-[#d9cdb3]/70 rounded-[18px] px-5 py-3 flex items-center justify-between"
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 120, damping: 20, delay: 0.1 }}
@@ -70,7 +73,7 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
               {user ? (
                 <Link href="/dashboard">
                   <motion.div
-                    className="primary-button text-[13px] !py-2 !px-5"
+                    className="primary-button text-[13px] !py-2 !px-5 !rounded-full"
                     whileHover={{ y: -2 }}
                     whileTap={{ scale: 0.98 }}
                   >
@@ -80,7 +83,7 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
               ) : (
                 <Link href="/waitlist">
                   <motion.div
-                    className="primary-button text-[13px] !py-2 !px-5"
+                    className="primary-button text-[13px] !py-2 !px-5 !rounded-full"
                     whileHover={{ y: -2 }}
                     whileTap={{ scale: 0.98 }}
                   >
