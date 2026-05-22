@@ -35,6 +35,9 @@ export async function POST(request: Request) {
     }
 
     const normalisedEmail = email.toLowerCase().trim();
+    // Embed assets from the deployment that processed this request, so previews
+    // serve their own preview-URL assets and prod serves prod assets.
+    const assetBaseUrl = new URL(request.url).origin;
 
     const supabase = getSupabaseAdmin();
     const { error } = await supabase
@@ -88,7 +91,7 @@ export async function POST(request: Request) {
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:560px;background-color:#FFFCF8;border-radius:18px;border:1px solid rgba(28,25,23,0.06);box-shadow:0 1px 2px rgba(28,25,23,0.04);">
             <tr>
               <td style="padding:36px 40px 8px 40px;">
-                <img src="https://www.fourteenfisherman.com/fourteenfishermann-dark.png" alt="Fourteen Fisherman" width="200" height="30" style="display:block;border:0;outline:none;text-decoration:none;">
+                <img src="${assetBaseUrl}/fourteenfishermann-dark.png" alt="Fourteen Fisherman" width="200" height="30" style="display:block;border:0;outline:none;text-decoration:none;">
               </td>
             </tr>
             <tr>
