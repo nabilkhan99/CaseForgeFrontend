@@ -34,14 +34,15 @@ export async function updateSession(request: NextRequest) {
         data: { user },
     } = await supabase.auth.getUser();
 
-    // Waitlist gate — redirect /try and /auth/sign-up to waitlist
+    // Waitlist gate — redirect /try and /auth/sign-up to the landing-page hero form
     const isWaitlistedRoute =
         request.nextUrl.pathname.startsWith('/try') ||
         request.nextUrl.pathname === '/auth/sign-up';
 
     if (isWaitlistedRoute) {
         const url = request.nextUrl.clone();
-        url.pathname = '/waitlist';
+        url.pathname = '/';
+        url.hash = 'join';
         return NextResponse.redirect(url);
     }
 

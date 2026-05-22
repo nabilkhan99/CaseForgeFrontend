@@ -33,7 +33,7 @@ export default function FinalCTA() {
           viewport={{ once: true }}
           transition={{ type: 'spring', stiffness: 100, damping: 16, delay: 0.2 }}
         >
-          <Link href="/waitlist">
+          <Link href="/#join">
             <motion.div
               className="inline-flex items-center gap-2 px-12 py-4 rounded-[14px] text-[14px] font-semibold text-white cursor-pointer"
               style={{

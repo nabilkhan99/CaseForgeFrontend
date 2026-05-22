@@ -78,7 +78,7 @@ export async function POST(request: Request) {
           htmlContent: `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 24px; color: #1C1917;">
   <p style="font-size: 16px; line-height: 1.7; margin-bottom: 20px;">Hi ${firstName},</p>
   <p style="font-size: 16px; line-height: 1.7; margin-bottom: 20px;">You’re on the list. We’ll notify you the moment we go live — and send you high-yield SCA tips while you wait.</p>
-  <p style="font-size: 16px; line-height: 1.7; margin-bottom: 20px;">Know another GP trainee who’d benefit? Share this link with them:<br><a href="https://www.fourteenfisherman.com/waitlist" style="color: #B45309; text-decoration: underline;">www.fourteenfisherman.com/waitlist</a></p>
+  <p style="font-size: 16px; line-height: 1.7; margin-bottom: 20px;">Know another GP trainee who’d benefit? Share this link with them:<br><a href="https://www.fourteenfisherman.com/#join" style="color: #B45309; text-decoration: underline;">www.fourteenfisherman.com</a></p>
   <p style="font-size: 16px; line-height: 1.7; margin-bottom: 8px;">Speak soon,</p>
   <p style="font-size: 16px; line-height: 1.7; font-weight: 600;">The Fourteen Fisherman team</p>
 </div>`,
