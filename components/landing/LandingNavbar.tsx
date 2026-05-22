@@ -81,7 +81,7 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
                   </motion.div>
                 </Link>
               ) : (
-                <Link href="/#join">
+                <Link href="/">
                   <motion.div
                     className="primary-button text-[13px] !py-2 !px-5 !rounded-full"
                     whileHover={{ y: -2 }}
@@ -155,7 +155,7 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
                     <div className="primary-button text-[14px] w-full justify-center">Dashboard</div>
                   </Link>
                 ) : (
-                  <Link href="/#join" onClick={() => setMobileOpen(false)}>
+                  <Link href="/" onClick={() => setMobileOpen(false)}>
                     <div className="primary-button text-[14px] w-full justify-center mt-1">
                       Join waitlist
                     </div>

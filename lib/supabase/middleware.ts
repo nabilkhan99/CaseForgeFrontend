@@ -42,7 +42,6 @@ export async function updateSession(request: NextRequest) {
     if (isWaitlistedRoute) {
         const url = request.nextUrl.clone();
         url.pathname = '/';
-        url.hash = 'join';
         return NextResponse.redirect(url);
     }
 
