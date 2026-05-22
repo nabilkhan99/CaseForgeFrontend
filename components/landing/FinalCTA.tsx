@@ -1,9 +1,12 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import Link from 'next/link';
 
 export default function FinalCTA() {
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
     <section className="py-10 md:py-12 px-6">
       <div className="max-w-[560px] mx-auto text-center">
@@ -33,19 +36,19 @@ export default function FinalCTA() {
           viewport={{ once: true }}
           transition={{ type: 'spring', stiffness: 100, damping: 16, delay: 0.2 }}
         >
-          <Link href="/">
-            <motion.div
-              className="inline-flex items-center gap-2 px-12 py-4 rounded-[14px] text-[14px] font-semibold text-white cursor-pointer"
-              style={{
-                background: 'linear-gradient(135deg, #B45309, #D97706)',
-                boxShadow: '0 8px 24px rgba(180,83,9,0.18)',
-              }}
-              whileHover={{ y: -2, boxShadow: '0 12px 32px rgba(180,83,9,0.25)' }}
-              whileTap={{ scale: 0.98 }}
-            >
-              Join the waitlist →
-            </motion.div>
-          </Link>
+          <motion.button
+            type="button"
+            onClick={scrollToTop}
+            className="inline-flex items-center gap-2 px-12 py-4 rounded-[14px] text-[14px] font-semibold text-white cursor-pointer"
+            style={{
+              background: 'linear-gradient(135deg, #B45309, #D97706)',
+              boxShadow: '0 8px 24px rgba(180,83,9,0.18)',
+            }}
+            whileHover={{ y: -2, boxShadow: '0 12px 32px rgba(180,83,9,0.25)' }}
+            whileTap={{ scale: 0.98 }}
+          >
+            Join the waitlist →
+          </motion.button>
         </motion.div>
 
       </div>
