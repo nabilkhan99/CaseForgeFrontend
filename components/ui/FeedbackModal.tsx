@@ -109,7 +109,7 @@ export default function FeedbackModal({ isOpen, onClose, sourceType, sourceId }:
                       required
                       rows={4}
                       className="w-full rounded-xl border border-black/[0.08] focus:border-primary/30 focus:ring-2 focus:ring-primary/20 text-sm p-3 text-heading placeholder:text-muted resize-none transition-all"
-                      placeholder="What's on your mind?"
+                      placeholder="Spotted a mistake or have a suggestion to improve this case?"
                       value={comment}
                       onChange={e => setComment(e.target.value)}
                     />

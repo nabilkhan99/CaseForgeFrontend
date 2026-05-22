@@ -90,7 +90,7 @@ export default function LandingHero() {
         }}
       />
 
-      <div className="relative z-10 max-w-[1240px] mx-auto px-6 sm:px-8 pt-28 pb-16 md:pt-32 md:pb-24">
+      <div className="relative z-10 max-w-[1240px] mx-auto px-6 sm:px-8 pt-24 pb-12 md:pt-28 md:pb-16">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}

@@ -60,7 +60,7 @@ export default function HeroPreview() {
       initial={{ opacity: 0, y: 32 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.8, delay: 0.35, ease: [0.22, 1, 0.36, 1] }}
-      className="relative mx-auto mt-16 sm:mt-20 w-full"
+      className="relative mx-auto mt-10 sm:mt-14 w-full"
       style={{
         maxWidth: TABLET_W,
         aspectRatio: `${TABLET_W} / ${TABLET_H}`,

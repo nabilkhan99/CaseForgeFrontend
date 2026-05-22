@@ -1,6 +1,6 @@
 export default function LandingFooter() {
   return (
-    <footer className="border-t border-black/[0.06] py-12 px-6">
+    <footer className="border-t border-[#d9cdb3]/60 py-8 px-6">
       <div className="max-w-[1200px] mx-auto flex flex-col sm:flex-row items-center sm:items-start justify-between gap-6">
         <div className="text-center sm:text-left">
           <div className="text-[14px] font-semibold text-heading">Fourteen Fisherman</div>

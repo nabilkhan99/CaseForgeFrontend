@@ -87,7 +87,7 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
                     whileHover={{ y: -2 }}
                     whileTap={{ scale: 0.98 }}
                   >
-                    Join the waitlist
+                    Join waitlist
                   </motion.div>
                 </Link>
               )}
@@ -157,7 +157,7 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
                 ) : (
                   <Link href="/waitlist" onClick={() => setMobileOpen(false)}>
                     <div className="primary-button text-[14px] w-full justify-center mt-1">
-                      Join the waitlist
+                      Join waitlist
                     </div>
                   </Link>
                 )}

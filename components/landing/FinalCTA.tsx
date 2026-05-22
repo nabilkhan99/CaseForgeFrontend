@@ -5,7 +5,7 @@ import Link from 'next/link';
 
 export default function FinalCTA() {
   return (
-    <section className="py-[60px] px-6">
+    <section className="py-10 md:py-12 px-6">
       <div className="max-w-[560px] mx-auto text-center">
         <motion.h2
           className="text-[clamp(28px,6vw,40px)] font-bold text-heading tracking-[-0.02em] mb-3"
