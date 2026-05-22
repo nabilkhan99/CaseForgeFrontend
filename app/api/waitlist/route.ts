@@ -9,6 +9,23 @@ function getSupabaseAdmin() {
 }
 
 export async function POST(request: Request) {
+  // Diagnostic surface returned in the response so operators can tell, from a
+  // single log line, why an expected confirmation email did or didn't go out.
+  const diag: {
+    inserted: boolean;
+    alreadyOnList: boolean;
+    emailAttempted: boolean;
+    emailSent: boolean;
+    emailSkipReason?: 'duplicate' | 'missing_RESEND_API_KEY';
+    emailError?: string;
+    resendId?: string;
+  } = {
+    inserted: false,
+    alreadyOnList: false,
+    emailAttempted: false,
+    emailSent: false,
+  };
+
   try {
     const body = await request.json();
     const { email, full_name, training_stage, sca_date } = body;
@@ -17,11 +34,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Valid email is required' }, { status: 400 });
     }
 
+    const normalisedEmail = email.toLowerCase().trim();
+
     const supabase = getSupabaseAdmin();
     const { error } = await supabase
       .from('waitlist_entries')
       .insert({
-        email: email.toLowerCase().trim(),
+        email: normalisedEmail,
         source: 'landing_page',
         full_name: full_name?.trim() ?? null,
         training_stage: training_stage ?? null,
@@ -30,34 +49,59 @@ export async function POST(request: Request) {
 
     // Treat duplicate email as success (23505 = unique_violation)
     if (error && error.code !== '23505') {
-      console.error('Waitlist insert error:', error);
+      console.error('[waitlist] insert failed', { email: normalisedEmail, error });
       return NextResponse.json({ error: 'Failed to join waitlist' }, { status: 500 });
     }
 
-    // Send confirmation email (non-blocking — don't fail the request if email fails)
+    if (error?.code === '23505') {
+      diag.alreadyOnList = true;
+    } else {
+      diag.inserted = true;
+    }
+
     const resendKey = process.env.RESEND_API_KEY;
-    if (resendKey && error?.code !== '23505') {
+    if (!resendKey) {
+      diag.emailSkipReason = 'missing_RESEND_API_KEY';
+      console.warn('[waitlist] confirmation email skipped: RESEND_API_KEY not set in env');
+    } else if (diag.alreadyOnList) {
+      diag.emailSkipReason = 'duplicate';
+    } else {
+      diag.emailAttempted = true;
       const firstName = full_name?.trim().split(' ')[0] || 'there';
       const resend = new Resend(resendKey);
-      resend.emails.send({
-        from: 'Fourteen Fisherman <hello@fourteenfisherman.com>',
-        to: email.toLowerCase().trim(),
-        subject: 'Spot reserved — here\u2019s what happens next',
-        html: `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 24px; color: #1C1917;">
+      try {
+        const result = await resend.emails.send({
+          from: 'Fourteen Fisherman <hello@fourteenfisherman.com>',
+          to: normalisedEmail,
+          subject: 'Spot reserved — here’s what happens next',
+          html: `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 24px; color: #1C1917;">
   <p style="font-size: 16px; line-height: 1.7; margin-bottom: 20px;">Hi ${firstName},</p>
-  <p style="font-size: 16px; line-height: 1.7; margin-bottom: 20px;">You\u2019re on the list. We\u2019ll notify you the moment we go live \u2014 and send you high-yield SCA tips while you wait.</p>
-  <p style="font-size: 16px; line-height: 1.7; margin-bottom: 20px;">Know another GP trainee who\u2019d benefit? Share this link with them:<br><a href="https://www.fourteenfisherman.com/waitlist" style="color: #B45309; text-decoration: underline;">www.fourteenfisherman.com/waitlist</a></p>
+  <p style="font-size: 16px; line-height: 1.7; margin-bottom: 20px;">You’re on the list. We’ll notify you the moment we go live — and send you high-yield SCA tips while you wait.</p>
+  <p style="font-size: 16px; line-height: 1.7; margin-bottom: 20px;">Know another GP trainee who’d benefit? Share this link with them:<br><a href="https://www.fourteenfisherman.com/waitlist" style="color: #B45309; text-decoration: underline;">www.fourteenfisherman.com/waitlist</a></p>
   <p style="font-size: 16px; line-height: 1.7; margin-bottom: 8px;">Speak soon,</p>
   <p style="font-size: 16px; line-height: 1.7; font-weight: 600;">The Fourteen Fisherman team</p>
 </div>`,
-      }).catch((emailErr) => {
-        console.error('Waitlist confirmation email failed:', emailErr);
-      });
+        });
+        if (result.error) {
+          diag.emailError = `${result.error.name}: ${result.error.message}`;
+          console.error('[waitlist] Resend returned error', { email: normalisedEmail, resendError: result.error });
+        } else {
+          diag.emailSent = true;
+          diag.resendId = result.data?.id;
+          console.log('[waitlist] confirmation email sent', { email: normalisedEmail, resendId: result.data?.id });
+        }
+      } catch (emailErr) {
+        diag.emailError = emailErr instanceof Error ? emailErr.message : String(emailErr);
+        console.error('[waitlist] Resend threw', { email: normalisedEmail, emailErr });
+      }
     }
 
-    return NextResponse.json({ success: true });
+    // Single structured summary line at the end — grep for "[waitlist] signup processed"
+    // in Vercel logs to audit each signup attempt.
+    console.log('[waitlist] signup processed', { email: normalisedEmail, ...diag });
+    return NextResponse.json({ success: true, ...diag });
   } catch (error) {
-    console.error('Waitlist API error:', error);
+    console.error('[waitlist] unhandled', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
