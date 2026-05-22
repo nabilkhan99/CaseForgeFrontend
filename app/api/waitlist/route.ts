@@ -88,7 +88,7 @@ export async function POST(request: Request) {
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:560px;background-color:#FFFCF8;border-radius:18px;border:1px solid rgba(28,25,23,0.06);box-shadow:0 1px 2px rgba(28,25,23,0.04);">
             <tr>
               <td style="padding:36px 40px 8px 40px;">
-                <img src="https://www.fourteenfisherman.com/fourteenfishermann.png" alt="Fourteen Fisherman" width="180" height="27" style="display:block;border:0;outline:none;text-decoration:none;">
+                <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Plus Jakarta Sans','Segoe UI',Roboto,sans-serif;font-size:16px;line-height:1;font-weight:700;letter-spacing:-0.01em;color:#1C1917;">Fourteen Fisherman</p>
               </td>
             </tr>
             <tr>
