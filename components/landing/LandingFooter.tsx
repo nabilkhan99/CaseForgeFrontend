@@ -5,7 +5,7 @@ export default function LandingFooter() {
         <div className="text-center sm:text-left">
           <div className="text-[14px] font-semibold text-heading">Fourteen Fisherman</div>
           <div className="text-[12px] text-muted mt-1">
-            Built by GP trainees, for GP trainees. © {new Date().getFullYear()}
+            Built for GP trainees. © {new Date().getFullYear()}
           </div>
         </div>
         <a
