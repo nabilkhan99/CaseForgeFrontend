@@ -111,7 +111,7 @@ export default function CaseCard({ className = '' }: CaseCardProps) {
               whileHover={{ y: -2 }}
               whileTap={{ scale: 0.98 }}
             >
-              Join the waitlist →
+              Join waitlist →
             </motion.div>
           </Link>
         </div>

@@ -47,7 +47,7 @@ export default function FinalCTA() {
             whileHover={{ y: -2, boxShadow: '0 12px 32px rgba(180,83,9,0.25)' }}
             whileTap={{ scale: 0.98 }}
           >
-            Join the waitlist →
+            Join waitlist →
           </motion.button>
         </motion.div>
 
