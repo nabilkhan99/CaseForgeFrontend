@@ -1,69 +1,75 @@
-'use client';
-
 import './globals.css'
-import { Inter } from 'next/font/google'
-import Image from 'next/image'
-import { useEffect } from 'react'
+import { Plus_Jakarta_Sans, JetBrains_Mono, DM_Serif_Display, Geist } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/next'
-import { initAnalytics } from '@/lib/analytics'
+import AnalyticsWrapper from '@/components/common/AnalyticsWrapper'
+import type { Metadata, Viewport } from 'next'
 
-const inter = Inter({ subsets: ['latin'] })
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ['latin'],
+  variable: '--font-sans',
+  display: 'swap',
+})
+
+const jetbrains = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-mono',
+  display: 'swap',
+})
+
+const dmSerif = DM_Serif_Display({
+  subsets: ['latin'],
+  weight: '400',
+  style: ['italic', 'normal'],
+  variable: '--font-serif',
+  display: 'swap',
+})
+
+const geist = Geist({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-display',
+  display: 'swap',
+})
+
+export const metadata: Metadata = {
+  title: 'Fourteen Fisherman - The Gold Standard for SCA Prep',
+  description: 'Master the Simulated Consultation Assessment with AI-powered patient simulations. Practice 24/7 with realistic clinical scenarios mapped to the RCGP curriculum.',
+  keywords: 'SCA exam, RCGP, GP training, medical simulation, clinical assessment, AI patient, consultation practice',
+  openGraph: {
+    type: 'website',
+    url: 'https://www.fourteenfisherman.com/',
+    title: 'Fourteen Fisherman - The Gold Standard for SCA Prep',
+    description: 'Master the Simulated Consultation Assessment with AI-powered patient simulations.',
+    images: ['https://www.fourteenfisherman.com/fourteenfishermann.png'],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Fourteen Fisherman - The Gold Standard for SCA Prep',
+    description: 'Master the Simulated Consultation Assessment with AI-powered patient simulations.',
+    images: ['https://www.fourteenfisherman.com/fourteenfishermann.png'],
+  },
+  alternates: {
+    canonical: 'https://www.fourteenfisherman.com/',
+  },
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+}
 
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  useEffect(() => {
-    initAnalytics();
-  }, []);
-
   return (
-    <html lang="en">
-      <head>
-        <title>Fourteen Fisherman - AI-Powered Case Review & Portfolio Builder</title>
-        <meta name="description" content="Transform your GP Trainee experience into compelling case studies. Fourteen Fisherman uses AI to help you craft professional portfolio reviews that showcase your expertise and capabilities." />
-        <meta name="keywords" content="GP Trainee portfolio, case studies, AI case review, GP Trainee experience, portfolio builder, professional services" />
-        
-        {/* Open Graph / Facebook */}
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://www.fourteenfisherman.com/" />
-        <meta property="og:title" content="Fourteen Fisherman - AI-Powered Case Review" />
-        <meta property="og:description" content="Transform your GP Trainee experience into compelling case studies with AI-powered case reviews." />
-        <meta property="og:image" content="https://www.fourteenfisherman.com/fourteenfishermann.png" />
-        
-        {/* Twitter */}
-        <meta property="twitter:card" content="summary_large_image" />
-        <meta property="twitter:url" content="https://www.fourteenfisherman.com/" />
-        <meta property="twitter:title" content="Fourteen Fisherman - AI-Powered Case Review" />
-        <meta property="twitter:description" content="Transform your GP Trainee experience into compelling case studies with AI-powered case reviews." />
-        <meta property="twitter:image" content="https://www.fourteenfisherman.com/fourteenfishermann.png" />
-        
-        <link rel="canonical" href="https://www.fourteenfisherman.com/" />
-      </head>
-      <body className={inter.className}>
-        <div className="min-h-screen">
-          <nav className="backdrop-blur-lg bg-black/20 border-b border-white/10">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="flex justify-between h-16">
-                <div className="flex items-center h-full py-2">
-                  <Image 
-                    src="/fourteenfishermann.png"
-                    alt="Fourteen Fisherman Logo"
-                    width={60}
-                    height={48}
-                    priority
-                    className="h-full w-auto"
-                  />
-                </div>
-              </div>
-            </div>
-          </nav>
-          <main className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
-            {children}
-          </main>
-        </div>
+    <html lang="en" className="scroll-smooth">
+      <body className={`${jakarta.variable} ${jetbrains.variable} ${dmSerif.variable} ${geist.variable} font-sans bg-surface text-body antialiased overflow-x-hidden`}>
+        {children}
+        <AnalyticsWrapper />
         <Analytics />
         <SpeedInsights />
       </body>

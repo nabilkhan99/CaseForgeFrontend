@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>FF — Mockup Index</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  *{ box-sizing: border-box; }
+  body{
+    margin: 0;
+    font-family: "Geist", system-ui, sans-serif;
+    background: oklch(94% 0.02 75);
+    color: oklch(20% 0.015 60);
+    padding: 80px clamp(24px, 5vw, 80px);
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap{ max-width: 1100px; margin: 0 auto;}
+  h1{
+    font-size: clamp(40px, 5vw, 64px);
+    font-weight: 700;
+    letter-spacing: -.035em;
+    line-height: 1;
+    margin: 0 0 12px;
+  }
+  h1 em{ font-style: italic; font-weight: 400; color: oklch(48% 0.16 45);}
+  .sub{ color: oklch(36% 0.015 60); font-size: 17px; line-height: 1.5; max-width: 56ch; margin-bottom: 56px;}
+  .grid{
+    display: grid;
+    gap: 24px;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+  a.card{
+    display: block;
+    padding: 28px;
+    border-radius: 16px;
+    background: oklch(98% 0.01 75);
+    border: 1px solid oklch(82% 0.025 70);
+    color: inherit;
+    text-decoration: none;
+    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+  }
+  a.card:hover{
+    transform: translateY(-2px);
+    box-shadow: 0 20px 40px -16px oklch(20% 0.04 60 / .2);
+    border-color: oklch(48% 0.16 45);
+  }
+  .num{
+    font-family: "Geist Mono", monospace;
+    font-size: 11px;
+    letter-spacing: .12em;
+    color: oklch(48% 0.16 45);
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+  .card h2{
+    margin: 0 0 8px;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -.02em;
+  }
+  .card p{
+    margin: 0;
+    font-size: 14px;
+    color: oklch(36% 0.015 60);
+    line-height: 1.5;
+  }
+  .tags{
+    margin-top: 18px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .tag{
+    font-family: "Geist Mono", monospace;
+    font-size: 10.5px;
+    padding: 3px 8px;
+    background: oklch(90% 0.025 70);
+    color: oklch(36% 0.015 60);
+    border-radius: 999px;
+    letter-spacing: .04em;
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Three directions, <em>three POVs</em>.</h1>
+    <p class="sub">Each mockup commits to one move that the current page doesn't make. Pick a direction (or borrow from across them) and I'll roll it into the actual React.</p>
+
+    <div class="grid">
+      <a class="card" href="01-confident-warm.html">
+        <div class="num">01</div>
+        <h2>Confident-warm</h2>
+        <p>Drops DM Serif Display, uses Geist's own italic, breaks the centered stack. Tablet overlaps the headline and bleeds off the right edge.</p>
+        <div class="tags">
+          <span class="tag">geist-only</span>
+          <span class="tag">asymmetric</span>
+          <span class="tag">restrained</span>
+        </div>
+      </a>
+
+      <a class="card" href="02-drenched-amber.html">
+        <div class="num">02</div>
+        <h2>Drenched amber</h2>
+        <p>Hero is full-bleed amber. Cream sits below. Tablet extrudes from the band onto the cream. Color IS the voice, not a 10% accent.</p>
+        <div class="tags">
+          <span class="tag">committed-color</span>
+          <span class="tag">drenched</span>
+          <span class="tag">amber-band</span>
+        </div>
+      </a>
+
+      <a class="card" href="03-stepper-sticky.html">
+        <div class="num">03</div>
+        <h2>Stepper-sticky journey</h2>
+        <p>Reworks ProductJourney only — four chapters become a stepper on the left, one sticky preview on the right that swaps as you cross anchors. ~50% less scroll.</p>
+        <div class="tags">
+          <span class="tag">journey-rework</span>
+          <span class="tag">sticky</span>
+          <span class="tag">interactive</span>
+        </div>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

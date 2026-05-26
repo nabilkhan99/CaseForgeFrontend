@@ -46,12 +46,12 @@ export function LoadingOverlay({
             {/* Animated Circle Icon */}
             <div className="relative w-20 h-20">
               <motion.div
-                className="absolute inset-0 border-4 border-indigo-100 rounded-full"
+                className="absolute inset-0 border-4 border-primary/15 rounded-full"
                 animate={{ scale: [1, 1.1, 1] }}
                 transition={{ duration: 2, repeat: Infinity }}
               />
               <motion.div
-                className="absolute inset-0 border-4 border-indigo-500 rounded-full border-t-transparent"
+                className="absolute inset-0 border-4 border-primary rounded-full border-t-transparent"
                 animate={{ rotate: 360 }}
                 transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
               />
@@ -62,7 +62,7 @@ export function LoadingOverlay({
 
             {/* Thinking Text */}
             <div className="text-center space-y-2">
-              <h3 className="text-xl font-semibold text-gray-900">
+              <h3 className="text-xl font-semibold text-heading">
                 Thinking...
               </h3>
               <div className="h-6 overflow-hidden">
@@ -73,7 +73,7 @@ export function LoadingOverlay({
                     animate={{ y: 0, opacity: 1 }}
                     exit={{ y: -20, opacity: 0 }}
                     transition={{ duration: 0.3 }}
-                    className="text-sm text-gray-500 font-medium"
+                    className="text-sm text-muted font-medium"
                   >
                     {messages[currentMessageIndex]}
                   </motion.p>
@@ -82,16 +82,17 @@ export function LoadingOverlay({
             </div>
 
             {/* Progress Bar */}
-            <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
+            <div className="w-full bg-primary/10 h-1.5 rounded-full overflow-hidden">
               <motion.div
-                className="h-full bg-indigo-500"
+                className="h-full rounded-full"
+                style={{ background: 'linear-gradient(90deg, #B45309, #D97706)' }}
                 initial={{ x: "-100%" }}
                 animate={{ x: "100%" }}
-                transition={{ 
-                  duration: 2, 
-                  repeat: Infinity, 
+                transition={{
+                  duration: 2,
+                  repeat: Infinity,
                   ease: "easeInOut",
-                  repeatDelay: 0.5 
+                  repeatDelay: 0.5
                 }}
               />
             </div>
