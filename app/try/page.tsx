@@ -141,7 +141,7 @@ export default function TryCasePickerPage() {
                           className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-md"
                           style={{ background: 'rgba(180,83,9,0.06)', color: '#92400E' }}
                         >
-                          {Math.floor((station.consultation_duration_seconds || 300) / 60)} min
+                          {Math.floor((station.consultation_duration_seconds || 720) / 60)} min
                         </span>
                       </div>
                     </div>

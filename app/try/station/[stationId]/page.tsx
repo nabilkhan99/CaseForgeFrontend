@@ -58,7 +58,7 @@ export default function TryReadingPhasePage() {
           patient_name: found.patient_name,
           candidate_instructions: candidateInstructions,
           reading_duration_seconds: found.reading_duration_seconds || 180,
-          consultation_duration_seconds: found.consultation_duration_seconds || 300,
+          consultation_duration_seconds: found.consultation_duration_seconds || 720,
           domain_name: found.domains?.name || 'General Practice',
         });
       } catch {

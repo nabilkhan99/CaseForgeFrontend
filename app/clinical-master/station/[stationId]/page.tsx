@@ -62,7 +62,7 @@ function ReadingPhaseContent() {
         patient_name: s.patient_name,
         candidate_instructions: s.candidate_instructions || '',
         reading_duration_seconds: s.reading_duration_seconds || 180,
-        consultation_duration_seconds: s.consultation_duration_seconds || 480,
+        consultation_duration_seconds: s.consultation_duration_seconds || 720,
         domain_name: domain?.name || 'General Practice',
       });
       setLoading(false);

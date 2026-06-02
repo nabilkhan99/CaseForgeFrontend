@@ -47,7 +47,7 @@ function GuestLiveConsultationContent() {
             title: found.title,
             patient_name: found.patient_name,
             patient_age: found.patient_age,
-            consultation_duration_seconds: found.consultation_duration_seconds || 300,
+            consultation_duration_seconds: found.consultation_duration_seconds || 720,
           });
         }
       } catch {
@@ -139,7 +139,7 @@ function GuestLiveConsultationContent() {
           &larr; <span className="hidden sm:inline">Exit</span>
         </button>
         <ConsultationTimer
-          durationSeconds={station?.consultation_duration_seconds || 300}
+          durationSeconds={station?.consultation_duration_seconds || 720}
           autoStart={isConnected}
           onComplete={finishConsultation}
         />

@@ -141,7 +141,7 @@ function LiveConsultationContent() {
           &larr; <span className="hidden sm:inline">Exit</span>
         </button>
         <ConsultationTimer
-          durationSeconds={station?.consultation_duration_seconds || 480}
+          durationSeconds={station?.consultation_duration_seconds || 720}
           autoStart={isConnected}
           onComplete={finishConsultation}
         />
