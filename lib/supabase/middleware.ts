@@ -78,5 +78,20 @@ export async function updateSession(request: NextRequest) {
         return NextResponse.redirect(url);
     }
 
+    // Signed-in users should never go through the anonymous free-trial funnel
+    // (it has a sign-up gate and is meant for unauthenticated prospects). Send
+    // them to the full authenticated experience instead. /try/feedback is
+    // excluded: it converts a completed anonymous trial into an account and then
+    // redirects to the real feedback page.
+    const isTrialFunnel =
+        request.nextUrl.pathname.startsWith('/try') &&
+        !request.nextUrl.pathname.startsWith('/try/feedback');
+    if (isTrialFunnel && user) {
+        const url = request.nextUrl.clone();
+        url.pathname = '/dashboard';
+        url.search = '';
+        return NextResponse.redirect(url);
+    }
+
     return supabaseResponse;
 }
