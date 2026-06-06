@@ -29,7 +29,7 @@ Next.js 15 App Router, TypeScript, Tailwind CSS 3, Framer Motion, React 19.
 - `/auth/` — Supabase JWT auth; protected routes in `middleware.ts` → `lib/supabase/middleware.ts`
 - `/dashboard/` — Post-login home: history, library, feedback, settings tabs
 - `/clinical-master/station/[stationId]` — Pre-consultation brief
-- `/clinical-master/session/[sessionId]` — Live consultation (LiveKit)
+- `/clinical-master/session/[sessionId]` — Live consultation (browser↔Azure gpt-realtime over WebRTC)
 - `/clinical-master/feedback/[sessionId]` — Scored feedback
 - `/portfolio/`, `/cases/` — Portfolio tool UI
 - `/try/` — Unauthenticated free trial (API routes at `app/api/try/`)
@@ -40,12 +40,13 @@ Next.js 15 App Router, TypeScript, Tailwind CSS 3, Framer Motion, React 19.
 - **Supabase** (`lib/supabase/`) — auth + all DB. Client: `client.ts`, Server: `server.ts`, queries in `queries/`
 - **Azure backend** via `lib/api.ts` — base URL `https://caseforge2025a.azurewebsites.net/api` (override with `NEXT_PUBLIC_API_BASE_URL`)
 - `next.config.js` rewrites ALL `/api/*` → `http://localhost:8000/api` in dev
-- LiveKit tokens: `app/api/livekit-token/route.ts`
+- **Clinical Master voice**: browser connects directly to Azure `gpt-realtime` (speech-to-speech) over WebRTC. `app/api/realtime-token/route.ts` (+ `app/api/try/realtime-token`) mints a short-lived Azure ephemeral key server-side; the real Azure key never reaches the client. Transcript persisted via `app/api/clinical-master/save-transcript`.
 - Feedback generation: `app/api/generate-feedback/route.ts` (Gemini)
 
 ### Key Files
 
-- `hooks/useLiveKitSession.ts` — LiveKit room connection, transcript collection, mute state
+- `hooks/useRealtimeSession.ts` — WebRTC connection to Azure gpt-realtime, transcript collection, speaking/mute state, function tools, consultation timer
+- `lib/clinical-master/` — `patientPrompt.ts` (patient system prompt), `realtimeSession.ts` (Azure session config + tools), `realtimeToken.ts` (ephemeral-key minting, server-only)
 - `lib/api.ts` — All Azure Functions API calls (portfolio tool)
 - `lib/types.ts` — Shared TypeScript types
 - `components/landing/` — Landing page sections
@@ -55,7 +56,7 @@ Next.js 15 App Router, TypeScript, Tailwind CSS 3, Framer Motion, React 19.
 
 ### State
 
-Local React state only. Supabase is source of truth; LiveKit for ephemeral real-time state. No Zustand/Redux.
+Local React state only. Supabase is source of truth; the WebRTC realtime connection holds ephemeral in-call state. No Zustand/Redux.
 
 ## Design System
 
@@ -73,13 +74,13 @@ Required in `.env.local`:
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
-NEXT_PUBLIC_LIVEKIT_URL          # wss://...livekit.cloud
-LIVEKIT_API_KEY
-LIVEKIT_API_SECRET
-NEXT_PUBLIC_ELEVENLABS_AGENT_ID
+AZURE_OPENAI_REALTIME_ENDPOINT   # https://<resource>.openai.azure.com
+AZURE_OPENAI_REALTIME_API_KEY    # server-only; ephemeral keys minted from it
+AZURE_OPENAI_REALTIME_DEPLOYMENT # gpt-realtime-2
 GOOGLE_API_KEY                   # Gemini — /api/generate-feedback
-NEXT_PUBLIC_CLINICAL_MASTER_URL  # http://localhost:8000 for local dev
 ```
+
+These three `AZURE_OPENAI_REALTIME_*` vars must also be set in Vercel for the deployed Clinical Master voice to work.
 
 ## Deployment
 
@@ -87,4 +88,4 @@ Vercel. Domain: `www.fourteenfisherman.com`. Images configured for `case-forge-f
 
 ## Backend Dependency
 
-The Python backend lives in a sibling repo at `../CaseForgeAzure/`. For local dev, run the Clinical Master agent (`cd ../CaseForgeAzure/clinical_master && uv run python agent.py start`) alongside this dev server — the Next.js rewrite proxies `/api/*` to `localhost:8000`.
+The Python backend lives in a sibling repo at `../CaseForgeAzure/` and serves only the **Portfolio tool** (Azure Functions). For local dev, run it so the Next.js rewrite can proxy `/api/*` (portfolio endpoints) to `localhost:8000`. The Clinical Master voice no longer has a Python service — the browser talks directly to Azure gpt-realtime, so nothing extra needs to run locally for voice.
