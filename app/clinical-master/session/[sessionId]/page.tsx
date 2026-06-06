@@ -4,7 +4,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { useLiveKitSession } from '@/hooks/useLiveKitSession';
+import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { createClient } from '@/lib/supabase/client';
 import ConsultationTimer from '@/components/clinical-master/ConsultationTimer';
 import AudioVisualizer from '@/components/clinical-master/AudioVisualizer';
@@ -57,13 +57,22 @@ function LiveConsultationContent() {
     fetchStation();
   }, [stationId]);
 
-  const { isConnected, isSpeaking, transcript, connect, endConsultation, setMicMuted, error, status } =
-    useLiveKitSession({
+  // Graceful end (button, timer, or the model's end_consultation tool): the hook
+  // persists the transcript + moves the session to 'processing', then this fires.
+  const handleEnded = useCallback(() => {
+    setIsProcessing(true);
+    const feedbackUrl = from
+      ? `/clinical-master/feedback/${sessionId}?from=${from}`
+      : `/clinical-master/feedback/${sessionId}`;
+    router.push(feedbackUrl);
+  }, [router, sessionId, from]);
+
+  const { isConnected, isSpeaking, transcript, connect, endConsultation, disconnect, setMicMuted, error, status } =
+    useRealtimeSession({
       sessionId,
       stationId: stationId || undefined,
       userId,
-      onSessionStarted: () => {},
-      onConsultationEnded: () => {},
+      onConsultationEnded: handleEnded,
       onError: () => {},
     });
 
@@ -71,33 +80,17 @@ function LiveConsultationContent() {
     if (station && status === 'disconnected') connect();
   }, [station, status, connect]);
 
-  const finishConsultation = useCallback(async () => {
-    setIsProcessing(true);
-    try {
-      await endConsultation();
-    } catch {
-      // Continue to feedback even if disconnect fails
-    }
-    const feedbackUrl = from
-      ? `/clinical-master/feedback/${sessionId}?from=${from}`
-      : `/clinical-master/feedback/${sessionId}`;
-    router.push(feedbackUrl);
-  }, [endConsultation, router, sessionId, from]);
-
   const handleToggleMute = () => {
     const newMuted = !isMuted;
     setIsMuted(newMuted);
     setMicMuted(newMuted);
   };
 
-  const handleLeaveWithoutFinishing = useCallback(async () => {
-    try {
-      await endConsultation();
-    } catch {
-      // Continue navigating even if disconnect fails
-    }
+  // Abandon: tear down without saving or generating feedback.
+  const handleLeaveWithoutFinishing = useCallback(() => {
+    disconnect();
     router.push('/dashboard/library');
-  }, [endConsultation, router]);
+  }, [disconnect, router]);
 
   const patientInitials = station
     ? station.patient_name.split(' ').map(n => n[0]).join('').slice(0, 2)
@@ -143,7 +136,7 @@ function LiveConsultationContent() {
         <ConsultationTimer
           durationSeconds={station?.consultation_duration_seconds || 720}
           autoStart={isConnected}
-          onComplete={finishConsultation}
+          onComplete={endConsultation}
         />
         <div className="flex items-center gap-2">
           {isConnected && (
@@ -262,7 +255,7 @@ function LiveConsultationContent() {
         confirmLabel="End Now"
         cancelLabel="Continue"
         variant="danger"
-        onConfirm={() => { setShowEndModal(false); finishConsultation(); }}
+        onConfirm={() => { setShowEndModal(false); endConsultation(); }}
         onCancel={() => setShowEndModal(false)}
       />
 

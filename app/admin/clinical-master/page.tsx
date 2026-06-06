@@ -7,61 +7,50 @@ import { useState, useEffect } from 'react';
 const MERMAID_FLOW = `%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#6366f1', 'primaryTextColor': '#e2e8f0', 'lineColor': '#475569', 'secondaryColor': '#1e1b4b', 'tertiaryColor': '#0f172a'}}}%%
 flowchart TB
   subgraph Frontend["Frontend (Next.js)"]
-    A["User selects station"] --> B["Create LiveKit Room"]
-    B --> C["Connect to room with token"]
+    A["User selects station"] --> B["Create session row (Supabase)"]
+    B --> C["POST /api/realtime-token"]
   end
 
-  subgraph LiveKit["LiveKit Cloud"]
-    C --> D["Room created with metadata<br/>(station_id, user_id, session_id)"]
-    D --> E["Agent dispatched to room"]
+  subgraph TokenRoute["Ephemeral-Key Route (server-side)"]
+    C --> D["Load station + build patient prompt"]
+    D --> E["POST Azure /realtime/client_secrets<br/>(prompt, voice, tools, transcription)"]
+    E --> F["Return ephemeral key + calls URL"]
+    F --> G["Set session status = live"]
   end
 
-  subgraph AgentProcess["Agent Process (Python)"]
-    E --> F["<b>entrypoint(ctx)</b><br/>Parse room metadata"]
-    F --> G["<b>Load Station Data</b><br/>SessionRepository.get_station()"]
-    G --> H["<b>Upsert DB Session</b><br/>Ensure session exists in Supabase"]
-    H --> I["<b>Create PatientAgent</b><br/>Build prompt from station data"]
-    I --> J["<b>AgentSession.start()</b><br/>Connect STT → LLM → TTS pipeline"]
-    J --> K["<b>generate_reply()</b><br/>Patient speaks opening line"]
+  subgraph BrowserRTC["Browser (WebRTC)"]
+    F --> H["RTCPeerConnection + mic"]
+    H --> I["POST SDP to Azure /realtime/calls"]
+  end
 
-    subgraph Pipeline["Voice Pipeline"]
-      direction LR
-      L["🎤 Deepgram STT"] --> M["🧠 GPT-4.1-mini"]
-      M --> N["🔊 OpenAI TTS"]
-    end
-
-    K --> Pipeline
+  subgraph Azure["Azure gpt-realtime (speech-to-speech)"]
+    I --> J["STT + LLM + TTS in one model"]
+    J --> K["Patient greets first, then waits"]
 
     subgraph Tools["Function Tools"]
-      O["🩺 request_examination<br/>Returns exam findings"]
-      P["🔚 end_consultation<br/>Ends session gracefully"]
+      O["🩺 request_examination"]
+      P["🔚 end_consultation"]
     end
 
-    M --> Tools
-    Tools --> M
-
-    Pipeline --> Q["<b>on_close</b><br/>Extract transcript"]
-    Q --> R["Save transcript to Supabase"]
-    R --> S["Set session status = processing"]
+    J --> Tools
+    Tools --> J
   end
 
-  subgraph FeedbackGen["Feedback Generation (Next.js API)"]
-    S --> T["Frontend navigates to /feedback"]
-    T --> U["<b>POST /api/generate-feedback</b>"]
-    U --> V["Read transcript + station data<br/>from Supabase"]
-    V --> W["Build feedback prompt<br/>(transcript + case brief + marking criteria)"]
-    W --> X["<b>Gemini 2.5 Flash</b><br/>Structured JSON output"]
-    X --> Y["Save to session_results"]
-    Y --> Z["Set session status = completed"]
-    Z --> AA["Return feedback to frontend"]
+  subgraph Persist["Transcript + Feedback"]
+    J --> Q["Data channel transcript events"]
+    Q --> R["POST /api/clinical-master/save-transcript"]
+    R --> S["Set session status = processing"]
+    S --> T["POST /api/generate-feedback"]
+    T --> X["<b>Gemini 2.5 Flash</b><br/>Structured JSON → session_results"]
+    X --> Z["Set session status = completed"]
   end
 
   style Frontend fill:#1e1b4b,stroke:#6366f1,stroke-width:2px
-  style LiveKit fill:#172554,stroke:#3b82f6,stroke-width:2px
-  style AgentProcess fill:#0c4a6e,stroke:#0ea5e9,stroke-width:2px
-  style Pipeline fill:#064e3b,stroke:#10b981,stroke-width:2px
+  style TokenRoute fill:#0c4a6e,stroke:#0ea5e9,stroke-width:2px
+  style BrowserRTC fill:#172554,stroke:#3b82f6,stroke-width:2px
+  style Azure fill:#064e3b,stroke:#10b981,stroke-width:2px
   style Tools fill:#713f12,stroke:#f59e0b,stroke-width:2px
-  style FeedbackGen fill:#4c1d95,stroke:#8b5cf6,stroke-width:2px
+  style Persist fill:#4c1d95,stroke:#8b5cf6,stroke-width:2px
 `;
 
 // ── Prompt Template (mirrored from Python patient.py) ──
@@ -485,14 +474,14 @@ export default function AdminDashboard() {
                             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Tech Stack</h3>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                 {[
-                                    { label: 'STT', value: 'Deepgram Nova-2', color: 'text-green-400' },
-                                    { label: 'LLM (Patient)', value: 'GPT-4.1-mini', color: 'text-blue-400' },
-                                    { label: 'TTS', value: 'OpenAI gpt-4o-mini-tts', color: 'text-cyan-400' },
+                                    { label: 'Voice Model', value: 'Azure gpt-realtime', color: 'text-green-400' },
+                                    { label: 'Modality', value: 'Speech-to-speech', color: 'text-blue-400' },
+                                    { label: 'Transport', value: 'WebRTC → Azure', color: 'text-cyan-400' },
+                                    { label: 'Auth', value: 'Ephemeral keys', color: 'text-rose-400' },
                                     { label: 'LLM (Feedback)', value: 'Gemini 2.5 Flash', color: 'text-violet-400' },
-                                    { label: 'Transport', value: 'LiveKit Cloud', color: 'text-rose-400' },
                                     { label: 'Database', value: 'Supabase (Postgres)', color: 'text-emerald-400' },
                                     { label: 'Frontend', value: 'Next.js 15', color: 'text-white' },
-                                    { label: 'Agent SDK', value: 'LiveKit Agents 1.4', color: 'text-amber-400' },
+                                    { label: 'Feedback', value: 'Supabase Edge Fn', color: 'text-amber-400' },
                                 ].map((item) => (
                                     <div key={item.label} className="p-3 rounded-lg bg-black/20 border border-white/5">
                                         <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{item.label}</span>
