@@ -4,6 +4,21 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { TranscriptItem } from '@/lib/clinical-master/types';
 import { getExaminationGuidance } from '@/lib/clinical-master/realtimeSession';
 
+/** Mean token probability from transcription logprobs, as a 0..1 confidence. */
+function meanProbFromLogprobs(logprobs: unknown): number | undefined {
+    if (!Array.isArray(logprobs) || logprobs.length === 0) return undefined;
+    const probs = logprobs.map((t) => {
+        const lp = (t as { logprob?: number })?.logprob;
+        return typeof lp === 'number' ? Math.exp(lp) : 1;
+    });
+    const mean = probs.reduce((a, b) => a + b, 0) / probs.length;
+    return Math.max(0, Math.min(1, mean));
+}
+
+function asMs(value: unknown): number | undefined {
+    return typeof value === 'number' ? value : undefined;
+}
+
 interface UseRealtimeSessionProps {
     sessionId: string;
     stationId?: string;
@@ -63,19 +78,42 @@ export function useRealtimeSession({
     const endedRef = useRef(false);
     const transcriptRef = useRef<TranscriptItem[]>([]);
     const messageCountRef = useRef(0);
+    const sessionStartRef = useRef<number>(0);
+    const vadRef = useRef<Record<string, { start_ms?: number; end_ms?: number }>>({});
 
-    const appendTranscript = useCallback((role: 'user' | 'assistant', content: string) => {
-        const text = (content || '').trim();
-        if (!text) return;
-        const item: TranscriptItem = {
-            id: `rt-${Date.now()}-${messageCountRef.current++}`,
-            role,
-            content: text,
-            timestamp: new Date().toISOString(),
-        };
-        transcriptRef.current = [...transcriptRef.current, item];
-        setTranscript(transcriptRef.current);
+    const relNow = useCallback((): number | undefined => {
+        return sessionStartRef.current ? Date.now() - sessionStartRef.current : undefined;
     }, []);
+
+    // Append one turn in the spec transcript shape (speaker/start_ms/end_ms/text/
+    // asr_confidence) while keeping legacy role/content/timestamp so the live
+    // transcript UI is unchanged.
+    const appendTurn = useCallback(
+        (turn: {
+            speaker: 'candidate' | 'patient';
+            text: string;
+            start_ms?: number;
+            end_ms?: number;
+            asr_confidence?: number;
+        }) => {
+            const text = (turn.text || '').trim();
+            if (!text) return;
+            const item: TranscriptItem = {
+                id: `rt-${Date.now()}-${messageCountRef.current++}`,
+                speaker: turn.speaker,
+                start_ms: turn.start_ms,
+                end_ms: turn.end_ms,
+                text,
+                asr_confidence: turn.asr_confidence,
+                role: turn.speaker === 'candidate' ? 'user' : 'assistant',
+                content: text,
+                timestamp: new Date().toISOString(),
+            };
+            transcriptRef.current = [...transcriptRef.current, item];
+            setTranscript(transcriptRef.current);
+        },
+        []
+    );
 
     const sendEvent = useCallback((event: Record<string, unknown>) => {
         const dc = dcRef.current;
@@ -179,13 +217,49 @@ export function useRealtimeSession({
                 return;
             }
             switch (evt.type) {
-                case 'conversation.item.input_audio_transcription.completed':
-                    appendTranscript('user', String(evt.transcript ?? ''));
+                case 'input_audio_buffer.speech_started': {
+                    const id = String(evt.item_id ?? '');
+                    if (id) {
+                        vadRef.current[id] = {
+                            ...vadRef.current[id],
+                            start_ms: asMs(evt.audio_start_ms),
+                        };
+                    }
                     break;
-                // GA emits response.output_audio_transcript.done; older builds use response.audio_transcript.done
+                }
+                case 'input_audio_buffer.speech_stopped': {
+                    const id = String(evt.item_id ?? '');
+                    if (id) {
+                        vadRef.current[id] = {
+                            ...vadRef.current[id],
+                            end_ms: asMs(evt.audio_end_ms),
+                        };
+                    }
+                    break;
+                }
+                case 'conversation.item.input_audio_transcription.completed': {
+                    const id = String(evt.item_id ?? '');
+                    const vad = (id && vadRef.current[id]) || {};
+                    appendTurn({
+                        speaker: 'candidate',
+                        text: String(evt.transcript ?? ''),
+                        start_ms: vad.start_ms ?? relNow(),
+                        end_ms: vad.end_ms,
+                        asr_confidence: meanProbFromLogprobs(evt.logprobs),
+                    });
+                    if (id) delete vadRef.current[id];
+                    break;
+                }
+                // GA emits response.output_audio_transcript.done; older builds use response.audio_transcript.done.
+                // The patient turn is generated text, so its ASR confidence is 1.0.
                 case 'response.output_audio_transcript.done':
                 case 'response.audio_transcript.done':
-                    appendTranscript('assistant', String(evt.transcript ?? ''));
+                    appendTurn({
+                        speaker: 'patient',
+                        text: String(evt.transcript ?? ''),
+                        start_ms: relNow(),
+                        asr_confidence: 1,
+                    });
                     break;
                 case 'output_audio_buffer.started':
                     setIsSpeaking(true);
@@ -212,7 +286,7 @@ export function useRealtimeSession({
                     break;
             }
         },
-        [appendTranscript, handleFunctionCall, onError]
+        [appendTurn, relNow, handleFunctionCall, onError]
     );
 
     const connect = useCallback(async () => {
@@ -267,6 +341,8 @@ export function useRealtimeSession({
             dc.onmessage = (e: MessageEvent) => handleServerEvent(e.data);
             dc.onopen = () => {
                 setStatus('connected');
+                sessionStartRef.current = Date.now();
+                vadRef.current = {};
                 onSessionStarted?.();
                 // Patient speaks first — greeting ONLY, then waits (greeting-first behaviour).
                 sendEvent({

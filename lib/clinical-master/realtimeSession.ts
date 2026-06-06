@@ -76,6 +76,9 @@ export function buildSessionPayload(stationData: StationData | null, opts: Sessi
       instructions,
       tools: REALTIME_TOOLS,
       tool_choice: 'auto',
+      // Stream input-transcription logprobs so we can derive a per-turn ASR
+      // confidence for the candidate's speech (Build Package Section 3.1).
+      include: ['item.input_audio_transcription.logprobs'],
       audio: {
         input: {
           transcription: {
