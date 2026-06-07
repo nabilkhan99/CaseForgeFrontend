@@ -20,27 +20,14 @@ export const DEFAULT_VOICE = 'marin';
  *  user side of the transcript). whisper-1 is the most broadly available. */
 export const DEFAULT_TRANSCRIPTION_MODEL = 'whisper-1';
 
-/** Function tools exposed to the model, mirroring the former @function_tool methods. */
+/**
+ * Function tools exposed to the model. Examination is intentionally NOT a tool:
+ * per Build Package Section 1.1 (audio only, no live visual examination) and
+ * Voice Actor Prompt 1 rule 8, the patient handles any examination request
+ * in-character, giving scripted findings or a neutral/negative answer and never
+ * inventing a new clinical finding.
+ */
 export const REALTIME_TOOLS = [
-  {
-    type: 'function',
-    name: 'request_examination',
-    description:
-      'Call this when the doctor asks to perform a physical examination on you ' +
-      '(e.g. blood pressure, abdominal, chest, neurological). It returns how you ' +
-      'cooperate and what is found, which you then describe as the patient.',
-    parameters: {
-      type: 'object',
-      properties: {
-        examination_type: {
-          type: 'string',
-          description:
-            'The type of examination being requested, e.g. "blood pressure", "abdominal", "chest", "neurological".',
-        },
-      },
-      required: ['examination_type'],
-    },
-  },
   {
     type: 'function',
     name: 'end_consultation',
@@ -99,22 +86,4 @@ export function buildSessionPayload(stationData: StationData | null, opts: Sessi
       },
     },
   };
-}
-
-/**
- * Guidance returned to the model when the doctor requests a physical
- * examination (the `request_examination` tool output). Carries the intent of
- * the former Python `request_examination` @function_tool, but station-free:
- * the model already holds the full scenario in its server-side instructions, so
- * we never need to send the patient script to the browser. The instruction
- * preserves the original guardrail — report no abnormality when the scenario
- * doesn't specify findings — so the model doesn't invent results.
- */
-export function getExaminationGuidance(examinationType: string): string {
-  return (
-    `The patient cooperates with the ${examinationType} examination. ` +
-    'Describe realistic findings drawn from your clinical scenario. ' +
-    'If your scenario does not specify findings for this examination, report no significant abnormality. ' +
-    'Respond as the patient would — describe what you feel, not clinical measurements.'
-  );
 }

@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TranscriptItem } from '@/lib/clinical-master/types';
-import { getExaminationGuidance } from '@/lib/clinical-master/realtimeSession';
 
 /** Mean token probability from transcription logprobs, as a 0..1 confidence. */
 function meanProbFromLogprobs(logprobs: unknown): number | undefined {
@@ -174,24 +173,8 @@ export function useRealtimeSession({
     }, [saveEndpoint, sessionId, teardown, onConsultationEnded]);
 
     const handleFunctionCall = useCallback(
-        (name: string, callId: string, argsJson: string) => {
-            if (name === 'request_examination') {
-                let examinationType = 'this';
-                try {
-                    examinationType = JSON.parse(argsJson || '{}').examination_type || examinationType;
-                } catch {
-                    /* keep default */
-                }
-                sendEvent({
-                    type: 'conversation.item.create',
-                    item: {
-                        type: 'function_call_output',
-                        call_id: callId,
-                        output: getExaminationGuidance(examinationType),
-                    },
-                });
-                sendEvent({ type: 'response.create' });
-            } else if (name === 'end_consultation') {
+        (name: string, callId: string, _argsJson: string) => {
+            if (name === 'end_consultation') {
                 sendEvent({
                     type: 'conversation.item.create',
                     item: {
