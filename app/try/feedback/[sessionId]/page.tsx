@@ -7,18 +7,24 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import Container from '@/components/ui/Container';
 import PrimaryButton from '@/components/ui/PrimaryButton';
-import ScoreBadge from '@/components/ui/ScoreBadge';
 import AuthCard from '@/components/auth/AuthCard';
 import AuthInput from '@/components/auth/AuthInput';
 
 type AuthMode = 'sign-up' | 'sign-in';
 
+const GRADE_PCT: Record<string, number> = { CP: 100, P: 67, F: 33, CF: 0 };
+const DOMAIN_LABEL: Record<string, string> = {
+  data_gathering: 'Data Gathering',
+  clinical_management: 'Clinical Management',
+  relating_to_others: 'Interpersonal Skills',
+};
+const PASSING_VERDICTS = ['Pass', 'Bare Pass'];
+
 interface FeedbackPreview {
-  overall_score: number;
-  passed: boolean;
-  data_gathering_score: number;
-  clinical_management_score: number;
-  interpersonal_skills_score: number;
+  verdict: string | null;
+  weightedScore: number;
+  maxScore: number;
+  domains: { domain: string; grade: string }[];
 }
 
 export default function TryFeedbackAuthGatePage() {
@@ -49,17 +55,22 @@ export default function TryFeedbackAuthGatePage() {
       try {
         const { data } = await supabase
           .from('session_results')
-          .select('overall_score, passed, data_gathering_score, clinical_management_score, interpersonal_skills_score')
+          .select('verdict, weighted_score, max_score, domains')
           .eq('session_id', sessionId)
           .single();
 
         if (data) {
+          const row = data as unknown as {
+            verdict: string | null;
+            weighted_score: number | null;
+            max_score: number | null;
+            domains: unknown;
+          };
           setFeedback({
-            overall_score: data.overall_score ?? 0,
-            passed: data.passed ?? false,
-            data_gathering_score: data.data_gathering_score ?? 0,
-            clinical_management_score: data.clinical_management_score ?? 0,
-            interpersonal_skills_score: data.interpersonal_skills_score ?? 0,
+            verdict: row.verdict ?? null,
+            weightedScore: Number(row.weighted_score ?? 0),
+            maxScore: Number(row.max_score ?? 10.5),
+            domains: Array.isArray(row.domains) ? (row.domains as { domain: string; grade: string }[]) : [],
           });
         }
       } catch {
@@ -224,11 +235,13 @@ export default function TryFeedbackAuthGatePage() {
     );
   }
 
-  const domainBars = feedback ? [
-    { label: 'Data Gathering', score: feedback.data_gathering_score },
-    { label: 'Clinical Management', score: feedback.clinical_management_score },
-    { label: 'Interpersonal Skills', score: feedback.interpersonal_skills_score },
-  ] : [];
+  const domainBars = feedback
+    ? feedback.domains.map((d) => ({
+        label: DOMAIN_LABEL[d.domain] ?? d.domain,
+        grade: d.grade,
+        pct: GRADE_PCT[d.grade] ?? 0,
+      }))
+    : [];
 
   return (
     <div className="min-h-[100dvh] flex flex-col items-center justify-center px-6 py-16">
@@ -273,10 +286,20 @@ export default function TryFeedbackAuthGatePage() {
                     WebkitTextFillColor: 'transparent',
                   }}
                 >
-                  {feedback.overall_score}
+                  {feedback.weightedScore.toFixed(1)}
                 </div>
-                <div className="text-[13px] text-muted mb-3">out of 100</div>
-                <ScoreBadge score={feedback.overall_score} showLabel />
+                <div className="text-[13px] text-muted mb-3">out of {feedback.maxScore.toFixed(1)}</div>
+                {feedback.verdict && (
+                  <span
+                    className="inline-flex px-4 py-1.5 rounded-full text-[12px] font-semibold uppercase tracking-wide"
+                    style={{
+                      background: PASSING_VERDICTS.includes(feedback.verdict) ? 'rgba(22,163,74,0.1)' : 'rgba(220,38,38,0.1)',
+                      color: PASSING_VERDICTS.includes(feedback.verdict) ? '#16A34A' : '#DC2626',
+                    }}
+                  >
+                    {feedback.verdict}
+                  </span>
+                )}
               </div>
             ) : (
               <div className="text-center py-6">
@@ -296,14 +319,14 @@ export default function TryFeedbackAuthGatePage() {
                   <div key={bar.label}>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[13px] font-medium text-heading">{bar.label}</span>
-                      <span className="text-[12px] font-mono font-semibold text-primary">{bar.score}%</span>
+                      <span className="text-[12px] font-mono font-semibold text-primary">{bar.grade}</span>
                     </div>
                     <div className="h-2 rounded-full bg-black/[0.04] overflow-hidden">
                       <motion.div
                         className="h-full rounded-full"
                         style={{ background: 'linear-gradient(90deg, #B45309, #D97706)' }}
                         initial={{ width: 0 }}
-                        animate={{ width: `${bar.score}%` }}
+                        animate={{ width: `${bar.pct}%` }}
                         transition={{ type: 'spring', stiffness: 40, damping: 20, delay: 0.3 + i * 0.1 }}
                       />
                     </div>

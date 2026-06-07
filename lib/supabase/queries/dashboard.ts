@@ -16,6 +16,23 @@ import type {
     LastStation,
 } from '@/lib/dashboard/types';
 
+// New SCA schema (Build Package Section 12): domains carry CP/P/F/CF grades and
+// the session carries a verdict + weighted score out of 10.5. For the dashboard
+// analytics we map a grade to an approximate percentage so the existing widgets
+// keep working from the new data.
+const GRADE_PCT: Record<string, number> = { CP: 100, P: 67, F: 33, CF: 0 };
+const PASSING_VERDICTS = ['Pass', 'Bare Pass'];
+const MAX_WEIGHTED = 10.5;
+
+interface DomainGrade {
+    domain?: string;
+    grade?: string;
+}
+
+function gradesFromResult(domains: unknown): DomainGrade[] {
+    return Array.isArray(domains) ? (domains as DomainGrade[]) : [];
+}
+
 /**
  * Fetch user stats: streak, completed stations count, exam countdown
  */
@@ -84,7 +101,7 @@ export async function getPerformanceMetrics(userId: string): Promise<Performance
 
     const { data: results } = await supabase
         .from('session_results')
-        .select('data_gathering_score, clinical_management_score, interpersonal_skills_score')
+        .select('domains')
         .in('session_id', sessionIds);
 
     if (!results || results.length === 0) {
@@ -95,16 +112,26 @@ export async function getPerformanceMetrics(userId: string): Promise<Performance
         };
     }
 
-    // Calculate averages
-    const avg = (arr: (number | null)[]) => {
-        const valid = arr.filter((n): n is number => n !== null);
-        return valid.length > 0 ? Math.round(valid.reduce((a, b) => a + b, 0) / valid.length) : 0;
+    const buckets: Record<string, number[]> = {
+        data_gathering: [],
+        clinical_management: [],
+        relating_to_others: [],
     };
+    for (const r of results) {
+        for (const d of gradesFromResult((r as { domains?: unknown }).domains)) {
+            if (d.domain && d.grade && d.domain in buckets) {
+                buckets[d.domain].push(GRADE_PCT[d.grade] ?? 0);
+            }
+        }
+    }
+
+    const avg = (arr: number[]) =>
+        arr.length > 0 ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0;
 
     return {
-        dataGathering: avg(results.map(r => r.data_gathering_score)),
-        clinicalManagement: avg(results.map(r => r.clinical_management_score)),
-        interpersonalSkills: avg(results.map(r => r.interpersonal_skills_score)),
+        dataGathering: avg(buckets.data_gathering),
+        clinicalManagement: avg(buckets.clinical_management),
+        interpersonalSkills: avg(buckets.relating_to_others),
     };
 }
 
@@ -160,9 +187,9 @@ export async function getBlueprintDomains(userId: string): Promise<BlueprintDoma
     return domains.map((domain, index) => {
         const stats = domainStats[domain.id] || { completed: 0, totalScore: 0 };
         const total = countByDomain[domain.id] || 0;
-        const percentage = stats.completed > 0
-            ? Math.round(stats.totalScore / stats.completed)
-            : 0;
+        // clinical_sessions.overall_score is now the weighted score (0 to 10.5).
+        const avgWeighted = stats.completed > 0 ? stats.totalScore / stats.completed : 0;
+        const percentage = Math.round((avgWeighted / MAX_WEIGHTED) * 100);
 
         return {
             id: index + 1,
@@ -238,11 +265,10 @@ export interface SessionHistoryItem {
     stationTitle: string;
     domainName: string;
     completedAt: string;
-    overallScore: number;
+    verdict: string | null;
+    weightedScore: number;
+    maxScore: number;
     passed: boolean;
-    dataGatheringScore: number;
-    clinicalManagementScore: number;
-    interpersonalSkillsScore: number;
 }
 
 export async function getSessionHistory(
@@ -263,11 +289,9 @@ export async function getSessionHistory(
                 domains (name)
             ),
             session_results (
-                overall_score,
-                passed,
-                data_gathering_score,
-                clinical_management_score,
-                interpersonal_skills_score
+                verdict,
+                weighted_score,
+                max_score
             )
         `)
         .eq('user_id', userId)
@@ -286,11 +310,9 @@ export async function getSessionHistory(
 
         // session_results is a single object (not an array) due to unique constraint on session_id
         const result = session.session_results as unknown as {
-            overall_score: number;
-            passed: boolean;
-            data_gathering_score: number;
-            clinical_management_score: number;
-            interpersonal_skills_score: number;
+            verdict: string | null;
+            weighted_score: number | null;
+            max_score: number | null;
         } | null;
 
         return {
@@ -299,11 +321,10 @@ export async function getSessionHistory(
             stationTitle: station?.title || 'Unknown Station',
             domainName: station?.domains?.name || 'General Practice',
             completedAt: session.completed_at || '',
-            overallScore: result?.overall_score ?? 0,
-            passed: result?.passed ?? false,
-            dataGatheringScore: result?.data_gathering_score ?? 0,
-            clinicalManagementScore: result?.clinical_management_score ?? 0,
-            interpersonalSkillsScore: result?.interpersonal_skills_score ?? 0,
+            verdict: result?.verdict ?? null,
+            weightedScore: Number(result?.weighted_score ?? 0),
+            maxScore: Number(result?.max_score ?? MAX_WEIGHTED),
+            passed: result?.verdict ? PASSING_VERDICTS.includes(result.verdict) : false,
         };
     });
 }

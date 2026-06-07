@@ -7,7 +7,6 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import Container from '@/components/ui/Container';
 import PrimaryButton from '@/components/ui/PrimaryButton';
-import ScoreBadge from '@/components/ui/ScoreBadge';
 import DomainTag from '@/components/ui/DomainTag';
 import {
   getUserStats,
@@ -281,7 +280,17 @@ export default function DashboardPage() {
                       <span className="text-[11px] text-muted">{formatRelativeDate(session.completedAt)}</span>
                     </div>
                   </div>
-                  <ScoreBadge score={session.overallScore} showLabel />
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span
+                      className="text-[11px] font-semibold uppercase"
+                      style={{ color: session.passed ? '#16A34A' : '#DC2626' }}
+                    >
+                      {session.verdict ?? 'Pending'}
+                    </span>
+                    <span className="text-[12px] font-mono text-muted">
+                      {session.weightedScore.toFixed(1)}/{session.maxScore.toFixed(1)}
+                    </span>
+                  </div>
                 </Link>
               </motion.div>
             ))}

@@ -6,7 +6,6 @@ import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
-import ScoreBadge from '@/components/ui/ScoreBadge';
 import DomainTag from '@/components/ui/DomainTag';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import SecondaryButton from '@/components/ui/SecondaryButton';
@@ -138,15 +137,17 @@ export default function HistoryPage() {
                     </div>
                   </div>
 
-                  {/* Pass/Refer label + score — flex-shrink-0 so they never get clipped */}
+                  {/* Verdict band + weighted score — flex-shrink-0 so they never get clipped */}
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <span
                       className="text-[11px] font-semibold uppercase"
                       style={{ color: session.passed ? '#16A34A' : '#DC2626' }}
                     >
-                      {session.passed ? 'Pass' : 'Refer'}
+                      {session.verdict ?? 'Pending'}
                     </span>
-                    <ScoreBadge score={session.overallScore} />
+                    <span className="text-[12px] font-mono text-muted">
+                      {session.weightedScore.toFixed(1)}/{session.maxScore.toFixed(1)}
+                    </span>
                   </div>
                 </Link>
               </motion.div>
