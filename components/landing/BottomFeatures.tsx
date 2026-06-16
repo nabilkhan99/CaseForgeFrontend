@@ -3,16 +3,6 @@
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 
-const SPECIALTIES_ROW1 = [
-  'Cardiovascular Health', 'Dermatology', 'Mental Health', 'Neurology',
-  'Respiratory Health', 'Musculoskeletal Health', 'Ophthalmology', 'Gastroenterology', 'Genetics',
-];
-const SPECIALTIES_ROW2 = [
-  'Haematology', 'Renal and Urology', 'Maternity and Reproductive Health',
-  'Sexual Health', 'Ear, Nose and Throat', 'Metabolic Problems and Endocrinology',
-  'Older Adults', 'People at the End of Life', 'Learning Disability',
-];
-
 function FeatureRow({
   label,
   heading,
@@ -47,7 +37,7 @@ function FeatureRow({
           <h2 className="text-[32px] font-bold text-heading tracking-[-0.02em] leading-[1.15] mb-4">
             {heading}
           </h2>
-          <p className="text-[16px] text-muted leading-[1.7] max-w-[420px] mb-6">
+          <p className="text-[16px] text-text-secondary leading-[1.7] max-w-[420px] mb-6">
             {body}
           </p>
           <Link href={href}>
@@ -75,7 +65,7 @@ function FeatureRow({
         <h2 className="text-[24px] font-bold text-heading tracking-[-0.02em] leading-[1.15] mb-3">
           {heading}
         </h2>
-        <p className="text-[14px] text-muted leading-[1.7] mb-5">
+        <p className="text-[14px] text-text-secondary leading-[1.7] mb-5">
           {body}
         </p>
         <div className="mb-5">{children}</div>
@@ -89,46 +79,10 @@ function FeatureRow({
   );
 }
 
-function CarouselVisual() {
-  return (
-    <div
-      className="rounded-[20px] overflow-hidden border border-black/[0.06] p-6"
-      style={{ background: '#FFFCF8', boxShadow: '0 24px 64px rgba(180,83,9,0.06)' }}
-    >
-      <div className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-4">
-        18 specialties covered
-      </div>
-      <div className="space-y-2.5 overflow-hidden">
-        <div className="flex gap-2.5 motion-safe:animate-scroll-left">
-          {[...SPECIALTIES_ROW1, ...SPECIALTIES_ROW1].map((s, i) => (
-            <div
-              key={i}
-              className="flex-shrink-0 px-3.5 py-2 rounded-lg bg-white border border-black/[0.06] text-[12px] text-body font-medium whitespace-nowrap"
-            >
-              {s}
-            </div>
-          ))}
-        </div>
-        <div className="flex gap-2.5 motion-safe:animate-scroll-right">
-          {[...SPECIALTIES_ROW2, ...SPECIALTIES_ROW2].map((s, i) => (
-            <div
-              key={i}
-              className="flex-shrink-0 px-3.5 py-2 rounded-lg bg-white border border-black/[0.06] text-[12px] text-body font-medium whitespace-nowrap"
-            >
-              {s}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function PracticeVisual() {
   return (
     <div
-      className="rounded-[20px] overflow-hidden border border-black/[0.06] p-6"
-      style={{ background: '#FFFCF8', boxShadow: '0 24px 64px rgba(180,83,9,0.06)' }}
+      className="rounded-2xl overflow-hidden border border-border-card bg-bg-card shadow-card-chrome p-6"
     >
       <div className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-4">
         Built-in tools
@@ -143,34 +97,53 @@ function PracticeVisual() {
           </div>
         </div>
       </div>
-      {/* Mini mark scheme */}
+      {/* Mini mark scheme — eczema case indicators */}
       <div className="space-y-2">
         <div className="flex gap-2">
-          <div className="flex-1 flex items-center gap-2 p-2.5 rounded-lg bg-emerald-50/50 border border-emerald-100">
-            <div className="w-4 h-4 rounded border-2 border-emerald-300 bg-white flex-shrink-0" />
-            <span className="text-[10px] text-body leading-tight">Explores patient concerns</span>
+          <div className="flex-1 flex items-start gap-2 p-2.5 rounded-lg bg-emerald-50/50 border border-emerald-100">
+            <div className="w-4 h-4 mt-0.5 rounded border-2 border-emerald-500 bg-emerald-500 flex-shrink-0 flex items-center justify-center">
+              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>
+            </div>
+            <span className="text-[10px] text-emerald-800 leading-tight">Reassures about steroid safety using Finger Tip Units</span>
           </div>
-          <div className="flex-1 flex items-center gap-2 p-2.5 rounded-lg bg-red-50/50 border border-red-100">
-            <div className="w-4 h-4 rounded border-2 border-red-300 bg-white flex-shrink-0" />
-            <span className="text-[10px] text-body leading-tight">Fails to establish rapport</span>
+          <div className="flex-1 flex items-start gap-2 p-2.5 rounded-lg bg-red-50/50 border border-red-100">
+            <div className="w-4 h-4 mt-0.5 rounded border-2 border-red-300 bg-white flex-shrink-0" />
+            <span className="text-[10px] text-body leading-tight">Dismisses parent&apos;s theory without explanation</span>
           </div>
         </div>
         <div className="flex gap-2">
-          <div className="flex-1 flex items-center gap-2 p-2.5 rounded-lg bg-emerald-50/50 border border-emerald-100">
-            <div className="w-4 h-4 rounded border-2 border-emerald-500 bg-emerald-500 flex-shrink-0 flex items-center justify-center">
+          <div className="flex-1 flex items-start gap-2 p-2.5 rounded-lg bg-emerald-50/50 border border-emerald-100">
+            <div className="w-4 h-4 mt-0.5 rounded border-2 border-emerald-500 bg-emerald-500 flex-shrink-0 flex items-center justify-center">
               <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>
             </div>
-            <span className="text-[10px] text-emerald-800 leading-tight">Asks about red flags</span>
+            <span className="text-[10px] text-emerald-800 leading-tight">Advises Complete Emollient Therapy (soap substitute + leave-on)</span>
           </div>
-          <div className="flex-1 flex items-center gap-2 p-2.5 rounded-lg bg-red-50/50 border border-red-100">
-            <div className="w-4 h-4 rounded border-2 border-red-300 bg-white flex-shrink-0" />
-            <span className="text-[10px] text-body leading-tight">Misses safety netting</span>
+          <div className="flex-1 flex items-start gap-2 p-2.5 rounded-lg bg-red-50/50 border border-red-100">
+            <div className="w-4 h-4 mt-0.5 rounded border-2 border-red-300 bg-white flex-shrink-0" />
+            <span className="text-[10px] text-body leading-tight">Prescribes oral steroids or antibiotics without indication</span>
           </div>
+        </div>
+        <div className="hidden lg:flex gap-2">
+          <div className="flex-1 flex items-start gap-2 p-2.5 rounded-lg bg-emerald-50/50 border border-emerald-100">
+            <div className="w-4 h-4 mt-0.5 rounded border-2 border-emerald-300 bg-white flex-shrink-0" />
+            <span className="text-[10px] text-body leading-tight">Explains why IgE blood tests are not indicated (NICE CKS)</span>
+          </div>
+          <div className="flex-1 flex items-start gap-2 p-2.5 rounded-lg bg-red-50/50 border border-red-100">
+            <div className="w-4 h-4 mt-0.5 rounded border-2 border-red-300 bg-white flex-shrink-0" />
+            <span className="text-[10px] text-body leading-tight">Fails to offer a different emollient formulation</span>
+          </div>
+        </div>
+        <div className="hidden lg:flex gap-2">
+          <div className="flex-1 flex items-start gap-2 p-2.5 rounded-lg bg-emerald-50/50 border border-emerald-100">
+            <div className="w-4 h-4 mt-0.5 rounded border-2 border-emerald-300 bg-white flex-shrink-0" />
+            <span className="text-[10px] text-body leading-tight">Suggests supervised exclusion trial if dairy suspected</span>
+          </div>
+          <div className="flex-1" />
         </div>
       </div>
       <div className="mt-3 text-center">
         <span className="text-[10px] font-semibold text-primary bg-primary/[0.06] px-3 py-1 rounded-lg">
-          2 / 8 indicators checked
+          2 / 4 positive indicators checked
         </span>
       </div>
     </div>
@@ -193,8 +166,7 @@ function PortfolioVisual() {
 
   return (
     <div
-      className="rounded-[20px] overflow-hidden border border-black/[0.06]"
-      style={{ background: '#FFFCF8', boxShadow: '0 24px 64px rgba(180,83,9,0.06)' }}
+      className="rounded-2xl overflow-hidden border border-border-card bg-bg-card shadow-card-chrome"
     >
       {/* Header */}
       <div className="px-5 py-3 border-b border-black/[0.05] flex items-center justify-between">
@@ -202,7 +174,6 @@ function PortfolioVisual() {
           <div className="w-2 h-2 rounded-full bg-primary" />
           <span className="text-[11px] font-mono text-primary">Portfolio AI</span>
         </div>
-        <span className="text-[9px] font-mono text-muted uppercase tracking-wider">RCGP · Standard</span>
       </div>
 
       <div className="p-5 space-y-2.5">
@@ -219,9 +190,9 @@ function PortfolioVisual() {
           </div>
         </div>
 
-        {/* Brief Description — expanded */}
+        {/* Brief Description — expanded (hidden on mobile) */}
         <div
-          className="p-3 rounded-xl border border-primary/10"
+          className="hidden lg:block p-3 rounded-xl border border-primary/10"
           style={{ background: 'linear-gradient(135deg, rgba(180,83,9,0.04), rgba(245,158,11,0.06))' }}
         >
           <div className="flex items-center justify-between mb-1.5">
@@ -263,20 +234,9 @@ function PortfolioVisual() {
 export default function BottomFeatures() {
   return (
     <section className="py-16 lg:py-24">
-      <div className="max-w-[1200px] mx-auto px-6 space-y-16 lg:space-y-28">
+      <div className="max-w-[1200px] mx-auto px-6 lg:px-5 space-y-16 lg:space-y-28">
         <FeatureRow
           index={0}
-          label="Comprehensive Coverage"
-          heading="200+ RCGP mapped stations"
-          body="Every case mapped to the RCGP curriculum. Practice across every specialty you will face in the SCA — from cardiovascular to mental health."
-          cta="Browse Case Library →"
-          href="/cases"
-        >
-          <CarouselVisual />
-        </FeatureRow>
-
-        <FeatureRow
-          index={1}
           label="Free Forever"
           heading="Practice with a friend"
           body="Every case comes with candidate briefs, patient scripts, and marking schemes. One of you plays the doctor, the other reads the patient script. Use the built-in timer and mark scheme to score each other in real time."
@@ -287,10 +247,10 @@ export default function BottomFeatures() {
         </FeatureRow>
 
         <FeatureRow
-          index={2}
+          index={1}
           label="Old Favourite"
           heading="The portfolio tool you already use"
-          body="Over 20% of GP trainees in the UK already use our AI to write RCGP-standard clinical case reviews. Describe your case, select your capabilities, and get a structured review ready to submit — in seconds."
+          body="Over 20% of GP trainees in the UK already use our AI to write clinical case reviews. Describe your case, select your capabilities, and get a structured review ready to submit — in seconds."
           cta="Open Portfolio Tool →"
           href="/portfolio"
         >

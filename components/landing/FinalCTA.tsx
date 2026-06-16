@@ -5,7 +5,7 @@ import Link from 'next/link';
 
 export default function FinalCTA() {
   return (
-    <section className="py-[60px] px-6">
+    <section className="py-10 md:py-12 px-6">
       <div className="max-w-[560px] mx-auto text-center">
         <motion.h2
           className="text-[clamp(28px,6vw,40px)] font-bold text-heading tracking-[-0.02em] mb-3"
@@ -24,7 +24,7 @@ export default function FinalCTA() {
           viewport={{ once: true }}
           transition={{ type: 'spring', stiffness: 60, damping: 20, delay: 0.1 }}
         >
-          Pick a case. Talk to your patient. Get scored. No account needed.
+          Pick a case, talk to an AI patient, and see where your SCA consultation skills stand.
         </motion.p>
 
         <motion.div
@@ -47,19 +47,6 @@ export default function FinalCTA() {
             </motion.div>
           </Link>
         </motion.div>
-
-        <motion.p
-          className="mt-4 text-[13px] text-muted"
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-          transition={{ delay: 0.4, duration: 0.5 }}
-        >
-          Already have an account?{' '}
-          <Link href="/auth/sign-in" className="text-primary hover:underline">
-            Sign in
-          </Link>
-        </motion.p>
       </div>
     </section>
   );

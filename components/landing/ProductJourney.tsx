@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import ProductWindow from './ProductWindow';
 import ChapterBrief from './ChapterBrief';
@@ -10,35 +11,31 @@ import ChapterProgress from './ChapterProgress';
 const CHAPTERS = [
   {
     number: '01',
-    heading: 'Read your patient brief',
-    body: 'Every station starts with a scenario. You get the same information a real SCA candidate gets — presenting complaint, patient background, and your task.',
-    timer: '12:00',
-    details: null,
+    eyebrow: 'THE BRIEF',
+    heading: 'Read your ',
+    headingBold: 'patient brief',
+    body: 'Every station starts with a scenario. You get the same information a real SCA candidate gets — presenting complaint, patient background and your task.',
   },
   {
     number: '02',
-    heading: 'Have the conversation',
+    eyebrow: 'THE CONSULTATION',
+    heading: 'Have the ',
+    headingBold: 'conversation',
     body: "Your patient responds in real-time with voice. They'll answer your questions, volunteer symptoms when prompted, and push back if you're vague — just like the real exam.",
-    timer: '06:26',
-    details: [
-      'Real-time voice · Deepgram + Cartesia',
-      'Adaptive emotional responses',
-      '12-minute timed consultations',
-    ],
   },
   {
     number: '03',
-    heading: 'See exactly where you stand',
+    eyebrow: 'THE FEEDBACK',
+    heading: 'See exactly ',
+    headingBold: 'where you stand',
     body: 'Instant, domain-level feedback scored on the three SCA marking criteria. Know your strengths. Know what to fix.',
-    timer: 'COMPLETE',
-    details: null,
   },
   {
     number: '04',
-    heading: 'Improve with every session',
+    eyebrow: 'THE PROGRESS',
+    heading: 'Improve with ',
+    headingBold: 'every station',
     body: 'Your consultation history builds a picture of your growth. See trends across domains, revisit feedback, and focus your practice where it matters most.',
-    timer: '—',
-    details: null,
   },
 ];
 
@@ -50,85 +47,116 @@ const CHAPTER_CONTENT = [
 ];
 
 export default function ProductJourney() {
+  const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const [activeSection, setActiveSection] = useState(0);
+
+  useEffect(() => {
+    const observers: (IntersectionObserver | null)[] = sectionRefs.current.map((ref, i) => {
+      if (!ref) return null;
+      const observer = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) setActiveSection(i);
+        },
+        { threshold: 0.4 }
+      );
+      observer.observe(ref);
+      return observer;
+    });
+    return () => observers.forEach(o => o?.disconnect());
+  }, []);
+
   return (
-    <section id="journey" className="py-16 lg:py-24">
-      <div className="max-w-[1200px] mx-auto px-6 space-y-16 lg:space-y-28">
+    <section id="journey" className="py-8 lg:py-0">
+      <div className="max-w-[1200px] mx-auto px-6 lg:px-5 relative">
+        {/* Continuous vertical thread — desktop only */}
+        <div className="hidden lg:block absolute w-px bg-border-card" style={{ left: 33, top: 48, bottom: 48 }} />
+
         {CHAPTERS.map((chapter, i) => (
-          <motion.div
+          <div
             key={i}
-            initial={{ opacity: 0, y: 48 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: '-80px' }}
-            transition={{ type: 'spring', stiffness: 50, damping: 20 }}
+            ref={el => { sectionRefs.current[i] = el; }}
+            className="py-5 lg:py-10"
           >
-            {/* Desktop: two columns */}
-            <div className="hidden lg:grid grid-cols-2 gap-20 items-start">
-              {/* Left: chapter text */}
-              <div>
-                <span className="text-[36px] font-bold font-mono text-primary/30">
-                  {chapter.number}
-                </span>
-                <h2 className="text-[36px] font-bold text-heading tracking-[-0.02em] leading-[1.15] mt-2 mb-5">
-                  {chapter.heading}
+            <motion.div
+              initial={{ opacity: 0, y: 48 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: '-80px' }}
+              transition={{ type: 'spring', stiffness: 50, damping: 20 }}
+            >
+              {/* ==================== DESKTOP ==================== */}
+              <div className="hidden lg:grid lg:grid-cols-[440px_420px] gap-24 items-center justify-between">
+                {/* Left column: thread dot + text */}
+                <div className="flex gap-6">
+                  {/* Thread node */}
+                  <div className="flex flex-col items-center pt-1 shrink-0" style={{ width: 28 }}>
+                    <div
+                      className={`w-3 h-3 rounded-full border-2 transition-all duration-300 z-10 ${
+                        activeSection === i
+                          ? 'bg-accent-soft border-accent-soft scale-110'
+                          : 'bg-bg-page border-border-card'
+                      }`}
+                    />
+                  </div>
+
+                  {/* Text content */}
+                  <div className="flex-1 min-w-0">
+                    {/* Step number */}
+                    <span
+                      className={`text-[28px] font-medium block leading-none transition-opacity duration-300 ${
+                        activeSection === i ? 'text-accent-soft' : 'text-accent-soft/40'
+                      }`}
+                    >
+                      {chapter.number}
+                    </span>
+                    {/* Eyebrow */}
+                    <span className="block text-xs font-semibold uppercase tracking-[0.08em] text-accent-primary mt-3 mb-3">
+                      {chapter.eyebrow}
+                    </span>
+                    {/* Headline */}
+                    <h2 className="text-[44px] font-semibold text-text-primary leading-[1.1] mb-5">
+                      {chapter.heading}<strong className="font-bold">{chapter.headingBold}</strong>
+                    </h2>
+                    {/* Body */}
+                    <p className="text-lg text-text-secondary leading-[1.5] max-w-[400px]">
+                      {chapter.body}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Right column: card */}
+                <div>
+                  <ProductWindow label="" timer="">
+                    {CHAPTER_CONTENT[i]}
+                  </ProductWindow>
+                </div>
+              </div>
+
+              {/* ==================== MOBILE ==================== */}
+              <div className="lg:hidden flex flex-col gap-4">
+                {/* Inline step number + eyebrow */}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-accent-soft">{chapter.number}</span>
+                  <span className="text-xs font-semibold uppercase tracking-[0.08em] text-accent-primary">
+                    · {chapter.eyebrow}
+                  </span>
+                </div>
+                {/* Headline */}
+                <h2 className="text-[32px] font-semibold text-text-primary leading-[1.1]">
+                  {chapter.heading}<strong className="font-bold">{chapter.headingBold}</strong>
                 </h2>
-                <p className="text-[16px] text-muted leading-[1.7] max-w-[400px]">
+                {/* Body */}
+                <p className="text-base text-text-secondary leading-[1.5]">
                   {chapter.body}
                 </p>
-                {chapter.details && (
-                  <div className="mt-6 flex flex-col gap-2">
-                    {chapter.details.map((detail, j) => (
-                      <motion.span
-                        key={j}
-                        className="text-[12px] text-muted flex items-center gap-2"
-                        initial={{ opacity: 0, x: -8 }}
-                        whileInView={{ opacity: 1, x: 0 }}
-                        viewport={{ once: true }}
-                        transition={{ delay: 0.2 + j * 0.1 }}
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-primary/30 flex-shrink-0" />
-                        {detail}
-                      </motion.span>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Right: product window */}
-              <div>
-                <ProductWindow label="Fourteen Fisherman" timer={chapter.timer}>
-                  {CHAPTER_CONTENT[i]}
-                </ProductWindow>
-              </div>
-            </div>
-
-            {/* Mobile/Tablet: stacked */}
-            <div className="lg:hidden flex flex-col gap-6 max-w-[500px] mx-auto">
-              <ProductWindow label="Fourteen Fisherman" timer={chapter.timer}>
-                {CHAPTER_CONTENT[i]}
-              </ProductWindow>
-              <div>
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="text-[24px] font-bold font-mono text-primary/30">
-                    {chapter.number}
-                  </span>
-                  <h2 className="text-[22px] font-bold text-heading tracking-[-0.02em] leading-[1.15]">
-                    {chapter.heading}
-                  </h2>
+                {/* Card */}
+                <div className="w-full">
+                  <ProductWindow label="" timer="">
+                    {CHAPTER_CONTENT[i]}
+                  </ProductWindow>
                 </div>
-                <p className="text-[14px] text-muted leading-[1.7]">{chapter.body}</p>
-                {chapter.details && (
-                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
-                    {chapter.details.map((detail, j) => (
-                      <span key={j} className="text-[11px] text-muted flex items-center gap-1.5">
-                        <span className="w-1 h-1 rounded-full bg-primary/30 flex-shrink-0" />
-                        {detail}
-                      </span>
-                    ))}
-                  </div>
-                )}
               </div>
-            </div>
-          </motion.div>
+            </motion.div>
+          </div>
         ))}
       </div>
     </section>

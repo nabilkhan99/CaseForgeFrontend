@@ -3,12 +3,12 @@
 import { motion } from 'framer-motion';
 
 const SESSIONS = [
-  { id: 'S1', station: 'Station 8', patient: 'Mr. Davies', score: 52, date: '2 weeks ago' },
-  { id: 'S2', station: 'Station 3', patient: 'Mrs. Khan', score: 58, date: '12 days ago' },
-  { id: 'S3', station: 'Station 11', patient: 'Mr. Okafor', score: 64, date: '10 days ago' },
-  { id: 'S4', station: 'Station 6', patient: 'Ms. Williams', score: 69, date: '1 week ago' },
-  { id: 'S5', station: 'Station 2', patient: 'Mrs. Begum', score: 72, date: '4 days ago' },
-  { id: 'S6', station: 'Station 14', patient: 'Mrs. Thompson', score: 78, date: 'Today' },
+  { id: 'S1', title: 'Chest Pain — New Onset', date: '2 weeks ago', score: 52 },
+  { id: 'S2', title: 'Child Eczema — Steroid Concerns', date: '12 days ago', score: 58 },
+  { id: 'S3', title: 'Low Mood — Work Stress', date: '10 days ago', score: 64 },
+  { id: 'S4', title: 'Knee Pain — Sports Injury', date: '1 week ago', score: 69 },
+  { id: 'S5', title: 'Breathlessness — Smoker', date: '4 days ago', score: 72 },
+  { id: 'S6', title: 'ECG Request — Running Club', date: 'Today', score: 78 },
 ];
 
 const DOMAINS = [
@@ -17,22 +17,9 @@ const DOMAINS = [
   { name: 'Interpersonal Skills', current: 88, previous: 76 },
 ];
 
-function ScorePill({ score }: { score: number }) {
-  const color = score >= 70 ? '#16A34A' : score >= 60 ? '#D97706' : '#DC2626';
-  const bg = score >= 70 ? 'rgba(34,197,94,0.1)' : score >= 60 ? 'rgba(217,119,6,0.1)' : 'rgba(220,38,38,0.1)';
-  return (
-    <span
-      className="text-[11px] font-bold font-mono px-2 py-0.5 rounded-md"
-      style={{ color, background: bg }}
-    >
-      {score}
-    </span>
-  );
-}
-
 export default function ChapterProgress() {
   return (
-    <div className="p-5">
+    <div className="p-5 lg:p-6">
       {/* Top row: big stat + trend */}
       <div className="flex items-center gap-4 mb-5">
         <div className="flex-1">
@@ -61,13 +48,13 @@ export default function ChapterProgress() {
               transition={{ delay: 0.5 }}
             >
               ↑ 26pts
-              <span className="text-[10px] text-muted font-normal ml-1">from first session</span>
+              <span className="text-[10px] text-muted font-normal ml-1">from first station</span>
             </motion.span>
           </div>
         </div>
         <div className="text-right">
           <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-1">
-            Sessions
+            Stations completed
           </div>
           <div className="text-[28px] font-bold text-heading leading-none">6</div>
         </div>
@@ -120,83 +107,54 @@ export default function ChapterProgress() {
         </div>
       </div>
 
-      {/* Divider */}
-      <div className="border-t border-black/[0.05] mb-5" />
-
-      {/* Domain progress with before/after bars */}
-      <div className="mb-5">
-        <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-3">
-          Domain Growth
-        </div>
-        <div className="flex flex-col gap-3">
-          {DOMAINS.map((d, i) => (
-            <motion.div
-              key={d.name}
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.8 + i * 0.1 }}
-            >
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[12px] text-stone-600 font-medium">{d.name}</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-muted line-through">{d.previous}%</span>
-                  <span className="text-[12px] font-bold text-heading">{d.current}%</span>
-                  <span className="text-[10px] font-semibold text-success">
-                    +{d.current - d.previous}
-                  </span>
+      {/* Domain progress — desktop only */}
+      <div className="hidden lg:block">
+        <div className="border-t border-black/[0.05] mb-5" />
+        <div className="mb-5">
+          <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-3">
+            Domain Growth
+          </div>
+          <div className="flex flex-col gap-3">
+            {DOMAINS.map((d, i) => (
+              <motion.div
+                key={d.name}
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.8 + i * 0.1 }}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[12px] text-stone-600 font-medium">{d.name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-muted line-through">{d.previous}%</span>
+                    <span className="text-[12px] font-bold text-heading">{d.current}%</span>
+                    <span className="text-[10px] font-semibold text-success">
+                      +{d.current - d.previous}
+                    </span>
+                  </div>
                 </div>
-              </div>
-              <div className="relative h-2.5 bg-black/[0.04] rounded-full overflow-hidden">
-                {/* Previous score (ghost bar) */}
-                <div
-                  className="absolute h-full rounded-full bg-black/[0.06]"
-                  style={{ width: `${d.previous}%` }}
-                />
-                {/* Current score (amber bar) */}
-                <motion.div
-                  className="absolute h-full rounded-full"
-                  style={{ background: 'linear-gradient(90deg, #B45309, #F59E0B)' }}
-                  initial={{ width: `${d.previous}%` }}
-                  animate={{ width: `${d.current}%` }}
-                  transition={{
-                    type: 'spring',
-                    stiffness: 40,
-                    damping: 18,
-                    delay: 1.0 + i * 0.15,
-                  }}
-                />
-              </div>
-            </motion.div>
-          ))}
+                <div className="relative h-2.5 bg-black/[0.04] rounded-full overflow-hidden">
+                  <div
+                    className="absolute h-full rounded-full bg-black/[0.06]"
+                    style={{ width: `${d.previous}%` }}
+                  />
+                  <motion.div
+                    className="absolute h-full rounded-full"
+                    style={{ background: 'linear-gradient(90deg, #B45309, #F59E0B)' }}
+                    initial={{ width: `${d.previous}%` }}
+                    animate={{ width: `${d.current}%` }}
+                    transition={{
+                      type: 'spring',
+                      stiffness: 40,
+                      damping: 18,
+                      delay: 1.0 + i * 0.15,
+                    }}
+                  />
+                </div>
+              </motion.div>
+            ))}
+          </div>
         </div>
-      </div>
 
-      {/* Divider */}
-      <div className="border-t border-black/[0.05] mb-4" />
-
-      {/* Recent sessions list */}
-      <div>
-        <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-2.5">
-          Recent Sessions
-        </div>
-        <div className="flex flex-col gap-1.5">
-          {SESSIONS.slice(-3).reverse().map((s, i) => (
-            <motion.div
-              key={s.id}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-black/[0.02] transition-colors"
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1.2 + i * 0.08 }}
-            >
-              <div className="text-[11px] font-mono text-muted w-6">{s.id}</div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[12px] font-medium text-heading truncate">{s.patient}</div>
-                <div className="text-[10px] text-muted">{s.station} · {s.date}</div>
-              </div>
-              <ScorePill score={s.score} />
-            </motion.div>
-          ))}
-        </div>
       </div>
     </div>
   );

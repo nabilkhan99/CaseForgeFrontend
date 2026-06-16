@@ -7,21 +7,25 @@ import { useState } from 'react';
 
 interface LandingNavbarProps {
   user: { id: string } | null;
+  hideAuth?: boolean;
 }
 
-export default function LandingNavbar({ user }: LandingNavbarProps) {
+export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { scrollYProgress } = useScroll();
 
   const navBg = useTransform(
     scrollYProgress,
     [0, 0.08],
-    ['rgba(255,255,255,0.72)', 'rgba(255,255,255,0.95)']
+    ['rgba(255,250,238,0.78)', 'rgba(255,250,238,0.94)']
   );
   const navShadow = useTransform(
     scrollYProgress,
     [0, 0.08],
-    ['0 1px 0 rgba(0,0,0,0)', '0 1px 0 rgba(0,0,0,0.06)']
+    [
+      '0 1px 0 rgba(255,255,255,0.7) inset, 0 8px 24px -16px rgba(60,30,8,0.18)',
+      '0 1px 0 rgba(255,255,255,0.7) inset, 0 12px 28px -16px rgba(60,30,8,0.28)',
+    ]
   );
 
   return (
@@ -29,7 +33,7 @@ export default function LandingNavbar({ user }: LandingNavbarProps) {
       <motion.nav
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         style={{ maxWidth: 'min(92%, 1200px)', backgroundColor: navBg, boxShadow: navShadow } as any}
-        className="w-full backdrop-blur-2xl border border-black/[0.06] rounded-[14px] px-5 py-3 flex items-center justify-between"
+        className="w-full backdrop-blur-2xl border border-[#d9cdb3]/70 rounded-[18px] px-5 py-3 flex items-center justify-between"
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 120, damping: 20, delay: 0.1 }}
@@ -52,7 +56,7 @@ export default function LandingNavbar({ user }: LandingNavbarProps) {
             href="/cases"
             className="text-[13px] text-body hover:text-heading transition-colors duration-150"
           >
-            Browse Cases
+            Case Library
           </Link>
           <Link
             href="/portfolio"
@@ -63,34 +67,38 @@ export default function LandingNavbar({ user }: LandingNavbarProps) {
               <span className="text-[8px]">✦</span> The original
             </span>
           </Link>
-          <div className="w-px h-4 bg-black/10" />
-          {user ? (
-            <Link href="/dashboard">
-              <motion.div
-                className="primary-button text-[13px] !py-2 !px-5"
-                whileHover={{ y: -2 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                Dashboard
-              </motion.div>
-            </Link>
-          ) : (
+          {!hideAuth && (
             <>
-              <Link
-                href="/auth/sign-in"
-                className="text-[13px] text-body hover:text-heading transition-colors duration-150"
-              >
-                Sign in
-              </Link>
-              <Link href="/try">
-                <motion.div
-                  className="primary-button text-[13px] !py-2 !px-5"
-                  whileHover={{ y: -2 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  Try a free case
-                </motion.div>
-              </Link>
+              <div className="w-px h-4 bg-black/10" />
+              {user ? (
+                <Link href="/dashboard">
+                  <motion.div
+                    className="primary-button text-[13px] !py-2 !px-5 !rounded-full"
+                    whileHover={{ y: -2 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    Dashboard
+                  </motion.div>
+                </Link>
+              ) : (
+                <>
+                  <Link
+                    href="/auth/sign-in"
+                    className="text-[13px] text-body hover:text-heading transition-colors duration-150"
+                  >
+                    Sign in
+                  </Link>
+                  <Link href="/try">
+                    <motion.div
+                      className="primary-button text-[13px] !py-2 !px-5 !rounded-full"
+                      whileHover={{ y: -2 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      Try a free case
+                    </motion.div>
+                  </Link>
+                </>
+              )}
             </>
           )}
         </div>
@@ -135,7 +143,7 @@ export default function LandingNavbar({ user }: LandingNavbarProps) {
               onClick={() => setMobileOpen(false)}
               className="min-h-[44px] flex items-center px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
             >
-              Browse Cases
+              Case Library
             </Link>
             <Link
               href="/portfolio"
@@ -147,25 +155,29 @@ export default function LandingNavbar({ user }: LandingNavbarProps) {
                 <span className="text-[8px]">✦</span> The original
               </span>
             </Link>
-            <div className="my-1 border-t border-black/[0.06]" />
-            {user ? (
-              <Link href="/dashboard" onClick={() => setMobileOpen(false)}>
-                <div className="primary-button text-[14px] w-full justify-center">Dashboard</div>
-              </Link>
-            ) : (
+            {!hideAuth && (
               <>
-                <Link
-                  href="/auth/sign-in"
-                  onClick={() => setMobileOpen(false)}
-                  className="min-h-[44px] flex items-center px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
-                >
-                  Sign in
-                </Link>
-                <Link href="/try" onClick={() => setMobileOpen(false)}>
-                  <div className="primary-button text-[14px] w-full justify-center mt-1">
-                    Try a free case
-                  </div>
-                </Link>
+                <div className="my-1 border-t border-black/[0.06]" />
+                {user ? (
+                  <Link href="/dashboard" onClick={() => setMobileOpen(false)}>
+                    <div className="primary-button text-[14px] w-full justify-center">Dashboard</div>
+                  </Link>
+                ) : (
+                  <>
+                    <Link
+                      href="/auth/sign-in"
+                      onClick={() => setMobileOpen(false)}
+                      className="min-h-[44px] flex items-center px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
+                    >
+                      Sign in
+                    </Link>
+                    <Link href="/try" onClick={() => setMobileOpen(false)}>
+                      <div className="primary-button text-[14px] w-full justify-center mt-1">
+                        Try a free case
+                      </div>
+                    </Link>
+                  </>
+                )}
               </>
             )}
           </motion.div>
