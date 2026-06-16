@@ -169,6 +169,19 @@ body {
     transform: translateY(0);
   }
 
+  .button-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-black/[0.08] bg-white/70 font-medium text-heading transition-all duration-150;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .button-secondary:hover {
+    @apply border-black/[0.12] bg-white;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  }
+  .button-secondary:active {
+    transform: translateY(0);
+  }
+
   .case-form {
     @apply bg-white shadow-lg rounded-xl p-8 border border-gray-100;
   }
