@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import type { ConsultationFeedback } from '@/lib/clinical-master/types';
@@ -7,10 +7,12 @@ import type { ConsultationFeedback } from '@/lib/clinical-master/types';
  * Feedback orchestrator + poller for the SCA marking engine.
  *
  * If results exist in session_results (new spec schema), return them. Otherwise
- * trigger the Azure Functions marking endpoint (mark-consultation) and return
+ * schedule the Azure Functions marking endpoint (mark-consultation) and return
  * "generating" so the page keeps polling. The Gemini Supabase Edge Function has
  * been retired; marking now runs on Azure (GPT-5.x), guarded by a shared secret.
  */
+
+export const maxDuration = 60;
 
 interface SessionResultRow {
     verdict: string;
@@ -55,7 +57,7 @@ function toFeedback(
 
 export async function POST(request: NextRequest) {
     try {
-        const { sessionId } = await request.json();
+        const { sessionId, trigger = true } = await request.json();
         if (!sessionId) {
             return NextResponse.json({ error: 'sessionId required' }, { status: 400 });
         }
@@ -135,7 +137,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'No transcript available yet' }, { status: 404 });
         }
 
-        // 3. Trigger the Azure marking endpoint (fire-and-forget; the page polls).
+        // 3. Trigger the Azure marking endpoint once; later polls pass trigger=false.
         const markingUrl = process.env.MARKING_API_URL;
         const markingSecret = process.env.MARKING_SHARED_SECRET;
         if (!markingUrl || !markingSecret) {
@@ -145,16 +147,32 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        fetch(`${markingUrl.replace(/\/+$/, '')}/api/mark-consultation`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-marking-secret': markingSecret,
-            },
-            body: JSON.stringify({ sessionId }),
-        }).catch((err) => {
-            console.error('Failed to trigger marking endpoint:', err);
-        });
+        if (trigger) {
+            const endpoint = `${markingUrl.replace(/\/+$/, '')}/api/mark-consultation`;
+            after(async () => {
+                try {
+                    const res = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-marking-secret': markingSecret,
+                        },
+                        body: JSON.stringify({ sessionId }),
+                    });
+
+                    if (!res.ok) {
+                        const body = await res.text().catch(() => '');
+                        console.error('Marking endpoint returned an error', {
+                            sessionId,
+                            status: res.status,
+                            body: body.slice(0, 500),
+                        });
+                    }
+                } catch (err) {
+                    console.error('Failed to trigger marking endpoint:', err);
+                }
+            });
+        }
 
         return NextResponse.json({ status: 'generating' });
     } catch (error) {

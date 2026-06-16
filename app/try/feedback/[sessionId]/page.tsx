@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
@@ -19,6 +19,7 @@ const DOMAIN_LABEL: Record<string, string> = {
   relating_to_others: 'Interpersonal Skills',
 };
 const PASSING_VERDICTS = ['Pass', 'Bare Pass'];
+const MAX_FEEDBACK_POLLS = 30;
 
 interface FeedbackPreview {
   verdict: string | null;
@@ -41,6 +42,7 @@ export default function TryFeedbackAuthGatePage() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [emailConfirmationSent, setEmailConfirmationSent] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackPreview | null>(null);
+  const feedbackPollStarted = useRef(false);
 
   const supabase = createClient();
 
@@ -49,36 +51,62 @@ export default function TryFeedbackAuthGatePage() {
     document.cookie = 'ff_free_trial_used=true; path=/; max-age=31536000; SameSite=Lax';
   }, []);
 
-  // Try to load partial feedback from the session
+  // Trigger marking once, then poll the service-role API for a partial preview.
   useEffect(() => {
+    let cancelled = false;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let attempts = 0;
+
     async function loadFeedback() {
       try {
-        const { data } = await supabase
-          .from('session_results')
-          .select('verdict, weighted_score, max_score, domains')
-          .eq('session_id', sessionId)
-          .single();
+        const shouldTrigger = !feedbackPollStarted.current;
+        feedbackPollStarted.current = true;
 
-        if (data) {
-          const row = data as unknown as {
-            verdict: string | null;
-            weighted_score: number | null;
-            max_score: number | null;
-            domains: unknown;
+        const res = await fetch('/api/generate-feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId, trigger: shouldTrigger }),
+        });
+        if (cancelled) return;
+
+        const data = await res.json().catch(() => ({}));
+        if (data.status === 'ready' && data.feedback) {
+          const report = data.feedback as {
+            overall?: {
+              verdict?: string | null;
+              weighted_score?: number | null;
+              max_score?: number | null;
+            };
+            domains?: { domain: string; grade: string }[];
           };
           setFeedback({
-            verdict: row.verdict ?? null,
-            weightedScore: Number(row.weighted_score ?? 0),
-            maxScore: Number(row.max_score ?? 10.5),
-            domains: Array.isArray(row.domains) ? (row.domains as { domain: string; grade: string }[]) : [],
+            verdict: report.overall?.verdict ?? null,
+            weightedScore: Number(report.overall?.weighted_score ?? 0),
+            maxScore: Number(report.overall?.max_score ?? 10.5),
+            domains: Array.isArray(report.domains) ? report.domains : [],
           });
+          return;
+        }
+
+        attempts += 1;
+        if (attempts < MAX_FEEDBACK_POLLS && (data.status === 'generating' || res.status === 404)) {
+          timeout = setTimeout(loadFeedback, 3000);
         }
       } catch {
-        // Feedback may not be ready yet
+        if (cancelled) return;
+        attempts += 1;
+        if (attempts < MAX_FEEDBACK_POLLS) {
+          timeout = setTimeout(loadFeedback, 3000);
+        }
       }
     }
+
     loadFeedback();
-  }, [sessionId, supabase]);
+    return () => {
+      cancelled = true;
+      if (timeout) clearTimeout(timeout);
+    };
+  }, [sessionId]);
 
   useEffect(() => {
     async function checkAuth() {
