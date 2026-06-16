@@ -43,11 +43,11 @@ export const metadata: Metadata = {
   keywords: 'SCA exam, RCGP, GP training, medical simulation, clinical assessment, AI patient, consultation practice',
   icons: {
     icon: [
-      { url: '/favicon.ico', sizes: 'any' },
-      { url: '/icon.png', type: 'image/png', sizes: '512x512' },
+      { url: '/favicon.ico?v=20260616-2', sizes: 'any' },
+      { url: '/icon.png?v=20260616-2', type: 'image/png', sizes: '512x512' },
     ],
-    shortcut: '/favicon.ico',
-    apple: [{ url: '/apple-icon.png', type: 'image/png', sizes: '180x180' }],
+    shortcut: '/favicon.ico?v=20260616-2',
+    apple: [{ url: '/apple-icon.png?v=20260616-2', type: 'image/png', sizes: '180x180' }],
   },
   manifest: '/manifest.webmanifest',
   openGraph: {
