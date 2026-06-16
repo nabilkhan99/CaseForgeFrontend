@@ -46,8 +46,12 @@ export async function updateSession(request: NextRequest) {
         return NextResponse.redirect(url);
     }
 
-    // Subscription-gated routes: /clinical-master/* requires an active plan
-    const requiresSubscription = request.nextUrl.pathname.startsWith('/clinical-master');
+    // Subscription-gated routes: starting/practising cases requires an active
+    // plan, but completed feedback must remain visible after a free trial or
+    // after a plan expires.
+    const isFeedbackRoute = request.nextUrl.pathname.startsWith('/clinical-master/feedback');
+    const requiresSubscription =
+        request.nextUrl.pathname.startsWith('/clinical-master') && !isFeedbackRoute;
     if (requiresSubscription && user) {
         try {
             const { data: subscription } = await supabase

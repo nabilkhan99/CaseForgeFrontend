@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useRealtimeSession } from '@/hooks/useRealtimeSession';
@@ -31,6 +31,7 @@ function GuestLiveConsultationContent() {
   const [showEndModal, setShowEndModal] = useState(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
+  const isEndingRef = useRef(false);
 
   useEffect(() => {
     async function fetchStation() {
@@ -61,6 +62,7 @@ function GuestLiveConsultationContent() {
   // Graceful end (button, timer, or the model's end_consultation tool): the hook
   // persists the transcript + moves the session to 'processing', then this fires.
   const handleEnded = useCallback(() => {
+    isEndingRef.current = true;
     setIsProcessing(true);
     router.push(`/try/feedback/${sessionId}`);
   }, [router, sessionId]);
@@ -75,8 +77,13 @@ function GuestLiveConsultationContent() {
     });
 
   useEffect(() => {
-    if (station && status === 'disconnected') connect();
-  }, [station, status, connect]);
+    if (station && !isProcessing && !isEndingRef.current && status === 'disconnected') connect();
+  }, [station, isProcessing, status, connect]);
+
+  const handleEndConsultation = useCallback(() => {
+    isEndingRef.current = true;
+    endConsultation();
+  }, [endConsultation]);
 
   const handleToggleMute = () => {
     const newMuted = !isMuted;
@@ -134,7 +141,7 @@ function GuestLiveConsultationContent() {
         <ConsultationTimer
           durationSeconds={station?.consultation_duration_seconds || 720}
           autoStart={isConnected}
-          onComplete={endConsultation}
+          onComplete={handleEndConsultation}
         />
         <div className="flex items-center gap-2">
           {isConnected && (
@@ -253,7 +260,7 @@ function GuestLiveConsultationContent() {
         confirmLabel="End Now"
         cancelLabel="Continue"
         variant="danger"
-        onConfirm={() => { setShowEndModal(false); endConsultation(); }}
+        onConfirm={() => { setShowEndModal(false); handleEndConsultation(); }}
         onCancel={() => setShowEndModal(false)}
       />
 

@@ -74,6 +74,7 @@ export function useRealtimeSession({
     const micTrackRef = useRef<MediaStreamTrack | null>(null);
     const audioElRef = useRef<HTMLAudioElement | null>(null);
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const endDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const endedRef = useRef(false);
     const transcriptRef = useRef<TranscriptItem[]>([]);
     const messageCountRef = useRef(0);
@@ -126,6 +127,10 @@ export function useRealtimeSession({
         if (timerRef.current) {
             clearTimeout(timerRef.current);
             timerRef.current = null;
+        }
+        if (endDelayRef.current) {
+            clearTimeout(endDelayRef.current);
+            endDelayRef.current = null;
         }
         try {
             dcRef.current?.close();
@@ -185,7 +190,7 @@ export function useRealtimeSession({
                 });
                 sendEvent({ type: 'response.create' });
                 // Let the goodbye play before tearing down (mirrors old delayed disconnect).
-                setTimeout(() => void endRoutine(), 7000);
+                endDelayRef.current = setTimeout(() => void endRoutine(), 7000);
             }
         },
         [sendEvent, endRoutine]
@@ -273,7 +278,7 @@ export function useRealtimeSession({
     );
 
     const connect = useCallback(async () => {
-        if (status === 'connecting' || status === 'connected') return;
+        if (endedRef.current || status === 'connecting' || status === 'connected') return;
         try {
             setStatus('connecting');
             setError(null);
