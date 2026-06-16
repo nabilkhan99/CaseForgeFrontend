@@ -33,21 +33,43 @@ const geist = Geist({
 })
 
 export const metadata: Metadata = {
-  title: 'Fourteen Fisherman - The Gold Standard for SCA Prep',
+  metadataBase: new URL('https://www.fourteenfisherman.com'),
+  applicationName: 'Fourteen Fisherman',
+  title: {
+    default: 'Fourteen Fisherman - The Gold Standard for SCA Prep',
+    template: '%s | Fourteen Fisherman',
+  },
   description: 'Master the Simulated Consultation Assessment with AI-powered patient simulations. Practice 24/7 with realistic clinical scenarios mapped to the RCGP curriculum.',
   keywords: 'SCA exam, RCGP, GP training, medical simulation, clinical assessment, AI patient, consultation practice',
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/icon.png', type: 'image/png', sizes: '512x512' },
+    ],
+    shortcut: '/favicon.ico',
+    apple: [{ url: '/apple-icon.png', type: 'image/png', sizes: '180x180' }],
+  },
+  manifest: '/manifest.webmanifest',
   openGraph: {
     type: 'website',
+    siteName: 'Fourteen Fisherman',
     url: 'https://www.fourteenfisherman.com/',
     title: 'Fourteen Fisherman - The Gold Standard for SCA Prep',
-    description: 'Master the Simulated Consultation Assessment with AI-powered patient simulations.',
-    images: ['https://www.fourteenfisherman.com/fourteenfishermann.png'],
+    description: 'AI patient consultations, realistic GP scenarios, and scored feedback for SCA exam practice.',
+    images: [
+      {
+        url: '/opengraph-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'Fourteen Fisherman Clinical Master for SCA prep',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Fourteen Fisherman - The Gold Standard for SCA Prep',
-    description: 'Master the Simulated Consultation Assessment with AI-powered patient simulations.',
-    images: ['https://www.fourteenfisherman.com/fourteenfishermann.png'],
+    description: 'AI patient consultations, realistic GP scenarios, and scored feedback for SCA exam practice.',
+    images: ['/twitter-image.png'],
   },
   alternates: {
     canonical: 'https://www.fourteenfisherman.com/',
@@ -58,6 +80,7 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
+  themeColor: '#B45309',
 }
 
 export default function RootLayout({
