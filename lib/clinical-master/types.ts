@@ -29,9 +29,11 @@ export type FeedbackSource =
   | 'nice'
   | 'sign'
   | 'curriculum';
+export type EvidenceKind = 'supporting_quote' | 'patient_cue' | 'not_asked' | 'no_direct_quote';
 
 export interface Evidence {
-  quote: string;
+  evidence_kind?: EvidenceKind;
+  quote?: string | null;
   timestamp_ms?: number | null;
   speaker?: 'candidate' | 'patient' | null;
 }
@@ -82,6 +84,9 @@ export interface DomainFeedback {
   display_name: string;
   grade: Grade;
   grade_points: number;
+  max_points?: number;
+  weighted_points?: number;
+  is_weighted?: boolean;
   anchored_statements: AnchoredStatement[];
   what_you_did_well: DidWell[];
   what_you_missed: Missed[];
