@@ -14,6 +14,8 @@ import type { ConsultationFeedback } from '@/lib/clinical-master/types';
 
 export const maxDuration = 60;
 
+const inFlightMarkingSessions = new Set<string>();
+
 interface SessionResultRow {
     verdict: string;
     weighted_score: number | string | null;
@@ -147,8 +149,9 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        if (trigger) {
+        if (trigger && !inFlightMarkingSessions.has(sessionId)) {
             const endpoint = `${markingUrl.replace(/\/+$/, '')}/api/mark-consultation`;
+            inFlightMarkingSessions.add(sessionId);
             after(async () => {
                 try {
                     const res = await fetch(endpoint, {
@@ -170,11 +173,17 @@ export async function POST(request: NextRequest) {
                     }
                 } catch (err) {
                     console.error('Failed to trigger marking endpoint:', err);
+                } finally {
+                    inFlightMarkingSessions.delete(sessionId);
                 }
             });
         }
 
-        return NextResponse.json({ status: 'generating' });
+        return NextResponse.json({
+            status: 'generating',
+            triggerQueued: trigger,
+            alreadyInFlight: inFlightMarkingSessions.has(sessionId),
+        });
     } catch (error) {
         console.error('Feedback route error:', error);
         return NextResponse.json(
