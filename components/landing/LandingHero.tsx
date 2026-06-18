@@ -1,10 +1,8 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { useState, FormEvent } from 'react';
+import Link from 'next/link';
 import HeroPreview from './HeroPreview';
-
-type SubmitState = 'idle' | 'submitting' | 'success' | 'error';
 
 const UNDERLINE_SVG =
   "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 8' preserveAspectRatio='none'><path d='M2 5 Q 50 0 100 4 T 198 3' stroke='%23a8520f' stroke-width='1.8' fill='none' stroke-linecap='round'/></svg>\")";
@@ -13,34 +11,6 @@ const GRAIN_SVG =
   "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.4  0 0 0 0 0.3  0 0 0 0 0.18  0 0 0 0.18 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>\")";
 
 export default function LandingHero() {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [state, setState] = useState<SubmitState>('idle');
-
-  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (state === 'submitting' || state === 'success') return;
-    setState('submitting');
-    try {
-      const res = await fetch('/api/waitlist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, full_name: name }),
-      });
-      if (!res.ok) throw new Error('Request failed');
-      setState('success');
-    } catch {
-      setState('error');
-    }
-  }
-
-  const buttonLabel =
-    state === 'success'
-      ? 'You are on the list'
-      : state === 'submitting'
-        ? 'Joining…'
-        : 'Join waitlist';
-
   return (
     <section
       className="relative overflow-hidden"
@@ -164,90 +134,52 @@ export default function LandingHero() {
           style={{ maxWidth: 560 }}
           id="join"
         >
-          <form
-            onSubmit={handleSubmit}
-            className="grid gap-2.5 items-stretch grid-cols-1 sm:grid-cols-[0.7fr_1fr_auto]"
+          <div
+            className="grid gap-2.5 items-stretch grid-cols-1 sm:grid-cols-[1fr_auto]"
           >
-            <input
-              type="text"
-              name="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Your name"
-              required
-              autoComplete="name"
-              disabled={state === 'submitting' || state === 'success'}
-              className="min-w-0 px-4 py-3.5 text-[14.5px] text-[#1a1612] placeholder:text-[#a89880] rounded-xl focus:outline-none transition"
+            <Link
+              href="/try"
+              className="inline-flex min-h-[50px] items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-[14px] font-medium text-[#fff8e9] transition hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-[#a8520f]/35 focus-visible:ring-offset-2 focus-visible:ring-offset-[#f3ebdb]"
               style={{
-                backgroundColor: 'rgba(255,250,238,.85)',
-                backdropFilter: 'blur(10px)',
-                WebkitBackdropFilter: 'blur(10px)',
-                border: '1px solid #d9cdb3',
-                boxShadow:
-                  '0 1px 0 rgba(255,255,255,.7) inset, 0 6px 16px -12px rgba(80,40,10,.30)',
-              }}
-            />
-            <input
-              type="email"
-              name="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Email address"
-              required
-              autoComplete="email"
-              disabled={state === 'submitting' || state === 'success'}
-              className="min-w-0 px-4 py-3.5 text-[14.5px] text-[#1a1612] placeholder:text-[#a89880] rounded-xl focus:outline-none transition"
-              style={{
-                backgroundColor: 'rgba(255,250,238,.85)',
-                backdropFilter: 'blur(10px)',
-                WebkitBackdropFilter: 'blur(10px)',
-                border: '1px solid #d9cdb3',
-                boxShadow:
-                  '0 1px 0 rgba(255,255,255,.7) inset, 0 6px 16px -12px rgba(80,40,10,.30)',
-              }}
-            />
-            <motion.button
-              type="submit"
-              disabled={state === 'submitting' || state === 'success'}
-              whileHover={state === 'idle' ? { y: -1 } : undefined}
-              whileTap={state === 'idle' ? { scale: 0.98 } : undefined}
-              className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-4 py-3.5 sm:py-0 text-[14px] font-medium text-[#fff8e9] disabled:cursor-default"
-              style={{
-                background:
-                  state === 'success'
-                    ? '#547a3f'
-                    : 'linear-gradient(180deg, #d3711e, #b35712)',
-                border:
-                  state === 'success'
-                    ? '1px solid rgba(50,80,30,.4)'
-                    : '1px solid rgba(120,55,8,.4)',
+                background: 'linear-gradient(180deg, #d3711e, #b35712)',
+                border: '1px solid rgba(120,55,8,.4)',
                 boxShadow:
                   '0 1px 0 rgba(255,220,170,.45) inset, 0 8px 20px -8px rgba(160,75,15,.55)',
               }}
             >
-              {buttonLabel}
-              {state !== 'success' && (
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M5 12h14" />
-                  <path d="M13 5l7 7-7 7" />
-                </svg>
-              )}
-            </motion.button>
-          </form>
-          {state === 'error' && (
-            <p className="mt-2 text-[12.5px] text-[#a8520f] text-center">
-              Something went wrong. Please try again.
-            </p>
-          )}
+              Try a free case
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M5 12h14" />
+                <path d="M13 5l7 7-7 7" />
+              </svg>
+            </Link>
+            <Link
+              href="/sca-cases"
+              className="inline-flex min-h-[50px] items-center justify-center rounded-xl px-5 py-3.5 text-[14px] font-medium text-[#3a2f24] transition hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-[#a8520f]/35 focus-visible:ring-offset-2 focus-visible:ring-offset-[#f3ebdb]"
+              style={{
+                backgroundColor: 'rgba(255,250,238,.85)',
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)',
+                border: '1px solid #d9cdb3',
+                boxShadow:
+                  '0 1px 0 rgba(255,255,255,.7) inset, 0 6px 16px -12px rgba(80,40,10,.30)',
+              }}
+            >
+              Browse Free SCA Practice Cases
+            </Link>
+          </div>
+          <p className="mt-3 text-center text-[12.5px] text-[#7b6a55]">
+            No account needed for the trial. Save your results when you are ready.
+          </p>
         </motion.div>
 
         <HeroPreview />

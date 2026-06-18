@@ -100,12 +100,14 @@ export default function CaseDetailTabs({
                 )}
             </div>
 
-            {/* Tab content */}
+            {/* Tab content: all panels stay in the DOM for crawlers; CSS hides inactive panels. */}
             <div className="bg-white/70 border border-black/[0.06] rounded-2xl rounded-tl-none mx-3 md:mx-4 mb-4">
-                {activeTab === 'candidate' && candidateContent}
-                {activeTab === 'script' && patientScriptContent}
-                {activeTab === 'markscheme' && markSchemeContent}
-                {activeTab === 'learning' && learningPointsContent}
+                <div className={activeTab === 'candidate' ? 'block' : 'hidden'}>{candidateContent}</div>
+                {patientScriptContent && (
+                    <div className={activeTab === 'script' ? 'block' : 'hidden'}>{patientScriptContent}</div>
+                )}
+                <div className={activeTab === 'markscheme' ? 'block' : 'hidden'}>{markSchemeContent}</div>
+                <div className={activeTab === 'learning' ? 'block' : 'hidden'}>{learningPointsContent}</div>
             </div>
         </div>
     );

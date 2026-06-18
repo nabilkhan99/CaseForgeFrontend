@@ -82,7 +82,7 @@ function FeatureRow({
 function PracticeVisual() {
   return (
     <div
-      className="rounded-2xl overflow-hidden border border-border-card bg-bg-card shadow-card-chrome p-6"
+      className="rounded-2xl overflow-hidden border border-border-card bg-bg-card shadow-card-chrome p-5 max-w-[560px] mx-auto"
     >
       <div className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-4">
         Built-in tools
@@ -132,13 +132,6 @@ function PracticeVisual() {
             <div className="w-4 h-4 mt-0.5 rounded border-2 border-red-300 bg-white flex-shrink-0" />
             <span className="text-[10px] text-body leading-tight">Fails to offer a different emollient formulation</span>
           </div>
-        </div>
-        <div className="hidden lg:flex gap-2">
-          <div className="flex-1 flex items-start gap-2 p-2.5 rounded-lg bg-emerald-50/50 border border-emerald-100">
-            <div className="w-4 h-4 mt-0.5 rounded border-2 border-emerald-300 bg-white flex-shrink-0" />
-            <span className="text-[10px] text-body leading-tight">Suggests supervised exclusion trial if dairy suspected</span>
-          </div>
-          <div className="flex-1" />
         </div>
       </div>
       <div className="mt-3 text-center">
@@ -239,9 +232,9 @@ export default function BottomFeatures() {
           index={0}
           label="Free Forever"
           heading="Practice with a friend"
-          body="Every case comes with candidate briefs, patient scripts, and marking schemes. One of you plays the doctor, the other reads the patient script. Use the built-in timer and mark scheme to score each other in real time."
-          cta="Practice Free Cases →"
-          href="/cases"
+          body="All 79 free SCA practice cases are built directly from the RCGP curriculum, each with a candidate brief, patient script and marking scheme."
+          cta="Browse Free SCA Practice Cases →"
+          href="/sca-cases"
         >
           <PracticeVisual />
         </FeatureRow>
@@ -251,8 +244,8 @@ export default function BottomFeatures() {
           label="Old Favourite"
           heading="The portfolio tool you already use"
           body="Over 20% of GP trainees in the UK already use our AI to write clinical case reviews. Describe your case, select your capabilities, and get a structured review ready to submit — in seconds."
-          cta="Open Portfolio Tool →"
-          href="/portfolio"
+          cta="Try the Free GP Portfolio Tool →"
+          href="/gp-portfolio-tool"
         >
           <PortfolioVisual />
         </FeatureRow>

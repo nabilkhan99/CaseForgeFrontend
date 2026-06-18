@@ -28,7 +28,7 @@ export default function PracticeWithFriend() {
               <p className="text-[16px] text-muted leading-[1.7] mb-6">
                 One of you plays the doctor, the other reads the patient script. Use the built-in timer and mark scheme to score each other in real time.
               </p>
-              <Link href="/cases">
+              <Link href="/sca-cases">
                 <motion.div
                   className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-[14px] font-semibold text-white cursor-pointer"
                   style={{
@@ -38,7 +38,7 @@ export default function PracticeWithFriend() {
                   whileHover={{ y: -2 }}
                   whileTap={{ scale: 0.98 }}
                 >
-                  Practice Free Cases →
+                  Browse Free SCA Practice Cases →
                 </motion.div>
               </Link>
             </div>

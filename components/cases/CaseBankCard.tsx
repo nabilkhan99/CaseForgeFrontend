@@ -1,10 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import type { CaseBankStation } from '@/lib/supabase/queries/cases';
+import type { SeoCase } from '@/lib/seo/cases';
 
 interface CaseBankCardProps {
-    station: CaseBankStation;
+    station: SeoCase;
 }
 
 function VideoIcon() {
@@ -49,15 +49,15 @@ export default function CaseBankCard({ station }: CaseBankCardProps) {
     const shortDesc = `${ageStr} • ${station.patient_name}`;
 
     return (
-        <Link href={`/cases/${station.id}`} className="h-full block">
-            <div className="group relative rounded-2xl bg-bg-card border border-border-card shadow-card-chrome hover:border-primary/[0.15] hover:shadow-elevation-2 transition-all duration-200 cursor-pointer p-5 h-full flex flex-col">
+        <Link href={station.path} className="h-full block">
+            <div className="group relative rounded-xl bg-white/60 backdrop-blur-sm border border-black/[0.04] hover:border-primary/[0.15] hover:shadow-elevation-1 transition-all duration-200 cursor-pointer p-5 h-full flex flex-col">
                 {/* Title */}
                 <h3 className="text-sm font-semibold text-heading leading-snug mb-2 group-hover:text-primary transition-colors line-clamp-3 sm:line-clamp-2 min-h-[44px]">
                     {station.title}
                 </h3>
 
                 {/* Description */}
-                <p className="text-xs text-text-secondary mb-4 line-clamp-1">
+                <p className="text-xs text-muted mb-4 line-clamp-1">
                     {shortDesc}
                 </p>
 

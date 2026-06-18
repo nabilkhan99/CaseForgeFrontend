@@ -53,13 +53,13 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
         {/* Desktop nav */}
         <div className="hidden md:flex items-center gap-6">
           <Link
-            href="/cases"
+            href="/sca-cases"
             className="text-[13px] text-body hover:text-heading transition-colors duration-150"
           >
-            Case Library
+            Free SCA Cases
           </Link>
           <Link
-            href="/portfolio"
+            href="/gp-portfolio-tool"
             className="text-[13px] text-body hover:text-heading transition-colors duration-150 flex items-baseline gap-2"
           >
             Portfolio AI tool
@@ -131,14 +131,14 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
             style={{ maxWidth: 'min(92%, 1200px)', margin: '0 auto' }}
           >
             <Link
-              href="/cases"
+              href="/sca-cases"
               onClick={() => setMobileOpen(false)}
               className="min-h-[44px] flex items-center px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
             >
-              Case Library
+              Free SCA Cases
             </Link>
             <Link
-              href="/portfolio"
+              href="/gp-portfolio-tool"
               onClick={() => setMobileOpen(false)}
               className="min-h-[44px] flex items-baseline px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150 gap-2"
             >

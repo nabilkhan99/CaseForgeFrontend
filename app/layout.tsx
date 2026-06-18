@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import AnalyticsWrapper from '@/components/common/AnalyticsWrapper'
 import type { Metadata, Viewport } from 'next'
+import { ORGANIZATION_JSON_LD } from '@/lib/seo/site'
 
 const jakarta = Plus_Jakarta_Sans({
   subsets: ['latin'],
@@ -93,6 +94,10 @@ export default function RootLayout({
   return (
     <html lang="en" className="scroll-smooth">
       <body className={`${jakarta.variable} ${jetbrains.variable} ${dmSerif.variable} ${geist.variable} font-sans bg-surface text-body antialiased overflow-x-hidden`}>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(ORGANIZATION_JSON_LD) }}
+        />
         {children}
         <AnalyticsWrapper />
         <Analytics />

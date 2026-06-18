@@ -14,7 +14,7 @@ const CHAPTERS = [
     eyebrow: 'THE BRIEF',
     heading: 'Read your ',
     headingBold: 'patient brief',
-    body: 'Every station starts with a scenario. You get the same information a real SCA candidate gets — presenting complaint, patient background and your task.',
+    body: 'Every SCA station starts with a scenario. You get the same information a real SCA candidate gets — presenting complaint, patient background and your task.',
   },
   {
     number: '02',
