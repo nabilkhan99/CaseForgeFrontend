@@ -101,7 +101,7 @@ export default function CaseCard({ className = '' }: CaseCardProps) {
           </div>
 
           {/* CTA */}
-          <Link href="/" className="block">
+          <Link href="/#join" className="block">
             <motion.div
               className="w-full py-3.5 rounded-xl text-center text-[14px] font-semibold text-white cursor-pointer"
               style={{

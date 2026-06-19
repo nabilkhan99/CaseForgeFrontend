@@ -3,8 +3,8 @@
 import { motion } from 'framer-motion';
 
 export default function FinalCTA() {
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  const scrollToWaitlist = () => {
+    document.getElementById('join')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
   return (
@@ -38,7 +38,7 @@ export default function FinalCTA() {
         >
           <motion.button
             type="button"
-            onClick={scrollToTop}
+            onClick={scrollToWaitlist}
             className="inline-flex items-center gap-2 px-12 py-4 rounded-[14px] text-[14px] font-semibold text-white cursor-pointer"
             style={{
               background: 'linear-gradient(135deg, #B45309, #D97706)',
