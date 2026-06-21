@@ -1,4 +1,8 @@
-export default function LandingFooter() {
+interface LandingFooterProps {
+  note?: string;
+}
+
+export default function LandingFooter({ note }: LandingFooterProps) {
   return (
     <footer className="border-t border-[#d9cdb3]/60 py-8 px-6">
       <div className="max-w-[1200px] mx-auto flex flex-col sm:flex-row items-center sm:items-start justify-between gap-6">
@@ -19,6 +23,11 @@ export default function LandingFooter() {
           hello@fourteenfisherman.com
         </a>
       </div>
+      {note && (
+        <div className="max-w-[1200px] mx-auto mt-4 text-center sm:text-left text-[12px] text-muted">
+          {note}
+        </div>
+      )}
     </footer>
   );
 }
