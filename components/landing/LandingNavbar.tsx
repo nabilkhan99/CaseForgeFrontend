@@ -3,7 +3,9 @@
 import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useState } from 'react';
+import { SCA_PILLAR_PATH } from '@/lib/guides/scaPillarGuide';
 
 interface LandingNavbarProps {
   user: { id: string } | null;
@@ -12,7 +14,9 @@ interface LandingNavbarProps {
 
 export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const pathname = usePathname();
   const { scrollYProgress } = useScroll();
+  const guidesActive = pathname?.startsWith('/guides');
 
   const navBg = useTransform(
     scrollYProgress,
@@ -57,6 +61,15 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
             className="text-[13px] text-body hover:text-heading transition-colors duration-150"
           >
             Free SCA Cases
+          </Link>
+          <Link
+            href={SCA_PILLAR_PATH}
+            aria-current={guidesActive ? 'page' : undefined}
+            className={`text-[13px] transition-colors duration-150 ${
+              guidesActive ? 'font-semibold text-heading' : 'text-body hover:text-heading'
+            }`}
+          >
+            SCA Guide
           </Link>
           <Link
             href="/gp-portfolio-tool"
@@ -136,6 +149,16 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
               className="min-h-[44px] flex items-center px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
             >
               Free SCA Cases
+            </Link>
+            <Link
+              href={SCA_PILLAR_PATH}
+              aria-current={guidesActive ? 'page' : undefined}
+              onClick={() => setMobileOpen(false)}
+              className={`min-h-[44px] flex items-center px-3 py-2.5 rounded-xl text-[14px] hover:bg-black/[0.03] transition-all duration-150 ${
+                guidesActive ? 'font-semibold text-heading' : 'text-body hover:text-heading'
+              }`}
+            >
+              SCA Guide
             </Link>
             <Link
               href="/gp-portfolio-tool"
