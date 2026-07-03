@@ -1,13 +1,13 @@
 import type { MetadataRoute } from 'next';
-import { getPublicCases } from '@/lib/cases/publicCases';
+import { getPublicCasesForList } from '@/lib/cases/publicCases';
 import { buildCaseSeoIndex } from '@/lib/seo/cases';
 import { absoluteUrl } from '@/lib/seo/site';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 3600;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const now = new Date();
-    const cases = buildCaseSeoIndex(await getPublicCases());
+    const cases = buildCaseSeoIndex(await getPublicCasesForList());
 
     return [
         {

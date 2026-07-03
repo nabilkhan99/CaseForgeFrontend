@@ -470,7 +470,7 @@ export default function CaseDetailPageClient({ caseData }: CaseDetailPageClientP
         supabase.auth.getUser().then(({ data }) => setUser(data.user as { id: string } | null));
     }, []);
 
-    const sections = parseInstructions(caseData.candidate_instructions);
+    const sections = parseInstructions(caseData.candidate_instructions ?? '');
 
     const detailSections = sections.filter(
         s =>
@@ -567,7 +567,7 @@ export default function CaseDetailPageClient({ caseData }: CaseDetailPageClientP
                     <h4 className="text-sm font-bold text-heading">Domain 1: Data Gathering and Diagnosis</h4>
                 </div>
                 <div className="pl-4 border-l-2 border-blue-200">
-                    <InteractiveMarkScheme content={caseData.data_gathering} />
+                    <InteractiveMarkScheme content={caseData.data_gathering ?? null} />
                 </div>
             </div>
 
@@ -578,7 +578,7 @@ export default function CaseDetailPageClient({ caseData }: CaseDetailPageClientP
                     <h4 className="text-sm font-bold text-heading">Domain 2: Clinical Management and Medical Complexity</h4>
                 </div>
                 <div className="pl-4 border-l-2 border-emerald-200">
-                    <InteractiveMarkScheme content={caseData.clinical_management} />
+                    <InteractiveMarkScheme content={caseData.clinical_management ?? null} />
                 </div>
             </div>
 
@@ -589,7 +589,7 @@ export default function CaseDetailPageClient({ caseData }: CaseDetailPageClientP
                     <h4 className="text-sm font-bold text-heading">Domain 3: Relating to Others</h4>
                 </div>
                 <div className="pl-4 border-l-2 border-primary/20">
-                    <InteractiveMarkScheme content={caseData.relating_to_others} />
+                    <InteractiveMarkScheme content={caseData.relating_to_others ?? null} />
                 </div>
             </div>
         </div>
@@ -649,7 +649,7 @@ export default function CaseDetailPageClient({ caseData }: CaseDetailPageClientP
                 </div>
                 <h3 className="text-xs font-black uppercase tracking-widest text-muted">Clinical Learning Points</h3>
             </div>
-            <LearningPointsDisplay content={caseData.clinical_learning_points} />
+            <LearningPointsDisplay content={caseData.clinical_learning_points ?? null} />
         </div>
     );
 

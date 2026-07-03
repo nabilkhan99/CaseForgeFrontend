@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
 import CaseBankPageClient from '@/components/cases/CaseBankPageClient';
-import { getPublicCasesGroupedByDomain } from '@/lib/cases/publicCases';
+import { getPublicCasesGroupedByDomainForList } from '@/lib/cases/publicCases';
 import { buildCaseSeoIndex } from '@/lib/seo/cases';
 import { pageMetadata } from '@/lib/seo/site';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 3600;
 
 export const metadata: Metadata = pageMetadata({
     title: 'Free SCA Practice Cases | 79 RCGP Curriculum Cases',
@@ -14,7 +14,7 @@ export const metadata: Metadata = pageMetadata({
 });
 
 export default async function ScaCasesPage() {
-    const domains = await getPublicCasesGroupedByDomain();
+    const domains = await getPublicCasesGroupedByDomainForList();
     const seoCases = buildCaseSeoIndex(domains.flatMap(domain => domain.cases));
     const seoCaseMap = new Map(seoCases.map(caseItem => [caseItem.id, caseItem]));
     const seoDomains = domains.map(domain => ({

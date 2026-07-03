@@ -5,7 +5,7 @@ import { getPublicCases } from '@/lib/cases/publicCases';
 import { buildCaseSeoIndex, caseDescription, caseTitle } from '@/lib/seo/cases';
 import { absoluteUrl, pageMetadata, SITE_NAME, SITE_URL } from '@/lib/seo/site';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 3600;
 
 interface PageProps {
     params: Promise<{ slug: string }>;
@@ -14,6 +14,11 @@ interface PageProps {
 async function getSeoCase(slug: string) {
     const seoCases = buildCaseSeoIndex(await getPublicCases());
     return seoCases.find(caseItem => caseItem.slug === slug) || null;
+}
+
+export async function generateStaticParams() {
+    const seoCases = buildCaseSeoIndex(await getPublicCases());
+    return seoCases.map(caseItem => ({ slug: caseItem.slug }));
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {

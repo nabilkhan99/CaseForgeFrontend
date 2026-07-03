@@ -6,16 +6,16 @@ export interface PublicCase {
     title: string;
     patient_name: string;
     patient_age: number;
-    difficulty: string | null;
+    difficulty?: string | null;
     consultation_type: string | null;
-    reading_duration_seconds: number;
+    reading_duration_seconds?: number;
     consultation_duration_seconds: number;
-    candidate_instructions: string;
-    station_script: string | null;
-    data_gathering: string | null;
-    clinical_management: string | null;
-    relating_to_others: string | null;
-    clinical_learning_points: string | null;
+    candidate_instructions?: string;
+    station_script?: string | null;
+    data_gathering?: string | null;
+    clinical_management?: string | null;
+    relating_to_others?: string | null;
+    clinical_learning_points?: string | null;
     domain_id: string;
     domain_name: string;
 }
@@ -27,23 +27,18 @@ export interface PublicCaseDomain {
     cases: PublicCase[];
 }
 
-const CASE_SELECT =
+// Full case body, incl. large text fields (patient script, marking scheme, learning points) — detail page + sitemap.
+const CASE_SELECT_DETAIL =
     'id, title, patient_name, patient_age, difficulty, consultation_type, reading_duration_seconds, consultation_duration_seconds, candidate_instructions, station_script, data_gathering, clinical_management, relating_to_others, clinical_learning_points, domain_id';
 
-export const getPublicCases = cache(async (): Promise<PublicCase[]> => {
-    const supabase = getSupabaseAdmin();
+// Card-display fields only — list page, avoids pulling the large text blobs for every card.
+const CASE_SELECT_LIST =
+    'id, title, patient_name, patient_age, consultation_type, consultation_duration_seconds, domain_id';
 
-    const { data: stations, error: stationsError } = await supabase
-        .from('stations')
-        .select(CASE_SELECT)
-        .eq('is_active', true)
-        .order('title');
-
-    if (stationsError || !stations) {
-        console.error('Error fetching public cases:', stationsError);
-        return [];
-    }
-
+async function attachDomainNames<T extends { domain_id: string }>(
+    supabase: ReturnType<typeof getSupabaseAdmin>,
+    stations: T[]
+): Promise<(T & { domain_name: string })[]> {
     const domainIds = [...new Set(stations.map(station => station.domain_id).filter(Boolean))];
     const { data: domains, error: domainsError } = await supabase
         .from('domains')
@@ -62,10 +57,43 @@ export const getPublicCases = cache(async (): Promise<PublicCase[]> => {
         ...station,
         domain_name: domainMap.get(station.domain_id) || 'Unknown',
     }));
+}
+
+export const getPublicCases = cache(async (): Promise<PublicCase[]> => {
+    const supabase = getSupabaseAdmin();
+
+    const { data: stations, error: stationsError } = await supabase
+        .from('stations')
+        .select(CASE_SELECT_DETAIL)
+        .eq('is_active', true)
+        .order('title');
+
+    if (stationsError || !stations) {
+        console.error('Error fetching public cases:', stationsError);
+        return [];
+    }
+
+    return attachDomainNames(supabase, stations);
 });
 
-export const getPublicCasesGroupedByDomain = cache(async (): Promise<PublicCaseDomain[]> => {
-    const cases = await getPublicCases();
+export const getPublicCasesForList = cache(async (): Promise<PublicCase[]> => {
+    const supabase = getSupabaseAdmin();
+
+    const { data: stations, error: stationsError } = await supabase
+        .from('stations')
+        .select(CASE_SELECT_LIST)
+        .eq('is_active', true)
+        .order('title');
+
+    if (stationsError || !stations) {
+        console.error('Error fetching public cases:', stationsError);
+        return [];
+    }
+
+    return attachDomainNames(supabase, stations);
+});
+
+function groupByDomain(cases: PublicCase[]): PublicCaseDomain[] {
     const domains = new Map<string, PublicCaseDomain>();
 
     for (const caseItem of cases) {
@@ -81,6 +109,14 @@ export const getPublicCasesGroupedByDomain = cache(async (): Promise<PublicCaseD
     }
 
     return [...domains.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export const getPublicCasesGroupedByDomain = cache(async (): Promise<PublicCaseDomain[]> => {
+    return groupByDomain(await getPublicCases());
+});
+
+export const getPublicCasesGroupedByDomainForList = cache(async (): Promise<PublicCaseDomain[]> => {
+    return groupByDomain(await getPublicCasesForList());
 });
 
 export const getPublicCaseById = cache(async (id: string) => {
