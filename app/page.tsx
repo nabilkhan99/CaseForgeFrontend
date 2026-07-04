@@ -32,9 +32,9 @@ export default function LandingPage() {
         <Hero />
         <GuaranteeCard />
         <TrustBar />
-        <ProductShowcase />
         <VideoProof />
         <ProgrammeJourney />
+        <ProductShowcase />
         <Testimonials />
         <NhsBanner />
         <PricingTable />
