@@ -71,19 +71,19 @@ export default function CaseDetailTabs({
 
     return (
         <div className="flex flex-col">
-            {/* Tab bar */}
-            <div className="flex items-center gap-1 px-4 md:px-5 pt-4 pb-0 overflow-x-auto no-scrollbar">
+            {/* Tab bar — 2x2 grid of pills on mobile (all always visible), connected row on desktop */}
+            <div className="grid grid-cols-2 gap-2 md:flex md:items-center md:gap-1 px-4 md:px-5 pt-4 pb-0">
                 {tabs.map(tab => (
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
-                        className={`flex items-center gap-2 px-3 md:px-5 py-2.5 rounded-t-xl text-sm font-semibold transition-all whitespace-nowrap min-h-[44px] ${activeTab === tab.id
-                                ? 'bg-white/70 text-heading border border-black/[0.06] border-b-transparent'
-                                : 'text-muted hover:text-body hover:bg-black/[0.02]'
+                        className={`flex items-center justify-center md:justify-start gap-2 px-3 md:px-5 py-2.5 rounded-xl md:rounded-b-none text-sm font-semibold transition-all whitespace-nowrap min-h-[44px] border ${activeTab === tab.id
+                                ? 'bg-white/70 text-heading border-black/[0.06] md:border-b-transparent'
+                                : 'bg-black/[0.02] md:bg-transparent border-transparent text-muted hover:text-body hover:bg-black/[0.04] md:hover:bg-black/[0.02]'
                             }`}
                     >
                         {activeTab === tab.id && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
                         )}
                         <tab.Icon />
                         <span className="text-[11px] sm:text-sm">{tab.label}</span>
@@ -92,7 +92,7 @@ export default function CaseDetailTabs({
             </div>
 
             {/* Tab content */}
-            <div className="bg-white/70 border border-black/[0.06] rounded-2xl rounded-tl-none mx-3 md:mx-4 mb-4">
+            <div className="bg-white/70 border border-black/[0.06] rounded-2xl md:rounded-tl-none mx-3 md:mx-4 mb-4 mt-2 md:mt-0">
                 {activeTab === 'candidate' && candidateContent}
                 {activeTab === 'script' && patientScriptContent}
                 {activeTab === 'markscheme' && markSchemeContent}

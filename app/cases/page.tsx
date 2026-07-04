@@ -12,7 +12,7 @@ export default function CaseBankPage() {
     const [user, setUser] = useState<{ id: string } | null>(null);
     const [domains, setDomains] = useState<CaseBankDomain[]>([]);
     const [loading, setLoading] = useState(true);
-    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedDomain, setSelectedDomain] = useState('all');
 
     useEffect(() => {
         const supabase = createClient();
@@ -36,27 +36,12 @@ export default function CaseBankPage() {
         fetchData();
     }, []);
 
-    // Filter logic
+    // Filter by topic
     const filteredDomains = useMemo(() => {
         return domains
-            .map(domain => {
-                let cases = domain.cases;
-
-                // Search filter
-                if (searchQuery.trim()) {
-                    const q = searchQuery.toLowerCase();
-                    cases = cases.filter(
-                        c =>
-                            c.title.toLowerCase().includes(q) ||
-                            c.patient_name.toLowerCase().includes(q) ||
-                            c.domain_name.toLowerCase().includes(q)
-                    );
-                }
-
-                return { ...domain, cases };
-            })
+            .filter(domain => selectedDomain === 'all' || domain.id === selectedDomain)
             .filter(domain => domain.cases.length > 0);
-    }, [domains, searchQuery]);
+    }, [domains, selectedDomain]);
 
     const totalCases = domains.reduce((sum, d) => sum + d.cases.length, 0);
     const totalDomains = domains.length;
@@ -84,25 +69,22 @@ export default function CaseBankPage() {
                     </div>
                 </BlurFade>
 
-                {/* Search & Filters */}
+                {/* Topic filter */}
                 <BlurFade delay={0.06} inView>
-                    <div className="flex flex-col sm:flex-row gap-3 mb-10 md:mb-12">
-                        {/* Search */}
-                        <div className="relative flex-1 max-w-xl">
-                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted" style={{ display: 'flex', alignItems: 'center' }}>
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <circle cx="11" cy="11" r="8" />
-                                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                                </svg>
-                            </span>
-                            <input
-                                type="text"
-                                placeholder="Search by specialty, case title..."
-                                value={searchQuery}
-                                onChange={e => setSearchQuery(e.target.value)}
-                                className="w-full pl-11 pr-4 py-3 rounded-xl bg-white/70 backdrop-blur-sm border border-black/[0.06] text-heading placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/30 transition-all text-base md:text-sm"
-                            />
-                        </div>
+                    <div className="mb-10 md:mb-12">
+                        <select
+                            value={selectedDomain}
+                            onChange={e => setSelectedDomain(e.target.value)}
+                            className="w-full sm:w-72 px-4 py-3 rounded-xl bg-white/70 backdrop-blur-sm border border-black/[0.06] text-heading focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/30 transition-all text-base md:text-sm"
+                            aria-label="Filter cases by RCGP topic"
+                        >
+                            <option value="all">All Topics</option>
+                            {domains.map(domain => (
+                                <option key={domain.id} value={domain.id}>
+                                    {domain.name}
+                                </option>
+                            ))}
+                        </select>
                     </div>
                 </BlurFade>
 
@@ -124,7 +106,7 @@ export default function CaseBankPage() {
                             </svg>
                         </div>
                         <h3 className="text-lg font-semibold text-body">No cases found</h3>
-                        <p className="text-muted text-sm">Try adjusting your search or filters</p>
+                        <p className="text-muted text-sm">Try selecting a different topic</p>
                     </div>
                 ) : (
                     <div className="space-y-10">
