@@ -11,6 +11,7 @@ import Container from '@/components/ui/Container';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import DomainTag from '@/components/ui/DomainTag';
 import ConsultationTimer from '@/components/clinical-master/ConsultationTimer';
+import AudioSetupNotice from '@/components/clinical-master/AudioSetupNotice';
 
 interface StationData {
   id: string;
@@ -222,6 +223,9 @@ function ReadingPhaseContent() {
                 {error}
               </motion.div>
             )}
+
+            {/* Audio setup guidance */}
+            <AudioSetupNotice />
 
             {/* CTA */}
             <div ref={ctaRef}>
