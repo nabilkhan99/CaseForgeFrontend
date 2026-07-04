@@ -3,12 +3,18 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import LandingNavbar from '@/components/landing/LandingNavbar';
-import LandingHero from '@/components/landing/LandingHero';
-import ProductJourney from '@/components/landing/ProductJourney';
-
-import BottomFeatures from '@/components/landing/BottomFeatures';
-import FinalCTA from '@/components/landing/FinalCTA';
 import LandingFooter from '@/components/landing/LandingFooter';
+import {
+  Hero,
+  GuaranteeCard,
+  TrustBar,
+  VideoProof,
+  ProgrammeJourney,
+  Testimonials,
+  NhsBanner,
+  Faq,
+} from '@/components/landing/v5';
+import PricingTable from '@/components/landing/v5/PricingTable';
 
 export default function LandingPage() {
   const [user, setUser] = useState<{ id: string } | null>(null);
@@ -19,13 +25,19 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div className="min-h-[100dvh] bg-[#f3ebdb] font-sans">
+    <div className="min-h-[100dvh] bg-[#F7F2E7] font-sans">
       <LandingNavbar user={user} />
-      <LandingHero />
-      <ProductJourney />
-
-      <BottomFeatures />
-      <FinalCTA />
+      <main className="flex flex-col gap-14 pb-20 sm:gap-20">
+        <Hero />
+        <GuaranteeCard />
+        <TrustBar />
+        <VideoProof />
+        <ProgrammeJourney />
+        <Testimonials />
+        <NhsBanner />
+        <PricingTable />
+        <Faq />
+      </main>
       <LandingFooter />
     </div>
   );
