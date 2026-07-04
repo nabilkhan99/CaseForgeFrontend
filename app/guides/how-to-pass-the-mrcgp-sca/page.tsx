@@ -7,7 +7,6 @@ import {
     CASE_LIBRARY_PATH,
     GUIDE_INDEX_PATH,
     SCA_PILLAR_PATH,
-    guideSeriesGroups,
     pillarMeta,
     pillarSections,
 } from '@/lib/guides/scaPillarGuide';
@@ -42,70 +41,6 @@ function GuideLinkCard({
                 -&gt;
             </span>
         </Link>
-    );
-}
-
-function SeriesCard({
-    href,
-    label,
-    subtitle,
-    number,
-}: {
-    href: string;
-    label: string;
-    subtitle: string;
-    number: string;
-}) {
-    return (
-        <Link
-            href={href}
-            className="group flex gap-4 rounded-[14px] border border-[#e6dccb] bg-[#fbf8f2] p-5 text-left transition hover:-translate-y-1 hover:border-primary hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-        >
-            <span className="[font-family:var(--font-serif)] text-xl italic leading-none text-primary">
-                {number}
-            </span>
-            <span>
-                <span className="block text-base font-bold leading-snug text-heading">{label}</span>
-                <span className="mt-1 block text-sm leading-snug text-muted">{subtitle}</span>
-            </span>
-        </Link>
-    );
-}
-
-function SeriesIndex() {
-    return (
-        <section className="border-y border-[#e2d8c8] bg-[#ebe2d4] py-16" aria-label="The complete series">
-            <div className="mx-auto max-w-[1180px] px-4 md:px-6">
-                <p className="mb-3 text-xs font-bold uppercase tracking-[0.26em] text-primary">
-                    The complete series
-                </p>
-                <h2 className="[font-family:var(--font-serif)] text-3xl font-semibold leading-tight text-heading md:text-5xl">
-                    Fifteen guides, one map
-                </h2>
-                <p className="mt-3 max-w-2xl text-base leading-relaxed text-body">
-                    This page is the overview. Each part above expands into a deeper guide, grouped here by where it fits in your preparation.
-                </p>
-
-                <div className="mt-10 space-y-9">
-                    {guideSeriesGroups.map(group => (
-                        <section key={group.label}>
-                            <div className="mb-4 flex items-center gap-3">
-                                <span className="h-2 w-2 rounded-full bg-primary" />
-                                <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-muted">
-                                    {group.label}
-                                </h3>
-                                <span className="h-px flex-1 bg-[#e2d8c8]" />
-                            </div>
-                            <div className="grid gap-3 md:grid-cols-2">
-                                {group.cards.map(card => (
-                                    <SeriesCard key={card.href} {...card} />
-                                ))}
-                            </div>
-                        </section>
-                    ))}
-                </div>
-            </div>
-        </section>
     );
 }
 
@@ -248,14 +183,21 @@ export default function HowToPassMrcgpScaPage() {
                                 </div>
 
                                 {section.domains && (
-                                    <div className="mt-5 grid gap-3">
-                                        {section.domains.map(domain => (
+                                    <div className="mt-6 space-y-5">
+                                        {section.domains.map((domain, index) => (
                                             <div
                                                 key={domain.title}
-                                                className="rounded-xl border border-[#e6dccb] border-l-primary bg-[#fbf8f2] p-4"
+                                                className="border-l-2 border-primary/40 pl-5"
                                             >
-                                                <h3 className="text-base font-bold text-heading">{domain.title}</h3>
-                                                <p className="mt-1 text-[15px] leading-relaxed text-body">
+                                                <h3 className="flex items-baseline gap-2.5 text-heading">
+                                                    <span className="[font-family:var(--font-serif)] text-sm italic text-primary">
+                                                        {index + 1}
+                                                    </span>
+                                                    <span className="[font-family:var(--font-serif)] text-lg font-semibold leading-snug">
+                                                        {domain.title}
+                                                    </span>
+                                                </h3>
+                                                <p className="mt-1.5 text-[15px] leading-relaxed text-body">
                                                     {domain.body}
                                                 </p>
                                             </div>
@@ -290,8 +232,6 @@ export default function HowToPassMrcgpScaPage() {
                     </div>
                 </main>
             </div>
-
-            <SeriesIndex />
 
             <section className="bg-[#ebe2d4] px-4 py-16 md:px-6">
                 <div className="mx-auto max-w-[1180px]">
