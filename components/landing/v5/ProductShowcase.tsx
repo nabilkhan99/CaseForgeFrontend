@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import ChapterBrief from './chapters/ChapterBrief';
 import ChapterConsultation from './chapters/ChapterConsultation';
 import ChapterScore from './chapters/ChapterScore';
@@ -68,8 +68,6 @@ export default function ProductShowcase() {
     return () => clearInterval(id);
   }, [inView]);
 
-  const step = STEPS[active];
-
   return (
     <motion.section
       className="px-5 py-6 sm:px-8 sm:py-10"
@@ -113,37 +111,42 @@ export default function ProductShowcase() {
           ))}
         </div>
 
-        {/* Product frame */}
-        <div className="overflow-hidden rounded-2xl border border-[#E4DDC9] bg-white text-left shadow-elevation-2">
-          <AnimatePresence mode="wait" initial={false}>
+        {/* Product frame — all steps stacked in one grid cell so the frame
+            keeps the tallest step's height and never jumps between tabs. */}
+        <div className="grid overflow-hidden rounded-2xl border border-[#E4DDC9] bg-white text-left shadow-elevation-2">
+          {STEPS.map((s, i) => (
             <motion.div
-              key={step.key}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
+              key={s.key}
+              className="col-start-1 row-start-1 flex flex-col justify-center"
+              initial={false}
+              animate={{ opacity: i === active ? 1 : 0 }}
               transition={{ duration: 0.28, ease: 'easeOut' }}
+              style={{ pointerEvents: i === active ? 'auto' : 'none' }}
+              aria-hidden={i !== active}
             >
-              <step.Mockup />
+              <s.Mockup />
             </motion.div>
-          </AnimatePresence>
+          ))}
         </div>
 
-        {/* Step caption */}
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={step.key}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.24 }}
-            className="mt-5"
-          >
-            <p className="text-sm font-medium text-heading sm:text-base">{step.title}</p>
-            <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-body sm:text-sm">
-              {step.copy}
-            </p>
-          </motion.div>
-        </AnimatePresence>
+        {/* Step caption — same stacking trick to avoid height wobble */}
+        <div className="mt-5 grid">
+          {STEPS.map((s, i) => (
+            <motion.div
+              key={s.key}
+              className="col-start-1 row-start-1"
+              initial={false}
+              animate={{ opacity: i === active ? 1 : 0 }}
+              transition={{ duration: 0.24 }}
+              aria-hidden={i !== active}
+            >
+              <p className="text-sm font-medium text-heading sm:text-base">{s.title}</p>
+              <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-body sm:text-sm">
+                {s.copy}
+              </p>
+            </motion.div>
+          ))}
+        </div>
       </div>
     </motion.section>
   );
