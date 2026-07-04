@@ -98,7 +98,7 @@ export default function PricingTable() {
     : 'Only 6 places per class';
 
   return (
-    <section id="pricing" className="scroll-mt-24 px-5 sm:px-8">
+    <section id="pricing" className="scroll-mt-24 px-5 py-6 sm:px-8 sm:py-10">
       <div className="mx-auto max-w-5xl">
         <motion.div
           initial={{ opacity: 0, y: 24 }}

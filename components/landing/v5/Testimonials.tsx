@@ -112,7 +112,7 @@ const TESTIMONIALS: Testimonial[] = [
 
 export default function Testimonials() {
   return (
-    <section className="px-5 py-10 sm:px-8 sm:py-16">
+    <section className="px-5 py-6 sm:px-8 sm:py-10">
       <div className="mx-auto flex max-w-5xl snap-x snap-mandatory gap-4 overflow-x-auto pb-2 sm:grid sm:grid-cols-3 sm:gap-6 sm:overflow-visible sm:pb-0">
         {TESTIMONIALS.map((t, i) => (
           <motion.div

@@ -5,7 +5,7 @@ import { ArrowRight } from 'lucide-react';
 
 export default function Hero() {
   return (
-    <section className="relative overflow-hidden rounded-b-[24px] sm:rounded-b-[32px] bg-[#1C1C1A] px-5 py-16 text-center sm:px-8 sm:py-24">
+    <section className="relative overflow-hidden rounded-b-[24px] sm:rounded-b-[32px] bg-[#1C1C1A] px-5 pb-10 pt-16 text-center sm:px-8 sm:pb-16 sm:pt-24">
       <div className="mx-auto max-w-4xl">
         <motion.p
           initial={{ opacity: 0, y: 12 }}

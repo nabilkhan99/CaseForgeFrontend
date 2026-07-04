@@ -27,7 +27,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-[100dvh] bg-[#F7F2E7] font-sans">
       <LandingNavbar user={user} />
-      <main className="flex flex-col gap-14 pb-20 sm:gap-20">
+      <main className="flex flex-col pb-16 sm:pb-20">
         <Hero />
         <GuaranteeCard />
         <TrustBar />

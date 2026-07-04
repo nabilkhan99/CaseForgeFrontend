@@ -56,7 +56,7 @@ export default function Faq() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   return (
-    <section className="px-5 py-10 sm:px-8 sm:py-16">
+    <section className="px-5 py-6 sm:px-8 sm:py-10">
       <motion.p
         initial={{ opacity: 0, y: 12 }}
         whileInView={{ opacity: 1, y: 0 }}

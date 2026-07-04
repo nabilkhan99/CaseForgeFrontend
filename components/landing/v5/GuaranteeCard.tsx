@@ -33,7 +33,7 @@ const STEPS: Step[] = [
 
 export default function GuaranteeCard() {
   return (
-    <section className="px-5 py-10 sm:px-8 sm:py-16">
+    <section className="px-5 py-6 sm:px-8 sm:py-10">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}

@@ -5,7 +5,7 @@ import { Check } from 'lucide-react';
 
 export default function NhsBanner() {
   return (
-    <section className="px-5 py-6 sm:px-8 sm:py-10">
+    <section className="px-5 py-4 sm:px-8 sm:py-6">
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         whileInView={{ opacity: 1, y: 0 }}

@@ -24,7 +24,7 @@ const STATS: Stat[] = [
 
 export default function TrustBar() {
   return (
-    <section className="px-5 py-8 sm:px-8 sm:py-14">
+    <section className="px-5 py-6 sm:px-8 sm:py-10">
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         whileInView={{ opacity: 1, y: 0 }}
