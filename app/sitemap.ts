@@ -1,5 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { getPublicCases } from '@/lib/cases/publicCases';
+import { guideArticles } from '@/lib/guides/articles';
+import { guidePath } from '@/lib/guides/articleTypes';
 import { GUIDE_INDEX_PATH, SCA_PILLAR_PATH } from '@/lib/guides/scaPillarGuide';
 import { buildCaseSeoIndex } from '@/lib/seo/cases';
 import { absoluteUrl } from '@/lib/seo/site';
@@ -35,6 +37,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
             changeFrequency: 'monthly',
             priority: 0.85,
         },
+        ...guideArticles.map(article => ({
+            url: absoluteUrl(guidePath(article.slug)),
+            lastModified: now,
+            changeFrequency: 'monthly' as const,
+            priority: 0.7,
+        })),
         ...cases.map(caseItem => ({
             url: absoluteUrl(caseItem.path),
             lastModified: now,
