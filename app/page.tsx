@@ -8,6 +8,7 @@ import {
   Hero,
   GuaranteeCard,
   TrustBar,
+  ProductShowcase,
   VideoProof,
   ProgrammeJourney,
   Testimonials,
@@ -31,6 +32,7 @@ export default function LandingPage() {
         <Hero />
         <GuaranteeCard />
         <TrustBar />
+        <ProductShowcase />
         <VideoProof />
         <ProgrammeJourney />
         <Testimonials />
