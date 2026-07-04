@@ -10,7 +10,7 @@ const NAV_LINKS = [
   { label: 'Home', href: '/dashboard', exact: true },
   { label: 'Library', href: '/dashboard/library' },
   { label: 'History', href: '/dashboard/history' },
-  { label: 'Portfolio', href: '/portfolio' },
+  { label: 'Portfolio', href: '/gp-portfolio-tool' },
 ];
 
 export default function AppNavbar() {

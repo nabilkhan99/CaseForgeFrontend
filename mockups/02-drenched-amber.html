@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>FF — Drenched Amber</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    /* Drenched warm-amber hero, cream below */
+    --amber:        oklch(56% 0.17 50);
+    --amber-deep:   oklch(40% 0.14 45);
+    --amber-glow:   oklch(80% 0.13 65);
+    --cream:        oklch(94% 0.02 75);
+    --ink-on-amber: oklch(98% 0.025 80);
+    --ink:          oklch(20% 0.015 60);
+    --ink-2:        oklch(36% 0.015 60);
+    --muted:        oklch(55% 0.02 65);
+    --line:         oklch(82% 0.025 70);
+    --green:        oklch(55% 0.13 145);
+  }
+  *{ box-sizing: border-box; }
+  html, body{ margin: 0; padding: 0;}
+  body{
+    font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
+    color: var(--ink);
+    background: var(--cream);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+  .mono{ font-family: "Geist Mono", monospace;}
+
+  /* ===== Drenched hero ===== */
+  .hero{
+    position: relative;
+    background: var(--amber);
+    color: var(--ink-on-amber);
+    overflow: hidden;
+    padding-bottom: 0;
+  }
+  .hero::before{
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(80% 60% at 100% 0%, var(--amber-glow), transparent 50%),
+      radial-gradient(60% 80% at 0% 100%, var(--amber-deep), transparent 60%);
+    opacity: .65;
+    pointer-events: none;
+  }
+  .hero-inner{
+    position: relative;
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 24px clamp(16px, 4vw, 48px) 0;
+  }
+
+  /* Nav drenched in amber too */
+  nav.bar{
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center; gap: clamp(16px, 4vw, 40px);
+    padding: 14px 22px;
+    background: oklch(100% 0 0 / .12);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid oklch(100% 0 0 / .18);
+    border-radius: 999px;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; font-weight: 600; font-size: 15.5px;}
+  .brand .leaf{ width: 22px; height: 22px; color: var(--ink-on-amber);}
+  .nav-mid{ display:flex; align-items:center; gap: 28px;}
+  .nav-mid a{ color: oklch(98% 0.02 80 / .85); text-decoration: none; font-size: 14px; font-weight: 450;}
+  .nav-mid a:hover{ color: var(--ink-on-amber);}
+  .pill-tag{
+    display:inline-flex; align-items:center; gap: 4px;
+    margin-left: 8px;
+    padding: 3px 9px;
+    background: oklch(100% 0 0 / .18);
+    color: var(--ink-on-amber);
+    font-size: 11.5px;
+    border-radius: 999px;
+  }
+  .btn-nav{
+    display:inline-flex; align-items:center; gap: 8px;
+    padding: 10px 18px;
+    background: var(--ink-on-amber);
+    color: var(--amber-deep);
+    border-radius: 999px;
+    text-decoration:none;
+    font-size: 14px; font-weight: 600;
+  }
+
+  /* Hero body */
+  .hero-body{
+    position: relative;
+    padding: clamp(40px, 7vw, 100px) 0 0;
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: clamp(32px, 5vw, 80px);
+    align-items: end;
+  }
+  .headline{
+    margin: 0;
+    font-size: clamp(64px, 11vw, 168px);
+    font-weight: 800;
+    line-height: 0.86;
+    letter-spacing: -0.055em;
+    color: var(--ink-on-amber);
+    text-wrap: balance;
+  }
+  .headline em{
+    font-style: italic;
+    font-weight: 300;
+    color: oklch(96% 0.05 75);
+    -webkit-text-stroke: 0;
+  }
+  .copy{
+    margin-bottom: 12px;
+  }
+  .copy p{
+    margin: 0 0 18px;
+    font-size: clamp(16px, 1.2vw, 19px);
+    line-height: 1.5;
+    color: oklch(98% 0.02 80 / .85);
+    max-width: 36ch;
+  }
+  .copy form{
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    background: oklch(100% 0 0 / .12);
+    border: 1px solid oklch(100% 0 0 / .22);
+    border-radius: 999px;
+    padding: 6px 6px 6px 18px;
+    max-width: 420px;
+  }
+  .copy form input{
+    border: 0; background: transparent; outline: 0;
+    color: var(--ink-on-amber);
+    font-family: inherit; font-size: 15px;
+    padding: 8px 0;
+  }
+  .copy form input::placeholder{ color: oklch(98% 0.02 80 / .55);}
+  .copy form button{
+    background: var(--ink-on-amber);
+    color: var(--amber-deep);
+    border: 0;
+    padding: 10px 18px;
+    border-radius: 999px;
+    font-family: inherit; font-size: 14px; font-weight: 600;
+    cursor: pointer;
+  }
+  .copy .stat-row{
+    margin-top: 16px;
+    display:flex; gap: 22px; flex-wrap: wrap;
+    font-family: "Geist Mono", monospace;
+    font-size: 11.5px;
+    color: oklch(98% 0.02 80 / .75);
+    letter-spacing: .04em;
+  }
+  .copy .stat-row strong{
+    display: block;
+    font-family: "Geist", sans-serif;
+    color: var(--ink-on-amber);
+    font-weight: 600;
+    font-size: 20px;
+    letter-spacing: -.02em;
+    margin-bottom: 2px;
+  }
+
+  /* Tablet "extruding" from below — half in amber band, half in cream */
+  .preview-wrap{
+    margin-top: clamp(40px, 6vw, 80px);
+    position: relative;
+    padding: 0 clamp(16px, 4vw, 48px);
+    max-width: 1320px;
+    margin-left: auto;
+    margin-right: auto;
+    z-index: 3;
+  }
+  .preview{
+    position: relative;
+    margin: 0 auto;
+    width: 100%;
+    max-width: 1080px;
+    aspect-ratio: 1080 / 640;
+    background: oklch(15% 0.01 60);
+    border-radius: 22px;
+    padding: 10px;
+    box-shadow: 0 60px 120px -40px oklch(20% 0.04 60 / .65);
+    /* sits half over the amber band, half on cream */
+    margin-top: clamp(40px, 6vw, 80px);
+    transform: translateY(50%);
+  }
+  /* push body padding to allow for tablet extrusion */
+  .below-band{
+    background: var(--cream);
+    padding: calc(clamp(60px, 12vw, 200px) + 6vw) 0 60px;
+    margin-top: -1px;
+  }
+  .preview-inner{
+    width: 100%; height: 100%;
+    background: oklch(97% 0.015 75);
+    border-radius: 14px;
+    display: grid;
+    grid-template-columns: 38% 1fr;
+    overflow: hidden;
+  }
+  .pane{ padding: 22px 22px; display: flex; flex-direction: column; gap: 18px;}
+  .pane.left{ background: oklch(97% 0.012 75); border-right: 1px solid var(--line);}
+  .pane.right{ position: relative; padding: 14px 20px;}
+  .lbl{ font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: .12em; color: var(--muted); text-transform: uppercase;}
+  .num{ font-size: 60px; font-weight: 700; letter-spacing: -.04em; color: var(--amber-deep); line-height: 0.95;}
+  .delta{
+    display:inline-flex; align-items:center; gap: 4px;
+    padding: 3px 9px; border-radius: 999px;
+    background: oklch(92% 0.04 145);
+    color: var(--green);
+    font-size: 12px; font-weight: 600;
+    align-self: start;
+  }
+  .timeline{ display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; align-items: end; height: 124px;}
+  .timeline .col{ display:flex; flex-direction:column; align-items:center; gap: 4px;}
+  .timeline .bar{ width: 100%; border-radius: 4px; background: linear-gradient(180deg, oklch(85% 0.08 70), oklch(72% 0.1 70));}
+  .timeline .col.now .bar{ background: linear-gradient(180deg, oklch(70% 0.15 60), var(--amber-deep));}
+  .timeline .v{ font-size: 10.5px; color: var(--muted); font-feature-settings: "tnum";}
+  .timeline .col.now .v{ color: var(--amber-deep); font-weight: 600;}
+  .timeline .l{ font-size: 10px; color: var(--muted); font-family: "Geist Mono", monospace;}
+
+  .domains{ display: grid; gap: 12px; margin-top: auto;}
+  .domain{ display: grid; gap: 5px;}
+  .domain .head{ display:flex; justify-content:space-between; font-size: 12px;}
+  .domain .name{ color: var(--ink); font-weight: 500;}
+  .domain .val{ color: var(--ink); font-weight: 600; font-feature-settings: "tnum";}
+  .domain .val em{ color: var(--green); font-style: normal; font-size: 11px; margin-left: 4px;}
+  .domain .track{ height: 8px; background: oklch(90% 0.015 75); border-radius: 999px; overflow: hidden;}
+  .domain .fill{ height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--amber-deep), oklch(75% 0.13 60), oklch(85% 0.08 70));}
+
+  .live-head{
+    display:flex; align-items:center; gap: 10px;
+    padding-bottom: 12px; border-bottom: 1px solid var(--line);
+    margin-bottom: 10px;
+  }
+  .live-head .av{
+    width: 32px; height: 32px; border-radius: 50%;
+    background: linear-gradient(135deg, oklch(65% 0.14 50), var(--amber-deep));
+    color: var(--ink-on-amber); font-size: 12px; font-weight: 600;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .live-head .name{ flex: 1; font-size: 13.5px; font-weight: 600;}
+  .live-dot{ display:inline-flex; align-items:center; gap: 5px; font-size: 11px; font-weight: 600; letter-spacing: .12em; color: var(--green); font-family: "Geist Mono", monospace;}
+  .live-dot::before{ content:""; width: 6px; height: 6px; background: var(--green); border-radius: 50%;}
+
+  .speaking{ text-align:center; font-family: "Geist Mono", monospace; font-size: 10.5px; letter-spacing: .14em; color: var(--amber-deep); padding: 8px 0;}
+  .wave{ display:flex; align-items:center; justify-content:center; gap: 2.5px; height: 60px;}
+  .wave i{ display:inline-block; width: 2.5px; border-radius: 2px; background: linear-gradient(180deg, oklch(68% 0.15 55), var(--amber-deep)); animation: wv 1.2s ease-in-out infinite;}
+  @keyframes wv{ 0%,100%{ transform: scaleY(.25)} 50%{ transform: scaleY(1)}}
+
+  .ripple-wrap{ position: relative; flex: 1; display:flex; align-items:center; justify-content:center;}
+  .ripple-rings i{
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    border: 1px solid oklch(70% 0.15 55 / .28);
+    border-radius: 50%;
+    animation: rip 3.2s ease-out infinite;
+    opacity: 0;
+  }
+  .ripple-rings i:nth-child(1){ animation-delay: 0s;}
+  .ripple-rings i:nth-child(2){ animation-delay: .8s;}
+  .ripple-rings i:nth-child(3){ animation-delay: 1.6s;}
+  @keyframes rip{ 0%{ width: 90px; height: 90px; opacity: .6;} 100%{ width: 260px; height: 260px; opacity: 0;}}
+  .ripple{
+    width: 86px; height: 86px; border-radius: 50%;
+    background: linear-gradient(135deg, oklch(65% 0.14 50), var(--amber-deep));
+    color: var(--ink-on-amber);
+    font-size: 20px; font-weight: 600;
+    display:flex; align-items:center; justify-content:center;
+    z-index: 2;
+    box-shadow: 0 12px 30px -10px oklch(40% 0.1 50 / .55);
+  }
+  .status-row{
+    display:flex; justify-content:space-between;
+    padding-top: 10px;
+    font-size: 11px;
+    color: var(--muted);
+    font-family: "Geist Mono", monospace;
+  }
+  .status-row .rec::before{ content: "●"; color: oklch(60% 0.18 25); margin-right: 5px;}
+  .status-row .rem{ color: var(--amber-deep); font-weight: 600;}
+
+  .glimpse{
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 0 clamp(16px, 4vw, 48px);
+  }
+  .glimpse .kicker{ font-family: "Geist Mono", monospace; font-size: 11px; letter-spacing: .12em; color: var(--amber-deep); text-transform: uppercase;}
+  .glimpse h2{
+    font-size: clamp(36px, 5vw, 64px);
+    font-weight: 700;
+    letter-spacing: -0.035em;
+    line-height: 1;
+    margin: 16px 0 0;
+    max-width: 18ch;
+    color: var(--ink);
+  }
+  .glimpse h2 em{ font-style: italic; color: var(--amber-deep); font-weight: 400;}
+
+  @media (max-width: 900px){
+    .hero-body{ grid-template-columns: 1fr; gap: 32px;}
+    .headline{ font-size: clamp(56px, 14vw, 96px);}
+    .preview{ transform: translateY(40%);}
+  }
+</style>
+</head>
+<body>
+
+<section class="hero">
+  <div class="hero-inner">
+    <nav class="bar">
+      <div class="brand">
+        <svg class="leaf" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M16 26 C 11 20, 11 13, 16 8 C 21 13, 21 20, 16 26 Z"/>
+          <path d="M16 26 C 9 24, 5 18, 6 12 C 12 13, 16 18, 16 26 Z"/>
+          <path d="M16 26 C 23 24, 27 18, 26 12 C 20 13, 16 18, 16 26 Z"/>
+        </svg>
+        Fourteen Fisherman
+      </div>
+      <div class="nav-mid">
+        <a href="#">Case Library</a>
+        <a href="#" style="display:inline-flex;align-items:center">Portfolio AI tool <span class="pill-tag">The original</span></a>
+      </div>
+      <a class="btn-nav" href="#">Join waitlist
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/><path d="M13 5l7 7-7 7"/></svg>
+      </a>
+    </nav>
+
+    <div class="hero-body">
+      <h1 class="headline">Would you pass the SCA <em>tomorrow?</em></h1>
+
+      <div class="copy">
+        <p>Test yourself against AI patients and find out if you're really ready. Realtime voice consultations. Domain-level feedback.</p>
+        <form onsubmit="event.preventDefault()">
+          <input type="email" placeholder="you@nhs.net" required />
+          <button type="submit">Get access →</button>
+        </form>
+        <div class="stat-row">
+          <div><strong>340+</strong> ON WAITLIST</div>
+          <div><strong>12 min</strong> AVG SESSION</div>
+          <div><strong>3</strong> SCA DOMAINS</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="preview-wrap">
+    <div class="preview">
+      <div class="preview-inner">
+        <div class="pane left">
+          <div>
+            <div class="lbl">Average score</div>
+            <div style="display:flex; align-items:end; justify-content:space-between; gap: 10px; margin-top: 6px;">
+              <div class="num">78</div>
+              <div class="delta">↑ 26 pts</div>
+            </div>
+          </div>
+          <div>
+            <div class="lbl" style="margin-bottom: 8px;">Score timeline</div>
+            <div class="timeline">
+              <div class="col"><div class="v">52</div><div class="bar" style="height:60px"></div><div class="l">S1</div></div>
+              <div class="col"><div class="v">58</div><div class="bar" style="height:72px"></div><div class="l">S2</div></div>
+              <div class="col"><div class="v">64</div><div class="bar" style="height:82px"></div><div class="l">S3</div></div>
+              <div class="col"><div class="v">69</div><div class="bar" style="height:94px"></div><div class="l">S4</div></div>
+              <div class="col"><div class="v">72</div><div class="bar" style="height:104px"></div><div class="l">S5</div></div>
+              <div class="col now"><div class="v">78</div><div class="bar" style="height:122px"></div><div class="l">S6</div></div>
+            </div>
+          </div>
+          <div class="domains">
+            <div class="lbl">Domain growth</div>
+            <div class="domain">
+              <div class="head"><span class="name">Data gathering</span><span class="val">82%<em>+14</em></span></div>
+              <div class="track"><div class="fill" style="width:82%"></div></div>
+            </div>
+            <div class="domain">
+              <div class="head"><span class="name">Clinical management</span><span class="val">71%<em>+8</em></span></div>
+              <div class="track"><div class="fill" style="width:71%"></div></div>
+            </div>
+            <div class="domain">
+              <div class="head"><span class="name">Relating to others</span><span class="val">88%<em>+12</em></span></div>
+              <div class="track"><div class="fill" style="width:88%"></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="pane right">
+          <div class="live-head">
+            <div class="av">JT</div>
+            <div class="name">Jack Thompson</div>
+            <span class="live-dot">LIVE</span>
+          </div>
+          <div class="speaking">PATIENT SPEAKING</div>
+          <div class="wave" aria-hidden="true">
+            <i style="height:18%; animation-delay: 0s"></i><i style="height:42%; animation-delay: .08s"></i>
+            <i style="height:28%; animation-delay: .16s"></i><i style="height:64%; animation-delay: .24s"></i>
+            <i style="height:22%; animation-delay: .32s"></i><i style="height:78%; animation-delay: .40s"></i>
+            <i style="height:40%; animation-delay: .48s"></i><i style="height:92%; animation-delay: .56s"></i>
+            <i style="height:30%; animation-delay: .64s"></i><i style="height:58%; animation-delay: .72s"></i>
+            <i style="height:18%; animation-delay: .80s"></i><i style="height:48%; animation-delay: .88s"></i>
+            <i style="height:70%; animation-delay: .96s"></i><i style="height:26%; animation-delay: 1.04s"></i>
+            <i style="height:52%; animation-delay: 1.12s"></i><i style="height:84%; animation-delay: 1.20s"></i>
+            <i style="height:34%; animation-delay: 1.28s"></i><i style="height:62%; animation-delay: 1.36s"></i>
+            <i style="height:46%; animation-delay: 1.44s"></i><i style="height:74%; animation-delay: 1.52s"></i>
+          </div>
+          <div class="ripple-wrap">
+            <div class="ripple-rings"><i></i><i></i><i></i></div>
+            <div class="ripple">JT</div>
+          </div>
+          <div class="status-row">
+            <span class="rec">REC</span>
+            <span>03:34 / 12:00</span>
+            <span class="rem">70% remaining</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="below-band">
+  <div class="glimpse">
+    <div class="kicker">01 · THE BRIEF</div>
+    <h2>Read your patient brief. The same one a <em>real candidate</em> gets.</h2>
+  </div>
+</section>
+
+</body>
+</html>

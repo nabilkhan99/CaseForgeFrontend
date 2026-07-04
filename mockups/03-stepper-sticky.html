@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>FF — Stepper Sticky (ProductJourney rework)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:           oklch(94% 0.02 75);
+    --bg-2:         oklch(91% 0.025 75);
+    --ink:          oklch(20% 0.015 60);
+    --ink-2:        oklch(36% 0.015 60);
+    --muted:        oklch(55% 0.02 65);
+    --line:         oklch(82% 0.025 70);
+    --accent:       oklch(58% 0.16 50);
+    --accent-deep:  oklch(48% 0.16 45);
+    --accent-soft:  oklch(90% 0.06 70);
+    --green:        oklch(55% 0.13 145);
+  }
+  *{ box-sizing: border-box; }
+  html, body{ margin: 0; padding: 0;}
+  body{
+    font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+
+  .container{
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 60px clamp(16px, 4vw, 48px);
+  }
+  .demo-note{
+    font-family: "Geist Mono", monospace;
+    font-size: 11px;
+    letter-spacing: .12em;
+    color: var(--muted);
+    text-transform: uppercase;
+    padding: 16px clamp(16px, 4vw, 48px);
+    border-bottom: 1px solid var(--line);
+    background: var(--bg-2);
+  }
+
+  /* ===== Stepper-with-sticky-preview ===== */
+  .journey{
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    gap: clamp(32px, 5vw, 80px);
+    align-items: start;
+    position: relative;
+  }
+  .steps{
+    position: sticky;
+    top: 80px;
+    padding: clamp(24px, 4vw, 40px) 0;
+  }
+  .step{
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    gap: 16px;
+    padding: 22px 0;
+    border-top: 1px solid var(--line);
+    cursor: pointer;
+    transition: opacity .4s ease;
+    opacity: .42;
+  }
+  .step:last-child{ border-bottom: 1px solid var(--line);}
+  .step.active{ opacity: 1; }
+  .step .n{
+    font-family: "Geist Mono", monospace;
+    font-size: 12px;
+    color: var(--muted);
+    padding-top: 4px;
+    font-feature-settings: "tnum";
+    letter-spacing: .04em;
+  }
+  .step.active .n{ color: var(--accent-deep);}
+  .step .body h3{
+    margin: 0 0 6px;
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+  }
+  .step .body h3 em{
+    font-style: italic;
+    font-weight: 400;
+    color: var(--accent-deep);
+  }
+  .step .body p{
+    margin: 0;
+    font-size: 14px;
+    color: var(--ink-2);
+    line-height: 1.45;
+    max-width: 38ch;
+  }
+  .step .progress{
+    margin-top: 12px;
+    height: 2px;
+    background: var(--line);
+    border-radius: 999px;
+    overflow: hidden;
+    display: none;
+  }
+  .step.active .progress{ display: block;}
+  .step .progress .fill{
+    height: 100%;
+    width: 0;
+    background: var(--accent);
+    border-radius: 999px;
+    transition: width 4s linear;
+  }
+  .step.active .progress .fill{ width: 100%;}
+
+  /* Sticky preview frame */
+  .preview-col{
+    position: sticky;
+    top: 80px;
+    align-self: start;
+  }
+  .preview{
+    background: oklch(15% 0.01 60);
+    border-radius: 22px;
+    padding: 10px;
+    aspect-ratio: 880 / 540;
+    box-shadow: 0 40px 80px -30px oklch(20% 0.04 60 / .45);
+  }
+  .preview-inner{
+    width: 100%; height: 100%;
+    background: oklch(97% 0.015 75);
+    border-radius: 14px;
+    position: relative;
+    overflow: hidden;
+  }
+  .frame{
+    position: absolute; inset: 0;
+    display: grid;
+    grid-template-columns: 38% 1fr;
+    opacity: 0;
+    transition: opacity .5s ease;
+    pointer-events: none;
+  }
+  .frame.show{ opacity: 1; pointer-events: auto;}
+
+  /* Frame 1: Brief */
+  .frame-1 .left{
+    padding: 26px; border-right: 1px solid var(--line);
+    background: oklch(97% 0.012 75);
+    display: flex; flex-direction: column; gap: 18px;
+  }
+  .frame-1 .right{
+    padding: 26px;
+    display: flex; flex-direction: column; gap: 18px;
+  }
+  .brief-row{
+    display: grid;
+    grid-template-columns: 90px 1fr;
+    gap: 14px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .brief-row .k{ font-family: "Geist Mono", monospace; font-size: 10.5px; letter-spacing: .12em; color: var(--muted); text-transform: uppercase; padding-top: 2px;}
+  .brief-row .v{ font-size: 14px; color: var(--ink); font-weight: 500;}
+  .brief-quote{
+    padding: 14px 18px;
+    background: var(--accent-soft);
+    border-left: 3px solid var(--accent-deep);
+    border-radius: 0 12px 12px 0;
+    font-style: italic;
+    color: var(--ink-2);
+    font-size: 13.5px;
+    line-height: 1.5;
+  }
+
+  /* Frame 2: Consultation */
+  .frame-2{ background: oklch(98% 0.012 75);}
+  .frame-2 .head{
+    grid-column: 1 / -1;
+    display: flex; align-items: center; gap: 12px;
+    padding: 18px 24px; border-bottom: 1px solid var(--line);
+  }
+  .frame-2 .av{
+    width: 36px; height: 36px; border-radius: 50%;
+    background: linear-gradient(135deg, oklch(65% 0.14 50), var(--accent-deep));
+    color: oklch(98% 0.02 75); font-weight: 600; font-size: 13px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .frame-2 .meta{ flex: 1;}
+  .frame-2 .meta .name{ font-size: 14px; font-weight: 600;}
+  .frame-2 .meta .sub{ font-size: 11.5px; color: var(--muted); font-family: "Geist Mono", monospace; letter-spacing: .04em;}
+  .live-dot{ display:inline-flex; align-items:center; gap: 5px; font-size: 11px; font-weight: 600; letter-spacing: .12em; color: var(--green); font-family: "Geist Mono", monospace;}
+  .live-dot::before{ content:""; width: 6px; height: 6px; background: var(--green); border-radius: 50%;}
+  .frame-2 .stage{
+    grid-column: 1 / -1;
+    flex: 1; display:flex; align-items:center; justify-content:center;
+    padding: 30px;
+    position: relative;
+  }
+  .ripple-rings i{
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    border: 1px solid oklch(70% 0.15 55 / .28);
+    border-radius: 50%;
+    animation: rip 3.2s ease-out infinite;
+    opacity: 0;
+  }
+  .ripple-rings i:nth-child(1){ animation-delay: 0s;}
+  .ripple-rings i:nth-child(2){ animation-delay: .8s;}
+  .ripple-rings i:nth-child(3){ animation-delay: 1.6s;}
+  @keyframes rip{ 0%{ width: 100px; height: 100px; opacity: .6;} 100%{ width: 320px; height: 320px; opacity: 0;}}
+  .ripple{
+    width: 96px; height: 96px; border-radius: 50%;
+    background: linear-gradient(135deg, oklch(65% 0.14 50), var(--accent-deep));
+    color: oklch(98% 0.02 75); font-size: 22px; font-weight: 600;
+    display:flex; align-items:center; justify-content:center;
+    z-index: 2;
+    box-shadow: 0 12px 30px -10px oklch(40% 0.1 50 / .55);
+  }
+  .frame-2 .wave-row{
+    grid-column: 1 / -1;
+    padding: 14px 24px 18px;
+    display:flex; align-items:center; justify-content:center; gap: 3px;
+  }
+  .frame-2 .wave-row i{ display:inline-block; width: 3px; border-radius: 2px; background: linear-gradient(180deg, oklch(68% 0.15 55), var(--accent-deep)); animation: wv 1.2s ease-in-out infinite;}
+  @keyframes wv{ 0%,100%{ transform: scaleY(.25)} 50%{ transform: scaleY(1)}}
+
+  /* Frame 3: Feedback */
+  .frame-3 .left{ padding: 26px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 16px;}
+  .frame-3 .right{ padding: 26px; display: flex; flex-direction: column; gap: 18px;}
+  .domain-card{
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: oklch(98% 0.012 75);
+  }
+  .domain-card .name{ font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 6px;}
+  .domain-card .row{ display:flex; justify-content:space-between; font-size: 12px; color: var(--muted);}
+  .domain-card .v{ font-family: "Geist Mono", monospace; font-feature-settings: "tnum";}
+  .domain-card .v.good{ color: var(--green);}
+  .domain-card .v.bad{ color: oklch(55% 0.18 25);}
+
+  /* Frame 4: Progress */
+  .frame-4{ padding: 26px;}
+  .frame-4 .big-stat{ display:flex; justify-content:space-between; align-items: end;}
+  .frame-4 .num{ font-size: 72px; font-weight: 700; color: var(--accent-deep); line-height: 0.9; letter-spacing: -.04em;}
+  .frame-4 .delta{
+    display:inline-flex; align-items:center; gap: 4px;
+    padding: 4px 10px; border-radius: 999px;
+    background: oklch(92% 0.04 145);
+    color: var(--green);
+    font-size: 12px; font-weight: 600;
+  }
+  .frame-4 .chart{
+    margin-top: 24px;
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+    align-items: end;
+    height: 180px;
+  }
+  .frame-4 .col{ display:flex; flex-direction:column; align-items:center; gap: 6px;}
+  .frame-4 .bar{ width: 100%; border-radius: 6px; background: linear-gradient(180deg, oklch(85% 0.08 70), oklch(72% 0.1 70));}
+  .frame-4 .col.now .bar{ background: linear-gradient(180deg, oklch(70% 0.15 60), var(--accent-deep));}
+  .frame-4 .l{ font-size: 11px; color: var(--muted); font-family: "Geist Mono", monospace;}
+  .frame-4 .col.now .l{ color: var(--accent-deep); font-weight: 600;}
+  .frame-4 .v{ font-size: 11.5px; color: var(--muted); font-feature-settings: "tnum";}
+  .frame-4 .col.now .v{ color: var(--accent-deep); font-weight: 600;}
+
+  @media (max-width: 900px){
+    .journey{ grid-template-columns: 1fr;}
+    .steps{ position: static;}
+    .preview-col{ position: static; order: -1;}
+  }
+</style>
+</head>
+<body>
+
+<div class="demo-note">Mockup 03 — replaces ProductJourney's 4-block stacked layout with a sticky stepper. ~50% less scroll.</div>
+
+<section class="container">
+  <div style="margin-bottom: 32px;">
+    <div style="font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .12em; color: var(--accent-deep); text-transform: uppercase;">HOW IT WORKS</div>
+    <h2 style="margin: 12px 0 0; font-size: clamp(36px, 5vw, 60px); font-weight: 700; letter-spacing: -0.035em; line-height: 1; max-width: 18ch;">Four moves from <em style="font-style: italic; color: var(--accent-deep); font-weight: 400;">brief to better</em>.</h2>
+  </div>
+
+  <div class="journey">
+    <div class="steps">
+      <div class="step active" data-step="1">
+        <div class="n">01</div>
+        <div class="body">
+          <h3>Read your <em>patient brief</em></h3>
+          <p>Same scenario a real SCA candidate gets — presenting complaint, background, your task.</p>
+          <div class="progress"><div class="fill"></div></div>
+        </div>
+      </div>
+      <div class="step" data-step="2">
+        <div class="n">02</div>
+        <div class="body">
+          <h3>Have the <em>conversation</em></h3>
+          <p>Patient responds in real-time voice. Volunteers symptoms. Pushes back if you're vague.</p>
+          <div class="progress"><div class="fill"></div></div>
+        </div>
+      </div>
+      <div class="step" data-step="3">
+        <div class="n">03</div>
+        <div class="body">
+          <h3>See <em>where you stand</em></h3>
+          <p>Instant feedback on the three SCA marking domains. Know your strengths. Know what to fix.</p>
+          <div class="progress"><div class="fill"></div></div>
+        </div>
+      </div>
+      <div class="step" data-step="4">
+        <div class="n">04</div>
+        <div class="body">
+          <h3>Improve <em>every station</em></h3>
+          <p>History builds a picture of your growth. Trend lines across domains. Targeted practice.</p>
+          <div class="progress"><div class="fill"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="preview-col">
+      <div class="preview">
+        <div class="preview-inner">
+
+          <div class="frame frame-1 show" data-frame="1">
+            <div class="left">
+              <div class="brief-row"><div class="k">Patient</div><div class="v">Jack Thompson</div></div>
+              <div class="brief-row"><div class="k">Age</div><div class="v">12 · DOB 14/05/2013</div></div>
+              <div class="brief-row"><div class="k">With</div><div class="v">David Thompson, father</div></div>
+              <div class="brief-row"><div class="k">Setting</div><div class="v">Video consult</div></div>
+            </div>
+            <div class="right">
+              <div style="font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: .14em; color: var(--muted); text-transform: uppercase;">Reason for encounter</div>
+              <div class="brief-quote">"Father requesting an ECG for his son. Jack has joined a running club and the father is worried about 'Sudden Death'."</div>
+              <div style="font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: .14em; color: var(--muted); text-transform: uppercase; margin-top: 8px;">Task</div>
+              <div style="font-size: 13.5px; color: var(--ink); line-height: 1.5;">Take a history. Address the father's concerns. Decide next steps.</div>
+            </div>
+          </div>
+
+          <div class="frame frame-2" data-frame="2" style="display: grid; grid-template-columns: 1fr;">
+            <div class="head">
+              <div class="av">JT</div>
+              <div class="meta"><div class="name">Jack Thompson</div><div class="sub">CONSULTATION · 03:34</div></div>
+              <span class="live-dot">LIVE</span>
+            </div>
+            <div class="stage">
+              <div class="ripple-rings"><i></i><i></i><i></i></div>
+              <div class="ripple">JT</div>
+            </div>
+            <div class="wave-row" aria-hidden="true">
+              <i style="height:20%; animation-delay: 0s"></i><i style="height:48%; animation-delay: .08s"></i>
+              <i style="height:30%; animation-delay: .16s"></i><i style="height:70%; animation-delay: .24s"></i>
+              <i style="height:24%; animation-delay: .32s"></i><i style="height:82%; animation-delay: .40s"></i>
+              <i style="height:44%; animation-delay: .48s"></i><i style="height:90%; animation-delay: .56s"></i>
+              <i style="height:32%; animation-delay: .64s"></i><i style="height:60%; animation-delay: .72s"></i>
+              <i style="height:20%; animation-delay: .80s"></i><i style="height:50%; animation-delay: .88s"></i>
+              <i style="height:72%; animation-delay: .96s"></i><i style="height:28%; animation-delay: 1.04s"></i>
+              <i style="height:54%; animation-delay: 1.12s"></i><i style="height:86%; animation-delay: 1.20s"></i>
+            </div>
+          </div>
+
+          <div class="frame frame-3" data-frame="3" style="display: grid; grid-template-columns: 38% 1fr;">
+            <div class="left">
+              <div style="font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: .14em; color: var(--muted); text-transform: uppercase;">Overall</div>
+              <div style="display:flex; align-items: end; gap: 12px;">
+                <div style="font-size: 64px; font-weight: 700; color: var(--accent-deep); letter-spacing: -.04em; line-height: 0.9;">78</div>
+                <div style="font-size: 12px; color: var(--muted); padding-bottom: 12px; font-family: 'Geist Mono', monospace;">/ 100</div>
+              </div>
+              <div style="font-size: 13px; color: var(--ink-2); line-height: 1.5; margin-top: 8px;">
+                A strong consultation. You opened with the father's worry, gathered cardiovascular family history, and offered a clear plan.
+              </div>
+            </div>
+            <div class="right">
+              <div class="domain-card">
+                <div class="name">Data gathering</div>
+                <div class="row"><span>Asked about family Hx</span><span class="v good">+</span></div>
+                <div class="row"><span>Quantified exercise</span><span class="v good">+</span></div>
+                <div class="row"><span>Past medical Hx</span><span class="v bad">−</span></div>
+              </div>
+              <div class="domain-card">
+                <div class="name">Clinical management</div>
+                <div class="row"><span>Acknowledged worry</span><span class="v good">+</span></div>
+                <div class="row"><span>Offered ECG referral</span><span class="v good">+</span></div>
+              </div>
+              <div class="domain-card">
+                <div class="name">Relating to others</div>
+                <div class="row"><span>Empathic opening</span><span class="v good">+</span></div>
+                <div class="row"><span>Checked understanding</span><span class="v bad">−</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="frame frame-4" data-frame="4">
+            <div class="big-stat">
+              <div>
+                <div style="font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: .14em; color: var(--muted); text-transform: uppercase;">Avg score across 6 sessions</div>
+                <div class="num">78</div>
+              </div>
+              <div class="delta">↑ 26 pts since S1</div>
+            </div>
+            <div class="chart">
+              <div class="col"><div class="v">52</div><div class="bar" style="height:90px"></div><div class="l">S1</div></div>
+              <div class="col"><div class="v">58</div><div class="bar" style="height:108px"></div><div class="l">S2</div></div>
+              <div class="col"><div class="v">64</div><div class="bar" style="height:124px"></div><div class="l">S3</div></div>
+              <div class="col"><div class="v">69</div><div class="bar" style="height:138px"></div><div class="l">S4</div></div>
+              <div class="col"><div class="v">72</div><div class="bar" style="height:152px"></div><div class="l">S5</div></div>
+              <div class="col now"><div class="v">78</div><div class="bar" style="height:172px"></div><div class="l">S6</div></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  const steps = document.querySelectorAll('.step');
+  const frames = document.querySelectorAll('.frame');
+  steps.forEach(step => {
+    step.addEventListener('click', () => {
+      const n = step.getAttribute('data-step');
+      steps.forEach(s => s.classList.toggle('active', s === step));
+      frames.forEach(f => f.classList.toggle('show', f.getAttribute('data-frame') === n));
+    });
+  });
+</script>
+
+</body>
+</html>

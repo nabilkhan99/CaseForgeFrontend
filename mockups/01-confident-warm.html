@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>FF — Confident Warm</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    /* OKLCH-tinted neutrals, all warming toward amber */
+    --bg:           oklch(94% 0.02 75);      /* warm cream */
+    --bg-2:         oklch(91% 0.025 75);     /* deeper cream */
+    --ink:          oklch(20% 0.015 60);     /* near-black, warm */
+    --ink-2:        oklch(36% 0.015 60);
+    --muted:        oklch(55% 0.02 65);
+    --line:         oklch(82% 0.025 70);
+    --accent:       oklch(58% 0.16 50);      /* burnt amber */
+    --accent-deep:  oklch(48% 0.16 45);
+    --accent-soft:  oklch(90% 0.06 70);
+    --green:        oklch(55% 0.13 145);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    letter-spacing: -0.005em;
+    overflow-x: hidden;
+  }
+  .mono{ font-family: "Geist Mono", ui-monospace, monospace; }
+
+  /* ===== Nav ===== */
+  .nav-wrap{ position: sticky; top: 0; z-index: 50; padding: 16px clamp(16px, 4vw, 32px); }
+  nav.bar{
+    max-width: 1240px; margin: 0 auto;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center; gap: clamp(16px, 4vw, 40px);
+    padding: 14px 22px;
+    background: color-mix(in oklch, var(--bg) 80%, transparent);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; font-weight: 600; font-size: 15.5px; letter-spacing:-.01em;}
+  .brand .leaf{ width: 22px; height:22px;}
+  .nav-mid{ display:flex; align-items:center; gap: 28px; }
+  .nav-mid a{ color: var(--ink-2); text-decoration: none; font-size: 14px; font-weight: 450;}
+  .nav-mid a:hover{ color: var(--accent-deep);}
+  .pill-tag{
+    display:inline-flex; align-items:center; gap:4px;
+    padding: 3px 9px;
+    background: var(--accent-soft);
+    color: var(--accent-deep);
+    font-size: 11.5px; font-weight: 500;
+    border-radius: 999px;
+    margin-left: 8px;
+  }
+  .btn{
+    display:inline-flex; align-items:center; gap:8px;
+    padding: 10px 18px; border-radius: 999px;
+    font-size: 14px; font-weight: 500;
+    text-decoration: none; cursor: pointer;
+    border: 0; font-family: inherit;
+  }
+  .btn-primary{
+    background: var(--ink);
+    color: var(--bg);
+    box-shadow: 0 1px 0 oklch(100% 0 0 / .08) inset;
+  }
+  .btn-primary:hover{ background: var(--accent-deep); }
+
+  /* ===== Hero — asymmetric overlap ===== */
+  .hero{
+    max-width: 1320px; margin: 0 auto;
+    padding: clamp(24px, 5vw, 64px) clamp(16px, 4vw, 48px) clamp(40px, 6vw, 80px);
+    position: relative;
+  }
+  .hero-grid{
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    column-gap: clamp(24px, 4vw, 56px);
+    row-gap: 24px;
+    align-items: end;
+  }
+  .headline{
+    grid-column: 1 / -1;
+    grid-row: 1;
+    font-size: clamp(56px, 9.5vw, 132px);
+    font-weight: 700;
+    line-height: 0.92;
+    letter-spacing: -0.045em;
+    color: var(--ink);
+    margin: 0;
+    text-wrap: balance;
+    max-width: 14ch;
+  }
+  .headline em{
+    font-style: italic;
+    font-weight: 400;
+    color: var(--accent-deep);
+    font-feature-settings: "ss01" 1;
+    /* No serif. Geist italic does the work. */
+  }
+  .headline .pass{
+    color: var(--accent);
+    -webkit-text-stroke: 0;
+  }
+  .lede-col{
+    grid-column: 1;
+    grid-row: 2;
+    max-width: 38ch;
+    align-self: end;
+    padding-bottom: 8px;
+  }
+  .lede-col p{
+    color: var(--ink-2);
+    font-size: clamp(17px, 1.3vw, 20px);
+    line-height: 1.45;
+    margin: 0 0 24px;
+  }
+  .lede-col form{
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    background: oklch(100% 0 0 / .55);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 6px 6px 6px 18px;
+    backdrop-filter: blur(8px);
+    max-width: 440px;
+  }
+  .lede-col form input{
+    border: 0; background: transparent; outline: 0;
+    font-family: inherit; font-size: 15px; color: var(--ink);
+    padding: 10px 0;
+    min-width: 0;
+  }
+  .lede-col form input::placeholder{ color: var(--muted);}
+  .lede-col form button{
+    background: var(--ink);
+    color: var(--bg);
+    border: 0;
+    padding: 10px 18px;
+    border-radius: 999px;
+    font-family: inherit; font-size: 14px; font-weight: 500;
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .lede-col .proof{
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 14px;
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+  .lede-col .proof .avatars{ display:inline-flex; }
+  .lede-col .proof .avatars span{
+    width: 22px; height: 22px; border-radius: 50%;
+    border: 1.5px solid var(--bg);
+    margin-left: -6px;
+    background: var(--accent-soft);
+    display:inline-flex; align-items:center; justify-content:center;
+    font-size: 10px; font-weight: 600;
+    color: var(--accent-deep);
+  }
+  .lede-col .proof .avatars span:first-child{ margin-left: 0;}
+
+  /* Tablet floats in the right column AND overlaps under the question mark */
+  .preview{
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    position: relative;
+    align-self: end;
+    width: 100%;
+    aspect-ratio: 880 / 568;
+    background: oklch(15% 0.01 60);
+    border-radius: 22px;
+    padding: 10px;
+    box-shadow: 0 40px 80px -30px oklch(20% 0.04 60 / .55);
+    transform: translateY(40px);
+    z-index: 1;
+  }
+  .preview-inner{
+    width: 100%; height: 100%;
+    background: oklch(97% 0.015 75);
+    border-radius: 14px;
+    display: grid;
+    grid-template-columns: 38% 1fr;
+    overflow: hidden;
+  }
+  .pane{ padding: 22px; display: flex; flex-direction: column; gap: 18px;}
+  .pane.left{ background: oklch(97% 0.012 75); border-right: 1px solid var(--line);}
+  .pane.right{ position: relative; align-items: stretch; padding: 14px 20px;}
+  .lbl{ font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: .12em; color: var(--muted); text-transform: uppercase;}
+  .num{ font-size: 56px; font-weight: 700; letter-spacing: -.04em; color: var(--accent-deep); line-height: 0.95;}
+  .delta{
+    display:inline-flex; align-items:center; gap: 4px;
+    padding: 3px 9px; border-radius: 999px;
+    background: oklch(92% 0.04 145);
+    color: var(--green);
+    font-size: 12px; font-weight: 600;
+    align-self: start;
+  }
+  .timeline{ display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; align-items: end; height: 110px;}
+  .timeline .col{ display:flex; flex-direction:column; align-items:center; gap: 4px;}
+  .timeline .bar{ width: 100%; border-radius: 4px; background: linear-gradient(180deg, oklch(85% 0.08 70), oklch(75% 0.1 70));}
+  .timeline .col.now .bar{ background: linear-gradient(180deg, oklch(70% 0.15 60), var(--accent-deep));}
+  .timeline .v{ font-size: 10.5px; color: var(--muted); font-feature-settings: "tnum"; }
+  .timeline .col.now .v{ color: var(--accent-deep); font-weight: 600;}
+  .timeline .l{ font-size: 10px; color: var(--muted); font-family: "Geist Mono", monospace;}
+
+  .domains{ display: grid; gap: 12px; margin-top: auto;}
+  .domain{ display: grid; gap: 5px;}
+  .domain .head{ display:flex; justify-content:space-between; font-size: 12px;}
+  .domain .name{ color: var(--ink); font-weight: 500;}
+  .domain .val{ color: var(--ink); font-weight: 600; font-feature-settings: "tnum"; }
+  .domain .val em{ color: var(--green); font-style: normal; font-size: 11px; margin-left: 4px;}
+  .domain .track{ height: 8px; background: oklch(90% 0.015 75); border-radius: 999px; overflow: hidden;}
+  .domain .fill{ height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent-deep), oklch(75% 0.13 60), oklch(85% 0.08 70));}
+
+  /* Right pane */
+  .live-head{
+    display:flex; align-items:center; gap: 10px;
+    padding-bottom: 12px; border-bottom: 1px solid var(--line);
+    margin-bottom: 10px;
+  }
+  .live-head .av{
+    width: 32px; height: 32px; border-radius: 50%;
+    background: linear-gradient(135deg, oklch(65% 0.14 50), var(--accent-deep));
+    color: oklch(98% 0.02 75); font-size: 12px; font-weight: 600;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .live-head .name{ flex: 1; font-size: 13.5px; font-weight: 600;}
+  .live-dot{ display:inline-flex; align-items:center; gap: 5px; font-size: 11px; font-weight: 600; letter-spacing: .12em; color: var(--green); font-family: "Geist Mono", monospace;}
+  .live-dot::before{ content:""; width: 6px; height: 6px; background: var(--green); border-radius: 50%; }
+
+  .speaking{ text-align:center; font-family: "Geist Mono", monospace; font-size: 10.5px; letter-spacing: .14em; color: var(--accent-deep); padding: 8px 0;}
+  .wave{ display:flex; align-items:center; justify-content:center; gap: 2.5px; height: 60px;}
+  .wave i{ display:inline-block; width: 2.5px; border-radius: 2px; background: linear-gradient(180deg, oklch(68% 0.15 55), var(--accent-deep)); animation: wv 1.2s ease-in-out infinite;}
+  @keyframes wv{ 0%,100%{ transform: scaleY(.25)} 50%{ transform: scaleY(1)}}
+
+  .ripple-wrap{ position: relative; flex: 1; display:flex; align-items:center; justify-content:center;}
+  .ripple-rings i{
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    border: 1px solid oklch(70% 0.15 55 / .25);
+    border-radius: 50%;
+    animation: rip 3.2s ease-out infinite;
+    opacity: 0;
+  }
+  .ripple-rings i:nth-child(1){ animation-delay: 0s;}
+  .ripple-rings i:nth-child(2){ animation-delay: .8s;}
+  .ripple-rings i:nth-child(3){ animation-delay: 1.6s;}
+  @keyframes rip{ 0%{ width: 90px; height: 90px; opacity: .6;} 100%{ width: 260px; height: 260px; opacity: 0;}}
+  .ripple{
+    width: 76px; height: 76px; border-radius: 50%;
+    background: linear-gradient(135deg, oklch(65% 0.14 50), var(--accent-deep));
+    color: oklch(98% 0.02 75);
+    font-size: 18px; font-weight: 600;
+    display:flex; align-items:center; justify-content:center;
+    z-index: 2;
+    box-shadow: 0 12px 30px -10px oklch(40% 0.1 50 / .55);
+  }
+  .status-row{
+    display:flex; justify-content:space-between;
+    padding-top: 10px;
+    font-size: 11px;
+    color: var(--muted);
+    font-family: "Geist Mono", monospace;
+  }
+  .status-row .rec::before{
+    content: "●"; color: oklch(60% 0.18 25); margin-right: 5px;
+  }
+  .status-row .rem{ color: var(--accent-deep); font-weight: 600;}
+
+  /* Subtle annotation overlay tying tablet → headline */
+  .anno{
+    position: absolute;
+    left: 56%; top: -8px;
+    font-family: "Geist Mono", monospace;
+    font-size: 10.5px;
+    letter-spacing: .12em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .anno::before{
+    content:""; display:inline-block; width: 28px; height: 1px;
+    background: var(--muted);
+    vertical-align: middle;
+    margin-right: 8px;
+  }
+
+  /* Section below, glimpse of the journey */
+  .glimpse{
+    max-width: 1320px;
+    margin: clamp(60px, 8vw, 120px) auto 0;
+    padding: 0 clamp(16px, 4vw, 48px);
+    border-top: 1px solid var(--line);
+    padding-top: clamp(40px, 6vw, 64px);
+  }
+  .glimpse .kicker{
+    font-family: "Geist Mono", monospace;
+    font-size: 11px;
+    letter-spacing: .12em;
+    color: var(--accent-deep);
+    text-transform: uppercase;
+  }
+  .glimpse h2{
+    font-size: clamp(36px, 5vw, 64px);
+    font-weight: 700;
+    letter-spacing: -0.035em;
+    line-height: 1;
+    margin: 16px 0 0;
+    max-width: 18ch;
+  }
+  .glimpse h2 em{ font-style: italic; color: var(--accent-deep); font-weight: 400;}
+
+  @media (max-width: 900px){
+    .hero-grid{ grid-template-columns: 1fr; }
+    .preview{ grid-column: 1; grid-row: auto; aspect-ratio: 880 / 568; transform: none; margin-top: 24px;}
+    .anno{ display: none;}
+    .headline{ font-size: clamp(46px, 12vw, 80px);}
+  }
+</style>
+</head>
+<body>
+
+<div class="nav-wrap">
+  <nav class="bar">
+    <div class="brand">
+      <svg class="leaf" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M16 26 C 11 20, 11 13, 16 8 C 21 13, 21 20, 16 26 Z"/>
+        <path d="M16 26 C 9 24, 5 18, 6 12 C 12 13, 16 18, 16 26 Z"/>
+        <path d="M16 26 C 23 24, 27 18, 26 12 C 20 13, 16 18, 16 26 Z"/>
+      </svg>
+      Fourteen Fisherman
+    </div>
+    <div class="nav-mid">
+      <a href="#">Case Library</a>
+      <a href="#" style="display:inline-flex;align-items:center">Portfolio AI tool <span class="pill-tag">The original</span></a>
+    </div>
+    <a class="btn btn-primary" href="#">Join waitlist
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/><path d="M13 5l7 7-7 7"/></svg>
+    </a>
+  </nav>
+</div>
+
+<section class="hero">
+  <div class="hero-grid">
+    <h1 class="headline">
+      Would you pass the SCA <em>tomorrow?</em>
+    </h1>
+
+    <div class="lede-col">
+      <p>Test yourself against AI patients and see if you're ready. Real-time consultation. Domain-level feedback.</p>
+      <form onsubmit="event.preventDefault()">
+        <input type="email" placeholder="you@nhs.net" required />
+        <button type="submit">Get access
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14"/><path d="M13 5l7 7-7 7"/></svg>
+        </button>
+      </form>
+      <div class="proof">
+        <div class="avatars">
+          <span>AS</span><span>RP</span><span>MK</span><span>EJ</span>
+        </div>
+        <span>340+ GP trainees on the waitlist</span>
+      </div>
+    </div>
+
+    <div class="preview">
+      <div class="anno">live preview ↓</div>
+      <div class="preview-inner">
+        <div class="pane left">
+          <div>
+            <div class="lbl">Average score</div>
+            <div style="display:flex; align-items:end; justify-content:space-between; gap: 10px; margin-top: 6px;">
+              <div class="num">78</div>
+              <div class="delta">↑ 26 pts</div>
+            </div>
+          </div>
+          <div>
+            <div class="lbl" style="margin-bottom: 8px;">Score timeline</div>
+            <div class="timeline">
+              <div class="col"><div class="v">52</div><div class="bar" style="height:54px"></div><div class="l">S1</div></div>
+              <div class="col"><div class="v">58</div><div class="bar" style="height:64px"></div><div class="l">S2</div></div>
+              <div class="col"><div class="v">64</div><div class="bar" style="height:74px"></div><div class="l">S3</div></div>
+              <div class="col"><div class="v">69</div><div class="bar" style="height:84px"></div><div class="l">S4</div></div>
+              <div class="col"><div class="v">72</div><div class="bar" style="height:94px"></div><div class="l">S5</div></div>
+              <div class="col now"><div class="v">78</div><div class="bar" style="height:108px"></div><div class="l">S6</div></div>
+            </div>
+          </div>
+          <div class="domains">
+            <div class="lbl">Domain growth</div>
+            <div class="domain">
+              <div class="head"><span class="name">Data gathering</span><span class="val">82%<em>+14</em></span></div>
+              <div class="track"><div class="fill" style="width:82%"></div></div>
+            </div>
+            <div class="domain">
+              <div class="head"><span class="name">Clinical management</span><span class="val">71%<em>+8</em></span></div>
+              <div class="track"><div class="fill" style="width:71%"></div></div>
+            </div>
+            <div class="domain">
+              <div class="head"><span class="name">Relating to others</span><span class="val">88%<em>+12</em></span></div>
+              <div class="track"><div class="fill" style="width:88%"></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="pane right">
+          <div class="live-head">
+            <div class="av">JT</div>
+            <div class="name">Jack Thompson</div>
+            <span class="live-dot">LIVE</span>
+          </div>
+          <div class="speaking">PATIENT SPEAKING</div>
+          <div class="wave" aria-hidden="true">
+            <i style="height:18%; animation-delay: 0s"></i><i style="height:42%; animation-delay: .08s"></i>
+            <i style="height:28%; animation-delay: .16s"></i><i style="height:64%; animation-delay: .24s"></i>
+            <i style="height:22%; animation-delay: .32s"></i><i style="height:78%; animation-delay: .40s"></i>
+            <i style="height:40%; animation-delay: .48s"></i><i style="height:92%; animation-delay: .56s"></i>
+            <i style="height:30%; animation-delay: .64s"></i><i style="height:58%; animation-delay: .72s"></i>
+            <i style="height:18%; animation-delay: .80s"></i><i style="height:48%; animation-delay: .88s"></i>
+            <i style="height:70%; animation-delay: .96s"></i><i style="height:26%; animation-delay: 1.04s"></i>
+            <i style="height:52%; animation-delay: 1.12s"></i><i style="height:84%; animation-delay: 1.20s"></i>
+            <i style="height:34%; animation-delay: 1.28s"></i><i style="height:62%; animation-delay: 1.36s"></i>
+            <i style="height:46%; animation-delay: 1.44s"></i><i style="height:74%; animation-delay: 1.52s"></i>
+          </div>
+          <div class="ripple-wrap">
+            <div class="ripple-rings"><i></i><i></i><i></i></div>
+            <div class="ripple">JT</div>
+          </div>
+          <div class="status-row">
+            <span class="rec">REC</span>
+            <span>03:34 / 12:00</span>
+            <span class="rem">70% remaining</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="glimpse">
+  <div class="kicker">01 · THE BRIEF</div>
+  <h2>Read your patient brief. The same one a <em>real candidate</em> gets.</h2>
+</section>
+
+</body>
+</html>

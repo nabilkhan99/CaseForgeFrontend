@@ -129,15 +129,6 @@ export const rcgpDomains: RCGPDomain[] = [
         completed: 5,
         total: 20,
     },
-    {
-        id: 'professional',
-        name: 'Professional Conversation',
-        subtitle: 'Ethics & Professional Dilemmas',
-        icon: 'forum',
-        color: 'teal',
-        completed: 12,
-        total: 20,
-    },
 ];
 
 // Paediatrics domain cases (example for detail view)

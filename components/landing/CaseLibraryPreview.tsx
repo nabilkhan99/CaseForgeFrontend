@@ -52,13 +52,13 @@ export default function CaseLibraryPreview() {
         </div>
 
         <div className="text-center">
-          <Link href="/cases">
+          <Link href="/sca-cases">
             <motion.div
               className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-[14px] font-semibold text-primary border-2 border-primary/20 hover:border-primary/40 hover:bg-primary/[0.03] transition-all cursor-pointer"
               whileHover={{ y: -2 }}
               whileTap={{ scale: 0.98 }}
             >
-              Browse Case Library →
+              Browse Free SCA Practice Cases →
             </motion.div>
           </Link>
         </div>

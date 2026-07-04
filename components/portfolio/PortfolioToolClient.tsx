@@ -1,0 +1,113 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import LandingNavbar from '@/components/landing/LandingNavbar';
+import AppNavbar from '@/components/ui/AppNavbar';
+import { CaseForm } from '@/components/CaseForm';
+import { ReviewDisplay } from '@/components/ReviewDisplay';
+import type { CaseReviewResponse } from '@/lib/types';
+import ErrorBoundary from '@/components/ErrorBoundary';
+import { analytics } from '@/lib/analytics';
+import { FeedbackWidget } from '@/components/FeedbackWidget';
+
+export default function PortfolioToolClient() {
+  const [user, setUser] = useState<{ id: string } | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [review, setReview] = useState<CaseReviewResponse | null>(null);
+  const [experienceGroups, setExperienceGroups] = useState<string[]>([]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user as { id: string } | null);
+      setAuthChecked(true);
+    });
+  }, []);
+
+  // Load state from localStorage on initial render
+  useEffect(() => {
+    const savedReview = localStorage.getItem('savedReview');
+    const savedExperienceGroups = localStorage.getItem('savedExperienceGroups');
+    if (savedReview) {
+      setReview(JSON.parse(savedReview));
+    }
+    if (savedExperienceGroups) {
+      setExperienceGroups(JSON.parse(savedExperienceGroups));
+    }
+  }, []);
+
+  const handleReviewGenerated = (newReview: CaseReviewResponse, newExperienceGroups: string[]) => {
+    setReview(newReview);
+    setExperienceGroups(newExperienceGroups);
+    localStorage.setItem('savedReview', JSON.stringify(newReview));
+    localStorage.setItem('savedExperienceGroups', JSON.stringify(newExperienceGroups));
+  };
+
+  const handleReviewUpdate = (updatedReview: CaseReviewResponse) => {
+    setReview(updatedReview);
+    localStorage.setItem('savedReview', JSON.stringify(updatedReview));
+  };
+
+  const handleNewCase = () => {
+    analytics.trackNewCaseStarted();
+    setReview(null);
+    setExperienceGroups([]);
+    localStorage.removeItem('savedReview');
+    localStorage.removeItem('savedExperienceGroups');
+  };
+
+  const isAuthenticated = authChecked && user !== null;
+  const pageIntro = (
+    <div className="space-y-2">
+      <h1 className="text-2xl md:text-3xl font-bold text-heading tracking-[-0.02em]">
+        Free GP Portfolio Tool — AI Clinical Case Review Generator
+      </h1>
+      <p className="text-sm md:text-base text-text-secondary">
+        Generate a structured clinical case review for your RCGP ePortfolio — free, no sign-up required.
+      </p>
+    </div>
+  );
+
+  const content = (
+    <ErrorBoundary>
+      <section className="card">
+        {!review ? (
+          <CaseForm onReviewGenerated={handleReviewGenerated} />
+        ) : (
+          <ReviewDisplay
+            review={review}
+            experienceGroups={experienceGroups}
+            onNewCase={handleNewCase}
+            onUpdate={handleReviewUpdate}
+          />
+        )}
+      </section>
+      {review && <FeedbackWidget />}
+    </ErrorBoundary>
+  );
+
+  if (isAuthenticated) {
+    return (
+      <div className="min-h-[100dvh] bg-surface font-sans">
+        <AppNavbar />
+        <main className="pt-24 pb-16 px-6">
+          <div className="max-w-[900px] mx-auto space-y-8">
+            {pageIntro}
+            {content}
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-[100dvh] bg-surface">
+      <LandingNavbar user={user} />
+      <div className="pt-24 max-w-7xl mx-auto space-y-8 px-4 sm:px-6 lg:px-8">
+        {pageIntro}
+        {content}
+      </div>
+    </div>
+  );
+}
