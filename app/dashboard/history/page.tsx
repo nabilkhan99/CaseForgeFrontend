@@ -98,7 +98,7 @@ export default function HistoryPage() {
     <div>
       <PageHeader
         title="Session History"
-        subtitle={totalCount > 0 ? `${totalCount} completed session${totalCount !== 1 ? 's' : ''}` : undefined}
+        subtitle={totalCount > 0 ? `${totalCount} completed session${totalCount !== 1 ? 's' : ''} · scored out of 10.5` : undefined}
       />
 
       {sessions.length === 0 ? (
@@ -139,15 +139,23 @@ export default function HistoryPage() {
 
                   {/* Verdict band + weighted score — flex-shrink-0 so they never get clipped */}
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <span
-                      className="text-[11px] font-semibold uppercase"
-                      style={{ color: session.passed ? '#16A34A' : '#DC2626' }}
-                    >
-                      {session.verdict ?? 'Pending'}
-                    </span>
-                    <span className="text-[12px] font-mono text-muted">
-                      {session.weightedScore.toFixed(1)}/{session.maxScore.toFixed(1)}
-                    </span>
+                    {session.scored ? (
+                      <>
+                        <span
+                          className="text-[11px] font-semibold uppercase"
+                          style={{ color: session.passed ? '#16A34A' : '#DC2626' }}
+                        >
+                          {session.verdict}
+                        </span>
+                        <span className="text-[12px] font-mono text-muted">
+                          {session.weightedScore.toFixed(1)}/{session.maxScore.toFixed(1)}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-[11px] font-medium text-muted">
+                        {session.marking ? 'Marking…' : 'No feedback available'}
+                      </span>
+                    )}
                   </div>
                 </Link>
               </motion.div>

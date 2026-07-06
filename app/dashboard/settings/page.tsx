@@ -38,6 +38,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
 
   const [fullName, setFullName] = useState('');
@@ -62,10 +63,12 @@ export default function SettingsPage() {
     if (!user?.id) return;
     setSaving(true);
     setSaved(false);
+    setSaveError(null);
 
     try {
-      // Write to user_metadata
-      await supabase.auth.updateUser({
+      // Write to user_metadata. supabase-js returns errors rather than
+      // throwing, so check both results — a silent failure must not show "Saved".
+      const { error: authError } = await supabase.auth.updateUser({
         data: {
           full_name: fullName,
           exam_date: examDate,
@@ -73,16 +76,19 @@ export default function SettingsPage() {
       });
 
       // Also write exam_date to profiles table (fix sync bug)
-      await supabase
+      const { error: profileError } = await supabase
         .from('profiles')
         .upsert({ id: user.id, exam_date: examDate || null }, { onConflict: 'id' });
 
+      if (authError || profileError) {
+        setSaveError('Your changes could not be saved. Please try again.');
+        return;
+      }
+
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch (error) {
-      if (error instanceof Error) {
-        // Handle silently
-      }
+    } catch {
+      setSaveError('Your changes could not be saved. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -270,6 +276,15 @@ export default function SettingsPage() {
               <polyline points="20 6 9 17 4 12" />
             </svg>
             Saved
+          </motion.span>
+        )}
+        {saveError && (
+          <motion.span
+            className="text-[13px] font-medium text-danger"
+            initial={{ opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+          >
+            {saveError}
           </motion.span>
         )}
       </motion.div>

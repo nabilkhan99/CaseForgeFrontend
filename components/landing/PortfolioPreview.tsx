@@ -25,7 +25,7 @@ export default function PortfolioPreview() {
           <p className="text-[14px] text-primary font-medium mb-8">
             Used by over 20% of GP trainees in the UK
           </p>
-          <Link href="/gp-portfolio-tool">
+          <Link href="/portfolio">
             <motion.div
               className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-[14px] font-semibold text-primary border-2 border-primary/20 hover:border-primary/40 hover:bg-primary/[0.03] transition-all cursor-pointer"
               whileHover={{ y: -2 }}
