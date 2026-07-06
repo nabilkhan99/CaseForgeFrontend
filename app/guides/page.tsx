@@ -1,106 +1,254 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import GuideTimeline from '@/components/guides/GuideTimeline';
+import { renderInline } from '@/components/guides/renderInline';
 import LandingFooter from '@/components/landing/LandingFooter';
 import LandingNavbar from '@/components/landing/LandingNavbar';
 import {
     CASE_LIBRARY_PATH,
     SCA_PILLAR_PATH,
-    guideSeriesGroups,
+    pillarMeta,
+    pillarSections,
 } from '@/lib/guides/scaPillarGuide';
-import { pageMetadata } from '@/lib/seo/site';
+import { absoluteUrl, pageMetadata, SITE_NAME, SITE_URL } from '@/lib/seo/site';
 
 export const metadata: Metadata = pageMetadata({
-    title: 'MRCGP SCA Guides',
-    description:
-        'A structured guide series for GP registrars preparing for the MRCGP SCA, covering exam format, marking, consultation structure and practice strategy.',
-    path: '/guides',
+    title: pillarMeta.title,
+    description: pillarMeta.description,
+    path: SCA_PILLAR_PATH,
+    type: 'article',
 });
 
-export default function GuidesIndexPage() {
+function GuideLinkCard({
+    href,
+    label,
+    subtitle,
+}: {
+    href: string;
+    label: string;
+    subtitle: string;
+}) {
+    return (
+        <Link
+            href={href}
+            className="group flex items-center justify-between gap-4 rounded-[11px] border border-[#e6dccb] bg-[#fbf8f2] px-4 py-3 text-heading transition hover:-translate-y-0.5 hover:border-primary hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        >
+            <span>
+                <span className="block text-[15px] font-semibold leading-snug">{label}</span>
+                <span className="mt-0.5 block text-[13px] font-normal text-muted">{subtitle}</span>
+            </span>
+            <span className="text-lg text-primary transition group-hover:translate-x-0.5" aria-hidden>
+                -&gt;
+            </span>
+        </Link>
+    );
+}
+
+export default function GuidesPage() {
+    const articleJsonLd = {
+        '@context': 'https://schema.org',
+        '@type': 'Article',
+        headline: pillarMeta.title,
+        description: pillarMeta.description,
+        datePublished: '2026-06-21',
+        dateModified: '2026-06-21',
+        author: {
+            '@type': 'Organization',
+            name: SITE_NAME,
+            url: SITE_URL,
+        },
+        publisher: {
+            '@type': 'Organization',
+            name: SITE_NAME,
+            url: SITE_URL,
+            logo: {
+                '@type': 'ImageObject',
+                url: absoluteUrl('/fourteenfishermann.png'),
+            },
+        },
+        mainEntityOfPage: absoluteUrl(SCA_PILLAR_PATH),
+    };
+
+    const breadcrumbJsonLd = {
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+            {
+                '@type': 'ListItem',
+                position: 1,
+                name: 'Home',
+                item: SITE_URL,
+            },
+            {
+                '@type': 'ListItem',
+                position: 2,
+                name: 'Guides',
+                item: absoluteUrl(SCA_PILLAR_PATH),
+            },
+        ],
+    };
+
     return (
         <div className="min-h-[100dvh] bg-[#f4efe6] text-body">
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
+            />
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+            />
+
+            <a
+                href="#main"
+                className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-heading focus:px-4 focus:py-2 focus:text-white"
+            >
+                Skip to content
+            </a>
             <LandingNavbar user={null} />
-            <main className="mx-auto max-w-[1180px] px-4 pb-20 pt-32 md:px-6">
-                <p className="text-xs font-bold uppercase tracking-[0.26em] text-primary">
-                    SCA Guide Series
-                </p>
-                <div className="mt-5 grid gap-8 lg:grid-cols-[1fr_360px] lg:items-end">
-                    <div>
-                        <h1 className="max-w-3xl [font-family:var(--font-serif)] text-[42px] font-semibold leading-none tracking-tight text-heading md:text-[64px]">
-                            One map for passing the MRCGP SCA
-                        </h1>
-                        <p className="mt-6 max-w-2xl text-lg leading-relaxed text-body">
-                            Start with the complete pillar guide, then move through the focused guides for marking, structure, communication, resources and exam-day preparation.
-                        </p>
-                    </div>
-                    <div className="rounded-[18px] border border-[#e6dccb] bg-[#fbf8f2] p-6">
-                        <p className="text-sm font-semibold text-heading">
-                            New here?
-                        </p>
-                        <p className="mt-2 text-sm leading-relaxed text-body">
-                            Read the complete guide first. It explains how the whole series fits together.
-                        </p>
-                        <Link href={SCA_PILLAR_PATH} className="primary-button mt-5">
-                            Read the complete guide
-                        </Link>
+
+            <header className="border-b border-[#e2d8c8] px-4 pb-10 pt-32 md:px-6 md:pb-12">
+                <div className="mx-auto max-w-[1180px]">
+                    <p className="text-xs font-bold uppercase tracking-[0.26em] text-primary">
+                        The complete guide
+                    </p>
+                    <h1 className="mt-4 [font-family:var(--font-serif)] text-[42px] font-semibold leading-[1.03] tracking-tight text-heading md:text-[68px]">
+                        How to pass the MRCGP SCA
+                    </h1>
+                    <p className="mt-6 max-w-3xl text-lg leading-relaxed text-body md:text-xl">
+                        The final clinical hurdle of GP training, explained end to end: what the exam is, how it is marked, how to structure 12 minutes, and how to prepare so you pass first time.
+                    </p>
+                    <div className="mt-7 flex flex-wrap items-center gap-3 text-sm text-muted">
+                        <span>{pillarMeta.readTime}</span>
+                        <span className="h-1 w-1 rounded-full bg-muted" />
+                        <span>{pillarMeta.updated}</span>
+                        {pillarMeta.tags.map(tag => (
+                            <span
+                                key={tag}
+                                className="rounded-full border border-[#e6dccb] bg-[#f0e9dc] px-3 py-1 text-xs font-medium text-body"
+                            >
+                                {tag}
+                            </span>
+                        ))}
                     </div>
                 </div>
+            </header>
 
-                <section className="mt-14 space-y-10" aria-label="Guide series">
-                    {guideSeriesGroups.map(group => (
-                        <div key={group.label}>
-                            <div className="mb-4 flex items-center gap-3">
-                                <span className="h-2 w-2 rounded-full bg-primary" />
-                                <h2 className="text-xs font-bold uppercase tracking-[0.16em] text-muted">
-                                    {group.label}
+            <div className="mx-auto grid max-w-[1180px] gap-12 px-4 py-12 md:px-6 lg:grid-cols-[264px_1fr]">
+                <GuideTimeline sections={pillarSections.map(({ id, number, title }) => ({ id, number, title }))} />
+
+                <main id="main" className="min-w-0 max-w-[720px]">
+                    <div className="space-y-6 text-lg leading-relaxed text-body">
+                        <p className="text-xl leading-relaxed text-heading">
+                            The Simulated Consultation Assessment is the final clinical hurdle of GP training, and it is a high stakes one, with a pass rate that fails a meaningful share of every cohort. Most candidates consult competently every day and still find it daunting, because performing under exam conditions is a different task from a normal surgery.
+                        </p>
+                        <p>
+                            Here is the most useful thing to understand before you read anything else: the SCA is a consultation exam, not a knowledge exam. The candidates who struggle are usually not the ones who missed a rare diagnosis. They are the ones who ran out of time, talked past the patient, or consulted mechanically. The skills that pass the SCA are specific, observable and trainable, and this guide covers all of them.
+                        </p>
+                        <p>
+                            Each section gives you the working summary and links to a deeper guide on that topic.
+                        </p>
+                    </div>
+
+                    <div className="mt-4">
+                        {pillarSections.map(section => (
+                            <section
+                                key={section.id}
+                                id={section.id}
+                                className="scroll-mt-28 pt-12"
+                            >
+                                <span className="[font-family:var(--font-serif)] text-lg italic text-primary">
+                                    {section.number}
+                                </span>
+                                <h2 className="mt-2 [font-family:var(--font-serif)] text-3xl font-semibold leading-tight tracking-tight text-heading md:text-[34px]">
+                                    {section.title}
                                 </h2>
-                                <span className="h-px flex-1 bg-[#e2d8c8]" />
-                            </div>
-                            <div className="grid gap-3 md:grid-cols-2">
-                                {group.cards.map(card => {
-                                    const isPillar = card.href === SCA_PILLAR_PATH;
-                                    return (
-                                        <Link
-                                            key={card.href}
-                                            href={card.href}
-                                            className="group flex gap-4 rounded-[14px] border border-[#e6dccb] bg-[#fbf8f2] p-5 transition hover:-translate-y-1 hover:border-primary hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                                        >
-                                            <span className="[font-family:var(--font-serif)] text-xl italic leading-none text-primary">
-                                                {card.number}
-                                            </span>
-                                            <span>
-                                                <span className="block text-base font-bold leading-snug text-heading">
-                                                    {card.label}
-                                                    {isPillar && (
-                                                        <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-primary">
-                                                            Start here
-                                                        </span>
-                                                    )}
-                                                </span>
-                                                <span className="mt-1 block text-sm leading-snug text-muted">
-                                                    {card.subtitle}
-                                                </span>
-                                            </span>
-                                        </Link>
-                                    );
-                                })}
+
+                                <div className="mt-5 space-y-5 text-[17px] leading-relaxed text-body">
+                                    {section.paragraphs.slice(0, section.pullQuote ? 1 : undefined).map((paragraph, index) => (
+                                        <p key={index}>{renderInline(paragraph)}</p>
+                                    ))}
+                                </div>
+
+                                {section.domains && (
+                                    <div className="mt-6 space-y-5">
+                                        {section.domains.map((domain, index) => (
+                                            <div
+                                                key={domain.title}
+                                                className="border-l-2 border-primary/40 pl-5"
+                                            >
+                                                <h3 className="flex items-baseline gap-2.5 text-heading">
+                                                    <span className="[font-family:var(--font-serif)] text-sm italic text-primary">
+                                                        {index + 1}
+                                                    </span>
+                                                    <span className="[font-family:var(--font-serif)] text-lg font-semibold leading-snug">
+                                                        {domain.title}
+                                                    </span>
+                                                </h3>
+                                                <p className="mt-1.5 text-[15px] leading-relaxed text-body">
+                                                    {domain.body}
+                                                </p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {section.pullQuote && (
+                                    <>
+                                        <blockquote className="mt-6 border-l-4 border-primary pl-5">
+                                            <p className="[font-family:var(--font-serif)] text-2xl font-medium leading-snug text-heading">
+                                                {section.pullQuote}
+                                            </p>
+                                        </blockquote>
+                                        <div className="mt-5 space-y-5 text-[17px] leading-relaxed text-body">
+                                            {section.paragraphs.slice(1).map((paragraph, index) => (
+                                                <p key={index}>{renderInline(paragraph)}</p>
+                                            ))}
+                                        </div>
+                                    </>
+                                )}
+
+                                {section.links && (
+                                    <div className="mt-6 flex flex-col gap-2">
+                                        {section.links.map(link => (
+                                            <GuideLinkCard key={link.href} {...link} />
+                                        ))}
+                                    </div>
+                                )}
+                            </section>
+                        ))}
+                    </div>
+                </main>
+            </div>
+
+            <section className="bg-[#ebe2d4] px-4 py-16 md:px-6">
+                <div className="mx-auto max-w-[1180px]">
+                    <div className="relative overflow-hidden rounded-[22px] bg-[#241d18] p-8 text-[#f4efe6] md:p-12">
+                        <div className="absolute -right-24 -top-24 h-80 w-80 rounded-full bg-primary/30 blur-3xl" />
+                        <div className="relative">
+                            <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold">
+                                <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                                Free, no paywall
+                            </span>
+                            <h2 className="mt-6 text-4xl font-extrabold leading-none tracking-tight text-white md:text-6xl">
+                                Start practising{' '}
+                                <em className="[font-family:var(--font-serif)] font-medium text-primary">
+                                    today
+                                </em>
+                            </h2>
+                            <p className="mt-5 max-w-2xl [font-family:var(--font-serif)] text-xl leading-relaxed text-[#c9bcaa]">
+                                Our case library has 79 SCA practice cases built directly from the RCGP curriculum, each with a candidate brief, patient script, marking scheme and learning points. Free, with no paywall, whenever it helps.
+                            </p>
+                            <div className="mt-8 flex flex-wrap gap-3">
+                                <Link href={CASE_LIBRARY_PATH} className="primary-button">
+                                    Practice Free Cases -&gt;
+                                </Link>
                             </div>
                         </div>
-                    ))}
-                </section>
+                    </div>
+                </div>
+            </section>
 
-                <section className="mt-16 rounded-[22px] bg-[#241d18] p-8 text-[#f4efe6] md:p-10">
-                    <h2 className="text-3xl font-extrabold tracking-tight text-white">
-                        Ready to practise?
-                    </h2>
-                    <p className="mt-3 max-w-2xl text-[#c9bcaa]">
-                        Pair the guides with free SCA practice cases built from the RCGP curriculum.
-                    </p>
-                    <Link href={CASE_LIBRARY_PATH} className="primary-button mt-6">
-                        Practice Free Cases
-                    </Link>
-                </section>
-            </main>
             <LandingFooter note="Educational guidance only. Always confirm exam details on the RCGP website." />
         </div>
     );

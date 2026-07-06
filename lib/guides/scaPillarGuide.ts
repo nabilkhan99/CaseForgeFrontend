@@ -1,5 +1,6 @@
 export const GUIDE_INDEX_PATH = '/guides';
-export const SCA_PILLAR_PATH = '/guides/how-to-pass-the-mrcgp-sca';
+// The complete guide is the /guides landing page itself.
+export const SCA_PILLAR_PATH = '/guides';
 export const CASE_LIBRARY_PATH = '/sca-cases';
 
 export interface GuideLink {

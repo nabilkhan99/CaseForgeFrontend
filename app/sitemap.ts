@@ -2,7 +2,7 @@ import type { MetadataRoute } from 'next';
 import { getPublicCasesForList } from '@/lib/cases/publicCases';
 import { guideArticles } from '@/lib/guides/articles';
 import { guidePath } from '@/lib/guides/articleTypes';
-import { GUIDE_INDEX_PATH, SCA_PILLAR_PATH } from '@/lib/guides/scaPillarGuide';
+import { GUIDE_INDEX_PATH } from '@/lib/guides/scaPillarGuide';
 import { buildCaseSeoIndex } from '@/lib/seo/cases';
 import { absoluteUrl } from '@/lib/seo/site';
 
@@ -33,12 +33,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         })),
         {
             url: absoluteUrl(GUIDE_INDEX_PATH),
-            lastModified: now,
-            changeFrequency: 'monthly',
-            priority: 0.8,
-        },
-        {
-            url: absoluteUrl(SCA_PILLAR_PATH),
             lastModified: now,
             changeFrequency: 'monthly',
             priority: 0.85,
