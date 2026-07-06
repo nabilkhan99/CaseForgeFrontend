@@ -16,9 +16,7 @@ export const whichScaAiPlatform: GuideArticle = {
         "A note on method before anything else. Prices, case counts and features in this market change frequently, so rather than fill this page with numbers that may be stale by the time you read them, this guide compares the models and tells you exactly what to verify on each provider's own site. Treat any specific figure you read anywhere, including in comparisons like this one, as something to check rather than trust.",
     ],
     readTime: '7 min read',
-    updated: 'Updated June 2026',
-    reviewNote:
-        'The comparison table is correct as of 13 June 2026 from each provider’s own website; this market changes monthly, so verify every figure at source before publishing.',
+    updated: 'Updated July 2026',
     sections: [
         {
             id: 'what-ai-practice-is-actually-for',
@@ -74,6 +72,14 @@ export const whichScaAiPlatform: GuideArticle = {
                     ],
                     rows: [
                         [
+                            '**Fourteen Fisherman**',
+                            '**Voice AI consultation practice built on our free RCGP curriculum case library, with domain mapped feedback**',
+                            '**Voice**',
+                            '**200 cases (unlimited practice, not limited by station credits)**',
+                            '**£199 for 3 month access; £599 bundle with AI practice, small group coaching and live lectures (eligible for the NHSE study budget)**',
+                            '**The only SCA programme that combines AI practice, small group coaching and live lectures, and the only one with a pass guarantee.**',
+                        ],
+                        [
                             'SCA Revision (SCARevision.ai)',
                             'AI patients on top of a large case bank',
                             'Voice',
@@ -105,19 +111,7 @@ export const whichScaAiPlatform: GuideArticle = {
                             'From £14.95 per month',
                             'Newer entrant; AI tutor and hot topics',
                         ],
-                        [
-                            'Fourteen Fisherman (us)',
-                            'Free case library, AI practice under exploration',
-                            'Practice with a partner today',
-                            '79 cases',
-                            'Free',
-                            'Built from the RCGP curriculum; AI consultation practice being explored, register interest',
-                        ],
                     ],
-                },
-                {
-                    type: 'note',
-                    text: "Reviewer to verify every figure against each provider's site on the day of publishing; this market changes monthly.",
                 },
             ],
         },
@@ -136,20 +130,6 @@ export const whichScaAiPlatform: GuideArticle = {
                 {
                     type: 'text',
                     text: 'A practical buying rule that follows from all of this: never subscribe to any platform in this category without using its free consultation or trial first, performing it exactly as you would an exam case, and reading the feedback critically. 10 minutes of trial tells you more than any comparison page, including this one.',
-                },
-            ],
-        },
-        {
-            id: 'where-fourteen-fisherman-stands',
-            title: 'Where Fourteen Fisherman stands',
-            blocks: [
-                {
-                    type: 'text',
-                    text: 'Full transparency, because we are part of this market’s story. What we offer today is not an AI platform. It is a free library of 79 SCA practice cases built directly from the case examples the RCGP lists in its curriculum, each with a candidate brief, patient script, marking scheme and learning points, usable immediately with a study partner, with no paywall and no subscription.',
-                },
-                {
-                    type: 'text',
-                    text: 'Our team is exploring building AI consultation practice on top of that free case library, so that the same curriculum derived cases could be practised with an AI patient and domain mapped feedback. Whether and how we build it will be shaped by how much trainees want it, and if you would use it, you can register your interest on our site. In the meantime, nothing about your preparation needs to wait: the cases are free now, and they work with a human partner today.',
                 },
             ],
         },

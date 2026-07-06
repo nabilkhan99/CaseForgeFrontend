@@ -187,7 +187,7 @@ export default async function GuideArticlePage({
                     <p className="mt-8 text-xs font-bold uppercase tracking-[0.26em] text-primary">
                         {article.kicker}
                     </p>
-                    <h1 className="mt-4 max-w-[18ch] [font-family:var(--font-serif)] text-[38px] font-semibold leading-[1.05] tracking-tight text-heading md:text-[58px]">
+                    <h1 className="mt-4 [font-family:var(--font-serif)] text-[38px] font-semibold leading-[1.05] tracking-tight text-heading md:text-[58px]">
                         {article.heading}
                     </h1>
                     <div className="mt-7 flex flex-wrap items-center gap-3 text-sm text-muted">

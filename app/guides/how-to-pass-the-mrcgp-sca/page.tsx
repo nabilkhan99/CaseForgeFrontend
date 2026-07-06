@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import GuideTimeline from '@/components/guides/GuideTimeline';
+import { renderInline } from '@/components/guides/renderInline';
 import LandingFooter from '@/components/landing/LandingFooter';
 import LandingNavbar from '@/components/landing/LandingNavbar';
 import {
@@ -124,7 +125,7 @@ export default function HowToPassMrcgpScaPage() {
                     <p className="mt-8 text-xs font-bold uppercase tracking-[0.26em] text-primary">
                         The complete guide
                     </p>
-                    <h1 className="mt-4 max-w-[14ch] [font-family:var(--font-serif)] text-[42px] font-semibold leading-none tracking-tight text-heading md:text-[68px]">
+                    <h1 className="mt-4 [font-family:var(--font-serif)] text-[42px] font-semibold leading-[1.03] tracking-tight text-heading md:text-[68px]">
                         How to pass the MRCGP SCA
                     </h1>
                     <p className="mt-6 max-w-3xl text-lg leading-relaxed text-body md:text-xl">
@@ -152,7 +153,7 @@ export default function HowToPassMrcgpScaPage() {
                 <main id="main" className="min-w-0 max-w-[720px]">
                     <div className="space-y-6 text-lg leading-relaxed text-body">
                         <p className="text-xl leading-relaxed text-heading">
-                            The Simulated Consultation Assessment is the final clinical hurdle of GP training, and it is a high stakes one, with a four figure fee and a pass rate that fails a meaningful share of every cohort. Most candidates consult competently every day and still find it daunting, because performing under exam conditions is a different task from a normal surgery.
+                            The Simulated Consultation Assessment is the final clinical hurdle of GP training, and it is a high stakes one, with a pass rate that fails a meaningful share of every cohort. Most candidates consult competently every day and still find it daunting, because performing under exam conditions is a different task from a normal surgery.
                         </p>
                         <p>
                             Here is the most useful thing to understand before you read anything else: the SCA is a consultation exam, not a knowledge exam. The candidates who struggle are usually not the ones who missed a rare diagnosis. They are the ones who ran out of time, talked past the patient, or consulted mechanically. The skills that pass the SCA are specific, observable and trainable, and this guide covers all of them.
@@ -177,8 +178,8 @@ export default function HowToPassMrcgpScaPage() {
                                 </h2>
 
                                 <div className="mt-5 space-y-5 text-[17px] leading-relaxed text-body">
-                                    {section.paragraphs.slice(0, section.pullQuote ? 1 : undefined).map(paragraph => (
-                                        <p key={paragraph}>{paragraph}</p>
+                                    {section.paragraphs.slice(0, section.pullQuote ? 1 : undefined).map((paragraph, index) => (
+                                        <p key={index}>{renderInline(paragraph)}</p>
                                     ))}
                                 </div>
 
@@ -213,8 +214,8 @@ export default function HowToPassMrcgpScaPage() {
                                             </p>
                                         </blockquote>
                                         <div className="mt-5 space-y-5 text-[17px] leading-relaxed text-body">
-                                            {section.paragraphs.slice(1).map(paragraph => (
-                                                <p key={paragraph}>{paragraph}</p>
+                                            {section.paragraphs.slice(1).map((paragraph, index) => (
+                                                <p key={index}>{renderInline(paragraph)}</p>
                                             ))}
                                         </div>
                                     </>
