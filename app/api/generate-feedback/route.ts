@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
         if (existingResults) {
             const { data: session } = await supabase
                 .from('clinical_sessions')
-                .select('station_id, stations(title)')
+                .select('station_id, transcript, stations(title)')
                 .eq('id', sessionId)
                 .single();
 
@@ -119,6 +119,7 @@ export async function POST(request: NextRequest) {
                     session?.station_id as string | undefined,
                     stationTitle
                 ),
+                transcript: Array.isArray(session?.transcript) ? session.transcript : [],
             });
         }
 
@@ -136,7 +137,13 @@ export async function POST(request: NextRequest) {
             !session.transcript ||
             (Array.isArray(session.transcript) && session.transcript.length === 0)
         ) {
-            return NextResponse.json({ error: 'No transcript available yet' }, { status: 404 });
+            // A session past the live stage with no transcript will never produce
+            // feedback (mic failure / abandoned call) — tell the page to stop polling.
+            const terminal = session.status !== 'reading' && session.status !== 'live';
+            return NextResponse.json({
+                status: terminal ? 'no_transcript' : 'generating',
+                triggerQueued: false,
+            });
         }
 
         // 3. Trigger the Azure marking endpoint once; later polls pass trigger=false.

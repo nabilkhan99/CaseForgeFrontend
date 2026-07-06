@@ -2,7 +2,7 @@
 
 import { useParams, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, Suspense } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import Link from 'next/link';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import {
@@ -17,7 +17,13 @@ import {
 
 const MAX_RETRIES = 30;
 const DOMAIN_NAV: DomainKey[] = ['data_gathering', 'clinical_management', 'relating_to_others'];
-type ReportTab = 'overview' | DomainKey;
+type ReportTab = 'overview' | DomainKey | 'transcript';
+
+interface TranscriptEntry {
+  role: string;
+  content: string;
+  timestamp?: string | number | null;
+}
 
 const DOMAIN_META: Record<DomainKey, {
   label: string;
@@ -157,6 +163,13 @@ function verdictColours(verdict: Verdict): {
     };
 }
 
+function gradeBarClass(grade: DomainFeedback['grade']): string {
+  if (grade === 'CP') return 'bg-success';
+  if (grade === 'P') return 'bg-lime-600';
+  if (grade === 'F') return 'bg-primary';
+  return 'bg-danger';
+}
+
 function severityLabel(tier: number): {
   label: string;
   className: string;
@@ -209,8 +222,8 @@ function EvidenceBlock({
 
   return (
     <blockquote className="mt-3 rounded-lg border border-stone-200 bg-white/80 px-3 py-2 text-[12px] leading-[1.65] text-stone-600 shadow-[0_1px_2px_rgba(31,26,20,0.04)]">
-      <div className="mb-1 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-stone-400">
-        {evidence.timestamp_ms != null && (
+      <div className="mb-1 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-stone-500">
+        {evidence.timestamp_ms != null && evidence.timestamp_ms > 0 && (
           <span className="font-mono tracking-normal">[{fmtTs(evidence.timestamp_ms)}]</span>
         )}
         {evidence.speaker && <span>{evidence.speaker}</span>}
@@ -247,6 +260,7 @@ function DomainMiniRow({ domain }: { domain: DomainFeedback }) {
   const maxPoints = domainMaxPoints(domain);
   const pct = Math.max(0, Math.min(100, (score / maxPoints) * 100));
   const gc = gradeColours(domain.grade);
+  const barClass = gradeBarClass(domain.grade);
 
   return (
     <div
@@ -262,12 +276,12 @@ function DomainMiniRow({ domain }: { domain: DomainFeedback }) {
           )}
         </div>
         <div className="h-1.5 overflow-hidden rounded-full bg-stone-200/80">
-          <div className={`h-full rounded-full ${meta.barClass}`} style={{ width: `${pct}%` }} />
+          <div className={`h-full rounded-full ${barClass}`} style={{ width: `${pct}%` }} />
         </div>
       </div>
       <div className="text-right">
         <div className="font-mono text-[13px] font-semibold text-heading">
-          {fmtScore(score)}<span className="text-stone-400">/{fmtScore(maxPoints)}</span>
+          {fmtScore(score)}<span className="text-stone-500">/{fmtScore(maxPoints)}</span>
         </div>
         <span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${gc.badge}`}>
           {GRADE_LABELS[domain.grade]}
@@ -328,7 +342,7 @@ function VerdictPanel({ feedback }: { feedback: ConsultationFeedback }) {
         <div className={`font-serif text-[40px] leading-none ${vc.text}`}>{overall.verdict}</div>
         <div className="mt-3 flex items-end gap-2 font-mono text-heading">
           <span className="text-[24px] font-semibold">{overall.weighted_score.toFixed(1)}</span>
-          <span className="pb-1 text-[13px] text-stone-400">/ {overall.max_score.toFixed(1)}</span>
+          <span className="pb-1 text-[13px] text-stone-500">/ {overall.max_score.toFixed(1)}</span>
         </div>
         <div className="mt-4 h-2 overflow-hidden rounded-full bg-stone-200">
           <motion.div
@@ -368,19 +382,23 @@ function VerdictPanel({ feedback }: { feedback: ConsultationFeedback }) {
       <div className="rounded-[18px] border border-black/[0.06] bg-stone-50/70 px-4 py-4">
         <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Score key</div>
         <div className="space-y-2.5 text-[12px] text-stone-600">
-          <div className="flex items-center justify-between gap-3">
-            <span>Data gathering</span>
-            <span className="font-mono font-semibold text-heading">/3</span>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span>Clinical management</span>
-            <span className="font-mono font-semibold text-heading">/4.5</span>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span>Relating</span>
-            <span className="font-mono font-semibold text-heading">/3</span>
-          </div>
+          {DOMAIN_NAV.map((key) => {
+            const domain = feedback.domains.find((d) => d.domain === key);
+            const meta = DOMAIN_META[key];
+            return (
+              <div key={key} className="flex items-center justify-between gap-3">
+                <span>{meta.label}</span>
+                <span className="font-mono font-semibold text-heading">
+                  {domain ? fmtScore(domainScore(domain)) : '—'}
+                  <span className="font-normal text-stone-500">/{fmtScore(domain ? domainMaxPoints(domain) : meta.maxPoints)}</span>
+                </span>
+              </div>
+            );
+          })}
         </div>
+        <p className="mt-3 border-t border-black/[0.06] pt-2.5 text-[11px] leading-[1.5] text-stone-500">
+          Domains sum to the /10.5 total. Clinical management is weighted 1.5x.
+        </p>
       </div>
     </section>
   );
@@ -390,10 +408,12 @@ function ReportTabs({
   activeTab,
   onChange,
   domains,
+  hasTranscript,
 }: {
   activeTab: ReportTab;
   onChange: (tab: ReportTab) => void;
   domains: DomainFeedback[];
+  hasTranscript: boolean;
 }) {
   const tabs: { key: ReportTab; label: string; grade?: DomainFeedback['grade'] }[] = [
     { key: 'overview', label: 'Overview' },
@@ -402,6 +422,7 @@ function ReportTabs({
       label: DOMAIN_META[domain.domain].label,
       grade: domain.grade,
     })),
+    ...(hasTranscript ? [{ key: 'transcript' as ReportTab, label: 'Transcript' }] : []),
   ];
 
   return (
@@ -431,6 +452,40 @@ function ReportTabs({
         );
       })}
     </div>
+  );
+}
+
+function TranscriptPanel({ transcript }: { transcript: TranscriptEntry[] }) {
+  return (
+    <motion.section
+      key="transcript-panel"
+      className="rounded-[22px] border border-black/[0.06] bg-white/85 p-5 shadow-[0_18px_48px_rgba(180,83,9,0.055),0_1px_3px_rgba(31,26,20,0.04)]"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -6 }}
+      transition={{ duration: 0.18 }}
+    >
+      <div className="mb-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
+        Full consultation transcript
+      </div>
+      <div className="space-y-4">
+        {transcript.map((entry, index) => {
+          const isCandidate = entry.role === 'user' || entry.role === 'doctor' || entry.role === 'candidate';
+          return (
+            <div key={index} className="grid grid-cols-[84px_1fr] gap-3">
+              <span
+                className={`pt-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] ${
+                  isCandidate ? 'text-primary' : 'text-stone-500'
+                }`}
+              >
+                {isCandidate ? 'You' : 'Patient'}
+              </span>
+              <p className="text-[13.5px] leading-[1.7] text-stone-700">{entry.content}</p>
+            </div>
+          );
+        })}
+      </div>
+    </motion.section>
   );
 }
 
@@ -634,7 +689,7 @@ function DomainCard({ domain, index }: { domain: DomainFeedback; index: number }
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-white/80">
               <motion.div
-                className={`h-full rounded-full ${meta.barClass}`}
+                className={`h-full rounded-full ${gradeBarClass(domain.grade)}`}
                 initial={{ width: 0 }}
                 whileInView={{ width: `${pct}%` }}
                 viewport={{ once: true }}
@@ -741,9 +796,11 @@ function FeedbackContent() {
   const from = searchParams.get('from');
 
   const [feedback, setFeedback] = useState<ConsultationFeedback | null>(null);
+  const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
+  const [noTranscript, setNoTranscript] = useState(false);
   const [activeTab, setActiveTab] = useState<ReportTab>('overview');
   const retryCount = useRef(0);
 
@@ -763,6 +820,12 @@ function FeedbackContent() {
 
         if (data.status === 'ready' && data.feedback) {
           setFeedback(data.feedback);
+          if (Array.isArray(data.transcript)) setTranscript(data.transcript);
+          setLoading(false);
+          return;
+        }
+        if (data.status === 'no_transcript') {
+          setNoTranscript(true);
           setLoading(false);
           return;
         }
@@ -805,6 +868,29 @@ function FeedbackContent() {
   }, [feedback]);
 
   if (loading) return <LoadingState />;
+
+  if (noTranscript) {
+    return (
+      <div className="min-h-[100dvh] bg-surface px-6 py-16">
+        <div className="mx-auto max-w-md rounded-[22px] border border-black/[0.06] bg-surface-raised p-6 text-center shadow-[0_16px_42px_rgba(180,83,9,0.06)]">
+          <p className="mb-2 text-[16px] font-semibold text-heading">No audio was captured for this session</p>
+          <p className="mb-6 text-sm leading-[1.65] text-muted">
+            We didn&apos;t receive a transcript, so this consultation can&apos;t be marked — this usually
+            means the microphone wasn&apos;t picking up audio or the call ended before it started.
+            Your attempt hasn&apos;t been counted against you.
+          </p>
+          <div className="flex flex-col items-center gap-3">
+            <Link href="/dashboard/library">
+              <PrimaryButton>Try the case again</PrimaryButton>
+            </Link>
+            <Link href="/dashboard" className="text-sm font-semibold text-primary hover:underline">
+              Back to dashboard
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (timedOut) {
     return (
@@ -890,19 +976,27 @@ function FeedbackContent() {
               Start with the overview, then switch into a single domain for detailed evidence and practice advice.
             </p>
           </div>
-          <ReportTabs activeTab={activeTab} onChange={setActiveTab} domains={orderedDomains} />
-          <div className="mt-5">
-            <AnimatePresence mode="wait">
-              {activeTab === 'overview' ? (
-                <OverviewPanel key="overview" feedback={feedback} domains={orderedDomains} />
-              ) : (
-                orderedDomains
-                  .filter((domain) => domain.domain === activeTab)
-                  .map((domain) => (
-                    <DomainCard key={domain.domain} domain={domain} index={0} />
-                  ))
-              )}
-            </AnimatePresence>
+          <ReportTabs
+            activeTab={activeTab}
+            onChange={setActiveTab}
+            domains={orderedDomains}
+            hasTranscript={transcript.length > 0}
+          />
+          {/* Keyed remount per tab; panels animate in via their own initial/animate.
+              (AnimatePresence mode="wait" stalled the swap — the exiting panel never
+              completed, leaving the tab state and panel content out of sync.) */}
+          <div className="mt-5" key={activeTab}>
+            {activeTab === 'overview' ? (
+              <OverviewPanel key="overview" feedback={feedback} domains={orderedDomains} />
+            ) : activeTab === 'transcript' ? (
+              <TranscriptPanel key="transcript" transcript={transcript} />
+            ) : (
+              orderedDomains
+                .filter((domain) => domain.domain === activeTab)
+                .map((domain) => (
+                  <DomainCard key={domain.domain} domain={domain} index={0} />
+                ))
+            )}
           </div>
         </section>
 

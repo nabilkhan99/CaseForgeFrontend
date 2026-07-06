@@ -79,8 +79,9 @@ function LiveConsultationContent() {
     });
 
   useEffect(() => {
-    if (station && !isProcessing && !isEndingRef.current && status === 'disconnected') connect();
-  }, [station, isProcessing, status, connect]);
+    // Never auto-reconnect after a connection failure — the error screen owns retry.
+    if (station && !isProcessing && !isEndingRef.current && status === 'disconnected' && !error) connect();
+  }, [station, isProcessing, status, error, connect]);
 
   const handleEndConsultation = useCallback(() => {
     isEndingRef.current = true;
@@ -115,6 +116,39 @@ function LiveConsultationContent() {
           <h3 className="text-[18px] font-semibold text-heading mb-1">Finalising Consultation</h3>
           <p className="text-[14px] text-muted">Generating your feedback...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (error && !isConnected) {
+    return (
+      <div className="min-h-[100dvh] bg-surface flex items-center justify-center px-6">
+        <motion.div
+          className="max-w-md text-center"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-full bg-red-50 border border-red-200">
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="none" className="text-danger">
+              <path d="M8 5v4M8 11.5v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.5" />
+            </svg>
+          </div>
+          <h3 className="text-[18px] font-semibold text-heading mb-2">Connection problem</h3>
+          <p className="text-[14px] leading-[1.65] text-muted mb-6">{error}</p>
+          <div className="flex flex-col items-center gap-3">
+            <button
+              onClick={() => connect()}
+              className="min-h-[44px] rounded-xl px-6 py-3 text-[14px] font-semibold text-white cursor-pointer"
+              style={{ background: 'linear-gradient(135deg, #B45309, #D97706)', boxShadow: '0 4px 12px rgba(180,83,9,0.2)' }}
+            >
+              Try again
+            </button>
+            <Link href="/dashboard/library" className="text-[13px] font-semibold text-primary hover:underline">
+              Back to library
+            </Link>
+          </div>
+        </motion.div>
       </div>
     );
   }

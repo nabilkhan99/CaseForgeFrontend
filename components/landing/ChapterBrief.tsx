@@ -9,19 +9,19 @@ export default function ChapterBrief() {
       <div className="mb-4">
         <div className="grid grid-cols-1 gap-1.5">
           <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-black/[0.02]">
-            <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide w-[110px] flex-shrink-0 pt-0.5">
+            <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wide w-[110px] flex-shrink-0 pt-0.5">
               Patient Name
             </span>
             <span className="text-[13px] font-semibold text-heading">Jack Thompson</span>
           </div>
           <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-black/[0.02]">
-            <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide w-[110px] flex-shrink-0 pt-0.5">
+            <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wide w-[110px] flex-shrink-0 pt-0.5">
               Age
             </span>
             <span className="text-[12px] text-stone-600">12 (DOB: 14/05/2013)</span>
           </div>
           <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-black/[0.02]">
-            <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide w-[110px] flex-shrink-0 pt-0.5">
+            <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wide w-[110px] flex-shrink-0 pt-0.5">
               Father&apos;s Name
             </span>
             <span className="text-[12px] text-stone-600">David Thompson</span>

@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { formatBriefMarkdown } from '@/lib/clinical-master/formatBrief';
 import Container from '@/components/ui/Container';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import DomainTag from '@/components/ui/DomainTag';
@@ -205,7 +206,7 @@ export default function TryReadingPhasePage() {
                     h3: ({ children }) => <h4 className="text-[14px] font-bold text-heading mt-3 mb-1">{children}</h4>,
                   }}
                 >
-                  {station.candidate_instructions}
+                  {formatBriefMarkdown(station.candidate_instructions)}
                 </ReactMarkdown>
               </div>
             </div>
