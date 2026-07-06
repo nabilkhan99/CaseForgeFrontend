@@ -93,7 +93,7 @@ export const scaTwelveMinuteConsultationFramework: GuideArticle = {
                 },
                 {
                     type: 'text',
-                    text: 'The College’s recommended process, paraphrased, is a loop: learn the overview, rate some consultations, have your supervisor rate the same ones, identify the reds, work the relevant educational material with your supervisor, practise to embed the change, and re rate to confirm the reds are turning amber and green, allowing enough time before your sitting if multiple weak areas surface. Run honestly, that loop is as close to a guaranteed improvement mechanism as exam preparation offers. The toolkit is free on the RCGP website, and because it is the authors’ copyright, the right way to use it is directly from the source, which this article should link to.',
+                    text: 'The College’s recommended process, paraphrased, is a loop: learn the overview, rate some consultations, have your supervisor rate the same ones, identify the reds, work the relevant educational material with your supervisor, practise to embed the change, and re rate to confirm the reds are turning amber and green, allowing enough time before your sitting if multiple weak areas surface. Run honestly, that loop is as close to a guaranteed improvement mechanism as exam preparation offers.',
                 },
             ],
         },

@@ -23,7 +23,7 @@ export const failedMrcgpScaResitGuide: GuideArticle = {
             blocks: [
                 {
                     type: 'text',
-                    text: 'Give yourself a short, deliberate window to be disappointed before you open a revision plan. This is practical advice, not sentiment: decisions made in the first raw days, such as instantly rebooking the next available sitting or concluding you are not cut out for general practice, are reliably worse than decisions made a week later. Tell the people who need to know, including your trainer and educational supervisor, early. They have supported trainees through this before, the conversation is more routine on their side than it feels on yours, and you will need them for what comes next.',
+                    text: 'Give yourself a short, deliberate window to be disappointed before you open a revision plan. This is practical advice, not sentiment: decisions made in the first raw days, such as instantly rebooking the next available sitting or concluding you are not cut out for general practice, are reliably worse than decisions made a week later. Tell the people who need to know, including your educational supervisor, early. They have supported trainees through this before, the conversation is more routine on their side than it feels on yours, and you will need them for what comes next.',
                 },
             ],
         },
@@ -115,7 +115,7 @@ export const failedMrcgpScaResitGuide: GuideArticle = {
             blocks: [
                 {
                     type: 'text',
-                    text: 'You are not meant to do a re-sit cycle alone. Your trainer and educational supervisor can build the rebuild into your remaining training time, your training programme director can advise on the implications for your programme and on local support, and if the result has knocked your confidence or your sleep, that is worth addressing directly rather than pushing through, since exam performance and wellbeing are not separable. Practical, evidence based help for the anxiety side is in [link: Managing SCA Anxiety].',
+                    text: 'You are not meant to do a re-sit cycle alone. Your educational supervisor can build the rebuild into your remaining training time, your training programme director can advise on the implications for your programme and on local support, and if the result has knocked your confidence or your sleep, that is worth addressing directly rather than pushing through, since exam performance and wellbeing are not separable. Practical, evidence based help for the anxiety side is in [link: Managing SCA Anxiety].',
                 },
                 {
                     type: 'text',
