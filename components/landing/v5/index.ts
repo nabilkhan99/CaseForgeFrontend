@@ -6,4 +6,5 @@ export { default as VideoProof } from './VideoProof';
 export { default as ProgrammeJourney } from './ProgrammeJourney';
 export { default as Testimonials } from './Testimonials';
 export { default as NhsBanner } from './NhsBanner';
+export { default as StudyBudgetChecker } from './StudyBudgetChecker';
 export { default as Faq } from './Faq';

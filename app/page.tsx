@@ -12,7 +12,7 @@ import {
   VideoProof,
   ProgrammeJourney,
   Testimonials,
-  NhsBanner,
+  StudyBudgetChecker,
   Faq,
 } from '@/components/landing/v5';
 import PricingTable from '@/components/landing/v5/PricingTable';
@@ -36,7 +36,7 @@ export default function LandingPage() {
         <ProgrammeJourney />
         <ProductShowcase />
         <Testimonials />
-        <NhsBanner />
+        <StudyBudgetChecker />
         <PricingTable />
         <Faq />
       </main>
