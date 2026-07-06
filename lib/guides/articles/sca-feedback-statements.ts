@@ -11,8 +11,6 @@ export const scaFeedbackStatements: GuideArticle = {
     metaDescription:
         'Every standardised RCGP SCA feedback statement explained in plain English, with the concrete fix behind each one, organised by marking domain.',
     kicker: 'How you are marked',
-    reviewNote:
-        'The statements shown in quotation marks are the RCGP’s published SCA feedback statements, reproduced as reference labels so candidates can match the feedback they received; all explanation and advice is original. A clinical reviewer should confirm accuracy before publishing.',
     intro: [
         'When your SCA result arrives, it comes with feedback: a set of standardised statements your examiner selected for each case, mapped to the 3 marking domains. The problem is that the statements are broad by design, each one covering a family of related shortfalls rather than your specific case, so many candidates read them, feel vaguely criticised, and have no clear idea what to change. This guide takes every statement the RCGP uses, shows you exactly what it says, and decodes it into plain English and a concrete next step.',
         '2 things to hold in mind first. The feedback is not a line-by-line explanation of your score. Examiners award the domain grades first and then select the statements that best describe what they saw, so the statements tell you where you fell short, not how each mark was calculated, and even passing candidates receive them. And a single statement on one case matters far less than the same statement appearing repeatedly, or several statements clustering in one domain. Look for the pattern, because the pattern is your revision plan.',

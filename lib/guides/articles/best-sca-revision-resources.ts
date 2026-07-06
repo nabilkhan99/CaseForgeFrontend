@@ -12,12 +12,10 @@ export const bestScaRevisionResources: GuideArticle = {
         'An honest comparison of SCA revision resources, from free RCGP material and study partners to subscription case banks, courses, coaching and books.',
     kicker: 'Plan and practise',
     intro: [
-        'There is no shortage of SCA preparation resources, and a fair amount of money waiting to be spent on them. What there is a shortage of is honest guidance about which types are actually worth your time, which are worth your money, and which are neither. This guide compares the main categories openly, including the free options that the paid market would prefer you overlooked, and including where we fit, so you can judge our interest for yourself. For where resources sit within a full preparation plan, see our [link: complete guide to passing the SCA].',
+        'There is no shortage of SCA preparation resources, and a fair amount of money waiting to be spent on them. What there is a shortage of is honest guidance about which types are actually worth your time, which are worth your money, and which are neither.',
     ],
     readTime: '9 min read',
-    updated: 'Updated June 2026',
-    reviewNote:
-        'Comparison tables are correct as of 13 June 2026, taken from each provider’s own website; prices, case counts and features change often, so verify every figure at source before publishing.',
+    updated: 'Updated July 2026',
     sections: [
         {
             id: 'the-test-to-apply-before-spending-anything',
@@ -94,6 +92,13 @@ export const bestScaRevisionResources: GuideArticle = {
                     columns: ['Provider', 'Approx case count', 'AI patients', 'Monthly price', 'Notes'],
                     rows: [
                         [
+                            '**Fourteen Fisherman**',
+                            '**79 cases**',
+                            '**Coming soon…**',
+                            '**Free**',
+                            '**Built from the RCGP curriculum, with brief, patient script, marking scheme and learning points; no subscription**',
+                        ],
+                        [
                             'SCA Revision',
                             '350+ written cases',
                             'Yes, voice based, pay per attempt add on from £1.20',
@@ -121,18 +126,7 @@ export const bestScaRevisionResources: GuideArticle = {
                             'Subscription, often sold within bundles',
                             'Scripts and mark schemes for study groups; also sells casebooks and courses',
                         ],
-                        [
-                            'Fourteen Fisherman (us)',
-                            '79 cases',
-                            'Not yet',
-                            'Free',
-                            'Built from the RCGP curriculum, with brief, patient script, marking scheme and learning points; no subscription',
-                        ],
                     ],
-                },
-                {
-                    type: 'note',
-                    text: 'Reviewer to verify every figure against each provider’s website on the day of publishing.',
                 },
             ],
         },
@@ -171,6 +165,12 @@ export const bestScaRevisionResources: GuideArticle = {
                     columns: ['Course provider', 'Format', 'Indicative price', 'Notes'],
                     rows: [
                         [
+                            '**Fourteen Fisherman — Complete Bundle**',
+                            '**AI practice plus small group teaching plus lectures: 3 × 3 hours of small group teaching, 3 × 4 hour lectures, and unlimited AI practice**',
+                            '**£599 (eligible for the NHSE study budget)**',
+                            '**The only option that combines all three, and the only one with a pass guarantee**',
+                        ],
+                        [
                             'Emedica',
                             'SCA masterclass and case crammer, online and bundles',
                             'From around £250, bundles higher',
@@ -189,10 +189,6 @@ export const bestScaRevisionResources: GuideArticle = {
                             'Run by the College; the free ST2 and ST3 webinars are the lowest cost expert input available',
                         ],
                     ],
-                },
-                {
-                    type: 'note',
-                    text: 'Reviewer to verify current course formats, prices and any published reviews before publishing.',
                 },
             ],
         },
@@ -238,10 +234,6 @@ export const bestScaRevisionResources: GuideArticle = {
                             'Background reading on consultation models rather than SCA specific practice',
                         ],
                     ],
-                },
-                {
-                    type: 'note',
-                    text: 'Reviewer to verify current titles, editions and prices before publishing.',
                 },
             ],
         },

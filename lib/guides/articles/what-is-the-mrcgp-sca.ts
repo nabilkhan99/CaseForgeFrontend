@@ -13,7 +13,7 @@ export const whatIsTheMrcgpSca: GuideArticle = {
     kicker: 'Understand the exam',
     intro: [],
     readTime: '7 min read',
-    updated: 'Updated June 2026',
+    updated: 'Updated July 2026',
     sections: [
         {
             id: 'where-the-sca-sits-in-your-training',
@@ -21,7 +21,7 @@ export const whatIsTheMrcgpSca: GuideArticle = {
             blocks: [
                 {
                     type: 'text',
-                    text: 'To complete your Certificate of Completion of Training and qualify as a GP in the UK, you must pass 3 components of the MRCGP: the Applied Knowledge Test, the Workplace Based Assessment, and the SCA. The SCA is the consultation component. It assesses your ability to integrate and apply clinical, professional and communication skills, which is the RCGP\'s own description of its purpose, and it is taken from the ST3 year of training.',
+                    text: 'To CCT and qualify as a GP in the UK, you must pass 3 components of the MRCGP: the Applied Knowledge Test, the Workplace Based Assessment, and the SCA. The SCA is the consultation component. It assesses your ability to integrate and apply clinical, professional and communication skills, which is the RCGP\'s own description of its purpose, and it is taken from the ST3 year of training.',
                 },
                 {
                     type: 'text',
@@ -67,7 +67,7 @@ export const whatIsTheMrcgpSca: GuideArticle = {
                 },
                 {
                     type: 'text',
-                    text: 'If you have a disability, a health condition or another circumstance that affects how you can sit the exam, the RCGP operates a reasonable adjustments process, and applications need to be made in advance through the College rather than on the day. The RCGP also publishes a comfort aid list setting out items candidates may have with them without prior approval. You are also permitted a blank whiteboard and pen, or paper and pen, for making notes during consultations, shown to be blank at the start and destroyed afterwards. Confirm the current permitted items on the RCGP site before your sitting, and if a reasonable adjustment applies to you, read the College\'s guidance early, because adjustment applications have their own timelines.',
+                    text: 'If you have a disability, a health condition or another circumstance that affects how you can sit the exam, the RCGP operates a reasonable adjustments process, and applications need to be made in advance through the College. The RCGP also publishes a comfort aid list setting out items candidates may have with them without prior approval. You are also permitted a blank whiteboard and pen, or paper and pen, for making notes during consultations, shown to be blank at the start and destroyed afterwards. Confirm the current permitted items on the RCGP site before your sitting, and if a reasonable adjustment applies to you, read the College\'s guidance early, because adjustment applications have their own timelines.',
                 },
             ],
         },
@@ -77,7 +77,7 @@ export const whatIsTheMrcgpSca: GuideArticle = {
             blocks: [
                 {
                     type: 'text',
-                    text: 'The SCA is delivered across 9 months of the year, so there are regular opportunities to sit rather than one or two annual windows. Each sitting runs over a small number of examination days, and you are allocated a morning or afternoon session rather than choosing an exact slot. Confirmed dates and booking windows are published on the RCGP website, and because later sittings are sometimes confirmed closer to the time, the RCGP\'s exam applications page is the place to check rather than any third party site.',
+                    text: 'The SCA is delivered across 9 months of the year, so there are regular opportunities to sit the exam. Each sitting runs over a small number of examination days, and you are allocated a morning or afternoon session rather than choosing an exact slot. Confirmed dates and booking windows are published on the RCGP website, and because later sittings are sometimes confirmed closer to the time, the RCGP\'s exam applications page is the place to check rather than any third party site.',
                 },
                 {
                     type: 'text',
@@ -91,15 +91,35 @@ export const whatIsTheMrcgpSca: GuideArticle = {
             blocks: [
                 {
                     type: 'text',
-                    text: 'The exam fee is £1,207 per attempt. The fee is the same whether it is your first attempt or a re-sit; there is no reduced rate for repeats, which is one of the strongest practical arguments for preparing thoroughly enough to pass first time.',
+                    text: '**Correct as of July 2026.** This area is changing, so check current guidance before you rely on it.',
                 },
                 {
                     type: 'text',
-                    text: 'The RCGP operates a reservation and booking system for the SCA, and payment is connected to that process, with the College having introduced arrangements that split payment across the reservation and booking stages. Because the payment structure and its deadlines are administrative details that the College can and does update, check the current arrangements on the RCGP\'s applying for the SCA page before you reserve, and diarise any payment deadlines it gives you, since missing one can cost you your place.',
+                    text: 'The SCA fee is £1,207 per attempt, the same for a first sit or a re-sit.',
                 },
                 {
                     type: 'text',
-                    text: 'One further financial point that catches people out: the exam fee is a professional expense, and the tax relief on professional exam fees can generally be claimed through HMRC. The fee itself, though, is yours to pay rather than something a study budget will usually cover, so it belongs in your ST3 financial planning.',
+                    text: 'Since the June 2026 resident doctor contract, the first 2 attempts of the SCA are reimbursed for GP registrars in England, for exams sat from 1 April 2026. Three things to know:',
+                },
+                {
+                    type: 'text',
+                    text: '• You pay the RCGP upfront and claim it back through your trust. It is not a waiver.',
+                },
+                {
+                    type: 'text',
+                    text: '• The trust claim process is still bedding in, so confirm yours before relying on it.',
+                },
+                {
+                    type: 'text',
+                    text: '• England only. Scotland, Wales and Northern Ireland are not covered.',
+                },
+                {
+                    type: 'text',
+                    text: 'From April 2026 the RCGP takes the fee in stages across reservation and booking. Check the deadlines on the RCGP\'s applying for the SCA page and diarise them, since missing one can cost you your place.',
+                },
+                {
+                    type: 'text',
+                    text: 'On tax: your study budget funds courses, not the exam, so the fee sits outside it. If you pay for an attempt you cannot reclaim (a third sit, say), you can recover the tax through HMRC. Until reimbursement is smooth at your trust, budget the fee as an upfront cost and claim it back after.',
                 },
             ],
         },

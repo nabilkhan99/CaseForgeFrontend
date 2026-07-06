@@ -11,8 +11,6 @@ export const scaPassRatesExplained: GuideArticle = {
     metaDescription:
         'The current MRCGP SCA pass rates, why they move between sittings, and what the figures actually mean for how you should prepare.',
     kicker: 'Understand the exam',
-    reviewNote:
-        'Pass-rate figures are correct as of 13 June 2026 from the RCGP’s published diet results; verify against the latest published diet before publishing.',
     intro: [
         'The pass rate is usually the first number a candidate looks up and the most misread. The headline figure moves around from sitting to sitting, the reasons are mostly statistical rather than sinister, and the number that actually matters to you is probably not the one in the headlines. This guide sets out the current figures from the RCGP\'s own published results, explains why they move, and translates them into what they mean for your preparation. For the wider picture, see our [link: complete guide to passing the SCA].',
     ],
