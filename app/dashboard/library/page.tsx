@@ -96,7 +96,7 @@ export default function StationLibraryPage() {
                     {/* Score or completion */}
                     {hasCompleted && (
                       <ScoreBadge
-                        score={Math.round((domain.completed_count / domain.station_count) * 100)}
+                        score={Math.min(100, Math.round((domain.completed_count / Math.max(1, domain.station_count)) * 100))}
                         size="sm"
                       />
                     )}

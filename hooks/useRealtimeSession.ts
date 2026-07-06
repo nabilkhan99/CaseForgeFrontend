@@ -75,6 +75,8 @@ export function useRealtimeSession({
     const audioElRef = useRef<HTMLAudioElement | null>(null);
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const endDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const greetingWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const patientAudioStartedRef = useRef(false);
     const endedRef = useRef(false);
     const transcriptRef = useRef<TranscriptItem[]>([]);
     const messageCountRef = useRef(0);
@@ -131,6 +133,10 @@ export function useRealtimeSession({
         if (endDelayRef.current) {
             clearTimeout(endDelayRef.current);
             endDelayRef.current = null;
+        }
+        if (greetingWatchdogRef.current) {
+            clearTimeout(greetingWatchdogRef.current);
+            greetingWatchdogRef.current = null;
         }
         try {
             dcRef.current?.close();
@@ -254,6 +260,13 @@ export function useRealtimeSession({
                     });
                     break;
                 case 'output_audio_buffer.started':
+                    // First patient audio proves the session is genuinely live —
+                    // stand down the greeting watchdog.
+                    patientAudioStartedRef.current = true;
+                    if (greetingWatchdogRef.current) {
+                        clearTimeout(greetingWatchdogRef.current);
+                        greetingWatchdogRef.current = null;
+                    }
                     setIsSpeaking(true);
                     break;
                 case 'output_audio_buffer.stopped':
@@ -311,6 +324,18 @@ export function useRealtimeSession({
             const pc = new RTCPeerConnection();
             pcRef.current = pc;
 
+            // A stalled call must not look like a live one: surface transport
+            // failures instead of leaving the UI on a frozen "Listening…" state.
+            pc.onconnectionstatechange = () => {
+                if (endedRef.current) return;
+                if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+                    const message = 'Connection to the patient was lost. Please try again.';
+                    setError(message);
+                    teardown();
+                    onError?.(message);
+                }
+            };
+
             // Patient audio playback
             pc.ontrack = (e: RTCTrackEvent) => {
                 let el = audioElRef.current;
@@ -348,6 +373,18 @@ export function useRealtimeSession({
                 });
                 // Authoritative consultation timer
                 timerRef.current = setTimeout(() => void endRoutine(), durationSeconds * 1000);
+                // Greeting watchdog: if no patient audio arrives shortly after the
+                // channel opens, the session is stalled — fail fast so the user can
+                // retry instead of sitting in a silent 12-minute consultation.
+                patientAudioStartedRef.current = false;
+                greetingWatchdogRef.current = setTimeout(() => {
+                    if (endedRef.current || patientAudioStartedRef.current) return;
+                    const message =
+                        "The patient didn't respond — the connection may have stalled. Please try again.";
+                    setError(message);
+                    teardown();
+                    onError?.(message);
+                }, 15000);
             };
 
             // 5. Mic uplink

@@ -15,7 +15,9 @@ module.exports = {
         },
         heading: '#1C1917',
         body: '#44403C',
-        muted: '#A8A29E',
+        // stone-500: the old stone-400 (#A8A29E) fails WCAG AA (2.41:1) for the
+        // small labels this token is used on against the cream surfaces.
+        muted: '#78716C',
         surface: {
           DEFAULT: '#FAFAF7',
           raised: '#FFFCF8',

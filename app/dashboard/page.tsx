@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import Container from '@/components/ui/Container';
 import PrimaryButton from '@/components/ui/PrimaryButton';
+import SecondaryButton from '@/components/ui/SecondaryButton';
 import DomainTag from '@/components/ui/DomainTag';
 import {
   getUserStats,
@@ -138,7 +139,7 @@ export default function DashboardPage() {
         </h1>
         <p className="text-[14px] text-muted mt-1">
           {stats.completedStations > 0
-            ? `You've completed ${stats.completedStations} session${stats.completedStations !== 1 ? 's' : ''}${stats.currentStreak > 0 ? ` \u00B7 ${stats.currentStreak}-day streak` : ''}`
+            ? `You've completed ${stats.completedStations} session${stats.completedStations !== 1 ? 's' : ''}${stats.currentStreak >= 2 ? ` \u00B7 ${stats.currentStreak}-day streak` : ''}`
             : 'Start your first consultation to begin tracking progress'}
         </p>
         {stats.examCountdownDays > 0 && (
@@ -211,44 +212,43 @@ export default function DashboardPage() {
 
       {/* Quick start */}
       <div className="mb-8">
-        {lastStation ? (
-          <Container>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-1.5">
-                  Resume Session
-                </div>
-                <div className="text-[15px] font-semibold text-heading truncate">{lastStation.title}</div>
-                <div className="flex items-center gap-2 mt-1">
-                  <DomainTag name={lastStation.domain} size="sm" />
-                  <span className="text-[12px] text-muted">{lastStation.patientName}</span>
-                  <span className="text-[11px] font-mono text-primary font-semibold">
-                    {Math.floor(lastStation.timeRemaining / 60)}m
-                  </span>
-                </div>
-              </div>
-              <Link href={`/clinical-master/session/${lastStation.sessionId}?stationId=${lastStation.id}`} className="sm:w-auto">
-                <PrimaryButton size="sm" fullWidth>Continue</PrimaryButton>
-              </Link>
-            </div>
-          </Container>
-        ) : (
-          <div>
-            <Link href="/dashboard/library">
-              <PrimaryButton size="lg" fullWidth>
-                Start a New Session
-              </PrimaryButton>
+        <Link href="/dashboard/library">
+          <PrimaryButton size="lg" fullWidth>
+            Start a New Session
+          </PrimaryButton>
+        </Link>
+        {randomStation && (
+          <div className="text-center mt-2">
+            <Link
+              href={`/clinical-master/station/${randomStation.id}`}
+              className="text-[13px] text-primary hover:underline"
+            >
+              or pick a random case &rarr;
             </Link>
-            {randomStation && (
-              <div className="text-center mt-2">
-                <Link
-                  href={`/clinical-master/station/${randomStation.id}`}
-                  className="text-[13px] text-primary hover:underline"
-                >
-                  or pick a random case &rarr;
+          </div>
+        )}
+        {lastStation && (
+          <div className="mt-4">
+            <Container>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-1.5">
+                    Unfinished Case
+                  </div>
+                  <div className="text-[15px] font-semibold text-heading truncate">{lastStation.title}</div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <DomainTag name={lastStation.domain} size="sm" />
+                    <span className="text-[12px] text-muted">{lastStation.patientName}</span>
+                    <span className="text-[11px] text-muted">
+                      Restarts from the beginning ({Math.floor(lastStation.timeRemaining / 60)} min)
+                    </span>
+                  </div>
+                </div>
+                <Link href={`/clinical-master/session/${lastStation.sessionId}?stationId=${lastStation.id}`} className="sm:w-auto">
+                  <SecondaryButton size="sm" fullWidth>Restart case</SecondaryButton>
                 </Link>
               </div>
-            )}
+            </Container>
           </div>
         )}
       </div>
@@ -258,8 +258,11 @@ export default function DashboardPage() {
         <div
           className="mb-8"
         >
-          <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-3">
-            Recent Sessions
+          <div className="flex items-baseline justify-between mb-3">
+            <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em]">
+              Recent Sessions
+            </div>
+            <span className="text-[11px] text-muted">Scored out of 10.5, the SCA weighted total</span>
           </div>
           <div className="divide-y divide-black/[0.06]">
             {recentSessions.map((session, i) => (
@@ -281,15 +284,23 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <span
-                      className="text-[11px] font-semibold uppercase"
-                      style={{ color: session.passed ? '#16A34A' : '#DC2626' }}
-                    >
-                      {session.verdict ?? 'Pending'}
-                    </span>
-                    <span className="text-[12px] font-mono text-muted">
-                      {session.weightedScore.toFixed(1)}/{session.maxScore.toFixed(1)}
-                    </span>
+                    {session.scored ? (
+                      <>
+                        <span
+                          className="text-[11px] font-semibold uppercase"
+                          style={{ color: session.passed ? '#16A34A' : '#DC2626' }}
+                        >
+                          {session.verdict}
+                        </span>
+                        <span className="text-[12px] font-mono text-muted">
+                          {session.weightedScore.toFixed(1)}/{session.maxScore.toFixed(1)}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-[11px] font-medium text-muted">
+                        {session.marking ? 'Marking…' : 'No feedback available'}
+                      </span>
+                    )}
                   </div>
                 </Link>
               </motion.div>

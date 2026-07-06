@@ -16,14 +16,13 @@ export const initAnalytics = () => {
         capture_pageview: true,
         capture_pageleave: true,
         autocapture: false, // Track events manually for better control
-        debug: true, // Enable debug mode to see logs in console
+        debug: process.env.NODE_ENV === 'development',
       });
       isInitialized = true;
-      console.log('PostHog initialized successfully');
     } catch (error) {
       console.error('Failed to initialize PostHog:', error);
     }
-  } else {
+  } else if (process.env.NODE_ENV === 'development') {
     console.warn('PostHog key not found');
   }
 };
@@ -44,9 +43,6 @@ export const trackEvent = async (eventName: string, properties?: Record<string, 
 
     if (isInitialized) {
       posthog.capture(eventName, eventData);
-      console.log(`[PostHog] Tracked event: ${eventName}`, eventData);
-    } else {
-      console.warn(`[PostHog] Skipped event ${eventName} (not initialized)`);
     }
   } catch (error) {
     console.error('Failed to track event:', error);
