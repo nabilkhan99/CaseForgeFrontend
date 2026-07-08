@@ -35,7 +35,7 @@ export default function ChapterBrief() {
           Situation
         </div>
         <p className="text-[13px] text-body leading-[1.7]">
-          Video or Telephone Consultation.
+          Telephone Consultation.
         </p>
       </div>
 
@@ -54,6 +54,47 @@ export default function ChapterBrief() {
           &ldquo;Father requesting an ECG for his son. Jack has joined a running club and the father
           is worried about &lsquo;Sudden Death&rsquo;.&rdquo;
         </div>
+      </div>
+
+      {/* Medical records */}
+      <div className="mb-4">
+        <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-2">
+          Medical Records
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-start gap-2">
+            <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide w-[64px] flex-shrink-0 pt-0.5">
+              PMH
+            </span>
+            <span className="text-[12px] text-stone-600 leading-[1.5]">
+              Fit and well. No regular medications.
+            </span>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide w-[64px] flex-shrink-0 pt-0.5">
+              Allergies
+            </span>
+            <span className="text-[12px] text-stone-600 leading-[1.5]">NKDA.</span>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide w-[64px] flex-shrink-0 pt-0.5">
+              FHx
+            </span>
+            <span className="text-[12px] text-stone-600 leading-[1.5]">
+              Grandfather (paternal) had MI aged 68. No known cardiomyopathy or sudden death.
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Recent notes */}
+      <div className="mb-4">
+        <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-2">
+          Recent Notes
+        </div>
+        <p className="text-[12px] text-stone-600 leading-[1.6]">
+          Last consult (1 year ago): Sore throat. Antibiotics prescribed.
+        </p>
       </div>
 
       {/* CTA */}

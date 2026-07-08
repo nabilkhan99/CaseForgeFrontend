@@ -20,13 +20,13 @@ const STEPS: Step[] = [
   {
     number: 4,
     text: (
-      <>
+      <span className="sm:whitespace-nowrap">
         We verify your progress and pay you{' '}
         <span className="whitespace-nowrap rounded-md bg-[#EAF3DE] px-2 py-0.5 font-medium text-[#27500A]">
           £500 cash
         </span>{' '}
         within 5 working days
-      </>
+      </span>
     ),
   },
 ];

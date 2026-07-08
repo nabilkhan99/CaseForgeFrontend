@@ -2,128 +2,112 @@
 
 import { motion } from 'framer-motion';
 
-const DOMAINS = [
-  { label: 'Data Gathering', pct: 82, descriptor: 'Clear & systematic' },
-  { label: 'Clinical Management', pct: 71, descriptor: 'Adequate' },
-  { label: 'Interpersonal Skills', pct: 88, descriptor: 'Excellent' },
+interface Domain {
+  label: string;
+  score: string;
+  pct: number;
+  pass: boolean;
+}
+
+const DOMAINS: readonly Domain[] = [
+  { label: 'Data gathering', score: '2 / 3', pct: 67, pass: true },
+  { label: 'Clinical management (weighted)', score: '2.5 / 4.5', pct: 56, pass: false },
+  { label: 'Relating to others', score: '2.5 / 3', pct: 83, pass: true },
 ];
+
+const PASS_GREEN = '#27500A';
+const AMBER = '#B45309';
 
 export default function ChapterScore() {
   return (
     <div className="p-5 lg:p-6">
-      {/* Score + pass — compact horizontal layout */}
-      <div className="flex items-center gap-4 mb-4">
-        <div className="relative flex-shrink-0">
-          <svg width="88" height="88" viewBox="0 0 88 88" className="transform -rotate-90">
-            <circle cx="44" cy="44" r="38" fill="none" stroke="rgba(0,0,0,0.04)" strokeWidth="6" />
-            <motion.circle
-              cx="44"
-              cy="44"
-              r="38"
-              fill="none"
-              stroke="url(#scoreGrad)"
-              strokeWidth="6"
-              strokeLinecap="round"
-              strokeDasharray={2 * Math.PI * 38}
-              initial={{ strokeDashoffset: 2 * Math.PI * 38 }}
-              animate={{ strokeDashoffset: 2 * Math.PI * 38 * (1 - 0.78) }}
-              transition={{ duration: 1.5, ease: 'easeOut', delay: 0.3 }}
-            />
-            <defs>
-              <linearGradient id="scoreGrad" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="#B45309" />
-                <stop offset="100%" stopColor="#F59E0B" />
-              </linearGradient>
-            </defs>
-          </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <motion.span
-              className="text-[28px] font-extrabold leading-none"
-              style={{
-                background: 'linear-gradient(135deg, #B45309, #D97706)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-              }}
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.5, type: 'spring' }}
-            >
-              78
-            </motion.span>
-            <span className="text-[9px] text-muted">out of 100</span>
-          </div>
-        </div>
-        <div className="flex-1 min-w-0">
-          <motion.div
-            className="inline-flex px-3 py-1 rounded-full text-[10px] font-semibold uppercase mb-2"
-            style={{ background: 'rgba(34,197,94,0.1)', color: '#16A34A' }}
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ type: 'spring', stiffness: 200, damping: 14, delay: 0.8 }}
-          >
-            Pass
-          </motion.div>
-          <div className="text-[11px] text-muted leading-[1.6]">
-            Scored across all three SCA domains with{' '}
-            <span className="text-heading font-medium">14 personalised insights</span>{' '}
-            from your consultation.
-          </div>
-        </div>
+      {/* Eyebrow */}
+      <div className="text-[10px] font-bold text-primary uppercase tracking-[0.14em] mb-1.5">
+        Session Complete
       </div>
 
-      {/* Domain bars — compact */}
-      <div className="flex flex-col gap-2 mb-4">
-        {DOMAINS.map((d, i) => (
-          <motion.div
-            key={d.label}
-            initial={{ opacity: 0, x: -8 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.9 + i * 0.1 }}
-          >
-            <div className="flex items-center justify-between mb-0.5">
-              <span className="text-[11px] text-stone-600 font-medium">{d.label}</span>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[9px] text-muted">{d.descriptor}</span>
-                <span className="font-mono text-[11px] font-bold text-heading">{d.pct}%</span>
-              </div>
-            </div>
-            <div className="h-2 bg-black/[0.04] rounded-full overflow-hidden">
-              <motion.div
-                className="h-full rounded-full"
-                style={{ background: 'linear-gradient(90deg, #B45309, #F59E0B)' }}
-                initial={{ width: 0 }}
-                animate={{ width: `${d.pct}%` }}
-                transition={{ type: 'spring', stiffness: 40, damping: 18, delay: 1.0 + i * 0.12 }}
-              />
-            </div>
-          </motion.div>
-        ))}
-      </div>
+      {/* Case title — matches the brief (Jack Thompson ECG request) */}
+      <h3 className="text-[16px] font-semibold text-heading leading-[1.25] mb-4">
+        A father requests an ECG for his son who has joined a running club
+      </h3>
 
-      {/* Key moment highlight */}
-      <motion.div
-        className="rounded-xl mb-4 px-3.5 py-3"
-        style={{
-          background: 'linear-gradient(135deg, rgba(180,83,9,0.04), rgba(245,158,11,0.06))',
-          borderLeft: '3px solid #D97706',
-        }}
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 1.2 }}
+      {/* Final verdict */}
+      <div
+        className="rounded-xl px-3.5 py-3 mb-4"
+        style={{ background: 'rgba(180,83,9,0.04)', border: '1px solid rgba(180,83,9,0.12)' }}
       >
-        <div className="flex items-center gap-1.5 mb-1.5">
-          <span className="text-[9px] font-semibold text-primary uppercase tracking-wider">Key Moment</span>
-          <span className="text-[9px] font-mono text-muted">2:34</span>
+        <div className="flex items-baseline justify-between mb-2">
+          <span className="text-[9px] font-semibold text-muted uppercase tracking-[0.12em]">
+            Final Verdict
+          </span>
+          <span className="font-mono text-[11px] text-muted">Total / 10.5</span>
         </div>
-        <div className="text-[12px] text-heading font-medium italic leading-[1.5] mb-1">
-          &ldquo;What are you most worried this headache might be?&rdquo;
+        <div className="flex items-baseline gap-2.5 mb-2.5">
+          <span className="text-[22px] font-bold leading-none" style={{ color: PASS_GREEN }}>
+            Bare Pass
+          </span>
+          <span className="font-mono text-[15px] font-bold text-heading">7</span>
+          <span className="font-mono text-[11px] text-muted">/ 10.5</span>
         </div>
-        <div className="text-[10px] text-stone-500 leading-[1.6]">
-          This open question uncovered the patient&apos;s fear of a brain tumour — a turning point that shaped your clinical management positively.
+        <div className="h-1.5 rounded-full overflow-hidden bg-black/[0.06]">
+          <motion.div
+            className="h-full rounded-full"
+            style={{ background: PASS_GREEN }}
+            initial={{ width: 0 }}
+            animate={{ width: '67%' }}
+            transition={{ type: 'spring', stiffness: 40, damping: 18, delay: 0.3 }}
+          />
         </div>
-      </motion.div>
+        <p className="text-[11px] text-body leading-[1.6] mt-2.5">
+          You safely reassured the father and explained the low likelihood of sudden death, but
+          could have explored his ideas and concerns more fully before moving to management.
+        </p>
+      </div>
 
+      {/* Domain summary */}
+      <div className="text-[9px] font-semibold text-muted uppercase tracking-[0.12em] mb-2">
+        Domain Score Summary
+      </div>
+      <div className="flex flex-col gap-2">
+        {DOMAINS.map((d, i) => {
+          const colour = d.pass ? PASS_GREEN : AMBER;
+          return (
+            <motion.div
+              key={d.label}
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.5 + i * 0.1 }}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[11px] text-stone-600 font-medium truncate pr-2">
+                  {d.label}
+                </span>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <span className="font-mono text-[10px] font-bold text-heading">{d.score}</span>
+                  <span
+                    className="px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wide"
+                    style={{
+                      background: d.pass ? 'rgba(39,80,10,0.1)' : 'rgba(180,83,9,0.1)',
+                      color: colour,
+                    }}
+                  >
+                    {d.pass ? 'Pass' : 'Fail'}
+                  </span>
+                </div>
+              </div>
+              <div className="h-1.5 rounded-full overflow-hidden bg-black/[0.05]">
+                <motion.div
+                  className="h-full rounded-full"
+                  style={{ background: colour }}
+                  initial={{ width: 0 }}
+                  animate={{ width: `${d.pct}%` }}
+                  transition={{ type: 'spring', stiffness: 40, damping: 18, delay: 0.6 + i * 0.12 }}
+                />
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight, X } from 'lucide-react';
+import { ArrowRight, Info, X } from 'lucide-react';
 import {
   BOOK_A_CALL_URL,
   PLANS,
@@ -42,7 +42,7 @@ const FEATURE_ROWS: readonly FeatureRow[] = [
   {
     label: 'AI consultations',
     labelSub: '200 cases',
-    cells: [{ text: 'Unlimited' }, { text: 'Unlimited', sub: '£199 value' }, { text: 'Unlimited' }],
+    cells: [{ text: 'Unlimited' }, { text: 'Unlimited', sub: '£299 value' }, { text: 'Unlimited' }],
   },
   {
     label: 'Half-day teaching',
@@ -114,25 +114,25 @@ export default function PricingTable() {
             <div className="grid grid-cols-[minmax(84px,150px)_repeat(3,minmax(0,1fr))]">
               {/* Plan headers */}
               <div />
-              <div className="px-2 py-4 text-center sm:py-5">
+              <div className="px-2 pb-4 pt-7 text-center sm:pb-5 sm:pt-8">
                 <p className="text-xs font-medium text-heading sm:text-sm">Self-Study</p>
                 <p className="mt-1 text-lg font-medium text-heading sm:text-2xl">
-                  £199 <span className="text-[10px] font-normal text-body sm:text-xs">one-off</span>
+                  £299 <span className="text-[10px] font-normal text-body sm:text-xs">one-off</span>
                 </p>
                 <p className="mt-0.5 text-[10px] text-body sm:text-xs">3-month access</p>
               </div>
-              <div className="bg-[#E1F5EE] px-2 pb-3 pt-3 text-center sm:pt-4">
-                <span className="mb-1.5 inline-block rounded-full bg-[#1D9E75] px-2.5 py-0.5 text-[9px] font-medium text-white sm:text-[10px]">
+              <div className="relative bg-[#E1F5EE] px-2 pb-3 pt-7 text-center sm:pt-8">
+                <span className="absolute left-1/2 top-2 -translate-x-1/2 whitespace-nowrap rounded-full bg-[#1D9E75] px-2.5 py-0.5 text-[9px] font-medium text-white sm:text-[10px]">
                   Most popular
                 </span>
-                <p className="text-xs font-medium text-[#085041] sm:text-sm">Complete</p>
+                <p className="text-xs font-medium text-[#085041] sm:text-sm">Complete SCA Course</p>
                 <p className="mt-1 text-lg font-medium text-[#085041] sm:text-2xl">
                   £599 <span className="text-[10px] font-normal text-[#0F6E56] sm:text-xs">one-off</span>
                 </p>
                 <p className="mt-0.5 text-[10px] text-[#0F6E56] sm:text-xs">3-month programme</p>
-                <p className="mt-0.5 text-[10px] text-muted line-through sm:text-xs">£1,397 total value</p>
+                <p className="mt-0.5 text-[10px] text-muted line-through sm:text-xs">£1,497 total value</p>
               </div>
-              <div className="px-2 py-4 text-center sm:py-5">
+              <div className="px-2 pb-4 pt-7 text-center sm:pb-5 sm:pt-8">
                 <p className="text-xs font-medium text-heading sm:text-sm">Intensive</p>
                 <p className="mt-1 text-base font-medium text-heading sm:text-xl">From £2,999</p>
                 <p className="mt-0.5 text-[10px] text-body sm:text-xs">By application</p>
@@ -168,8 +168,25 @@ export default function PricingTable() {
               ))}
 
               {/* Guarantee row */}
-              <div className="border-t border-[#E4DDC9] bg-[#EAF3DE] px-2.5 py-3.5 sm:px-4">
-                <p className="text-[11px] font-medium text-[#27500A] sm:text-sm">SCA guarantee</p>
+              <div className="group relative border-t border-[#E4DDC9] bg-[#EAF3DE] px-2.5 py-3.5 sm:px-4">
+                <div className="flex items-center gap-1">
+                  <p className="text-[11px] font-medium text-[#27500A] sm:text-sm">SCA guarantee</p>
+                  <button
+                    type="button"
+                    aria-label="About the SCA guarantee: conditional on passing all 200 AI stations"
+                    title="Conditional guarantee: to qualify you must first pass all 200 AI stations."
+                    className="inline-flex shrink-0 items-center justify-center rounded-full text-[#27500A]/70 transition-colors hover:text-[#27500A] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#27500A]/40"
+                  >
+                    <Info className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                </div>
+                <div
+                  role="tooltip"
+                  className="pointer-events-none absolute left-2.5 top-full z-20 mt-1 w-52 rounded-lg border border-[#E4DDC9] bg-white p-2.5 text-left text-[10px] leading-snug text-body opacity-0 shadow-elevation-3 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 sm:left-4 sm:text-[11px]"
+                >
+                  This is a <span className="font-medium text-[#27500A]">conditional</span> guarantee — to qualify
+                  you must first pass all 200 AI stations.
+                </div>
               </div>
               {[0, 1, 2].map((i) => (
                 <div key={i} className="border-l border-t border-[#E4DDC9] bg-[#EAF3DE] px-1.5 py-3.5 text-center">
@@ -236,14 +253,6 @@ export default function PricingTable() {
               <div className="pb-3" />
             </div>
           </div>
-
-          <p className="mt-4 text-center text-[10px] text-muted sm:text-xs">
-            Pass all 200 cases to qualify for the SCA guarantee.
-          </p>
-          <p className="mt-1 text-center text-[10px] text-muted sm:text-xs">
-            Each month of Complete includes one half-day teaching session and one small-group coaching
-            session, alongside unlimited AI practice throughout.
-          </p>
         </motion.div>
       </div>
 

@@ -5,7 +5,7 @@ import { ArrowRight } from 'lucide-react';
 
 export default function Hero() {
   return (
-    <section className="relative overflow-hidden rounded-b-[24px] sm:rounded-b-[32px] bg-[#1C1C1A] px-5 pb-10 pt-28 text-center sm:px-8 sm:pb-16 sm:pt-28">
+    <section className="relative overflow-hidden bg-[#1C1C1A] px-5 pb-10 pt-28 text-center sm:px-8 sm:pb-16 sm:pt-28">
       <div className="mx-auto max-w-4xl">
         <motion.p
           initial={{ opacity: 0, y: 12 }}
@@ -24,9 +24,9 @@ export default function Hero() {
           transition={{ duration: 0.5, delay: 0.08 }}
           className="mb-5 font-[family-name:var(--font-display)] text-3xl font-medium leading-[1.35] text-white sm:mb-6 sm:text-5xl lg:text-6xl"
         >
-          Pass all 200 mock AI SCA stations.
+          Pass 200 mock SCA stations
           <br />
-          Still fail your SCA? We pay you{' '}
+          Fail your SCA? We pay you{' '}
           <span className="text-[#EF9F27]">£500</span>.
         </motion.h1>
 
@@ -37,7 +37,7 @@ export default function Hero() {
           transition={{ duration: 0.5, delay: 0.14 }}
           className="mb-1 text-sm font-medium text-white sm:text-lg"
         >
-          The only complete SCA programme.
+          The only complete SCA programme
         </motion.p>
 
         <motion.p
@@ -47,9 +47,9 @@ export default function Hero() {
           transition={{ duration: 0.5, delay: 0.2 }}
           className="mx-auto mb-8 max-w-md text-xs leading-relaxed text-[#B4B2A9] sm:mb-10 sm:max-w-lg sm:text-base"
         >
-          AI practice <span className="text-[#6E6D68]">+</span> expert
-          teaching <span className="text-[#6E6D68]">+</span> small-group
-          coaching.
+          AI Practice <span className="text-[#6E6D68]">+</span> Live
+          Teaching <span className="text-[#6E6D68]">+</span> Small-group
+          coaching
         </motion.p>
 
         <motion.a

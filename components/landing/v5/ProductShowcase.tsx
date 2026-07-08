@@ -5,7 +5,6 @@ import { motion } from 'framer-motion';
 import ChapterBrief from './chapters/ChapterBrief';
 import ChapterConsultation from './chapters/ChapterConsultation';
 import ChapterScore from './chapters/ChapterScore';
-import ChapterProgress from './chapters/ChapterProgress';
 
 const AUTO_ADVANCE_MS = 5000;
 
@@ -29,7 +28,7 @@ const STEPS: readonly Step[] = [
     key: 'consultation',
     tab: 'The consultation',
     title: 'Have the conversation',
-    copy: 'Your patient responds in real time with voice — and pushes back if you’re vague.',
+    copy: 'Your patient responds in real time with voice.',
     Mockup: ChapterConsultation,
   },
   {
@@ -39,16 +38,9 @@ const STEPS: readonly Step[] = [
     copy: 'Instant, domain-level scores on the three SCA marking criteria.',
     Mockup: ChapterScore,
   },
-  {
-    key: 'progress',
-    tab: 'The progress',
-    title: 'Improve with every station',
-    copy: 'Trends across domains show you exactly where to focus next.',
-    Mockup: ChapterProgress,
-  },
 ] as const;
 
-/** Compact tabbed product tour: one frame, four steps, gentle auto-advance. */
+/** Compact tabbed product tour: one frame, three steps, gentle auto-advance. */
 export default function ProductShowcase() {
   const [active, setActive] = useState(0);
   const [inView, setInView] = useState(false);
@@ -79,12 +71,9 @@ export default function ProductShowcase() {
       onViewportLeave={() => setInView(false)}
     >
       <div className="mx-auto max-w-2xl text-center">
-        <p className="mb-2 text-xs font-medium uppercase tracking-[0.08em] text-[#854F0B] sm:text-sm">
+        <p className="mb-5 text-xs font-medium uppercase tracking-[0.08em] text-[#854F0B] sm:mb-6 sm:text-sm">
           How a station works
         </p>
-        <h2 className="mb-6 text-lg font-medium text-heading sm:mb-8 sm:text-2xl">
-          Practice that feels like the real exam.
-        </h2>
 
         {/* Step tabs */}
         <div
@@ -111,26 +100,9 @@ export default function ProductShowcase() {
           ))}
         </div>
 
-        {/* Product frame — all steps stacked in one grid cell so the frame
-            keeps the tallest step's height and never jumps between tabs. */}
-        <div className="grid overflow-hidden rounded-2xl border border-[#E4DDC9] bg-white text-left shadow-elevation-2">
-          {STEPS.map((s, i) => (
-            <motion.div
-              key={s.key}
-              className="col-start-1 row-start-1 flex flex-col justify-center"
-              initial={false}
-              animate={{ opacity: i === active ? 1 : 0 }}
-              transition={{ duration: 0.28, ease: 'easeOut' }}
-              style={{ pointerEvents: i === active ? 'auto' : 'none' }}
-              aria-hidden={i !== active}
-            >
-              <s.Mockup />
-            </motion.div>
-          ))}
-        </div>
-
-        {/* Step caption — same stacking trick to avoid height wobble */}
-        <div className="mt-5 grid">
+        {/* Step caption — read first, then the mockup below. Same stacking
+            trick to avoid height wobble between tabs. */}
+        <div className="mb-5 grid">
           {STEPS.map((s, i) => (
             <motion.div
               key={s.key}
@@ -144,6 +116,25 @@ export default function ProductShowcase() {
               <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-body sm:text-sm">
                 {s.copy}
               </p>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Product frame — all steps stacked in one grid cell so the frame
+            keeps the tallest step's height and never jumps between tabs.
+            Capped in size so the whole tour fits one desktop viewport. */}
+        <div className="mx-auto grid w-full max-w-md overflow-hidden rounded-2xl border border-[#E4DDC9] bg-white text-left shadow-elevation-2">
+          {STEPS.map((s, i) => (
+            <motion.div
+              key={s.key}
+              className="col-start-1 row-start-1 flex flex-col justify-center"
+              initial={false}
+              animate={{ opacity: i === active ? 1 : 0 }}
+              transition={{ duration: 0.28, ease: 'easeOut' }}
+              style={{ pointerEvents: i === active ? 'auto' : 'none' }}
+              aria-hidden={i !== active}
+            >
+              <s.Mockup />
             </motion.div>
           ))}
         </div>

@@ -154,7 +154,7 @@ export default function VideoProof() {
         transition={{ duration: 0.5 }}
         className="mb-2 text-xs font-medium uppercase tracking-[0.08em] text-[#854F0B] sm:text-sm"
       >
-        Hear from GP trainees on the programme
+        What doctors are saying about the programme
       </motion.p>
 
       <motion.p

@@ -58,55 +58,37 @@ const JamesAvatar = (
   </svg>
 );
 
-const AminaAvatar = (
-  <svg viewBox="0 0 34 34" width="34" height="34" aria-hidden="true">
-    <rect width="34" height="34" fill="#F0E3D0" />
-    <path
-      d="M17 5 q8 0 8 9 l0 6 q0 3 -2.5 3 l-11 0 q-2.5 0 -2.5 -3 l0 -6 q0 -9 8 -9z"
-      fill="#7A4E2D"
-    />
-    <circle cx="17" cy="14" r="5.8" fill="#B57A4A" />
-    <circle cx="14.8" cy="13.5" r="0.9" fill="#1B1B1B" />
-    <circle cx="19.2" cy="13.5" r="0.9" fill="#1B1B1B" />
-    <path
-      d="M15.2 17 q1.8 1.4 3.6 0"
-      stroke="#1B1B1B"
-      strokeWidth="0.8"
-      fill="none"
-      strokeLinecap="round"
-    />
-    <path d="M5 34 q0 -12 12 -12 q12 0 12 12z" fill="#8A4A5E" />
-    <path
-      d="M9 21 q-1.5 -8 3 -12 M25 21 q1.5 -8 -3 -12"
-      stroke="#7A4E2D"
-      strokeWidth="2.6"
-      fill="none"
-      strokeLinecap="round"
-    />
-  </svg>
+const ZainAvatar = (
+  <img
+    src="/images/reviews/zain-chowdhary.jpeg"
+    alt="Dr Zain Chowdhary"
+    width={68}
+    height={68}
+    className="h-full w-full rounded-full object-cover object-top"
+  />
 );
 
 const TESTIMONIALS: Testimonial[] = [
   {
-    name: 'Sarah',
-    meta: 'GP2, London',
+    name: 'Dr Amir Hussain',
+    meta: 'GP Registrar, London',
     avatar: SarahAvatar,
     quote:
-      'The voice consultations feel like the real exam. I did stations on my lunch breaks, and the feedback showed me exactly which domain I was losing marks in.',
+      'I thought timed mocks with a study partner were the best prep I’d get, but this was remarkably close. Every AI patient responds like a real patient in clinic, and the feedback is genuinely specific: it showed me exactly what I was missing and how to fix it, like an ES sitting in on your consult. Best of all I could do it at 6am or after a late shift, whenever I actually had the time.',
   },
   {
-    name: 'James',
-    meta: 'ST3, Yorkshire',
+    name: 'Dr Harmeet Makan',
+    meta: 'GP Registrar, East Midlands',
     avatar: JamesAvatar,
     quote:
-      "Doing a full timed mock in front of five others was daunting, but the coach's breakdown changed how I consult. I learnt as much from their stations as my own.",
+      'Doing a full timed mock in front of five others was daunting, but the GP tutor’s breakdown changed how I consult. With only six of us, everyone gets their own station pulled apart, there’s time for the tutor to answer your questions and feed back on your own consulting, and I learnt as much dissecting my peers’ mistakes as I did my own. It’s the kind of personal attention you’d never get in a big cohort.',
   },
   {
-    name: 'Amina',
-    meta: 'GP registrar, West Midlands',
-    avatar: AminaAvatar,
+    name: 'Dr Zain Chowdhary',
+    meta: 'GP Registrar, Wessex',
+    avatar: ZainAvatar,
     quote:
-      'The teaching sessions gave my revision a structure it never had. How each domain is marked, and why people fail, finally made sense.',
+      'I expected generic exam-technique waffle from the teaching. Instead the live teaching sessions cut straight to what counts: the handful of things that separate a pass from a fail in each domain, and the exact points where candidates quietly lose marks without realising. It reshaped how I consult.',
   },
 ];
 
