@@ -1,4 +1,5 @@
 export { default as Hero } from './Hero';
+export { default as TopicConveyor } from './TopicConveyor';
 export { default as GuaranteeCard } from './GuaranteeCard';
 export { default as TrustBar } from './TrustBar';
 export { default as ProductShowcase } from './ProductShowcase';

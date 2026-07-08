@@ -6,6 +6,7 @@ import LandingNavbar from '@/components/landing/LandingNavbar';
 import LandingFooter from '@/components/landing/LandingFooter';
 import {
   Hero,
+  TopicConveyor,
   GuaranteeCard,
   TrustBar,
   ProductShowcase,
@@ -30,6 +31,7 @@ export default function LandingPage() {
       <LandingNavbar user={user} />
       <main className="flex flex-col pb-16 sm:pb-20">
         <Hero />
+        <TopicConveyor />
         <GuaranteeCard />
         <TrustBar />
         <VideoProof />
