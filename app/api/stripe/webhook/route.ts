@@ -2,6 +2,16 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type Stripe from 'stripe';
 import { getStripe } from '@/lib/commerce/stripe';
+import {
+  REWARD_BY_PLAN,
+  generateReferralCode,
+  isSelfReferral,
+  normalizeCode,
+  normalizeEmail,
+  referralUrl,
+  rewardFor,
+} from '@/lib/commerce/referrals';
+import { sendReferralEmail } from '@/lib/email/referralEmail';
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -9,10 +19,19 @@ function getSupabaseAdmin() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
 }
 
+type SupabaseAdmin = ReturnType<typeof getSupabaseAdmin>;
+
 /**
- * Stripe webhook: records paid pre-orders in Supabase.
- * `checkout.session.completed` -> insert into `preorders` (idempotent on
- * stripe_session_id), which is what drives the live seat counter down.
+ * Stripe webhook.
+ *
+ * `checkout.session.completed` -> record the paid pre-order (drives the seat
+ * counter), attribute any referral, and mint the buyer's own advocate code +
+ * invite email. Every write is idempotent so Stripe retries are safe.
+ *
+ * `charge.refunded` (full refunds only) -> mark the pre-order refunded and void
+ * its linked referral so it can't be paid out.
+ *
+ * Ops: the Stripe webhook endpoint must have `charge.refunded` enabled.
  */
 export async function POST(request: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -35,11 +54,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
-  if (event.type !== 'checkout.session.completed') {
-    return NextResponse.json({ received: true, ignored: event.type });
+  const origin = new URL(request.url).origin;
+
+  if (event.type === 'checkout.session.completed') {
+    return handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session, origin);
+  }
+  if (event.type === 'charge.refunded') {
+    return handleChargeRefunded(event.data.object as Stripe.Charge);
   }
 
-  const session = event.data.object as Stripe.Checkout.Session;
+  return NextResponse.json({ received: true, ignored: event.type });
+}
+
+async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin: string) {
   if (session.payment_status !== 'paid') {
     // Async payment methods settle later via checkout.session.async_payment_succeeded;
     // card payments (our case) are always 'paid' here.
@@ -62,25 +89,267 @@ export async function POST(request: Request) {
   }
 
   const supabase = getSupabaseAdmin();
-  const { error } = await supabase.from('preorders').insert({
-    email: email.toLowerCase().trim(),
-    full_name: session.customer_details?.name ?? null,
-    plan,
-    intake_month: intakeMonth,
-    amount: session.amount_total ?? 0,
-    currency: session.currency ?? 'gbp',
-    stripe_session_id: session.id,
-    stripe_customer_id: typeof session.customer === 'string' ? session.customer : (session.customer?.id ?? null),
-    stripe_payment_intent_id:
-      typeof session.payment_intent === 'string' ? session.payment_intent : (session.payment_intent?.id ?? null),
-    status: 'paid',
-  });
+  const buyerEmail = normalizeEmail(email);
+  const buyerName = session.customer_details?.name ?? null;
+  const referralCode = session.metadata?.referral_code
+    ? normalizeCode(session.metadata.referral_code)
+    : null;
 
-  // 23505 = duplicate stripe_session_id -> webhook retry, already recorded.
-  if (error && error.code !== '23505') {
-    console.error('[stripe-webhook] preorder insert failed', { sessionId: session.id, error });
-    return NextResponse.json({ error: 'Failed to record preorder' }, { status: 500 });
+  // ── 1. Record the pre-order (idempotent on stripe_session_id) ──
+  const { data: inserted, error: insertError } = await supabase
+    .from('preorders')
+    .insert({
+      email: buyerEmail,
+      full_name: buyerName,
+      plan,
+      intake_month: intakeMonth,
+      amount: session.amount_total ?? 0,
+      currency: session.currency ?? 'gbp',
+      stripe_session_id: session.id,
+      stripe_customer_id:
+        typeof session.customer === 'string' ? session.customer : (session.customer?.id ?? null),
+      stripe_payment_intent_id:
+        typeof session.payment_intent === 'string'
+          ? session.payment_intent
+          : (session.payment_intent?.id ?? null),
+      status: 'paid',
+      referral_code: referralCode,
+    })
+    .select('id')
+    .single();
+
+  let preorderId = inserted?.id ?? null;
+
+  if (insertError) {
+    if (insertError.code !== '23505') {
+      console.error('[stripe-webhook] preorder insert failed', { sessionId: session.id, error: insertError });
+      return NextResponse.json({ error: 'Failed to record preorder' }, { status: 500 });
+    }
+    // Duplicate stripe_session_id (webhook retry). Do NOT early-return — a prior
+    // attempt may have crashed before writing the referral. Fetch the id and continue.
+    const { data: existing } = await supabase
+      .from('preorders')
+      .select('id')
+      .eq('stripe_session_id', session.id)
+      .maybeSingle();
+    preorderId = existing?.id ?? null;
   }
 
-  return NextResponse.json({ received: true, recorded: !error });
+  // Referral attribution: a genuine DB failure here returns 500 so Stripe
+  // retries — every write in this handler is idempotent, so the retry is safe
+  // and recovers the attribution instead of silently dropping it.
+  if (preorderId) {
+    const recorded = await recordReferral(supabase, {
+      referralCode,
+      preorderId,
+      refereeEmail: buyerEmail,
+      plan,
+      amount: session.amount_total ?? 0,
+    });
+    if (recorded === 'failed') {
+      return NextResponse.json({ error: 'Failed to record referral' }, { status: 500 });
+    }
+  }
+
+  // Advocate minting + invite email are best-effort: never fail the webhook.
+  try {
+    await mintAdvocateAndInvite(supabase, { email: buyerEmail, name: buyerName, origin });
+  } catch (error: unknown) {
+    console.error('[stripe-webhook] advocate minting error', { sessionId: session.id, error });
+  }
+
+  return NextResponse.json({ received: true, recorded: !insertError, preorderId });
+}
+
+interface RecordReferralArgs {
+  referralCode: string | null;
+  preorderId: string;
+  refereeEmail: string;
+  plan: string;
+  amount: number;
+}
+
+/**
+ * Insert the referral row for an attributed purchase. Idempotent via the unique
+ * preorder_id. Self-referrals are recorded as `void`. Benign conflicts (dup
+ * referee/preorder = 23505, dead/removed code FK = 23503) are logged and
+ * ignored; a genuine DB failure returns 'failed' so the webhook can 500 and
+ * let Stripe's retry recover it.
+ */
+async function recordReferral(
+  supabase: SupabaseAdmin,
+  args: RecordReferralArgs,
+): Promise<'ok' | 'skipped' | 'failed'> {
+  const { referralCode, preorderId, refereeEmail, plan, amount } = args;
+  if (!referralCode) return 'skipped';
+
+  const { data: codeRow, error: codeError } = await supabase
+    .from('referral_codes')
+    .select('code, owner_email, active')
+    .eq('code', referralCode)
+    .maybeSingle();
+
+  if (codeError) {
+    console.error('[stripe-webhook] referral code lookup failed', { referralCode, error: codeError });
+    return 'failed';
+  }
+  if (!codeRow || !codeRow.active) return 'skipped'; // unknown or deactivated code — no attribution
+
+  const referrerEmail = normalizeEmail(codeRow.owner_email);
+  const selfReferral = isSelfReferral(referrerEmail, refereeEmail);
+
+  const { error: referralError } = await supabase.from('referrals').insert({
+    referral_code: codeRow.code,
+    referrer_email: referrerEmail,
+    referee_email: refereeEmail,
+    preorder_id: preorderId,
+    plan,
+    amount,
+    reward_amount: rewardFor(plan),
+    status: selfReferral ? 'void' : 'pending',
+    void_reason: selfReferral ? 'self_referral' : null,
+  });
+
+  if (referralError && referralError.code !== '23505' && referralError.code !== '23503') {
+    console.error('[stripe-webhook] referral insert failed', { preorderId, error: referralError });
+    return 'failed';
+  }
+  if (referralError) {
+    // 23505 = dup referee (partial index) or dup preorder (retry); 23503 = code FK gone.
+    console.log('[stripe-webhook] referral not recorded (benign)', {
+      preorderId,
+      code: referralError.code,
+    });
+  }
+  return 'ok';
+}
+
+interface MintArgs {
+  email: string;
+  name: string | null;
+  origin: string;
+}
+
+/**
+ * Ensure the buyer has their own advocate code (single writer = this webhook),
+ * then email them their share link. Reuses an existing code if present; retries
+ * once on a random code-PK collision. The email is sent only when the code was
+ * newly minted this invocation — an existing code (webhook retry, repeat buyer,
+ * or losing a concurrent-mint race) means the owner was already invited.
+ * Email failure never blocks the webhook.
+ */
+async function mintAdvocateAndInvite(supabase: SupabaseAdmin, args: MintArgs): Promise<void> {
+  const { email, name, origin } = args;
+
+  // Reuse an existing code (repeat buyer / webhook retry).
+  const { data: existing } = await supabase
+    .from('referral_codes')
+    .select('code')
+    .eq('owner_email', email)
+    .maybeSingle();
+
+  let code = existing?.code ?? null;
+  let justMinted = false;
+
+  if (!code) {
+    for (let attempt = 0; attempt < 2 && !code; attempt += 1) {
+      const candidate = generateReferralCode(name ?? undefined);
+      const { data: minted, error } = await supabase
+        .from('referral_codes')
+        .insert({ code: candidate, owner_email: email, owner_name: name, active: true })
+        .select('code')
+        .single();
+
+      if (!error) {
+        code = minted?.code ?? candidate;
+        justMinted = true;
+        break;
+      }
+      if (error.code === '23505') {
+        // Either owner_email already has a code (race with a concurrent webhook)
+        // or the random code collided. Re-check by email; else retry with a new code.
+        const { data: raced } = await supabase
+          .from('referral_codes')
+          .select('code')
+          .eq('owner_email', email)
+          .maybeSingle();
+        if (raced?.code) {
+          code = raced.code; // concurrent winner minted it — they sent the email
+          break;
+        }
+        continue; // code-PK collision — loop retries once
+      }
+      console.error('[stripe-webhook] advocate code mint failed', { email, error });
+      return;
+    }
+  }
+
+  if (!code) {
+    console.error('[stripe-webhook] advocate code mint exhausted retries', { email });
+    return;
+  }
+  if (!justMinted) return; // already invited on a previous attempt/purchase
+
+  await sendReferralEmail({
+    toEmail: email,
+    toName: name,
+    referralUrl: referralUrl(origin, code),
+    rewardAmount: REWARD_BY_PLAN.complete, // headline "up to £100"
+  });
+}
+
+/**
+ * Full refund -> mark the pre-order refunded and void its referral. Partial
+ * refunds are ignored. If the referral was already `paid`, it is still voided
+ * but `paid_at` is left intact so the clawback is visible in the admin view.
+ */
+async function handleChargeRefunded(charge: Stripe.Charge) {
+  if (!charge.refunded) {
+    // Partial refund — leave the pre-order and referral untouched.
+    return NextResponse.json({ received: true, ignored: 'partial_refund', chargeId: charge.id });
+  }
+
+  const paymentIntentId =
+    typeof charge.payment_intent === 'string' ? charge.payment_intent : (charge.payment_intent?.id ?? null);
+  if (!paymentIntentId) {
+    console.error('[stripe-webhook] refunded charge has no payment_intent', { chargeId: charge.id });
+    return NextResponse.json({ received: true, error: 'no_payment_intent', chargeId: charge.id });
+  }
+
+  const supabase = getSupabaseAdmin();
+  const { data: preorder, error: findError } = await supabase
+    .from('preorders')
+    .select('id')
+    .eq('stripe_payment_intent_id', paymentIntentId)
+    .maybeSingle();
+
+  if (findError) {
+    console.error('[stripe-webhook] refund preorder lookup failed', { paymentIntentId, error: findError });
+    return NextResponse.json({ error: 'Failed to process refund' }, { status: 500 });
+  }
+  if (!preorder) {
+    // No matching pre-order (e.g. a non-preorder charge) — acknowledge and move on.
+    return NextResponse.json({ received: true, ignored: 'no_preorder', paymentIntentId });
+  }
+
+  const { error: preorderError } = await supabase
+    .from('preorders')
+    .update({ status: 'refunded' })
+    .eq('id', preorder.id);
+  if (preorderError) {
+    console.error('[stripe-webhook] preorder refund update failed', { preorderId: preorder.id, error: preorderError });
+    return NextResponse.json({ error: 'Failed to process refund' }, { status: 500 });
+  }
+
+  // Void the linked referral (keep paid_at so a clawback is visible in admin).
+  const { error: voidError } = await supabase
+    .from('referrals')
+    .update({ status: 'void', void_reason: 'refunded' })
+    .eq('preorder_id', preorder.id)
+    .neq('status', 'void');
+  if (voidError) {
+    console.error('[stripe-webhook] referral void failed', { preorderId: preorder.id, error: voidError });
+  }
+
+  return NextResponse.json({ received: true, refunded: preorder.id });
 }
