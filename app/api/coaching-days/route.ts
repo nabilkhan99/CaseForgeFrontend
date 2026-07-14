@@ -28,7 +28,11 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to load coaching days' }, { status: 500 });
     }
 
-    const days = (data ?? []).map(({ past: _past, ...day }) => day) as CoachingDayAvailability[];
+    const days = (data ?? []).map((row) => {
+      const { past, ...day } = row;
+      void past;
+      return day;
+    }) as CoachingDayAvailability[];
     return NextResponse.json(
       { days },
       { headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30' } },

@@ -34,17 +34,6 @@ export async function updateSession(request: NextRequest) {
         data: { user },
     } = await supabase.auth.getUser();
 
-    // Waitlist gate — redirect /try and /auth/sign-up to the landing-page hero form
-    const isWaitlistedRoute =
-        request.nextUrl.pathname.startsWith('/try') ||
-        request.nextUrl.pathname === '/auth/sign-up';
-
-    if (isWaitlistedRoute) {
-        const url = request.nextUrl.clone();
-        url.pathname = '/';
-        return NextResponse.redirect(url);
-    }
-
     // Protected routes - redirect to sign-in if not authenticated
     const isProtectedRoute = (request.nextUrl.pathname.startsWith('/dashboard') ||
         request.nextUrl.pathname.startsWith('/clinical-master')) &&

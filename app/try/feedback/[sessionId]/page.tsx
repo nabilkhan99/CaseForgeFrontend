@@ -1,221 +1,84 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
-import { useState, useEffect, useRef } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { useParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import Container from '@/components/ui/Container';
-import PrimaryButton from '@/components/ui/PrimaryButton';
-import AuthCard from '@/components/auth/AuthCard';
-import AuthInput from '@/components/auth/AuthInput';
+import { ArrowRight } from 'lucide-react';
+import FeedbackReport from '@/components/clinical-master/FeedbackReport';
+import PricingTable from '@/components/landing/v5/PricingTable';
+import { GuaranteeCard } from '@/components/landing/v5';
+import {
+  TRIAL_EMAIL_KEY,
+  TRIAL_FEEDBACK_URL_KEY,
+  TRIAL_USED_KEY,
+} from '@/lib/trial/storage';
 
-type AuthMode = 'sign-up' | 'sign-in';
-
-const GRADE_PCT: Record<string, number> = { CP: 100, P: 67, F: 33, CF: 0 };
-const DOMAIN_LABEL: Record<string, string> = {
-  data_gathering: 'Data Gathering',
-  clinical_management: 'Clinical Management',
-  relating_to_others: 'Interpersonal Skills',
-};
-const PASSING_VERDICTS = ['Pass', 'Bare Pass'];
-const MAX_FEEDBACK_POLLS = 30;
-
-interface FeedbackPreview {
-  verdict: string | null;
-  weightedScore: number;
-  maxScore: number;
-  domains: { domain: string; grade: string }[];
-}
-
-export default function TryFeedbackAuthGatePage() {
+/**
+ * The free mock station reveal: an email-only gate sits between finishing the
+ * consultation and the full feedback report, which renders with the pricing
+ * table directly beneath it. No password, no account, no confirmation email.
+ */
+export default function TryFeedbackPage() {
   const params = useParams();
-  const router = useRouter();
   const sessionId = params.sessionId as string;
 
-  const [authMode, setAuthMode] = useState<AuthMode>('sign-up');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [unlocked, setUnlocked] = useState(false);
+  const [checkingGate, setCheckingGate] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [checkingAuth, setCheckingAuth] = useState(true);
-  const [emailConfirmationSent, setEmailConfirmationSent] = useState(false);
-  const [feedback, setFeedback] = useState<FeedbackPreview | null>(null);
-  const feedbackPollStarted = useRef(false);
 
-  const supabase = createClient();
-
-  // Set free trial cookie — user completed a consultation
+  // Returning visitors who already gave their email skip the gate.
   useEffect(() => {
-    document.cookie = 'ff_free_trial_used=true; path=/; max-age=31536000; SameSite=Lax';
-  }, []);
-
-  // Trigger marking once, then poll the service-role API for a partial preview.
-  useEffect(() => {
-    let cancelled = false;
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    let attempts = 0;
-
-    async function loadFeedback() {
-      try {
-        const shouldTrigger = !feedbackPollStarted.current;
-        feedbackPollStarted.current = true;
-
-        const res = await fetch('/api/generate-feedback', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId, trigger: shouldTrigger }),
-        });
-        if (cancelled) return;
-
-        const data = await res.json().catch(() => ({}));
-        if (data.status === 'ready' && data.feedback) {
-          const report = data.feedback as {
-            overall?: {
-              verdict?: string | null;
-              weighted_score?: number | null;
-              max_score?: number | null;
-            };
-            domains?: { domain: string; grade: string }[];
-          };
-          setFeedback({
-            verdict: report.overall?.verdict ?? null,
-            weightedScore: Number(report.overall?.weighted_score ?? 0),
-            maxScore: Number(report.overall?.max_score ?? 10.5),
-            domains: Array.isArray(report.domains) ? report.domains : [],
-          });
-          return;
-        }
-
-        attempts += 1;
-        if (attempts < MAX_FEEDBACK_POLLS && (data.status === 'generating' || res.status === 404)) {
-          timeout = setTimeout(loadFeedback, 3000);
-        }
-      } catch {
-        if (cancelled) return;
-        attempts += 1;
-        if (attempts < MAX_FEEDBACK_POLLS) {
-          timeout = setTimeout(loadFeedback, 3000);
-        }
-      }
-    }
-
-    loadFeedback();
-    return () => {
-      cancelled = true;
-      if (timeout) clearTimeout(timeout);
-    };
-  }, [sessionId]);
-
-  useEffect(() => {
-    async function checkAuth() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await claimAndRedirect();
-      } else {
-        setCheckingAuth(false);
-      }
-    }
-    checkAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
-      if (event === 'SIGNED_IN') {
-        await claimAndRedirect();
-      }
-    });
-
-    return () => subscription.unsubscribe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function claimAndRedirect() {
     try {
-      const res = await fetch('/api/try/claim-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        if (!data.alreadyClaimed) {
-          // Non-critical error
-        }
+      if (window.localStorage.getItem(TRIAL_EMAIL_KEY)) {
+        setUnlocked(true);
       }
     } catch {
-      // Non-critical error
+      // Storage unavailable — show the gate.
     }
-
-    router.push(`/clinical-master/feedback/${sessionId}`);
-  }
+    setCheckingGate(false);
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
+    if (submitting) return;
+    setSubmitting(true);
     setError(null);
 
     try {
-      if (authMode === 'sign-up') {
-        const { data, error: signUpError } = await supabase.auth.signUp({
-          email: email.trim(),
-          password,
-          options: {
-            data: { full_name: fullName.trim() },
-            emailRedirectTo: `${window.location.origin}/auth/callback?next=/clinical-master/feedback/${sessionId}`,
-          },
-        });
-
-        if (signUpError) {
-          setError(signUpError.message);
-          setLoading(false);
-          return;
-        }
-
-        if (data.user && !data.session) {
-          setEmailConfirmationSent(true);
-          setLoading(false);
-          return;
-        }
-
-        if (data.session) {
-          await claimAndRedirect();
-        }
-      } else {
-        const { data, error: signInError } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password,
-        });
-
-        if (signInError) {
-          setError(signInError.message);
-          setLoading(false);
-          return;
-        }
-
-        if (data.user) {
-          await claimAndRedirect();
-        }
+      const res = await fetch('/api/try/capture-lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, email: email.trim() }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        setError(data.error ?? 'Something went wrong — please try again.');
+        setSubmitting(false);
+        return;
       }
+
+      try {
+        window.localStorage.setItem(TRIAL_EMAIL_KEY, email.trim().toLowerCase());
+        window.localStorage.setItem(TRIAL_USED_KEY, '1');
+        window.localStorage.setItem(TRIAL_FEEDBACK_URL_KEY, `/try/feedback/${sessionId}`);
+      } catch {
+        // Storage unavailable — the reveal still works for this visit.
+      }
+      setUnlocked(true);
     } catch {
-      setError('An unexpected error occurred');
-      setLoading(false);
+      setError('Something went wrong — please try again.');
+      setSubmitting(false);
     }
   }
 
-  async function handleResend() {
-    try {
-      await supabase.auth.resend({ type: 'signup', email: email.trim() });
-    } catch {
-      // Handle silently
-    }
-  }
-
-  if (checkingAuth) {
+  if (checkingGate) {
     return (
       <div className="min-h-[100dvh] flex items-center justify-center">
         <motion.div
-          className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent"
+          className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent"
           animate={{ rotate: 360 }}
           transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
         />
@@ -223,264 +86,99 @@ export default function TryFeedbackAuthGatePage() {
     );
   }
 
-  if (emailConfirmationSent) {
+  if (!unlocked) {
     return (
-      <div className="min-h-[100dvh] flex items-center justify-center p-6">
-        <div className="max-w-md w-full">
-          <AuthCard
-            icon={
-              <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-            }
-            accentColor="blue"
-            title="Check Your Email"
-            subtitle={`We've sent a confirmation link to ${email}. Click the link, then come back to view your feedback.`}
-          >
-            <div className="space-y-4">
-              <p className="text-[12px] text-muted text-center">
-                Your feedback has been saved and will be waiting for you after you confirm.
-              </p>
+      <div className="min-h-[100dvh] flex items-center justify-center px-6 py-16">
+        <motion.div
+          className="w-full max-w-md"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 60, damping: 20 }}
+        >
+          <div className="rounded-[22px] border border-black/[0.06] bg-surface-raised p-7 text-center shadow-[0_16px_42px_rgba(180,83,9,0.06)] sm:p-9">
+            <span
+              className="mb-4 inline-flex items-center gap-1.5 rounded-lg px-3 py-1 text-[11px] font-semibold uppercase tracking-wide"
+              style={{ background: 'rgba(22,163,74,0.08)', color: '#16A34A' }}
+            >
+              Consultation complete
+            </span>
+            <h1 className="mb-2 text-[26px] font-bold tracking-[-0.02em] text-heading">
+              Your report is being marked
+            </h1>
+            <p className="mb-7 text-[14px] leading-relaxed text-muted">
+              Enter your email to unlock your full feedback report — scored across the three SCA
+              marking domains, just like the real exam.
+            </p>
+
+            <form onSubmit={handleSubmit} className="space-y-4 text-left">
+              <div>
+                <label
+                  htmlFor="trial-email"
+                  className="mb-1.5 block text-[13px] font-medium text-heading"
+                >
+                  Email address
+                </label>
+                <input
+                  id="trial-email"
+                  type="email"
+                  required
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="doctor@example.com"
+                  className="w-full rounded-xl border border-stone-200 bg-white px-4 py-3 text-[14px] text-heading outline-none transition-colors placeholder:text-stone-400 focus:border-primary"
+                />
+              </div>
+
+              {error && (
+                <div className="rounded-lg border border-danger/20 bg-danger/10 p-3">
+                  <p className="text-center text-sm text-danger">{error}</p>
+                </div>
+              )}
+
               <button
-                onClick={handleResend}
-                className="w-full text-[13px] text-primary hover:underline font-medium cursor-pointer"
+                type="submit"
+                disabled={submitting}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#EF9F27] px-6 py-3.5 text-sm font-semibold text-[#2C2C2A] shadow-[0_3px_12px_rgba(186,117,23,0.4)] transition-all hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Resend confirmation email
+                {submitting ? 'Unlocking…' : 'See my feedback'}
+                {!submitting && <ArrowRight className="h-4 w-4" />}
               </button>
-              <button
-                onClick={() => {
-                  setEmailConfirmationSent(false);
-                  setAuthMode('sign-in');
-                }}
-                className="w-full text-[13px] text-muted hover:text-heading transition-colors cursor-pointer"
-              >
-                Already confirmed? Sign in here
-              </button>
-            </div>
-          </AuthCard>
-        </div>
+            </form>
+
+            <p className="mt-4 text-[11px] leading-relaxed text-muted">
+              By continuing you agree to receive occasional emails about the course — unsubscribe
+              anytime.
+            </p>
+            <p className="mt-3 text-[12px] text-muted">
+              Already have an account?{' '}
+              <Link href="/auth/sign-in" className="text-primary hover:underline">
+                Sign in
+              </Link>
+            </p>
+          </div>
+        </motion.div>
       </div>
     );
   }
 
-  const domainBars = feedback
-    ? feedback.domains.map((d) => ({
-        label: DOMAIN_LABEL[d.domain] ?? d.domain,
-        grade: d.grade,
-        pct: GRADE_PCT[d.grade] ?? 0,
-      }))
-    : [];
-
   return (
-    <div className="min-h-[100dvh] flex flex-col items-center justify-center px-6 py-16">
-      {/* Header */}
-      <motion.div
-        className="text-center mb-8"
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ type: 'spring', stiffness: 60, damping: 20 }}
-      >
-        <span
-          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-semibold uppercase tracking-wide mb-4"
-          style={{ background: 'rgba(22,163,74,0.08)', color: '#16A34A' }}
-        >
-          Consultation Complete
-        </span>
-        <h1 className="text-[28px] font-bold text-heading tracking-[-0.02em] mb-2">
-          Your Assessment is Ready
-        </h1>
-        <p className="text-[14px] text-muted">
-          Sign up to see your full feedback and track your progress
-        </p>
-      </motion.div>
+    <div className="bg-surface">
+      <FeedbackReport sessionId={sessionId} variant="trial" />
 
-      <div className="w-full max-w-[900px] flex flex-col lg:flex-row gap-8 items-start">
-        {/* Partial feedback preview */}
-        <motion.div
-          className="flex-1 w-full"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
-          <Container>
-            {/* Score hero */}
-            {feedback ? (
-              <div className="text-center mb-6">
-                <div
-                  className="text-[48px] font-bold font-mono mb-1"
-                  style={{
-                    background: 'linear-gradient(135deg, #B45309, #D97706)',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                  }}
-                >
-                  {feedback.weightedScore.toFixed(1)}
-                </div>
-                <div className="text-[13px] text-muted mb-3">out of {feedback.maxScore.toFixed(1)}</div>
-                {feedback.verdict && (
-                  <span
-                    className="inline-flex px-4 py-1.5 rounded-full text-[12px] font-semibold uppercase tracking-wide"
-                    style={{
-                      background: PASSING_VERDICTS.includes(feedback.verdict) ? 'rgba(22,163,74,0.1)' : 'rgba(220,38,38,0.1)',
-                      color: PASSING_VERDICTS.includes(feedback.verdict) ? '#16A34A' : '#DC2626',
-                    }}
-                  >
-                    {feedback.verdict}
-                  </span>
-                )}
-              </div>
-            ) : (
-              <div className="text-center py-6">
-                <motion.div
-                  className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent mx-auto mb-2"
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                />
-                <p className="text-[13px] text-muted">Loading feedback...</p>
-              </div>
-            )}
-
-            {/* Domain bars */}
-            {domainBars.length > 0 && (
-              <div className="space-y-3 mb-6">
-                {domainBars.map((bar, i) => (
-                  <div key={bar.label}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[13px] font-medium text-heading">{bar.label}</span>
-                      <span className="text-[12px] font-mono font-semibold text-primary">{bar.grade}</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-black/[0.04] overflow-hidden">
-                      <motion.div
-                        className="h-full rounded-full"
-                        style={{ background: 'linear-gradient(90deg, #B45309, #D97706)' }}
-                        initial={{ width: 0 }}
-                        animate={{ width: `${bar.pct}%` }}
-                        transition={{ type: 'spring', stiffness: 40, damping: 20, delay: 0.3 + i * 0.1 }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Gradient fade overlay for hidden content */}
-            <div className="relative">
-              <div className="space-y-3 opacity-30 blur-[2px]">
-                <div className="h-4 bg-black/[0.04] rounded w-3/4" />
-                <div className="h-4 bg-black/[0.04] rounded w-full" />
-                <div className="h-4 bg-black/[0.04] rounded w-2/3" />
-                <div className="h-4 bg-black/[0.04] rounded w-5/6" />
-                <div className="h-4 bg-black/[0.04] rounded w-1/2" />
-              </div>
-              <div className="absolute inset-0 bg-gradient-to-t from-surface-raised to-transparent" />
-            </div>
-
-            <div className="text-center mt-4">
-              <p className="text-[13px] text-muted">
-                Sign up to see strengths, improvements, and learning points
-              </p>
-            </div>
-          </Container>
-        </motion.div>
-
-        {/* Auth panel */}
-        <motion.div
-          className="w-full lg:w-[400px] shrink-0"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
-          <AuthCard
-            title={authMode === 'sign-up' ? 'Create Account' : 'Sign In'}
-            subtitle={authMode === 'sign-up' ? 'Unlock your full feedback report' : 'Welcome back'}
-          >
-            {/* Toggle */}
-            <div className="flex bg-black/[0.03] rounded-xl p-1 mb-5">
-              <button
-                onClick={() => setAuthMode('sign-up')}
-                className={`flex-1 min-h-[44px] py-2 rounded-lg text-[13px] font-semibold transition-all cursor-pointer ${
-                  authMode === 'sign-up'
-                    ? 'bg-white shadow-sm text-heading'
-                    : 'text-muted hover:text-heading'
-                }`}
-              >
-                Sign Up
-              </button>
-              <button
-                onClick={() => setAuthMode('sign-in')}
-                className={`flex-1 min-h-[44px] py-2 rounded-lg text-[13px] font-semibold transition-all cursor-pointer ${
-                  authMode === 'sign-in'
-                    ? 'bg-white shadow-sm text-heading'
-                    : 'text-muted hover:text-heading'
-                }`}
-              >
-                Sign In
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {authMode === 'sign-up' && (
-                <AuthInput
-                  label="Full Name"
-                  type="text"
-                  icon="user"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Dr. John Smith"
-                  required
-                  autoComplete="name"
-                />
-              )}
-
-              <AuthInput
-                label="Email Address"
-                type="email"
-                icon="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="doctor@example.com"
-                required
-                autoComplete="email"
-              />
-
-              <AuthInput
-                label="Password"
-                type="password"
-                icon="lock"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Minimum 8 characters"
-                required
-                minLength={8}
-                autoComplete={authMode === 'sign-up' ? 'new-password' : 'current-password'}
-              />
-
-              {error && (
-                <div className="p-3 bg-danger/10 border border-danger/20 rounded-lg">
-                  <p className="text-danger text-sm text-center">{error}</p>
-                </div>
-              )}
-
-              <PrimaryButton type="submit" fullWidth disabled={loading}>
-                {loading
-                  ? 'Please wait...'
-                  : authMode === 'sign-up'
-                    ? 'Sign Up & View Feedback'
-                    : 'Sign In & View Feedback'
-                }
-              </PrimaryButton>
-            </form>
-
-            {authMode === 'sign-in' && (
-              <div className="mt-4 text-center">
-                <Link href="/auth/forgot-password" className="text-[13px] text-primary hover:underline transition-colors">
-                  Forgot password?
-                </Link>
-              </div>
-            )}
-          </AuthCard>
-        </motion.div>
+      {/* The offer, at the moment the product has just proved itself. */}
+      <div className="mx-auto max-w-[1180px] px-5 pb-6 sm:px-7 lg:px-10">
+        <div className="border-t border-[#E4DDC9] pt-10 text-center">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#854F0B] sm:text-xs">
+            That was 1 of 200 stations
+          </p>
+          <h2 className="mx-auto mt-2 max-w-xl text-2xl font-semibold tracking-tight text-heading sm:text-3xl">
+            Keep practising until you pass — or we pay you £500.
+          </h2>
+        </div>
       </div>
+      <PricingTable />
+      <GuaranteeCard />
     </div>
   );
 }

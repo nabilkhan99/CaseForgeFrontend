@@ -3,6 +3,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { getTrialState, markTrialSessionStarted } from '@/lib/trial/storage';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -79,17 +80,23 @@ export default function TryReadingPhasePage() {
     const sessionId = crypto.randomUUID();
 
     try {
+      const trial = getTrialState();
       const res = await fetch('/api/try/create-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, stationId }),
+        body: JSON.stringify({ sessionId, stationId, knownEmail: trial.email }),
       });
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
+        if (errData.code === 'free_station_used') {
+          router.push(trial.feedbackUrl ?? '/#pricing');
+          return;
+        }
         throw new Error(errData.error || 'Failed to create session');
       }
 
+      markTrialSessionStarted(sessionId);
       router.push(`/try/session/${sessionId}?stationId=${stationId}`);
     } catch (err) {
       setStarting(false);

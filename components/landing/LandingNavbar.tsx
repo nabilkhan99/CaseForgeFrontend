@@ -3,7 +3,8 @@
 import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { getTrialState } from '@/lib/trial/storage';
 
 interface LandingNavbarProps {
   user: { id: string } | null;
@@ -12,6 +13,18 @@ interface LandingNavbarProps {
 
 export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [trialCta, setTrialCta] = useState<{ label: string; href: string }>({
+    label: 'Try Free Mock Station',
+    href: '/try',
+  });
+
+  // Once the free station is used, the CTA deep-links back to their report.
+  useEffect(() => {
+    const trial = getTrialState();
+    if (trial.used && trial.feedbackUrl) {
+      setTrialCta({ label: 'See your feedback', href: trial.feedbackUrl });
+    }
+  }, []);
   const { scrollYProgress } = useScroll();
 
   const navBg = useTransform(
@@ -81,13 +94,13 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
                   </motion.div>
                 </Link>
               ) : (
-                <Link href="/try">
+                <Link href={trialCta.href}>
                   <motion.div
                     className="primary-button text-[13px] !py-2 !px-5 !rounded-full"
                     whileHover={{ y: -2 }}
                     whileTap={{ scale: 0.98 }}
                   >
-                    Try Free Mock Station
+                    {trialCta.label}
                   </motion.div>
                 </Link>
               )}
@@ -155,9 +168,9 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
                     <div className="primary-button text-[14px] w-full justify-center">Dashboard</div>
                   </Link>
                 ) : (
-                  <Link href="/try" onClick={() => setMobileOpen(false)}>
+                  <Link href={trialCta.href} onClick={() => setMobileOpen(false)}>
                     <div className="primary-button text-[14px] w-full justify-center mt-1">
-                      Try Free Mock Station
+                      {trialCta.label}
                     </div>
                   </Link>
                 )}

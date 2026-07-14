@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import Container from '@/components/ui/Container';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import DomainTag from '@/components/ui/DomainTag';
+import { getTrialState } from '@/lib/trial/storage';
 
 interface FreeCaseStation {
   id: string;
@@ -22,11 +23,14 @@ export default function TryCasePickerPage() {
   const [cases, setCases] = useState<FreeCaseStation[]>([]);
   const [loading, setLoading] = useState(true);
   const [trialUsed, setTrialUsed] = useState(false);
+  const [feedbackUrl, setFeedbackUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check free trial cookie
-    if (document.cookie.includes('ff_free_trial_used=true')) {
+    // One free station per person (device flag; email dedupe backs it server-side)
+    const trial = getTrialState();
+    if (trial.used) {
       setTrialUsed(true);
+      setFeedbackUrl(trial.feedbackUrl);
       setLoading(false);
       return;
     }
@@ -65,18 +69,21 @@ export default function TryCasePickerPage() {
             </svg>
           </div>
           <h1 className="text-[28px] font-bold text-heading tracking-[-0.02em] mb-3">
-            You&apos;ve Tried Your Free Case
+            You&apos;ve used your free mock station
           </h1>
           <p className="text-[15px] text-muted leading-relaxed mb-8">
-            Sign up to unlock unlimited practice sessions and track your progress across all 250+ cases.
+            Join a plan for unlimited practice across all 200 stations — pass them all, and if you
+            still fail your SCA, we pay you £500.
           </p>
           <div className="space-y-3">
-            <Link href="/auth/sign-up" className="block">
-              <PrimaryButton fullWidth>Create Account</PrimaryButton>
-            </Link>
-            <Link href="/pricing" className="block">
+            {feedbackUrl && (
+              <Link href={feedbackUrl} className="block">
+                <PrimaryButton fullWidth>See your feedback</PrimaryButton>
+              </Link>
+            )}
+            <Link href="/#pricing" className="block">
               <button className="w-full min-h-[44px] py-2.5 text-[14px] font-medium text-primary hover:underline cursor-pointer">
-                See Plans &rarr;
+                See plans &rarr;
               </button>
             </Link>
           </div>
@@ -98,13 +105,13 @@ export default function TryCasePickerPage() {
           className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-semibold uppercase tracking-wide mb-4"
           style={{ background: 'rgba(180,83,9,0.06)', color: '#92400E' }}
         >
-          Free Trial
+          Free Mock Station
         </span>
         <h1 className="text-[32px] font-bold text-heading tracking-[-0.02em] mb-3">
-          Try a Free Case
+          Try a Free Mock Station
         </h1>
         <p className="text-[15px] text-muted leading-relaxed">
-          Pick a station and start a consultation. No account needed.
+          Pick a station and start a voice consultation. No account needed.
         </p>
       </motion.div>
 
@@ -164,7 +171,7 @@ export default function TryCasePickerPage() {
         transition={{ delay: 0.4 }}
       >
         <p className="text-[13px] text-muted mb-3">
-          After completing your consultation, sign up to receive your detailed AI feedback report.
+          After your consultation, enter your email to unlock your full feedback report.
         </p>
         <Link
           href="/auth/sign-in"
