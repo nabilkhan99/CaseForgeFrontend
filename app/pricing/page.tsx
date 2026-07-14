@@ -5,55 +5,7 @@ import LandingFooter from '@/components/landing/LandingFooter';
 import { Faq, GuaranteeCard, NhsBanner } from '@/components/landing/v5';
 import PricingTable from '@/components/landing/v5/PricingTable';
 
-function PricingContent() {
-  const searchParams = useSearchParams();
-  const showUpgradeBanner = searchParams.get('upgrade') === 'true';
-
-  const [user, setUser] = useState<User | null>(null);
-  const [currentPlan, setCurrentPlan] = useState<string | null>(null);
-  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
-
-  useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user ?? null);
-      if (user) {
-        fetch('/api/subscription')
-          .then((r) => r.json())
-          .then((data) => {
-            if (data.subscription) {
-              setCurrentPlan(data.subscription.plan);
-            }
-          });
-      }
-    });
-  }, []);
-
-  const handleCheckout = async (plan: string) => {
-    if (!user) {
-      window.location.href = `/auth/sign-up?redirect=/pricing`;
-      return;
-    }
-
-    setCheckoutLoading(plan);
-    try {
-      const res = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan }),
-      });
-      const data = await res.json();
-
-      if (data.url) {
-        window.location.href = data.url;
-      } else if (data.redirect) {
-        window.location.href = data.redirect;
-      }
-    } catch {
-      setCheckoutLoading(null);
-    }
-  };
-
+export default function PricingPage() {
   return (
     <div className="min-h-[100dvh] bg-[#F7F2E7] font-sans">
       <LandingNavbar user={null} />
@@ -76,19 +28,5 @@ function PricingContent() {
       </main>
       <LandingFooter />
     </div>
-  );
-}
-
-export default function PricingPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="min-h-[100dvh] bg-surface flex items-center justify-center">
-          <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-        </div>
-      }
-    >
-      <PricingContent />
-    </Suspense>
   );
 }
