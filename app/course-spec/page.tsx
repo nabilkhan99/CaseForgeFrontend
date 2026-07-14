@@ -8,15 +8,15 @@ import PrintButton from './PrintButton';
 // navigation: its job is to receive TPDs and study leave teams, not to sell.
 
 export const metadata: Metadata = {
-  title: 'SCA Complete Programme — Course Specification | Fourteen Fisherman',
+  title: 'Complete SCA Course — Course Specification | Fourteen Fisherman',
   description:
-    'Course specification for the SCA Complete Programme: a 3-month structured MRCGP SCA preparation course. For Training Programme Directors, Educational Supervisors and study leave teams assessing a study budget application.',
+    'Course specification for the Complete SCA Course: a structured MRCGP SCA preparation course with 3 months of access. For Training Programme Directors, Educational Supervisors and study leave teams assessing a study budget application.',
 };
 
 const APPROVER_EMAIL = 'education@fourteenfisherman.com';
 
 const SUMMARY_ROWS: ReadonlyArray<readonly [string, string]> = [
-  ['Course title', 'SCA Complete Programme'],
+  ['Course title', 'Complete SCA Course'],
   ['Provider', 'Fourteen Fisherman, operated by Phenolabs Limited (UK)'],
   [
     'Course type',
@@ -24,21 +24,24 @@ const SUMMARY_ROWS: ReadonlyArray<readonly [string, string]> = [
   ],
   [
     'Format',
-    'Fully remote. Live teaching and live small-group coaching, with structured consultation practice between sessions',
-  ],
-  ['Duration', '3 months, with a fixed start and end date per intake'],
-  [
-    'Intakes',
-    'Monthly. Each intake has published session dates confirmed at booking',
+    'Fully remote. On-demand lectures and one full-day live small-group coaching session, with structured consultation practice throughout',
   ],
   [
-    'Live contact hours',
-    '21 hours: 12 hours of teaching (3 half-day sessions) and 9 hours of coaching (3 sessions, maximum class size of 6)',
+    'Duration',
+    "3 months' access from the date of purchase. Purchases made before the course opens on 1 September 2026 begin on 1 September 2026",
+  ],
+  [
+    'Coaching day',
+    'One full day, 9am to 6pm, live and remote, on a published Saturday or Sunday date chosen by the trainee at booking',
+  ],
+  [
+    'Taught content',
+    '21 hours: 12 hours of recorded lectures available on demand, and 9 hours of live coaching in a single full-day session (maximum class size of 6)',
   ],
   ['Fee', '£599, one-off. No subscription, no renewal, no additional costs'],
   [
     'Certificate',
-    'Certificate of completion issued to every trainee at the end of the programme',
+    'Certificate of completion issued to every trainee at the end of the course',
   ],
 ];
 
@@ -49,7 +52,7 @@ const DOMAINS: ReadonlyArray<readonly [string, string]> = [
   ],
   [
     'Clinical management skills',
-    'safe, evidence-based management planning, safety netting and follow-up, taught in the live sessions and assessed in every practice case.',
+    'safe, evidence-based management planning, safety netting and follow-up, taught in the lectures and assessed in every practice case.',
   ],
   [
     'Relating to others',
@@ -59,12 +62,12 @@ const DOMAINS: ReadonlyArray<readonly [string, string]> = [
 
 const FAQS: ReadonlyArray<readonly [string, string]> = [
   [
-    'Who delivers the teaching and coaching?',
-    'Live sessions are delivered by an experienced GP educator involved in building the course and its case library. Coaching is delivered in groups of no more than 6 to keep feedback individual.',
+    'Who delivers the lectures and coaching?',
+    'The lectures and coaching are delivered by an experienced GP educator involved in building the course and its case library. Coaching runs in classes of no more than 6 to keep feedback individual.',
   ],
   [
-    'What happens if a trainee misses a session?',
-    'Teaching sessions are recorded for catch-up. Coaching sessions run live; where a trainee cannot attend, we try to place them in another class that month where space allows.',
+    'What happens if a trainee misses their coaching day?',
+    'The lectures are on demand, so there is nothing to miss there. The coaching day runs live; where a trainee cannot attend their chosen date, we try to place them on another published coaching day where space allows.',
   ],
   [
     'Is any real exam content used?',
@@ -124,7 +127,7 @@ export default function CourseSpecPage() {
       <main className="px-5 py-8 sm:px-8 sm:py-12 print:p-0">
         <article className="mx-auto max-w-3xl rounded-2xl border border-[#E4DDC9] bg-white p-6 shadow-elevation-1 sm:p-12 print:max-w-none print:rounded-none print:border-0 print:p-0 print:shadow-none">
           <h1 className="text-xl font-semibold leading-snug text-heading sm:text-3xl">
-            SCA Complete Programme: course specification
+            Complete SCA Course: course specification
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-body sm:text-[15px]">
             For Training Programme Directors, Educational Supervisors and study
@@ -159,44 +162,47 @@ export default function CourseSpecPage() {
 
           <SectionHeading>What the fee includes</SectionHeading>
           <Paragraph>
-            The £599 fee covers the full 3-month course: all live teaching, all
-            small-group coaching, unlimited consultation practice across the
-            full case library for the duration of the course, personalised
-            feedback, and the completion certificate. Access to the practice
-            platform is included as part of the course cost for the course
-            period. There are no further charges of any kind.
+            The £599 fee covers the full course: all 12 hours of on-demand
+            lectures, the full-day small-group coaching session, unlimited
+            consultation practice across the full case library for the 3-month
+            access period, personalised feedback, and the completion
+            certificate. Access to the practice platform is included as part of
+            the course cost for the course period. There are no further charges
+            of any kind.
           </Paragraph>
 
           <SectionHeading>Course structure</SectionHeading>
           <Paragraph>
             <strong className="font-semibold text-heading">
-              Live teaching: 12 hours.
+              On-demand lectures: 12 hours.
             </strong>{' '}
-            Three half-day sessions (4 hours each), one per month, delivered by
-            an experienced GP educator. The teaching covers consultation
-            frameworks, time management, how each SCA marking domain is
-            assessed, common reasons candidates fail and how to avoid them, and
-            difficult consultation types including breaking bad news,
-            negotiation, third-party and telephone consultations. Sessions are
-            recorded, so a trainee who misses one can catch up in full.
+            A structured lecture series delivered by an experienced GP
+            educator, available on demand throughout the trainee&apos;s access
+            period and watchable as often as needed. The lectures cover
+            consultation frameworks, time management, how each SCA marking
+            domain is assessed, common reasons candidates fail and how to avoid
+            them, and difficult consultation types including breaking bad news,
+            negotiation and third-party consultations.
           </Paragraph>
           <Paragraph>
             <strong className="font-semibold text-heading">
-              Small-group coaching: 9 hours.
+              Small-group coaching: one full day, 9 hours.
             </strong>{' '}
-            Three sessions (3 hours each), one per month, in a fixed class of
-            no more than 6 trainees. Each session runs 6 full 12-minute mock
-            stations, one consulted by each trainee, with structured feedback
-            from the coach on how the consultation would be assessed against
-            the three marking domains and what to improve. Trainees also learn
-            from observing and debriefing their peers&apos; stations.
+            A single full-day live session, 9am to 6pm, in a class of no more
+            than 6 trainees, on a published weekend date chosen at booking. The
+            day runs 12 full timed mock stations — each trainee consults 2
+            themselves, live with the tutor — with structured feedback on how
+            each consultation would be assessed against the three marking
+            domains and what to improve, alongside focused teaching blocks on
+            exam technique. Trainees also learn from observing and debriefing
+            their peers&apos; stations.
           </Paragraph>
           <Paragraph>
             <strong className="font-semibold text-heading">
               Structured consultation practice: throughout.
             </strong>{' '}
             Unlimited voice consultation practice across 200 cases built
-            directly from the RCGP curriculum, available for the full course
+            directly from the RCGP curriculum, available for the full access
             period. Every case is scored across the three official SCA marking
             domains, with personalised feedback mapped to each domain after
             every attempt.
@@ -227,25 +233,25 @@ export default function CourseSpecPage() {
           <SectionHeading>Why this is a course, not a subscription</SectionHeading>
           <Paragraph>
             Several deanery policies distinguish courses from subscriptions, so
-            for clarity: the SCA Complete Programme has a fixed start and end
-            date, a defined syllabus, 21 hours of live taught content delivered
-            to a cohort, a maximum class size for coaching, and a certificate
-            of completion. The fee is a one-off course fee, not a recurring
-            payment, and there is no auto-renewal. Practice platform access is
-            included as part of the course cost for the duration of the course,
-            in the same way course materials are included in a taught course
-            fee.
+            for clarity: the Complete SCA Course has a defined syllabus, 21
+            hours of structured taught content, a scheduled live coaching day
+            with a maximum class size, a fixed 3-month access period, and a
+            certificate of completion. The fee is a one-off course fee, not a
+            recurring payment, and there is no auto-renewal. Practice platform
+            access is included as part of the course cost for the duration of
+            the course, in the same way course materials are included in a
+            taught course fee.
           </Paragraph>
 
           <SectionHeading>Study leave impact</SectionHeading>
           <Paragraph>
-            All live sessions run at weekends, so the course typically requires
-            no time away from clinical duties and no rota adjustment. For most
-            trainees this is a funding-only application rather than a request
-            for study leave time. Where a trainee wishes to apply for study
-            leave time for online learning, we provide the indicative course
-            hours above and can confirm session dates in writing for any
-            intake.
+            The lectures are on demand and the coaching day runs at a weekend,
+            so the course typically requires no time away from clinical duties
+            and no rota adjustment. For most trainees this is a funding-only
+            application rather than a request for study leave time. Where a
+            trainee wishes to apply for study leave time for online learning,
+            we provide the indicative course hours above and can confirm the
+            trainee&apos;s coaching day date in writing.
           </Paragraph>
 
           <SectionHeading>Documentation provided</SectionHeading>
@@ -253,7 +259,7 @@ export default function CourseSpecPage() {
           <ol className="mb-4 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-body sm:text-[15px]">
             <li>
               An itemised invoice in the trainee&apos;s own name, stating the
-              course title, intake dates and the one-off fee, issued by
+              course title, coaching day date and the one-off fee, issued by
               Phenolabs Limited.
             </li>
             <li>
@@ -261,9 +267,9 @@ export default function CourseSpecPage() {
               documentation.
             </li>
             <li>
-              A certificate of completion at the end of the programme,
-              confirming participation across the teaching, coaching and
-              consultation practice components.
+              A certificate of completion at the end of the course, confirming
+              participation across the lectures, coaching and consultation
+              practice components.
             </li>
           </ol>
 
@@ -292,7 +298,7 @@ export default function CourseSpecPage() {
           </dl>
 
           <footer className="mt-10 border-t border-[#E4DDC9] pt-5 text-xs leading-relaxed text-muted">
-            SCA Complete Programme, Fourteen Fisherman, operated by Phenolabs
+            Complete SCA Course, Fourteen Fisherman, operated by Phenolabs
             Limited. This specification is current as of July 2026. For
             approver enquiries: <ApproverEmailLink />.
           </footer>

@@ -8,7 +8,7 @@ interface Step {
 }
 
 const STEPS: Step[] = [
-  { number: 1, text: 'Subscribe to any of our plans' },
+  { number: 1, text: 'Join any of our plans' },
   {
     number: 2,
     text: 'Pass all 200 mock AI SCA stations. Unlimited attempts, no credits',

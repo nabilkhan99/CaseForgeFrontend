@@ -20,23 +20,7 @@ export default function ChapterBrief() {
             </span>
             <span className="text-[12px] text-stone-600">12 (DOB: 14/05/2013)</span>
           </div>
-          <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-black/[0.02]">
-            <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide w-[110px] flex-shrink-0 pt-0.5">
-              Father&apos;s Name
-            </span>
-            <span className="text-[12px] text-stone-600">David Thompson</span>
-          </div>
         </div>
-      </div>
-
-      {/* Situation */}
-      <div className="mb-4">
-        <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-2">
-          Situation
-        </div>
-        <p className="text-[13px] text-body leading-[1.7]">
-          Telephone Consultation.
-        </p>
       </div>
 
       {/* Reason for encounter */}
@@ -62,20 +46,6 @@ export default function ChapterBrief() {
           Medical Records
         </div>
         <div className="flex flex-col gap-1.5">
-          <div className="flex items-start gap-2">
-            <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide w-[64px] flex-shrink-0 pt-0.5">
-              PMH
-            </span>
-            <span className="text-[12px] text-stone-600 leading-[1.5]">
-              Fit and well. No regular medications.
-            </span>
-          </div>
-          <div className="flex items-start gap-2">
-            <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide w-[64px] flex-shrink-0 pt-0.5">
-              Allergies
-            </span>
-            <span className="text-[12px] text-stone-600 leading-[1.5]">NKDA.</span>
-          </div>
           <div className="flex items-start gap-2">
             <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide w-[64px] flex-shrink-0 pt-0.5">
               FHx

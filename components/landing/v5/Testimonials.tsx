@@ -71,24 +71,24 @@ const ZainAvatar = (
 const TESTIMONIALS: Testimonial[] = [
   {
     name: 'Dr Amir Hussain',
-    meta: 'GP Registrar, London',
+    meta: 'GP Registrar, Wessex',
     avatar: SarahAvatar,
     quote:
-      'I thought timed mocks with a study partner were the best prep I’d get, but this was remarkably close. Every AI patient responds like a real patient in clinic, and the feedback is genuinely specific: it showed me exactly what I was missing and how to fix it, like an ES sitting in on your consult. Best of all I could do it at 6am or after a late shift, whenever I actually had the time.',
+      'I’d tried other AI tools before and wasn’t impressed, so I went in sceptical. But with Fourteen Fisherman, the AI patients behave like the ones in my actual clinics, and the feedback was specific enough to feel like having my ES sit in on the consult. I fitted it into odd bits of time between clinics, which would’ve been impossible to arrange with a study partner.',
   },
   {
     name: 'Dr Harmeet Makan',
     meta: 'GP Registrar, East Midlands',
     avatar: JamesAvatar,
     quote:
-      'Doing a full timed mock in front of five others was daunting, but the GP tutor’s breakdown changed how I consult. With only six of us, everyone gets their own station pulled apart, there’s time for the tutor to answer your questions and feed back on your own consulting, and I learnt as much dissecting my peers’ mistakes as I did my own. It’s the kind of personal attention you’d never get in a big cohort.',
+      'Consulting a full mock in front of five other trainees was as grim as it sounds, at first. But there were only six of us, so the tutor had time to take my consultation apart properly and show me exactly where I was going wrong and how to fix it. I picked up as much watching the others as I did from my own turn.',
   },
   {
     name: 'Dr Zain Chowdhary',
-    meta: 'GP Registrar, Wessex',
+    meta: 'GP Registrar, London',
     avatar: ZainAvatar,
     quote:
-      'I expected generic exam-technique waffle from the teaching. Instead the live teaching sessions cut straight to what counts: the handful of things that separate a pass from a fail in each domain, and the exact points where candidates quietly lose marks without realising. It reshaped how I consult.',
+      'I expected the usual exam-technique waffle from the lectures. Instead it was super high yield: the few things that actually separate a pass from a fail in each domain, and the small habits costing people marks. I’ve carried so much of it into how I actually consult now.',
   },
 ];
 
@@ -116,9 +116,8 @@ export default function Testimonials() {
                 >
                   ★★★★★
                 </div>
-                <p className="text-xs font-medium text-heading sm:text-sm">
-                  {t.name} · {t.meta}
-                </p>
+                <p className="text-xs font-medium text-heading sm:text-sm">{t.name}</p>
+                <p className="text-[11px] text-muted sm:text-xs">{t.meta}</p>
               </div>
             </div>
             <p className="text-xs leading-relaxed text-body sm:text-sm">

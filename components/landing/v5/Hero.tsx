@@ -24,10 +24,9 @@ export default function Hero() {
           transition={{ duration: 0.5, delay: 0.08 }}
           className="mb-5 font-[family-name:var(--font-display)] text-3xl font-medium leading-[1.35] text-white sm:mb-6 sm:text-5xl lg:text-6xl"
         >
-          Pass 200 mock SCA stations
-          <br />
-          Fail your SCA? We pay you{' '}
-          <span className="text-[#EF9F27]">£500</span>.
+          <span className="whitespace-nowrap">
+            Fail your SCA? We pay you <span className="text-[#EF9F27]">£500</span>.
+          </span>
         </motion.h1>
 
         <motion.p
@@ -37,7 +36,7 @@ export default function Hero() {
           transition={{ duration: 0.5, delay: 0.14 }}
           className="mb-1 text-sm font-medium text-white sm:text-lg"
         >
-          The only complete SCA programme
+          The only complete SCA Course
         </motion.p>
 
         <motion.p
@@ -47,20 +46,20 @@ export default function Hero() {
           transition={{ duration: 0.5, delay: 0.2 }}
           className="mx-auto mb-8 max-w-md text-xs leading-relaxed text-[#B4B2A9] sm:mb-10 sm:max-w-lg sm:text-base"
         >
-          AI Practice <span className="text-[#6E6D68]">+</span> Live
-          Teaching <span className="text-[#6E6D68]">+</span> Small-group
-          coaching
+          AI Practice <span className="text-[#6E6D68]">+</span> On-demand
+          Lectures <span className="text-[#6E6D68]">+</span> Small-Group
+          Coaching
         </motion.p>
 
         <motion.a
-          href="#pricing"
+          href="/try"
           initial={{ opacity: 0, y: 12 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.26 }}
           className="inline-flex items-center gap-2 rounded-lg bg-[#EF9F27] px-7 py-3 text-sm font-semibold text-[#2C2C2A] shadow-[0_3px_12px_rgba(186,117,23,0.45)] transition-transform hover:scale-[1.03] sm:px-9 sm:py-4 sm:text-base"
         >
-          Join next intake
+          Try Free Mock Station
           <ArrowRight className="h-4 w-4" aria-hidden="true" />
         </motion.a>
       </div>

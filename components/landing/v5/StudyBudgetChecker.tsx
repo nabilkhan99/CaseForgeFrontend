@@ -35,8 +35,6 @@ function transformEmailText(text: string): string {
       'I am preparing for the SCA'
     )
     .replace(', GPST3, [Scheme]', '')
-    .split('SCA Complete Programme')
-    .join('Complete SCA Course')
     .replace('Dear [name],\n\n', 'Dear [name],\n\nI hope you are well.\n\n');
 }
 
@@ -130,6 +128,11 @@ export default function StudyBudgetChecker() {
                 onChange={(e) => handleSelect(e.target.value)}
                 className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0"
               >
+                {DEANERIES.filter((d) => d.group === 'Other').map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {deaneryLabel(d)}
+                  </option>
+                ))}
                 {GROUPS.map((group) => (
                   <optgroup key={group} label={group}>
                     {DEANERIES.filter((d) => d.group === group).map((d) => (
@@ -138,11 +141,6 @@ export default function StudyBudgetChecker() {
                       </option>
                     ))}
                   </optgroup>
-                ))}
-                {DEANERIES.filter((d) => d.group === 'Other').map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {deaneryLabel(d)}
-                  </option>
                 ))}
               </select>
             </span>
@@ -201,16 +199,18 @@ function Verdict({ deanery, hasResat, onResitChange }: VerdictProps) {
 
   return (
     <div className="mt-8 rounded-xl bg-[#EEF3F2] p-6 sm:mt-10 sm:p-7">
-      <p
-        className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] sm:text-xs"
-        style={{ color: theme.accent }}
-      >
-        <span
-          className="inline-block h-2 w-2 rounded-full"
-          style={{ background: theme.accent }}
-        />
-        {theme.pill}
-      </p>
+      {deanery.verdict !== 'local' && (
+        <p
+          className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] sm:text-xs"
+          style={{ color: theme.accent }}
+        >
+          <span
+            className="inline-block h-2 w-2 rounded-full"
+            style={{ background: theme.accent }}
+          />
+          {theme.pill}
+        </p>
+      )}
 
       {deanery.resit && (
         <p className="mt-3 text-sm text-body">

@@ -1,6 +1,6 @@
 /**
  * Study budget checker data: per-deanery funding positions for the
- * SCA Complete Programme, checked July 2026 against each deanery's
+ * Complete SCA Course, checked July 2026 against each deanery's
  * most current published study leave policy.
  *
  * The email templates reference fourteenfisherman.com/course-spec —
@@ -315,7 +315,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
     label: 'Not sure yet',
     group: 'Other',
     verdict: 'local',
-    title: 'Deaneries decide locally, so pick yours when you know it',
+    title: 'Deaneries decide locally',
     usesGpCode: false,
     contact: '[your patch or scheme office]',
     body: 'Most English deaneries fund one SCA preparation course (typically up to £600, code GP0001), but each applies its own rules: some fund two, some cap at £500, some run named lists, and the devolved nations differ again. Select your deanery above for the specific position, with the policy evidence quoted.',
@@ -367,7 +367,7 @@ export function buildEmailBody(
     'I am an ST3 on the [scheme name] programme preparing for the SCA. Before booking, I would like to confirm eligibility for study budget reimbursement for the following as my SCA preparation course claim' +
     gpCode +
     ':\n\n' +
-    'SCA Complete Programme, £599 one-off. A 3-month structured course: 12 hours of live teaching, 9 hours of small-group coaching (max class size 6), and consultation practice across 200 cases built from the RCGP curriculum, mapped to the three SCA marking domains. Full course specification: fourteenfisherman.com/course-spec\n\n' +
+    'Complete SCA Course, £599 one-off. A structured course with 3 months of access: 12 hours of on-demand lectures, a full-day small-group coaching session (9am to 6pm, max class size 6), and consultation practice across 200 stations built from the RCGP curriculum, mapped to the three SCA marking domains. Full course specification: fourteenfisherman.com/course-spec\n\n' +
     extra +
     'I have discussed this with my Educational Supervisor and added SCA preparation to my PDP. Could you confirm whether this would be approved, or let me know what else you need?\n\n' +
     'Many thanks,\n[Your name], GPST3, [Scheme]'

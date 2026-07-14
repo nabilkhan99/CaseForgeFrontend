@@ -14,7 +14,7 @@ const FAQS: QA[] = [
     question: 'Will this actually help me pass?',
     answer: [
       "We're confident enough to put real money behind it. Pass all 200 stations, sit your SCA, and if you don't pass, we pay you £500 in cash. No other provider takes that risk with you.",
-      "It's also the most comprehensive SCA preparation you'll find. Most options give you one dimension in isolation: a single day of lectures, a single day of small-group coaching, or an AI subscription on its own. The Complete SCA Course combines all three. You get AI voice practice on 200 stations, three 4-hour teaching sessions from a GP educator who knows what examiners are looking for, and three 3-hour small-group coaching sessions with a GP tutor, where you consult a case in person and get it broken down for you. All three are built from the RCGP curriculum and the three marking domains, so nothing in the real exam catches you out.",
+      "It's also the most comprehensive SCA preparation you'll find. Most options give you one dimension in isolation: a set of lectures, a day of small-group coaching, or an AI subscription on its own. The Complete SCA Course combines all three. You get AI voice practice on 200 stations, 12 hours of lectures from a GP educator who knows what examiners are looking for, and a full-day Small-Group Coaching session with a GP tutor (9am to 6pm), where you consult full mock stations live and get each one broken down for you. All three are built from the RCGP curriculum and the three marking domains, so nothing in the real exam catches you out.",
     ],
   },
   {
@@ -32,50 +32,50 @@ const FAQS: QA[] = [
   {
     question: 'Which plan do I actually need?',
     answer: [
-      'Most trainees choose the Complete SCA Course, which is why we recommend it: AI practice plus live teaching and small-group coaching. The Self-Study plan is the AI practice on its own, best if you just want stations to work through. The Intensive plan adds weekly one-to-one coaching and starts with a call rather than checkout, for trainees who want individual support throughout.',
+      'Most trainees choose the Complete SCA Course, which is why we recommend it: AI practice plus on-demand lectures and Small-Group Coaching. The Self-Study plan is the AI practice on its own, best if you just want stations to work through. The Intensive plan adds weekly one-to-one coaching and starts with a call rather than checkout, for trainees who want individual support throughout.',
     ],
   },
   {
     question: 'Can I start practising straight away?',
     answer: [
-      'Yes. Your AI practice unlocks the moment you join, so you can start your first station today. That access runs for three months. For the Complete SCA Course, the three months are counted from the first day of your intake month, not your join date, so booking earlier means longer access at no extra cost. For example, if you join the November intake on 15 September, you get access straight away on 15 September and keep it until the end of January. With the Self-Study plan, access starts immediately and runs for three months from your purchase date.',
-      'One exception applies to our first intake in September. Because the course goes live on 1 September, all September access, on both the Self-Study and Complete plans, starts on 1 September, whenever you book. If you buy in July or August, your access still begins on 1 September, not on your purchase date.',
+      'Yes. Your AI practice unlocks the moment you buy, and on the Complete SCA Course your on-demand lectures unlock at the same time. Your access runs for 3 months from the day of purchase, on every plan, so you set the pace: there is no fixed schedule to follow.',
+      'One exception applies before launch. The course goes live on 1 September 2026, so if you buy before then, your access starts on 1 September rather than your purchase date.',
     ],
   },
   {
     question: 'Is this actually like the real SCA?',
     answer: [
-      "Yes, deliberately so. Every AI station is a voice consultation, exactly like sitting across from a simulated patient on the day, built from the RCGP curriculum and scored across the three official marking domains: data gathering, clinical management, and relating to others. But practice alone isn't what gets you over the line. The teaching covers the core curriculum in a structured way, so you learn the frameworks properly rather than picking them up piecemeal. The small-group coaching puts you in front of a GP tutor who watches you consult a live case and gives you feedback in person, on your own performance, not a generic model answer. That is the point of blending all three: the AI gives you the volume and repetition, the teaching gives you the structure and raw learning, and the coaching gives you the personalisation. By the time you walk into your SCA, the format, the pressure, and the marking already feel familiar.",
+      "Yes, deliberately so. Every AI station is a voice consultation, exactly like sitting across from a simulated patient on the day, built from the RCGP curriculum and scored across the three official marking domains: data gathering, clinical management, and relating to others. But practice alone isn't what gets you over the line. The lectures cover the core curriculum in a structured way, so you learn the frameworks properly rather than picking them up piecemeal. The Small-Group Coaching puts you in front of a GP tutor who watches you consult a live case and gives you feedback on your own performance, not a generic model answer. That is the point of combining all three: the AI gives you the volume and repetition, the lectures give you the structure and raw learning, and the coaching gives you the personalisation. By the time you walk into your SCA, the format, the pressure, and the marking already feel familiar.",
     ],
   },
   {
-    question: 'When are the live teaching and small-group coaching sessions?',
+    question: 'When do the lectures and the coaching day happen?',
     answer: [
-      'The live teaching and the small-group coaching each run once a month, for every month of your programme. They will not always land on the same weekend as each other, so we give you the exact dates for your intake when you book, or on request. Each session takes place on a Saturday or Sunday, once a month, so you can plan around your timetable well in advance. All sessions are remote, and a link to join is sent in advance.',
+      "The lectures are on demand, so you watch them whenever suits you, from any device, as often as you like, throughout your 3 months' access. Your Small-Group Coaching runs as one full day, 9am to 6pm, on a Saturday or Sunday: you pick your date from the available coaching days at checkout. The coaching day is remote and live, and a link to join is sent in advance.",
     ],
   },
   {
-    question: 'What happens if I miss a session?',
+    question: "What happens if I can't make my coaching day?",
     answer: [
-      "Teaching sessions are recorded, so you can catch up on your own session whenever suits you. Coaching runs live and isn't recorded. If you can't make yours, we'll do our best to fit you into another class that month where a place is free, but we can't promise it, so tell us as early as you can.",
+      "The lectures are on demand, so there is nothing to miss there. The coaching day runs live and isn't recorded, so tell us as early as you can if your date no longer works. We'll do our best to move you onto another coaching day where a place is free, but places are capped at six per class, so we can't promise it.",
     ],
   },
   {
-    question: "What if I don't have three months before my exam?",
+    question: 'What if my exam is soon?',
     answer: [
-      "You can still make it work. Your AI practice is unlimited and available the moment you buy, so you can begin straight away and go at whatever pace your exam date demands. From December 2026, once we've recorded a full teaching cycle, you'll also get access to recorded lectures covering the whole syllabus, so the core content is there even if some of your own live sessions fall close to or after your exam. If your exam is sooner than that, get in touch with us first so we can work out the best way to get you the content you need in time. For coaching, if a slot happens to be free in an earlier class we'll try to get you into it, but that depends on availability and isn't something we can guarantee. Around three months gives you the ideal spacing to absorb everything, but the course can be completed in less time.",
+      "That's exactly what this is built for. Your AI practice is unlimited and available the moment you buy, and the lectures are on demand, so you can work through all 12 hours as quickly as your exam date demands: there is no fixed schedule holding you to a slower pace. For the coaching day, simply pick the date at checkout that falls before your exam; if none of the available days work, contact us.",
     ],
   },
   {
     question: 'How much time will this take each week?',
     answer: [
-      'The AI patients are available to practise with 24/7, so you set the pace around your timetable and fit stations in whenever you have a gap. The only fixed commitment is light: a 4-hour teaching session and a 3-hour coaching session, each once a month on a weekend date confirmed in advance, so you can plan around them.',
+      'The AI patients are available to practise with 24/7, and the lectures are on demand, so you set the pace around your timetable and fit both in whenever you have a gap. The only fixed commitment is one full coaching day, 9am to 6pm on a weekend, on a date you choose at checkout.',
     ],
   },
   {
     question: 'What if I change my mind?',
     answer: [
-      'All of our plans are non-refundable. Please make sure the intake you choose works for you before you complete checkout, and if you are unsure which one suits your exam date, ask us first and we will help you choose.',
+      'All of our plans are non-refundable. Please make sure the coaching day you choose works for you before you complete checkout, and if you are unsure, ask us first and we will help you choose.',
     ],
   },
 ];

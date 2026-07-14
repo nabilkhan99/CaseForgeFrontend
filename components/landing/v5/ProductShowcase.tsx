@@ -19,21 +19,21 @@ interface Step {
 const STEPS: readonly Step[] = [
   {
     key: 'brief',
-    tab: 'The brief',
+    tab: 'Brief',
     title: 'Read your patient brief',
-    copy: 'Every station starts with the same information a real SCA candidate gets.',
+    copy: 'Three minutes to prepare, same format as exam day.',
     Mockup: ChapterBrief,
   },
   {
     key: 'consultation',
-    tab: 'The consultation',
+    tab: 'Consultation',
     title: 'Have the conversation',
     copy: 'Your patient responds in real time with voice.',
     Mockup: ChapterConsultation,
   },
   {
     key: 'feedback',
-    tab: 'The feedback',
+    tab: 'Feedback',
     title: 'See exactly where you stand',
     copy: 'Instant, domain-level scores on the three SCA marking criteria.',
     Mockup: ChapterScore,

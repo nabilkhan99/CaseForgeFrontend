@@ -18,7 +18,7 @@ interface ThanksPageProps {
 
 interface OrderSummary {
   planName: string;
-  intakeLabel: string | null;
+  coachingDayLabel: string | null;
   email: string | null;
 }
 
@@ -30,7 +30,7 @@ async function getOrderSummary(sessionId: string | undefined): Promise<OrderSumm
     const plan = getPlan(session.metadata?.plan ?? '');
     return {
       planName: plan?.name ?? 'your plan',
-      intakeLabel: session.metadata?.intake_label ?? null,
+      coachingDayLabel: session.metadata?.coaching_day_label ?? null,
       email: session.customer_details?.email ?? null,
     };
   } catch (error: unknown) {
@@ -94,8 +94,11 @@ export default async function ThanksPage({ searchParams }: ThanksPageProps) {
         {order ? (
           <p className="text-body text-lg leading-relaxed mb-3">
             Your place on <span className="font-semibold text-heading">{order.planName}</span>
-            {order.intakeLabel ? (
-              <> for the <span className="font-semibold text-heading">{order.intakeLabel}</span> intake</>
+            {order.coachingDayLabel ? (
+              <>
+                {' '}— coaching day{' '}
+                <span className="font-semibold text-heading">{order.coachingDayLabel}</span> —
+              </>
             ) : null}{' '}
             is confirmed.
           </p>
@@ -109,8 +112,8 @@ export default async function ThanksPage({ searchParams }: ThanksPageProps) {
           ) : (
             <>A receipt is on its way to your inbox. </>
           )}
-          We’ll email you before your intake opens with everything you need to get started —
-          your access begins on the 1st of your intake month.
+          We’ll email you with everything you need to get started. Your access runs for 3 months
+          from today — or from 1 September 2026 if you’ve bought before launch.
         </p>
 
         {/* ── Referral block (read-only; code is minted by the Stripe webhook) ── */}

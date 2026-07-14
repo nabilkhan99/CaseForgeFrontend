@@ -122,7 +122,7 @@ export default function ChapterConsultation() {
       </div>
 
       {/* Main voice area */}
-      <div className="flex flex-col items-center justify-center px-6 pt-1 pb-4 min-h-[200px]">
+      <div className="flex flex-col items-center justify-center px-6 pt-1 pb-4 min-h-[140px]">
         {/* Circular audio visualizer */}
         <motion.div
           className="mb-0"
