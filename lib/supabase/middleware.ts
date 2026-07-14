@@ -57,11 +57,54 @@ export async function updateSession(request: NextRequest) {
         return NextResponse.redirect(url);
     }
 
+    // Subscription-gated routes: starting/practising cases requires an active
+    // plan, but completed feedback must remain visible after a free trial or
+    // after a plan expires.
+    const isFeedbackRoute = request.nextUrl.pathname.startsWith('/clinical-master/feedback');
+    const requiresSubscription =
+        request.nextUrl.pathname.startsWith('/clinical-master') && !isFeedbackRoute;
+    if (requiresSubscription && user) {
+        try {
+            const { data: subscription } = await supabase
+                .from('subscriptions')
+                .select('id')
+                .eq('user_id', user.id)
+                .eq('status', 'active')
+                .gt('expires_at', new Date().toISOString())
+                .limit(1)
+                .single();
+
+            if (!subscription) {
+                const url = request.nextUrl.clone();
+                url.pathname = '/pricing';
+                url.searchParams.set('upgrade', 'true');
+                return NextResponse.redirect(url);
+            }
+        } catch {
+            // Fail open — don't block paid users on transient DB errors
+        }
+    }
+
     // If user is authenticated and trying to access auth pages, redirect to dashboard
     const isAuthRoute = request.nextUrl.pathname.startsWith('/auth');
     if (isAuthRoute && user) {
         const url = request.nextUrl.clone();
         url.pathname = '/dashboard';
+        return NextResponse.redirect(url);
+    }
+
+    // Signed-in users should never go through the anonymous free-trial funnel
+    // (it has a sign-up gate and is meant for unauthenticated prospects). Send
+    // them to the full authenticated experience instead. /try/feedback is
+    // excluded: it converts a completed anonymous trial into an account and then
+    // redirects to the real feedback page.
+    const isTrialFunnel =
+        request.nextUrl.pathname.startsWith('/try') &&
+        !request.nextUrl.pathname.startsWith('/try/feedback');
+    if (isTrialFunnel && user) {
+        const url = request.nextUrl.clone();
+        url.pathname = '/dashboard';
+        url.search = '';
         return NextResponse.redirect(url);
     }
 

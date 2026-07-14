@@ -1,12 +1,14 @@
 'use client';
 
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { useLiveKitSession } from '@/hooks/useLiveKitSession';
+import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { createClient } from '@/lib/supabase/client';
 import ConsultationTimer from '@/components/clinical-master/ConsultationTimer';
+import AudioVisualizer from '@/components/clinical-master/AudioVisualizer';
+import LiveTranscript from '@/components/clinical-master/LiveTranscript';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 
 interface StationData {
@@ -14,45 +16,6 @@ interface StationData {
   title: string;
   patient_name: string;
   consultation_duration_seconds: number;
-}
-
-function AudioVisualizer({ active }: { active: boolean }) {
-  const barCount = 48;
-  return (
-    <div className="flex items-center justify-center gap-[3px] h-20 w-full max-w-[400px] mx-auto">
-      {Array.from({ length: barCount }).map((_, i) => {
-        const center = barCount / 2;
-        const dist = Math.abs(i - center) / center;
-        const maxH = active ? 100 - dist * 55 : 15;
-        return (
-          <motion.div
-            key={i}
-            className="rounded-full"
-            style={{
-              width: '3px',
-              background: active
-                ? `linear-gradient(180deg, rgba(180,83,9,${0.8 - dist * 0.4}) 0%, rgba(245,158,11,${0.2 + (1 - dist) * 0.3}) 100%)`
-                : 'rgba(0,0,0,0.08)',
-            }}
-            animate={{
-              height: active
-                ? [
-                    `${10 + Math.sin(i * 0.5) * 6}%`,
-                    `${maxH * (0.3 + Math.sin(i * 0.35 + 1) * 0.7)}%`,
-                    `${10 + Math.sin(i * 0.5 + 2) * 6}%`,
-                  ]
-                : ['15%'],
-            }}
-            transition={
-              active
-                ? { duration: 0.8 + (i % 6) * 0.1, repeat: Infinity, delay: (i % 8) * 0.05, ease: 'easeInOut' }
-                : { duration: 0.3 }
-            }
-          />
-        );
-      })}
-    </div>
-  );
 }
 
 function LiveConsultationContent() {
@@ -67,7 +30,10 @@ function LiveConsultationContent() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [showEndModal, setShowEndModal] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [userId, setUserId] = useState<string | undefined>(undefined);
+  const [showTranscript, setShowTranscript] = useState(false);
+  const isEndingRef = useRef(false);
 
   useEffect(() => {
     async function fetchUser() {
@@ -92,38 +58,46 @@ function LiveConsultationContent() {
     fetchStation();
   }, [stationId]);
 
-  const { isConnected, isSpeaking, connect, endConsultation, setMicMuted, error, status } =
-    useLiveKitSession({
-      sessionId,
-      stationId: stationId || undefined,
-      userId,
-      onSessionStarted: () => {},
-      onConsultationEnded: () => {},
-      onError: () => {},
-    });
-
-  useEffect(() => {
-    if (station && status === 'disconnected') connect();
-  }, [station, status, connect]);
-
-  const finishConsultation = useCallback(async () => {
+  // Graceful end (button, timer, or the model's end_consultation tool): the hook
+  // persists the transcript + moves the session to 'processing', then this fires.
+  const handleEnded = useCallback(() => {
+    isEndingRef.current = true;
     setIsProcessing(true);
-    try {
-      await endConsultation();
-    } catch {
-      // Continue to feedback even if disconnect fails
-    }
     const feedbackUrl = from
       ? `/clinical-master/feedback/${sessionId}?from=${from}`
       : `/clinical-master/feedback/${sessionId}`;
     router.push(feedbackUrl);
-  }, [endConsultation, router, sessionId, from]);
+  }, [router, sessionId, from]);
+
+  const { isConnected, isSpeaking, transcript, connect, endConsultation, disconnect, setMicMuted, error, status } =
+    useRealtimeSession({
+      sessionId,
+      stationId: stationId || undefined,
+      userId,
+      onConsultationEnded: handleEnded,
+      onError: () => {},
+    });
+
+  useEffect(() => {
+    if (station && !isProcessing && !isEndingRef.current && status === 'disconnected') connect();
+  }, [station, isProcessing, status, connect]);
+
+  const handleEndConsultation = useCallback(() => {
+    isEndingRef.current = true;
+    endConsultation();
+  }, [endConsultation]);
 
   const handleToggleMute = () => {
     const newMuted = !isMuted;
     setIsMuted(newMuted);
     setMicMuted(newMuted);
   };
+
+  // Abandon: tear down without saving or generating feedback.
+  const handleLeaveWithoutFinishing = useCallback(() => {
+    disconnect();
+    router.push('/dashboard/library');
+  }, [disconnect, router]);
 
   const patientInitials = station
     ? station.patient_name.split(' ').map(n => n[0]).join('').slice(0, 2)
@@ -159,14 +133,17 @@ function LiveConsultationContent() {
   return (
     <div className="min-h-[100dvh] bg-surface font-sans flex flex-col">
       {/* Top bar */}
-      <div className="h-12 flex items-center justify-between px-6 border-b border-black/[0.06] bg-surface/80 backdrop-blur-xl flex-shrink-0">
-        <div className="hidden sm:block text-[13px] text-muted truncate max-w-[200px]">
-          {station?.patient_name || 'Loading...'}
-        </div>
+      <div className="h-14 flex items-center justify-between px-4 sm:px-6 border-b border-black/[0.06] bg-surface/80 backdrop-blur-xl flex-shrink-0">
+        <button
+          onClick={() => setShowLeaveModal(true)}
+          className="min-h-[44px] min-w-[44px] text-[13px] text-muted hover:text-heading transition-colors flex items-center gap-1 flex-shrink-0 cursor-pointer"
+        >
+          &larr; <span className="hidden sm:inline">Exit</span>
+        </button>
         <ConsultationTimer
-          durationSeconds={station?.consultation_duration_seconds || 480}
+          durationSeconds={station?.consultation_duration_seconds || 720}
           autoStart={isConnected}
-          onComplete={finishConsultation}
+          onComplete={handleEndConsultation}
         />
         <div className="flex items-center gap-2">
           {isConnected && (
@@ -184,9 +161,9 @@ function LiveConsultationContent() {
       </div>
 
       {/* Main voice area */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 gap-8">
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 gap-6 min-h-0">
         {/* Patient avatar with pulse */}
-        <motion.div className="relative" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}>
+        <motion.div className="relative flex-shrink-0" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}>
           <motion.div
             className="absolute rounded-full"
             style={{ inset: '-16px', border: '1.5px solid rgba(180,83,9,0.1)' }}
@@ -208,7 +185,7 @@ function LiveConsultationContent() {
         </motion.div>
 
         {/* Speaking indicator */}
-        <div className="text-center">
+        <div className="text-center flex-shrink-0">
           <motion.div
             className="text-[12px] font-semibold text-primary uppercase tracking-[0.1em] mb-0.5"
             animate={isSpeaking ? { opacity: [1, 0.4, 1] } : { opacity: 0.5 }}
@@ -221,16 +198,20 @@ function LiveConsultationContent() {
           </div>
         </div>
 
-        {/* Waveform */}
-        <AudioVisualizer active={isSpeaking} />
+        {/* Waveform or Transcript */}
+        {showTranscript ? (
+          <LiveTranscript items={transcript} className="flex-1 w-full max-w-[480px] min-h-0" />
+        ) : (
+          <AudioVisualizer active={isSpeaking} />
+        )}
       </div>
 
       {/* Controls bar */}
-      <div className="min-h-[80px] flex items-center justify-center gap-6 px-6 border-t border-black/[0.06] flex-shrink-0 pb-[env(safe-area-inset-bottom)]">
+      <div className="min-h-[80px] flex items-center justify-center gap-3 sm:gap-4 px-4 sm:px-6 border-t border-black/[0.06] flex-shrink-0 pb-[env(safe-area-inset-bottom)]">
         <button
           onClick={handleToggleMute}
           disabled={!isConnected}
-          className="w-11 h-11 rounded-full flex items-center justify-center border border-black/[0.08] cursor-pointer hover:bg-black/[0.02] transition-colors disabled:opacity-40"
+          className="w-11 h-11 rounded-full flex items-center justify-center border border-black/[0.08] cursor-pointer hover:bg-black/[0.02] transition-colors disabled:opacity-40 flex-shrink-0"
         >
           <svg width="16" height="16" viewBox="0 0 14 14" fill="none" className={isMuted ? 'text-danger' : 'text-muted'}>
             {isMuted ? (
@@ -238,6 +219,18 @@ function LiveConsultationContent() {
             ) : (
               <path d="M7 1v12M4 4v6M10 3v8M1 6v2M13 5v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             )}
+          </svg>
+        </button>
+
+        <button
+          onClick={() => setShowTranscript(prev => !prev)}
+          className={`w-11 h-11 rounded-full flex items-center justify-center border cursor-pointer hover:bg-black/[0.02] transition-colors ${
+            showTranscript ? 'border-primary/30 bg-primary/5' : 'border-black/[0.08]'
+          }`}
+          title={showTranscript ? 'Show waveform' : 'Show transcript'}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className={showTranscript ? 'text-primary' : 'text-muted'}>
+            <path d="M2 4h12M2 8h8M2 12h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
         </button>
 
@@ -255,9 +248,10 @@ function LiveConsultationContent() {
 
         <button
           onClick={() => setShowEndModal(true)}
-          className="min-h-[44px] px-5 py-2.5 rounded-xl text-[13px] font-medium text-danger bg-red-50 border border-red-200 hover:bg-red-100 transition-colors cursor-pointer"
+          className="min-h-[44px] px-3 sm:px-5 py-2.5 rounded-xl text-[13px] font-medium text-danger bg-red-50 border border-red-200 hover:bg-red-100 transition-colors cursor-pointer whitespace-nowrap flex-shrink-0"
         >
-          End Consultation
+          <span className="hidden sm:inline">End Consultation</span>
+          <span className="sm:hidden">End</span>
         </button>
       </div>
 
@@ -268,8 +262,19 @@ function LiveConsultationContent() {
         confirmLabel="End Now"
         cancelLabel="Continue"
         variant="danger"
-        onConfirm={() => { setShowEndModal(false); finishConsultation(); }}
+        onConfirm={() => { setShowEndModal(false); handleEndConsultation(); }}
         onCancel={() => setShowEndModal(false)}
+      />
+
+      <ConfirmModal
+        open={showLeaveModal}
+        title="Leave Consultation"
+        message="Leave without finishing? Your progress won't be saved."
+        confirmLabel="Leave"
+        cancelLabel="Stay"
+        variant="danger"
+        onConfirm={() => { setShowLeaveModal(false); handleLeaveWithoutFinishing(); }}
+        onCancel={() => setShowLeaveModal(false)}
       />
     </div>
   );

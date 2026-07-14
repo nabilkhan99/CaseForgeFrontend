@@ -4,7 +4,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-[100dvh] bg-surface font-sans">
       <AppNavbar />
-      <main className="pt-24 pb-16 px-6">
+      <main className="pt-24 pb-16 px-6 pb-[max(4rem,env(safe-area-inset-bottom))]">
         <div className="max-w-[900px] mx-auto">
           {children}
         </div>

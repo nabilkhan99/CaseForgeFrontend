@@ -35,10 +35,8 @@ function StationRow({ station, onStart, onViewFeedback }: {
   const latestAttempt = hasAttempts ? station.attempts[0] : null;
 
   const handleClick = () => {
-    if (hasAttempts && station.attempts.length > 1) {
+    if (hasAttempts) {
       setExpanded(!expanded);
-    } else if (hasAttempts && latestAttempt) {
-      onViewFeedback(latestAttempt.sessionId);
     } else {
       onStart(station.id);
     }
@@ -103,8 +101,8 @@ function StationRow({ station, onStart, onViewFeedback }: {
           </button>
         )}
 
-        {/* Expand indicator for multi-attempt stations */}
-        {hasAttempts && station.attempts.length > 1 && (
+        {/* Expand indicator */}
+        {hasAttempts && (
           <motion.svg
             className="w-4 h-4 text-muted flex-shrink-0"
             fill="none"

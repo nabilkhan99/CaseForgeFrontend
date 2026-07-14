@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import type { CapabilitiesResponse } from '@/lib/types';
 
 interface CapabilitySelectProps {
   selectedCapabilities: string[];
@@ -10,6 +11,7 @@ interface CapabilitySelectProps {
   disabled?: boolean;
   onAISelectToggle?: (enabled: boolean) => void;
   aiSelectEnabled?: boolean;
+  loadCapabilities?: () => Promise<CapabilitiesResponse>;
 }
 
 export function CapabilitySelect({
@@ -18,6 +20,7 @@ export function CapabilitySelect({
   disabled = false,
   onAISelectToggle,
   aiSelectEnabled = false,
+  loadCapabilities = api.getCapabilities,
 }: CapabilitySelectProps) {
   const [capabilities, setCapabilities] = useState<Record<string, string[]>>({});
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +31,7 @@ export function CapabilitySelect({
     const fetchCapabilities = async () => {
       try {
         setIsLoading(true);
-        const response = await api.getCapabilities();
+        const response = await loadCapabilities();
         setCapabilities(response.capabilities);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load capabilities');
@@ -38,7 +41,7 @@ export function CapabilitySelect({
     };
 
     fetchCapabilities();
-  }, []);
+  }, [loadCapabilities]);
 
   const handleAISelect = (e?: React.MouseEvent) => {
     e?.preventDefault();

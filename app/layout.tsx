@@ -37,10 +37,10 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://www.fourteenfisherman.com'),
   applicationName: 'Fourteen Fisherman',
   title: {
-    default: 'Fourteen Fisherman — The Complete SCA Programme',
+    default: 'Fourteen Fisherman — The Complete SCA Course',
     template: '%s | Fourteen Fisherman',
   },
-  description: 'The only complete SCA programme: unlimited AI patient consultations, expert teaching, and small-group coaching. Pass all 200 mock stations — still fail your SCA and we pay you £500.',
+  description: 'AI practice on 200 stations, 12 hours of on-demand lectures and a full-day Small-Group Coaching session. Fail your SCA after passing all 200 stations, and we pay you £500.',
   keywords: 'SCA exam, RCGP, GP training, medical simulation, clinical assessment, AI patient, consultation practice',
   icons: {
     icon: [
@@ -57,8 +57,8 @@ export const metadata: Metadata = {
     type: 'website',
     siteName: 'Fourteen Fisherman',
     url: 'https://www.fourteenfisherman.com/',
-    title: 'Fourteen Fisherman — The Complete SCA Programme',
-    description: 'AI practice + expert teaching + small-group coaching. Pass all 200 mock SCA stations — still fail and we pay you £500.',
+    title: 'Fourteen Fisherman — The Complete SCA Course',
+    description: 'AI practice on 200 stations, 12 hours of on-demand lectures and a full-day Small-Group Coaching session. Fail your SCA after passing all 200 stations, and we pay you £500.',
     images: [
       {
         url: '/opengraph-image.png',
@@ -70,8 +70,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Fourteen Fisherman — The Complete SCA Programme',
-    description: 'AI practice + expert teaching + small-group coaching. Pass all 200 mock SCA stations — still fail and we pay you £500.',
+    title: 'Fourteen Fisherman — The Complete SCA Course',
+    description: 'AI practice on 200 stations, 12 hours of on-demand lectures and a full-day Small-Group Coaching session. Fail your SCA after passing all 200 stations, and we pay you £500.',
     images: ['/twitter-image.png'],
   },
   alternates: {

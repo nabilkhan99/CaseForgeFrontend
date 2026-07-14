@@ -8,6 +8,10 @@ export interface CaseReviewRequest {
   selected_capabilities: string[];
 }
 
+export interface PlaygroundCaseReviewRequest extends CaseReviewRequest {
+  system_prompt: string;
+}
+
 export interface CaseReviewResponse {
   case_title: string;
   review_content: string;
@@ -41,4 +45,9 @@ export interface ExperienceGroupRequest {
 
 export interface ExperienceGroupResponse {
   experience_groups: string[];
+}
+
+export interface PortfolioPromptResponse {
+  system_prompt: string;
+  source: string;
 }
