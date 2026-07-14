@@ -72,11 +72,11 @@ export default function TrustBar() {
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.5 }}
-        className="mx-auto flex max-w-5xl divide-x divide-[#E4DDC9] text-center"
+        className="mx-auto flex max-w-5xl flex-col divide-y divide-[#E4DDC9] text-center sm:flex-row sm:divide-x sm:divide-y-0"
       >
         {STATS.map((stat) => (
-          <div key={stat.headline} className="flex-1 px-2 sm:px-8">
-            <p className="mb-1 text-sm font-medium text-heading sm:mb-2 sm:text-2xl">
+          <div key={stat.headline} className="flex-1 px-2 py-4 first:pt-0 last:pb-0 sm:px-8 sm:py-0 sm:first:pt-0 sm:last:pb-0">
+            <p className="mb-1 text-base font-medium text-heading sm:mb-2 sm:text-2xl">
               {stat.count ? (
                 <>
                   <CountUp
@@ -90,7 +90,7 @@ export default function TrustBar() {
                 stat.headline
               )}
             </p>
-            <p className="text-[10.5px] leading-relaxed text-body sm:text-sm">
+            <p className="text-xs leading-relaxed text-body sm:text-sm">
               {stat.subline}
             </p>
           </div>

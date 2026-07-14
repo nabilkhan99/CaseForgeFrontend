@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Play } from 'lucide-react';
 
@@ -144,6 +145,60 @@ function VideoCard({ handle, gradient, avatar, videoSrc, poster }: VideoCardData
   );
 }
 
+/**
+ * Mobile: a TikTok-style carousel — one dominant centred video with the
+ * neighbours peeking in at the edges, swipeable, looping infinitely. Three
+ * copies of the set render side by side; when the scroll position drifts into
+ * the first or last copy, it silently jumps one set-width back to the middle,
+ * so swiping never reaches an end.
+ */
+function MobileVideoCarousel() {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const extended = [...VIDEOS, ...VIDEOS, ...VIDEOS];
+
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+
+    const setWidth = scroller.scrollWidth / 3;
+    // Start centred on the middle copy's first video.
+    scroller.scrollLeft = setWidth;
+
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const width = scroller.scrollWidth / 3;
+        if (scroller.scrollLeft < width * 0.5) {
+          scroller.scrollLeft += width;
+        } else if (scroller.scrollLeft > width * 1.5) {
+          scroller.scrollLeft -= width;
+        }
+      });
+    };
+
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      scroller.removeEventListener('scroll', onScroll);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  return (
+    <div
+      ref={scrollerRef}
+      className="-mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-[16%] pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:hidden"
+      aria-label="Video testimonials carousel"
+    >
+      {extended.map((video, i) => (
+        <div key={`${video.handle}-${i}`} className="w-[68%] flex-shrink-0 snap-center">
+          <VideoCard {...video} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function VideoProof() {
   return (
     <section className="px-5 py-6 text-center sm:px-8 sm:py-10">
@@ -167,7 +222,9 @@ export default function VideoProof() {
         Don&apos;t just take our word for it.
       </motion.p>
 
-      <div className="mx-auto grid max-w-3xl grid-cols-3 gap-3 sm:gap-6">
+      <MobileVideoCarousel />
+
+      <div className="mx-auto hidden max-w-3xl grid-cols-3 gap-3 sm:grid sm:gap-6">
         {VIDEOS.map((video, i) => (
           <motion.div
             key={video.handle}
