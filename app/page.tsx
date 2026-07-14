@@ -11,7 +11,7 @@ import {
   TrustBar,
   ProductShowcase,
   VideoProof,
-  ProgrammeJourney,
+  CompleteCourse,
   Testimonials,
   StudyBudgetChecker,
   Faq,
@@ -35,7 +35,7 @@ export default function LandingPage() {
         <GuaranteeCard />
         <TrustBar />
         <VideoProof />
-        <ProgrammeJourney />
+        <CompleteCourse />
         <ProductShowcase />
         <Testimonials />
         <StudyBudgetChecker />
