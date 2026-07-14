@@ -75,13 +75,16 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
 
   const email = session.customer_details?.email ?? session.customer_email;
   const plan = session.metadata?.plan;
-  const intakeMonth = session.metadata?.intake_month;
+  const coachingDay = session.metadata?.coaching_day ?? null;
+  const intakeMonth = session.metadata?.intake_month ?? null; // legacy sessions
+  const needsCoachingDay = plan === 'complete';
 
-  if (!email || !plan || !intakeMonth) {
+  if (!email || !plan || (needsCoachingDay && !coachingDay && !intakeMonth)) {
     console.error('[stripe-webhook] session missing required fields', {
       sessionId: session.id,
       hasEmail: Boolean(email),
       plan,
+      coachingDay,
       intakeMonth,
     });
     // 200 so Stripe doesn't retry forever — this needs manual follow-up, not retries.
@@ -89,6 +92,17 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
   }
 
   const supabase = getSupabaseAdmin();
+
+  // The hold's job ends with the session: the paid preorder now occupies the
+  // place, so drop the hold rather than double-counting until it expires.
+  const { error: holdError } = await supabase
+    .from('checkout_holds')
+    .delete()
+    .eq('stripe_session_id', session.id);
+  if (holdError) {
+    console.error('[stripe-webhook] hold release failed (non-fatal)', { sessionId: session.id, error: holdError });
+  }
+
   const buyerEmail = normalizeEmail(email);
   const buyerName = session.customer_details?.name ?? null;
   const referralCode = session.metadata?.referral_code
@@ -102,6 +116,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
       email: buyerEmail,
       full_name: buyerName,
       plan,
+      coaching_day: coachingDay,
       intake_month: intakeMonth,
       amount: session.amount_total ?? 0,
       currency: session.currency ?? 'gbp',

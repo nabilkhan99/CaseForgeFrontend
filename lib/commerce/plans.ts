@@ -23,7 +23,7 @@ export const PLANS: readonly Plan[] = [
     name: 'Self-Study',
     displayPrice: '£199',
     priceSuffix: 'one-off',
-    tagline: '3-month access',
+    tagline: "3 months' access",
     cta: 'checkout',
     ctaLabel: 'Pre-order now',
     highlighted: false,
@@ -33,9 +33,9 @@ export const PLANS: readonly Plan[] = [
     name: 'Complete',
     displayPrice: '£599',
     priceSuffix: 'one-off',
-    tagline: '3-month programme',
+    tagline: "3 months' access",
     cta: 'checkout',
-    ctaLabel: 'Join next intake',
+    ctaLabel: 'Choose your coaching day',
     highlighted: true,
   },
   {
@@ -69,12 +69,15 @@ export function stripePriceIdFor(key: PlanKey): string {
 /** Intensive booking link. */
 export const BOOK_A_CALL_URL = 'https://calendly.com/hello-fourteenfisherman/30min'
 
-export interface IntakeAvailability {
-  month: string // ISO date, first of month, e.g. "2026-09-01"
-  label: string // "September 2026"
-  capacity: number
-  seats_left: number
-  enrol_deadline: string | null
+export interface CoachingDayAvailability {
+  day: string // ISO date of the coaching day, e.g. "2026-09-12"
+  label: string // "Saturday 12 September 2026"
+  capacity: number // displayed capacity, capped at 6
+  places_left: number // displayed places remaining, capped at 6
+  cutoff_at: string // bookings close: midnight (London) the day before
   status: 'open' | 'closed' | 'sold_out'
-  sort_order: number
 }
+
+/** The course goes live on this date; purchases before it start then. */
+export const ACCESS_OPENS = '2026-09-01'
+export const ACCESS_OPENS_LABEL = '1 September 2026'

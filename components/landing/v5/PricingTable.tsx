@@ -1,30 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowRight, Info, X } from 'lucide-react';
-import {
-  BOOK_A_CALL_URL,
-  PLANS,
-  type IntakeAvailability,
-  type Plan,
-} from '@/lib/commerce/plans';
-import IntakeModal from './IntakeModal';
-
-function formatDeadline(iso: string | null): string | null {
-  if (!iso) return null;
-  return new Date(`${iso}T00:00:00`).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'long',
-  });
-}
-
-function formatMonthStart(iso: string): string {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'long',
-  });
-}
+import { BOOK_A_CALL_URL } from '@/lib/commerce/plans';
 
 interface FeatureCell {
   text: string;
@@ -41,19 +21,19 @@ interface FeatureRow {
 const FEATURE_ROWS: readonly FeatureRow[] = [
   {
     label: 'AI consultations',
-    labelSub: '200 cases',
+    labelSub: '200 stations',
     cells: [{ text: 'Unlimited' }, { text: 'Unlimited', sub: '£299 value' }, { text: 'Unlimited' }],
   },
   {
-    label: 'Half-day teaching',
-    cells: [{ text: '', cross: true }, { text: '3 x 4hr sessions', sub: '£599 value' }, { text: '3 x 4hr sessions' }],
+    label: 'On-demand Lectures',
+    cells: [{ text: '', cross: true }, { text: '12 hours', sub: '£599 value' }, { text: '12 hours' }],
   },
   {
-    label: 'Small-group coaching',
+    label: 'Small-Group Coaching',
     cells: [
       { text: '', cross: true },
-      { text: '3 x 3hr sessions', sub: 'Max class size 6 · £599 value' },
-      { text: '3 x 3hr sessions' },
+      { text: 'One full day, 9am to 6pm', sub: 'Max class of 6 · £599 value' },
+      { text: 'One full day, 9am to 6pm' },
     ],
   },
   {
@@ -62,40 +42,222 @@ const FEATURE_ROWS: readonly FeatureRow[] = [
   },
 ];
 
-const checkoutPlans = PLANS.filter((p) => p.cta === 'checkout');
+/** Kicks off Stripe checkout for the Self-Study plan (no coaching day needed). */
+function useSelfStudyCheckout() {
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-/** The three-tier pricing comparison table with live seat availability. */
-export default function PricingTable() {
-  const [intakes, setIntakes] = useState<IntakeAvailability[]>([]);
-  const [modalPlan, setModalPlan] = useState<Plan | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch('/api/intakes')
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
-      .then((data: { intakes: IntakeAvailability[] }) => {
-        if (!cancelled) setIntakes(data.intakes ?? []);
-      })
-      .catch((error: unknown) => {
-        // Table still renders without live seat counts.
-        console.error('[pricing] failed to load intake availability', error);
+  async function start() {
+    if (submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: 'self_study' }),
       });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok || !data.url) {
+        setError(data.error ?? 'Something went wrong — please try again.');
+        setSubmitting(false);
+        return;
+      }
+      window.location.assign(data.url);
+    } catch {
+      setError('Something went wrong — please try again.');
+      setSubmitting(false);
+    }
+  }
 
-  const nextIntake = intakes.find((i) => i.status === 'open') ?? null;
-  const nextDeadline = nextIntake ? formatDeadline(nextIntake.enrol_deadline) : null;
-  const accessDate = nextIntake ? formatMonthStart(nextIntake.month) : '1 September';
+  return { start, submitting, error };
+}
 
-  const scarcityLine = nextIntake
-    ? nextIntake.seats_left <= 0
-      ? `${nextIntake.label.split(' ')[0]} class full — next month open`
-      : nextIntake.seats_left < nextIntake.capacity
-        ? `Only ${nextIntake.seats_left} of ${nextIntake.capacity} places left for ${nextIntake.label.split(' ')[0]}`
-        : `Only ${nextIntake.capacity} places per class`
-    : 'Only 6 places per class';
+function GuaranteeInfo({ align = 'left' }: { align?: 'left' | 'right' }) {
+  return (
+    <div className="group relative inline-flex items-center gap-1">
+      <p className="text-[11px] font-medium text-[#27500A] sm:text-sm">SCA Guarantee</p>
+      <button
+        type="button"
+        aria-label="About the SCA Guarantee: conditional on passing all 200 AI stations"
+        title="Conditional guarantee: to qualify you must first pass all 200 AI stations."
+        className="inline-flex shrink-0 items-center justify-center rounded-full text-[#27500A]/70 transition-colors hover:text-[#27500A] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#27500A]/40"
+      >
+        <Info className="h-3.5 w-3.5" aria-hidden="true" />
+      </button>
+      <div
+        role="tooltip"
+        className={`pointer-events-none absolute top-full z-20 mt-1 w-52 rounded-lg border border-[#E4DDC9] bg-white p-2.5 text-left text-[10px] leading-snug text-body opacity-0 shadow-elevation-3 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 sm:text-[11px] ${
+          align === 'right' ? 'right-0' : 'left-0'
+        }`}
+      >
+        This is a <span className="font-medium text-[#27500A]">conditional</span> guarantee — to qualify
+        you must first pass all 200 AI stations.
+      </div>
+    </div>
+  );
+}
+
+interface CtaButtonsProps {
+  selfStudy: ReturnType<typeof useSelfStudyCheckout>;
+  variant: 'self_study' | 'complete' | 'intensive';
+  fullWidth?: boolean;
+}
+
+function PlanCta({ selfStudy, variant }: CtaButtonsProps) {
+  if (variant === 'self_study') {
+    return (
+      <button
+        type="button"
+        onClick={selfStudy.start}
+        disabled={selfStudy.submitting}
+        className="w-full rounded-lg border border-stone-300 px-2 py-2.5 text-[11px] font-medium text-heading transition-colors hover:bg-surface-warm disabled:opacity-60 sm:text-sm"
+      >
+        {selfStudy.submitting ? 'Redirecting…' : 'Pre-order now'}
+      </button>
+    );
+  }
+  if (variant === 'complete') {
+    return (
+      <Link
+        href="/coaching-day"
+        className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#EF9F27] px-2 py-2.5 text-[11px] font-semibold text-[#2C2C2A] shadow-[0_2px_6px_rgba(186,117,23,0.4)] transition-all hover:brightness-105 sm:text-sm"
+      >
+        Choose your coaching day <ArrowRight className="h-3.5 w-3.5" />
+      </Link>
+    );
+  }
+  return (
+    <a
+      href={BOOK_A_CALL_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="block w-full rounded-lg border border-stone-300 px-2 py-2.5 text-[11px] font-medium text-heading transition-colors hover:bg-surface-warm sm:text-sm"
+    >
+      Book a call
+    </a>
+  );
+}
+
+/** Mobile: one full-width card per plan, same content as its desktop column. */
+function MobileCards({ selfStudy }: { selfStudy: ReturnType<typeof useSelfStudyCheckout> }) {
+  const cards = [
+    {
+      key: 'self_study' as const,
+      name: 'Self-Study',
+      price: '£299',
+      suffix: 'one-off',
+      tagline: "3 months' access",
+      highlighted: false,
+      badge: null,
+      valueLine: null,
+      cellIndex: 0,
+    },
+    {
+      key: 'complete' as const,
+      name: 'Complete SCA Course',
+      price: '£599',
+      suffix: 'one-off',
+      tagline: "3 months' access",
+      highlighted: true,
+      badge: 'Most popular',
+      valueLine: '£1,497 total value',
+      cellIndex: 1,
+    },
+    {
+      key: 'intensive' as const,
+      name: 'Intensive',
+      price: 'From £2,999',
+      suffix: '',
+      tagline: 'By application',
+      highlighted: false,
+      badge: null,
+      valueLine: null,
+      cellIndex: 2,
+    },
+  ];
+
+  return (
+    <div className="flex flex-col gap-4 sm:hidden">
+      {cards.map((card) => (
+        <div
+          key={card.key}
+          className={`overflow-hidden rounded-2xl border shadow-elevation-2 ${
+            card.highlighted ? 'border-[#1D9E75]/40 bg-[#E1F5EE]' : 'border-[#E4DDC9] bg-white'
+          }`}
+        >
+          <div className="relative px-5 pb-4 pt-6 text-center">
+            {card.badge && (
+              <span className="absolute left-1/2 top-2 -translate-x-1/2 whitespace-nowrap rounded-full bg-[#1D9E75] px-2.5 py-0.5 text-[9px] font-medium text-white">
+                {card.badge}
+              </span>
+            )}
+            <p className={`text-sm font-medium ${card.highlighted ? 'text-[#085041]' : 'text-heading'}`}>
+              {card.name}
+            </p>
+            <p className={`mt-1 text-2xl font-medium ${card.highlighted ? 'text-[#085041]' : 'text-heading'}`}>
+              {card.price}{' '}
+              {card.suffix && (
+                <span className={`text-xs font-normal ${card.highlighted ? 'text-[#0F6E56]' : 'text-body'}`}>
+                  {card.suffix}
+                </span>
+              )}
+            </p>
+            <p className={`mt-0.5 text-xs ${card.highlighted ? 'text-[#0F6E56]' : 'text-body'}`}>{card.tagline}</p>
+            {card.valueLine && <p className="mt-0.5 text-xs text-muted line-through">{card.valueLine}</p>}
+          </div>
+
+          <div className={`border-t ${card.highlighted ? 'border-[#1D9E75]/20' : 'border-[#E4DDC9]'}`}>
+            {FEATURE_ROWS.map((row) => {
+              const cell = row.cells[card.cellIndex];
+              return (
+                <div
+                  key={row.label}
+                  className={`flex items-center justify-between gap-3 border-b px-5 py-3 ${
+                    card.highlighted ? 'border-[#1D9E75]/15' : 'border-[#E4DDC9]/70'
+                  }`}
+                >
+                  <div>
+                    <p className="text-[13px] font-medium text-heading">{row.label}</p>
+                    {row.labelSub && <p className="text-[11px] text-muted">{row.labelSub}</p>}
+                  </div>
+                  <div className="text-right">
+                    {cell.cross ? (
+                      <X className="ml-auto h-4 w-4 text-stone-300" aria-label="Not included" />
+                    ) : (
+                      <>
+                        <p className={`text-[13px] font-medium ${card.highlighted ? 'text-[#085041]' : 'text-heading'}`}>
+                          {cell.text}
+                        </p>
+                        {cell.sub && <p className="text-[11px] text-[#0F6E56]">{cell.sub}</p>}
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Guarantee row */}
+            <div className="flex items-center justify-between gap-3 bg-[#EAF3DE] px-5 py-3.5">
+              <GuaranteeInfo />
+              <p className="text-right text-[11px] leading-snug text-[#27500A]">
+                Don’t pass? We pay you £500
+              </p>
+            </div>
+          </div>
+
+          <div className="p-3">
+            <PlanCta selfStudy={selfStudy} variant={card.key} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** The three-tier pricing table: matrix on desktop, stacked cards on mobile. */
+export default function PricingTable() {
+  const selfStudy = useSelfStudyCheckout();
 
   return (
     <section id="pricing" className="scroll-mt-24 px-5 py-6 sm:px-8 sm:py-10">
@@ -110,7 +272,9 @@ export default function PricingTable() {
             Choose your prep
           </p>
 
-          <div className="overflow-hidden rounded-2xl border border-[#E4DDC9] bg-white shadow-elevation-2">
+          <MobileCards selfStudy={selfStudy} />
+
+          <div className="hidden overflow-hidden rounded-2xl border border-[#E4DDC9] bg-white shadow-elevation-2 sm:block">
             <div className="grid grid-cols-[minmax(84px,150px)_repeat(3,minmax(0,1fr))]">
               {/* Plan headers */}
               <div />
@@ -119,7 +283,7 @@ export default function PricingTable() {
                 <p className="mt-1 text-lg font-medium text-heading sm:text-2xl">
                   £299 <span className="text-[10px] font-normal text-body sm:text-xs">one-off</span>
                 </p>
-                <p className="mt-0.5 text-[10px] text-body sm:text-xs">3-month access</p>
+                <p className="mt-0.5 text-[10px] text-body sm:text-xs">3 months&rsquo; access</p>
               </div>
               <div className="relative bg-[#E1F5EE] px-2 pb-3 pt-7 text-center sm:pt-8">
                 <span className="absolute left-1/2 top-2 -translate-x-1/2 whitespace-nowrap rounded-full bg-[#1D9E75] px-2.5 py-0.5 text-[9px] font-medium text-white sm:text-[10px]">
@@ -129,7 +293,7 @@ export default function PricingTable() {
                 <p className="mt-1 text-lg font-medium text-[#085041] sm:text-2xl">
                   £599 <span className="text-[10px] font-normal text-[#0F6E56] sm:text-xs">one-off</span>
                 </p>
-                <p className="mt-0.5 text-[10px] text-[#0F6E56] sm:text-xs">3-month programme</p>
+                <p className="mt-0.5 text-[10px] text-[#0F6E56] sm:text-xs">3 months&rsquo; access</p>
                 <p className="mt-0.5 text-[10px] text-muted line-through sm:text-xs">£1,497 total value</p>
               </div>
               <div className="px-2 pb-4 pt-7 text-center sm:pb-5 sm:pt-8">
@@ -168,25 +332,8 @@ export default function PricingTable() {
               ))}
 
               {/* Guarantee row */}
-              <div className="group relative border-t border-[#E4DDC9] bg-[#EAF3DE] px-2.5 py-3.5 sm:px-4">
-                <div className="flex items-center gap-1">
-                  <p className="text-[11px] font-medium text-[#27500A] sm:text-sm">SCA guarantee</p>
-                  <button
-                    type="button"
-                    aria-label="About the SCA guarantee: conditional on passing all 200 AI stations"
-                    title="Conditional guarantee: to qualify you must first pass all 200 AI stations."
-                    className="inline-flex shrink-0 items-center justify-center rounded-full text-[#27500A]/70 transition-colors hover:text-[#27500A] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#27500A]/40"
-                  >
-                    <Info className="h-3.5 w-3.5" aria-hidden="true" />
-                  </button>
-                </div>
-                <div
-                  role="tooltip"
-                  className="pointer-events-none absolute left-2.5 top-full z-20 mt-1 w-52 rounded-lg border border-[#E4DDC9] bg-white p-2.5 text-left text-[10px] leading-snug text-body opacity-0 shadow-elevation-3 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 sm:left-4 sm:text-[11px]"
-                >
-                  This is a <span className="font-medium text-[#27500A]">conditional</span> guarantee — to qualify
-                  you must first pass all 200 AI stations.
-                </div>
+              <div className="border-t border-[#E4DDC9] bg-[#EAF3DE] px-2.5 py-3.5 sm:px-4">
+                <GuaranteeInfo />
               </div>
               {[0, 1, 2].map((i) => (
                 <div key={i} className="border-l border-t border-[#E4DDC9] bg-[#EAF3DE] px-1.5 py-3.5 text-center">
@@ -198,67 +345,25 @@ export default function PricingTable() {
                 </div>
               ))}
 
-              {/* Availability row */}
-              <div className="border-t border-[#E4DDC9]" />
-              <div className="border-l border-t border-[#E4DDC9] px-1.5 pt-3 text-center">
-                <p className="text-[10px] text-body sm:text-xs">Access from {accessDate}</p>
-              </div>
-              <div className="border-l border-t border-[#E4DDC9] bg-[#E1F5EE] px-1.5 pt-3 text-center">
-                <p className="text-[10px] font-medium text-[#854F0B] sm:text-xs">{scarcityLine}</p>
-                {nextDeadline && <p className="mt-0.5 text-[9px] text-[#0F6E56] sm:text-xs">Enrol by {nextDeadline}</p>}
-              </div>
-              <div className="border-l border-t border-[#E4DDC9] px-1.5 pt-3 text-center">
-                <p className="text-[10px] text-body sm:text-xs">Apply anytime</p>
-              </div>
-
               {/* CTA row */}
-              <div />
-              <div className="p-1.5 text-center sm:p-2.5">
-                <button
-                  type="button"
-                  onClick={() => setModalPlan(checkoutPlans[0])}
-                  className="w-full rounded-lg border border-stone-300 px-2 py-2.5 text-[10px] font-medium text-heading transition-colors hover:bg-surface-warm sm:text-sm"
-                >
-                  Pre-order now
-                </button>
+              <div className="border-t border-[#E4DDC9]" />
+              <div className="border-t border-[#E4DDC9] p-1.5 text-center sm:p-2.5">
+                <PlanCta selfStudy={selfStudy} variant="self_study" />
               </div>
-              <div className="bg-[#E1F5EE] p-1.5 text-center sm:p-2.5">
-                <button
-                  type="button"
-                  onClick={() => setModalPlan(checkoutPlans[1])}
-                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#EF9F27] px-2 py-2.5 text-[10px] font-semibold text-[#2C2C2A] shadow-[0_2px_6px_rgba(186,117,23,0.4)] transition-all hover:brightness-105 sm:text-sm"
-                >
-                  Join next intake <ArrowRight className="h-3.5 w-3.5" />
-                </button>
+              <div className="border-t border-[#E4DDC9] bg-[#E1F5EE] p-1.5 text-center sm:p-2.5">
+                <PlanCta selfStudy={selfStudy} variant="complete" />
               </div>
-              <div className="p-1.5 text-center sm:p-2.5">
-                <a
-                  href={BOOK_A_CALL_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block w-full rounded-lg border border-stone-300 px-2 py-2.5 text-[10px] font-medium text-heading transition-colors hover:bg-surface-warm sm:text-sm"
-                >
-                  Book a call
-                </a>
+              <div className="border-t border-[#E4DDC9] p-1.5 text-center sm:p-2.5">
+                <PlanCta selfStudy={selfStudy} variant="intensive" />
               </div>
-
-              {/* Footnote row inside highlighted column */}
-              <div className="pb-3" />
-              <div className="pb-3" />
-              <div className="bg-[#E1F5EE] px-2 pb-3 text-center">
-                <p className="text-[9px] leading-relaxed text-[#0F6E56] sm:text-[11px]">
-                  Access opens {accessDate} · Prefer a later start? Choose your month at checkout
-                </p>
-              </div>
-              <div className="pb-3" />
             </div>
           </div>
+
+          {selfStudy.error && (
+            <p className="mt-3 text-center text-sm font-medium text-danger">{selfStudy.error}</p>
+          )}
         </motion.div>
       </div>
-
-      {modalPlan && (
-        <IntakeModal plan={modalPlan} intakes={intakes} onClose={() => setModalPlan(null)} />
-      )}
     </section>
   );
 }
