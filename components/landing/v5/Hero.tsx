@@ -24,7 +24,7 @@ export default function Hero() {
           transition={{ duration: 0.5, delay: 0.08 }}
           className="mb-5 font-[family-name:var(--font-display)] text-3xl font-medium leading-[1.35] text-white sm:mb-6 sm:text-5xl lg:text-6xl"
         >
-          <span className="whitespace-nowrap">
+          <span className="sm:whitespace-nowrap">
             Fail your SCA? We pay you <span className="text-[#EF9F27]">£500</span>.
           </span>
         </motion.h1>
