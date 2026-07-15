@@ -219,7 +219,23 @@ function EvidenceBlock({
   );
 }
 
-function LoadingState() {
+function LoadingState({ compact = false }: { compact?: boolean }) {
+  // Compact (trial funnel): the pricing table renders directly below this
+  // component, so the skeleton must not fill the viewport and hide it.
+  if (compact) {
+    return (
+      <div className="bg-surface px-5 py-10">
+        <div className="mx-auto max-w-[1120px] animate-pulse">
+          <div className="mb-6 h-5 w-48 rounded-full bg-stone-200/70" />
+          <div className="mb-4 h-12 w-full max-w-[560px] rounded-xl bg-stone-200/70" />
+          <div className="h-40 rounded-[22px] bg-white/70" />
+          <p className="mt-6 text-sm text-muted">
+            Marking your consultation — this takes a couple of minutes. Your plan options are below.
+          </p>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="min-h-[100dvh] bg-surface px-5 py-10">
       <div className="mx-auto max-w-[1120px] animate-pulse">
@@ -808,11 +824,11 @@ export default function FeedbackReport({ sessionId, variant = 'app', from = null
       .filter(Boolean) as DomainFeedback[];
   }, [feedback]);
 
-  if (loading) return <LoadingState />;
+  if (loading) return <LoadingState compact={isTrial} />;
 
   if (timedOut) {
     return (
-      <div className="min-h-[100dvh] bg-surface px-6 py-16">
+      <div className={`bg-surface px-6 ${isTrial ? 'py-12' : 'min-h-[100dvh] py-16'}`}>
         <div className="mx-auto max-w-md rounded-[22px] border border-black/[0.06] bg-surface-raised p-6 text-center shadow-[0_16px_42px_rgba(180,83,9,0.06)]">
           <p className="mb-2 text-[16px] font-semibold text-heading">Feedback is still processing</p>
           <p className="mb-6 text-sm leading-[1.65] text-muted">
@@ -832,7 +848,7 @@ export default function FeedbackReport({ sessionId, variant = 'app', from = null
 
   if (error || !feedback) {
     return (
-      <div className="min-h-[100dvh] bg-surface px-6 py-16">
+      <div className={`bg-surface px-6 ${isTrial ? 'py-12' : 'min-h-[100dvh] py-16'}`}>
         <div className="mx-auto max-w-md rounded-[22px] border border-black/[0.06] bg-surface-raised p-6 text-center shadow-[0_16px_42px_rgba(180,83,9,0.06)]">
           <p className="mb-2 text-[16px] font-semibold text-heading">Unable to load feedback</p>
           <p className="mb-6 text-sm leading-[1.65] text-muted">Please try again later.</p>
