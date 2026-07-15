@@ -34,6 +34,14 @@ export async function updateSession(request: NextRequest) {
         data: { user },
     } = await supabase.auth.getUser();
 
+    // Preorder state: no self-serve account creation yet. The free-station
+    // funnel (/try) is open, but sign-up stays gated until product launch.
+    if (request.nextUrl.pathname === '/auth/sign-up') {
+        const url = request.nextUrl.clone();
+        url.pathname = '/';
+        return NextResponse.redirect(url);
+    }
+
     // Protected routes - redirect to sign-in if not authenticated
     const isProtectedRoute = (request.nextUrl.pathname.startsWith('/dashboard') ||
         request.nextUrl.pathname.startsWith('/clinical-master')) &&

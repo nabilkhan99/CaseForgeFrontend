@@ -2,7 +2,6 @@
 
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
 import FeedbackReport from '@/components/clinical-master/FeedbackReport';
@@ -149,12 +148,6 @@ export default function TryFeedbackPage() {
             <p className="mt-4 text-[11px] leading-relaxed text-muted">
               By continuing you agree to receive occasional emails about the course — unsubscribe
               anytime.
-            </p>
-            <p className="mt-3 text-[12px] text-muted">
-              Already have an account?{' '}
-              <Link href="/auth/sign-in" className="text-primary hover:underline">
-                Sign in
-              </Link>
             </p>
           </div>
         </motion.div>

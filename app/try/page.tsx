@@ -170,15 +170,9 @@ export default function TryCasePickerPage() {
         animate={{ opacity: 1 }}
         transition={{ delay: 0.4 }}
       >
-        <p className="text-[13px] text-muted mb-3">
+        <p className="text-[13px] text-muted">
           After your consultation, enter your email to unlock your full feedback report.
         </p>
-        <Link
-          href="/auth/sign-in"
-          className="text-[13px] text-primary hover:underline font-medium transition-colors"
-        >
-          Already have an account? Sign in
-        </Link>
       </motion.div>
     </div>
   );
