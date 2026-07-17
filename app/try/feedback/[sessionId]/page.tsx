@@ -12,6 +12,10 @@ import {
   TRIAL_FEEDBACK_URL_KEY,
   TRIAL_USED_KEY,
 } from '@/lib/trial/storage';
+import { SCA_SIT_DATES, TRAINING_STAGES } from '@/lib/trial/leadFields';
+
+const GATE_FIELD_CLASSES =
+  'w-full rounded-xl border border-stone-200 bg-white px-4 py-3 text-[14px] text-heading outline-none transition-colors focus:border-primary';
 
 /**
  * The free mock station reveal: an email-only gate sits between finishing the
@@ -23,6 +27,8 @@ export default function TryFeedbackPage() {
   const sessionId = params.sessionId as string;
 
   const [email, setEmail] = useState('');
+  const [trainingStage, setTrainingStage] = useState('');
+  const [scaSitDate, setScaSitDate] = useState('');
   const [unlocked, setUnlocked] = useState(false);
   const [checkingGate, setCheckingGate] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -50,7 +56,7 @@ export default function TryFeedbackPage() {
       const res = await fetch('/api/try/capture-lead', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, email: email.trim() }),
+        body: JSON.stringify({ sessionId, email: email.trim(), trainingStage, scaSitDate }),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || !data.ok) {
@@ -125,8 +131,58 @@ export default function TryFeedbackPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="doctor@example.com"
-                  className="w-full rounded-xl border border-stone-200 bg-white px-4 py-3 text-[14px] text-heading outline-none transition-colors placeholder:text-stone-400 focus:border-primary"
+                  className={`${GATE_FIELD_CLASSES} placeholder:text-stone-400`}
                 />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="trial-stage"
+                  className="mb-1.5 block text-[13px] font-medium text-heading"
+                >
+                  Stage of training
+                </label>
+                <select
+                  id="trial-stage"
+                  required
+                  value={trainingStage}
+                  onChange={(e) => setTrainingStage(e.target.value)}
+                  className={`${GATE_FIELD_CLASSES} ${trainingStage ? '' : 'text-stone-400'}`}
+                >
+                  <option value="" disabled>
+                    Select your stage
+                  </option>
+                  {TRAINING_STAGES.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="trial-sit-date"
+                  className="mb-1.5 block text-[13px] font-medium text-heading"
+                >
+                  When do you plan to sit the SCA?
+                </label>
+                <select
+                  id="trial-sit-date"
+                  required
+                  value={scaSitDate}
+                  onChange={(e) => setScaSitDate(e.target.value)}
+                  className={`${GATE_FIELD_CLASSES} ${scaSitDate ? '' : 'text-stone-400'}`}
+                >
+                  <option value="" disabled>
+                    Select a window
+                  </option>
+                  {SCA_SIT_DATES.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {error && (

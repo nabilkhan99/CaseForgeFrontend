@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { pushTrialLeadToBrevo } from '@/lib/marketing/trialLead';
+import { SCA_SIT_DATES, TRAINING_STAGES, findOption } from '@/lib/trial/leadFields';
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -12,16 +13,34 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * The email gate between finishing a free mock station and seeing the report.
- * Records the lead in trial_leads and upserts a Brevo contact (best-effort).
+ * Records the lead (email + stage of training + planned SCA sit window) in
+ * trial_leads and upserts a Brevo contact (best-effort).
  * Idempotent: re-submitting the same session or email succeeds quietly.
  */
 export async function POST(req: NextRequest) {
   try {
-    const { sessionId, email } = (await req.json()) as { sessionId?: string; email?: string };
+    const { sessionId, email, trainingStage, scaSitDate } = (await req.json()) as {
+      sessionId?: string;
+      email?: string;
+      trainingStage?: string;
+      scaSitDate?: string;
+    };
 
     const normalizedEmail = email?.trim().toLowerCase() ?? '';
     if (!sessionId || !EMAIL_RE.test(normalizedEmail)) {
       return NextResponse.json({ error: 'A valid email is required' }, { status: 400 });
+    }
+
+    const stage = findOption(TRAINING_STAGES, trainingStage);
+    if (!stage) {
+      return NextResponse.json({ error: 'Please select your stage of training' }, { status: 400 });
+    }
+    const sitDate = findOption(SCA_SIT_DATES, scaSitDate);
+    if (!sitDate) {
+      return NextResponse.json(
+        { error: 'Please select when you plan to sit the SCA' },
+        { status: 400 },
+      );
     }
 
     const supabase = getSupabaseAdmin();
@@ -45,6 +64,8 @@ export async function POST(req: NextRequest) {
       email: normalizedEmail,
       session_id: sessionId,
       station_id: session.station_id ?? null,
+      training_stage: stage.value,
+      sca_sit_date: sitDate.value,
     });
 
     // 23505 = this session or email already captured — that's fine, let them in.
@@ -54,7 +75,13 @@ export async function POST(req: NextRequest) {
     }
 
     const stationTitle = (session.stations as { title?: string } | null)?.title ?? null;
-    await pushTrialLeadToBrevo({ email: normalizedEmail, stationTitle, score: null });
+    await pushTrialLeadToBrevo({
+      email: normalizedEmail,
+      stationTitle,
+      score: null,
+      trainingStage: stage.label,
+      scaSitDate: sitDate.label,
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error: unknown) {

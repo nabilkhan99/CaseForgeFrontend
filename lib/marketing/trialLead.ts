@@ -5,6 +5,8 @@ interface PushTrialLeadArgs {
   email: string
   stationTitle: string | null
   score: string | null
+  trainingStage?: string | null
+  scaSitDate?: string | null
 }
 
 /**
@@ -12,7 +14,13 @@ interface PushTrialLeadArgs {
  * for a nurture sequence. Best-effort: a Brevo failure must never block the
  * feedback reveal — the lead is already recorded in Supabase.
  */
-export async function pushTrialLeadToBrevo({ email, stationTitle, score }: PushTrialLeadArgs): Promise<void> {
+export async function pushTrialLeadToBrevo({
+  email,
+  stationTitle,
+  score,
+  trainingStage,
+  scaSitDate,
+}: PushTrialLeadArgs): Promise<void> {
   const brevoKey = process.env.BREVO_API_KEY
   if (!brevoKey) {
     console.warn('[trial-lead] Brevo push skipped: BREVO_API_KEY not set')
@@ -31,6 +39,8 @@ export async function pushTrialLeadToBrevo({ email, stationTitle, score }: PushT
         TRIAL_STATION: stationTitle ?? '',
         TRIAL_SCORE: score ?? '',
         TRIAL_DATE: new Date().toISOString().slice(0, 10),
+        TRAINING_STAGE: trainingStage ?? '',
+        SCA_SIT_DATE: scaSitDate ?? '',
       },
     })
   } catch (error: unknown) {
