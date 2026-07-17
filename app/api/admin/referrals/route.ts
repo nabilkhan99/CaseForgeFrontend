@@ -33,7 +33,8 @@ export async function GET() {
   const supabase = getSupabaseAdmin();
 
   // ── Lazy qualification (no cron) ──
-  // Flip pending -> qualified for rows past the 14-day window whose preorder is
+  // Flip pending -> qualified for rows past the qualification window (5 days,
+  // floored at the 1 Sept 2026 launch — see PAYOUT_FLOOR_DATE) whose preorder is
   // still paid. Two-step: select eligible ids (guarded by preorder status), then
   // update just those ids so a refunded/canceled preorder can never qualify.
   try {

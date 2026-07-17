@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   CODE_ALPHABET,
   MIN_QUALIFYING_SPEND_BY_PLAN,
+  PAYOUT_FLOOR_DATE,
   QUALIFICATION_WINDOW_DAYS,
   REFERRAL_COOKIE,
   REWARD_BY_PLAN,
@@ -250,30 +251,58 @@ describe('isSelfReferral', () => {
 })
 
 describe('isPastQualificationWindow', () => {
-  const created = new Date('2026-01-01T00:00:00.000Z')
+  // Post-launch reference dates (the payout floor is 2026-09-01).
+  const created = new Date('2026-10-01T00:00:00.000Z')
 
-  it('exposes a 14 day window', () => {
-    expect(QUALIFICATION_WINDOW_DAYS).toBe(14)
+  it('exposes a 5 day window and the launch payout floor', () => {
+    expect(QUALIFICATION_WINDOW_DAYS).toBe(5)
+    expect(PAYOUT_FLOOR_DATE.toISOString()).toBe('2026-09-01T00:00:00.000Z')
   })
 
-  it('is false just inside the window (13d 23h)', () => {
-    const now = new Date(created.getTime() + (13 * 24 + 23) * 60 * 60 * 1000)
+  it('is false just inside the window (4d 23h)', () => {
+    const now = new Date(created.getTime() + (4 * 24 + 23) * 60 * 60 * 1000)
     expect(isPastQualificationWindow(created, now)).toBe(false)
   })
 
-  it('is true exactly on the boundary (14d)', () => {
-    const now = new Date(created.getTime() + 14 * 24 * 60 * 60 * 1000)
+  it('is true exactly on the boundary (5d)', () => {
+    const now = new Date(created.getTime() + 5 * 24 * 60 * 60 * 1000)
     expect(isPastQualificationWindow(created, now)).toBe(true)
   })
 
+  it('never qualifies before the payout floor, however old the referral', () => {
+    const preorderRow = new Date('2026-07-20T00:00:00.000Z') // weeks old by launch
+    const beforeFloor = new Date('2026-08-31T23:59:59.999Z')
+    expect(isPastQualificationWindow(preorderRow, beforeFloor)).toBe(false)
+  })
+
+  it('a pre-launch referral qualifies at the floor instant itself', () => {
+    const preorderRow = new Date('2026-07-20T00:00:00.000Z')
+    expect(isPastQualificationWindow(preorderRow, PAYOUT_FLOOR_DATE)).toBe(true)
+  })
+
+  it('a purchase within 5 days of launch still serves its full window', () => {
+    const lateAugust = new Date('2026-08-29T00:00:00.000Z')
+    expect(isPastQualificationWindow(lateAugust, PAYOUT_FLOOR_DATE)).toBe(false)
+    const fiveDaysOn = new Date(lateAugust.getTime() + 5 * 24 * 60 * 60 * 1000)
+    expect(isPastQualificationWindow(lateAugust, fiveDaysOn)).toBe(true)
+  })
+
   it('qualificationCutoff agrees with the window at, just before, and just after the boundary', () => {
-    const now = new Date('2026-07-01T12:00:00.000Z')
+    const now = new Date('2026-10-15T12:00:00.000Z')
     const cutoff = qualificationCutoff(now)
     for (const offsetMs of [-1, 0, 1]) {
       const createdAt = new Date(cutoff.getTime() + offsetMs)
       // created_at <= cutoff (the .lte DB query) must equal the tested helper
       expect(createdAt.getTime() <= cutoff.getTime()).toBe(isPastQualificationWindow(createdAt, now))
     }
+  })
+
+  it('qualificationCutoff before the floor matches no real row', () => {
+    const beforeFloor = new Date('2026-08-15T00:00:00.000Z')
+    expect(qualificationCutoff(beforeFloor).getTime()).toBe(0)
+    // Equivalence holds for any realistic created_at (post-2020)
+    const createdAt = new Date('2026-07-20T00:00:00.000Z')
+    expect(createdAt.getTime() <= 0).toBe(isPastQualificationWindow(createdAt, beforeFloor))
   })
 })
 

@@ -98,26 +98,43 @@ export function isSelfReferral(referrerEmail: string, refereeEmail: string): boo
   return normalizeEmail(referrerEmail) === normalizeEmail(refereeEmail)
 }
 
-/** Days a referral must age (still-paid) before it qualifies for payout. */
-export const QUALIFICATION_WINDOW_DAYS = 14
+/**
+ * Days a referral must age (still-paid) before it qualifies for payout.
+ * 5 days works because digital access (and the cancellation waiver that comes
+ * with it) starts at the moment of purchase from launch day onward, so the
+ * practical refund window is short. Founder decision 2026-07-17 (Nabil + Ishaq).
+ */
+export const QUALIFICATION_WINDOW_DAYS = 5
+
+/**
+ * No referral qualifies before launch (1 September 2026), however old it is:
+ * pre-order buyers receive nothing until launch, so their refund exposure runs
+ * to this date. Pre-launch referrals qualify on launch day itself (their 5-day
+ * age is already served by then).
+ */
+export const PAYOUT_FLOOR_DATE = new Date('2026-09-01T00:00:00.000Z')
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 
 /**
- * True once `now` is at least QUALIFICATION_WINDOW_DAYS after `createdAt`.
- * Boundary is inclusive: exactly 14 days qualifies, 13d23h does not.
+ * True once `now` is past {@link PAYOUT_FLOOR_DATE} AND at least
+ * QUALIFICATION_WINDOW_DAYS after `createdAt`. Boundaries are inclusive:
+ * exactly 5 days (and exactly the floor instant) qualifies.
  */
 export function isPastQualificationWindow(createdAt: Date, now: Date): boolean {
+  if (now.getTime() < PAYOUT_FLOOR_DATE.getTime()) return false
   return now.getTime() - createdAt.getTime() >= QUALIFICATION_WINDOW_DAYS * MS_PER_DAY
 }
 
 /**
  * The latest `created_at` that already qualifies at `now`. A row qualifies iff
- * `created_at <= qualificationCutoff(now)` — by construction this is exactly
- * equivalent to {@link isPastQualificationWindow}, so DB queries (`.lte`) and
- * the tested helper share one boundary.
+ * `created_at <= qualificationCutoff(now)` — equivalent to
+ * {@link isPastQualificationWindow} for any real row (created after 1970), so
+ * DB queries (`.lte`) and the tested helper share one boundary. Before the
+ * payout floor the cutoff is the epoch, which matches no real row.
  */
 export function qualificationCutoff(now: Date): Date {
+  if (now.getTime() < PAYOUT_FLOOR_DATE.getTime()) return new Date(0)
   return new Date(now.getTime() - QUALIFICATION_WINDOW_DAYS * MS_PER_DAY)
 }
 
