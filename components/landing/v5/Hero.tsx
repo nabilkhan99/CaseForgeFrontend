@@ -5,16 +5,19 @@ import { ArrowRight } from 'lucide-react';
 
 export default function Hero() {
   return (
-    <section className="relative overflow-hidden bg-[#1C1C1A] px-5 pb-10 pt-28 text-center sm:px-8 sm:pb-16 sm:pt-28">
+    <section className="relative overflow-hidden px-5 pb-10 pt-32 text-center sm:px-8 sm:pb-16 sm:pt-40">
       <div className="mx-auto max-w-4xl">
         <motion.p
           initial={{ opacity: 0, y: 12 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5 }}
-          className="mb-4 text-xs font-medium uppercase tracking-[0.08em] text-[#FAC775] sm:mb-6 sm:text-sm"
+          className="mb-6 sm:mb-8"
         >
-          For GP trainees preparing for the SCA
+          <span className="inline-flex items-center gap-2 rounded-full bg-[#FAEEDA] px-4 py-1.5 text-xs font-semibold text-[#854F0B] sm:text-sm">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#B45309]" aria-hidden="true" />
+            The £500 SCA guarantee
+          </span>
         </motion.p>
 
         <motion.h1
@@ -22,11 +25,13 @@ export default function Hero() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.08 }}
-          className="mb-5 font-[family-name:var(--font-display)] text-3xl font-medium leading-[1.35] text-white sm:mb-6 sm:text-5xl lg:text-6xl"
+          className="mb-6 font-[family-name:var(--font-display)] text-[2.6rem] font-medium leading-[1.12] tracking-tight text-heading sm:mb-8 sm:text-6xl lg:text-7xl"
         >
-          <span className="sm:whitespace-nowrap">
-            Fail your SCA? We pay you <span className="text-[#EF9F27]">£500</span>.
-          </span>
+          We&apos;re betting{' '}
+          <span className="whitespace-nowrap rounded-xl bg-[#EAF3DE] px-2.5 py-0.5 text-[#3D6212] sm:rounded-2xl sm:px-4">
+            £500
+          </span>{' '}
+          that you&apos;ll pass.
         </motion.h1>
 
         <motion.p
@@ -34,34 +39,31 @@ export default function Hero() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.14 }}
-          className="mb-1 text-sm font-medium text-white sm:text-lg"
+          className="mx-auto mb-8 max-w-md text-sm leading-relaxed text-body sm:mb-10 sm:max-w-xl sm:text-lg"
         >
-          The only complete SCA Course
+          Pass all 200 mock stations, fail your real SCA, and we pay you £500
+          cash.
         </motion.p>
 
-        <motion.p
+        <motion.div
           initial={{ opacity: 0, y: 12 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="mx-auto mb-8 max-w-md text-xs leading-relaxed text-[#B4B2A9] sm:mb-10 sm:max-w-lg sm:text-base"
         >
-          AI Practice <span className="text-[#6E6D68]">+</span> On-demand
-          Lectures <span className="text-[#6E6D68]">+</span> Small-Group
-          Coaching
-        </motion.p>
-
-        <motion.a
-          href="/try"
-          initial={{ opacity: 0, y: 12 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5, delay: 0.26 }}
-          className="inline-flex items-center gap-2 rounded-lg bg-[#EF9F27] px-7 py-3 text-sm font-semibold text-[#2C2C2A] shadow-[0_3px_12px_rgba(186,117,23,0.45)] transition-transform hover:scale-[1.03] sm:px-9 sm:py-4 sm:text-base"
-        >
-          Try Free Mock Station
-          <ArrowRight className="h-4 w-4" aria-hidden="true" />
-        </motion.a>
+          <motion.a
+            href="/try"
+            whileHover={{ y: -2, scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="inline-flex items-center gap-2 rounded-full bg-[#B45309] px-8 py-4 text-base font-semibold text-white shadow-[0_4px_16px_rgba(180,83,9,0.4),inset_0_1px_0_rgba(255,255,255,0.18)] sm:px-10 sm:py-[1.15rem] sm:text-lg"
+          >
+            Try Free Mock Station
+            <ArrowRight className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true" />
+          </motion.a>
+          <p className="mt-4 text-xs text-[#78716C] sm:text-sm">
+            12 minutes · no card
+          </p>
+        </motion.div>
       </div>
     </section>
   );
