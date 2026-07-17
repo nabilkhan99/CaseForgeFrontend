@@ -22,7 +22,7 @@ const FEATURE_ROWS: readonly FeatureRow[] = [
   {
     label: 'AI consultations',
     labelSub: '200 stations',
-    cells: [{ text: 'Unlimited' }, { text: 'Unlimited', sub: '£199 value' }, { text: 'Unlimited' }],
+    cells: [{ text: 'Unlimited' }, { text: 'Unlimited', sub: '£299 value' }, { text: 'Unlimited' }],
   },
   {
     label: 'On-demand Lectures',
@@ -145,7 +145,7 @@ function MobileCards({ selfStudy }: { selfStudy: ReturnType<typeof useSelfStudyC
     {
       key: 'self_study' as const,
       name: 'Self-Study',
-      price: '£199',
+      price: '£299',
       suffix: 'one-off',
       tagline: "3 months' access",
       highlighted: false,
@@ -156,12 +156,12 @@ function MobileCards({ selfStudy }: { selfStudy: ReturnType<typeof useSelfStudyC
     {
       key: 'complete' as const,
       name: 'Complete SCA Course',
-      price: '£299',
+      price: '£599',
       suffix: 'one-off',
       tagline: "3 months' access",
       highlighted: true,
       badge: 'Most popular',
-      valueLine: '£1,397 total value',
+      valueLine: '£1,497 total value',
       cellIndex: 1,
     },
     {
@@ -281,7 +281,7 @@ export default function PricingTable() {
               <div className="px-2 pb-4 pt-7 text-center sm:pb-5 sm:pt-8">
                 <p className="text-xs font-medium text-heading sm:text-sm">Self-Study</p>
                 <p className="mt-1 text-lg font-medium text-heading sm:text-2xl">
-                  £199 <span className="text-[10px] font-normal text-body sm:text-xs">one-off</span>
+                  £299 <span className="text-[10px] font-normal text-body sm:text-xs">one-off</span>
                 </p>
                 <p className="mt-0.5 text-[10px] text-body sm:text-xs">3 months&rsquo; access</p>
               </div>
@@ -291,10 +291,10 @@ export default function PricingTable() {
                 </span>
                 <p className="text-xs font-medium text-[#085041] sm:text-sm">Complete SCA Course</p>
                 <p className="mt-1 text-lg font-medium text-[#085041] sm:text-2xl">
-                  £299 <span className="text-[10px] font-normal text-[#0F6E56] sm:text-xs">one-off</span>
+                  £599 <span className="text-[10px] font-normal text-[#0F6E56] sm:text-xs">one-off</span>
                 </p>
                 <p className="mt-0.5 text-[10px] text-[#0F6E56] sm:text-xs">3 months&rsquo; access</p>
-                <p className="mt-0.5 text-[10px] text-muted line-through sm:text-xs">£1,397 total value</p>
+                <p className="mt-0.5 text-[10px] text-muted line-through sm:text-xs">£1,497 total value</p>
               </div>
               <div className="px-2 pb-4 pt-7 text-center sm:pb-5 sm:pt-8">
                 <p className="text-xs font-medium text-heading sm:text-sm">Intensive</p>

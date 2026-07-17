@@ -20,7 +20,7 @@ const FAQS: QA[] = [
   {
     question: 'Can I use my study budget for this?',
     answer: [
-      'The Complete SCA Course is built as a course, not a subscription, which is the distinction most NHS England study budgets care about (they typically cap around £600, and at £299 it sits comfortably within that). Eligibility varies by deanery, so check your local study budget policy before you book. Most trainees pay nothing out of pocket.',
+      'The Complete SCA Course is built as a course, not a subscription, which is the distinction most NHS England study budgets care about (they typically cap around £600, and it is priced at £599). Eligibility varies by deanery, so check your local study budget policy before you book. Most trainees pay nothing out of pocket.',
     ],
   },
   {
