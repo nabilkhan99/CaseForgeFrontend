@@ -111,7 +111,7 @@ export default function TryCasePickerPage() {
           Try a Free Mock Station
         </h1>
         <p className="text-[15px] text-muted leading-relaxed">
-          Pick a station and start a voice consultation. No account needed.
+          Start a voice consultation with an AI patient. No account needed.
         </p>
       </motion.div>
 
