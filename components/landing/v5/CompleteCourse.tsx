@@ -167,7 +167,7 @@ export default function CompleteCourse() {
               <div className="mt-3">
                 <FeatureRows rows={AI_PRACTICE_ROWS} color={TEAL} />
               </div>
-              <p className="mt-2 border-t-[0.5px] border-[#E4DDC9] pt-3 text-xs text-muted">£299 value</p>
+              <p className="mt-2 border-t-[0.5px] border-[#E4DDC9] pt-3 text-xs text-muted">£199 value</p>
             </div>
 
             <div className="rounded-2xl border border-[#E4DDC9] bg-white px-5 py-5 shadow-elevation-1 sm:px-6">
