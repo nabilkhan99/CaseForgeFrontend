@@ -103,18 +103,19 @@ export default function CoachingDayPage() {
           </Link>
 
           <p className="mt-6 text-[11px] font-medium uppercase tracking-[0.08em] text-[#854F0B] sm:text-xs">
-            Complete SCA Course · £599 one-off
+            Pre-order · Complete SCA Course · £599 one-off
           </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-heading sm:text-4xl">
             Choose your coaching day
           </h1>
           <p className="mt-3 max-w-lg text-sm leading-relaxed text-body sm:text-base">
             One full day of live Small-Group Coaching, 9am to 6pm, remote, with a maximum class of
-            six. Your AI practice and on-demand lectures are separate — they unlock the moment you
-            buy, for 3 months.
+            six. Your AI practice and on-demand lectures are separate — they open alongside
+            everything else, for 3 months.
           </p>
-          <p className="mt-3 inline-flex rounded-lg bg-[#FDF6EC] px-3 py-1.5 text-[12px] font-medium text-[#854F0B]">
-            Access opens {ACCESS_OPENS_LABEL} — buy before then and your 3 months start on launch day.
+          <p className="mt-3 inline-flex max-w-lg rounded-lg bg-[#FDF6EC] px-3 py-1.5 text-[12px] font-medium leading-relaxed text-[#854F0B]">
+            This is a pre-order: everything starts {ACCESS_OPENS_LABEL} — AI practice, lectures and
+            coaching. Your 3 months run from that date.
           </p>
 
           <div className="mt-8 flex flex-col gap-2.5">
