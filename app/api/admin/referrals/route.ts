@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/admin/guard';
 import { qualificationCutoff } from '@/lib/commerce/referrals';
+import {
+  computeDashboardStats,
+  type CodeRow,
+  type ReferralRow,
+} from '@/lib/commerce/referralStats';
 
 export interface AdminReferral {
   id: string;
@@ -84,7 +89,27 @@ export async function GET() {
     return NextResponse.json({ error: 'Failed to load referrals' }, { status: 500 });
   }
 
-  return NextResponse.json({ referrals: (data ?? []) as AdminReferral[] });
+  const referrals = (data ?? []) as AdminReferral[];
+
+  // ── Dashboard aggregates ──
+  // Fetch the advocate codes (including zero-referral ones — their clicks still
+  // count) and roll everything up with the pure computeDashboardStats. A codes
+  // query failure degrades gracefully: the payout queue still renders from
+  // `referrals`, only the stats strip falls back to an empty aggregate.
+  const { data: codeData, error: codesError } = await supabase
+    .from('referral_codes')
+    .select('code, owner_email, owner_name, active, click_count, created_at');
+
+  if (codesError) {
+    console.error('[admin-referrals] codes query failed', codesError);
+  }
+
+  const stats = computeDashboardStats(
+    (codeData ?? []) as CodeRow[],
+    referrals as ReferralRow[],
+  );
+
+  return NextResponse.json({ referrals, stats });
 }
 
 interface PostBody {
