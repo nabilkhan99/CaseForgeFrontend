@@ -194,7 +194,7 @@ export default function TryFeedbackPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#EF9F27] px-6 py-3.5 text-sm font-semibold text-[#2C2C2A] shadow-[0_3px_12px_rgba(186,117,23,0.4)] transition-all hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+                className="cta-button w-full px-6 py-4 text-base"
               >
                 {submitting ? 'Unlocking…' : 'See my feedback'}
                 {!submitting && <ArrowRight className="h-4 w-4" />}

@@ -195,7 +195,7 @@ export default function CoachingDayPage() {
             type="button"
             onClick={handleContinue}
             disabled={!selected || submitting || selectable.length === 0}
-            className="mt-7 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#EF9F27] px-6 py-3.5 text-sm font-semibold text-[#2C2C2A] shadow-[0_3px_12px_rgba(186,117,23,0.4)] transition-all hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+            className="cta-button mt-7 w-full px-6 py-4 text-base"
           >
             {submitting ? 'Redirecting to secure checkout…' : 'Continue to payment'}
             {!submitting && <ArrowRight className="h-4 w-4" />}

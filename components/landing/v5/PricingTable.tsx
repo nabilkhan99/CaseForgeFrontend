@@ -111,7 +111,7 @@ function PlanCta({ selfStudy, variant }: CtaButtonsProps) {
         type="button"
         onClick={selfStudy.start}
         disabled={selfStudy.submitting}
-        className="w-full rounded-lg border border-stone-300 px-2 py-2.5 text-[11px] font-medium text-heading transition-colors hover:bg-surface-warm disabled:opacity-60 sm:text-sm"
+        className="w-full rounded-full border border-stone-400 px-2 py-3 text-[13px] font-semibold text-heading transition-colors hover:bg-surface-warm disabled:opacity-60 sm:py-2.5 sm:text-sm"
       >
         {selfStudy.submitting ? 'Redirecting…' : 'Pre-order now'}
       </button>
@@ -121,7 +121,7 @@ function PlanCta({ selfStudy, variant }: CtaButtonsProps) {
     return (
       <Link
         href="/coaching-day"
-        className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#EF9F27] px-2 py-2.5 text-[11px] font-semibold text-[#2C2C2A] shadow-[0_2px_6px_rgba(186,117,23,0.4)] transition-all hover:brightness-105 sm:text-sm"
+        className="cta-button w-full gap-1.5 px-2 py-3.5 text-[13px] sm:py-3 sm:text-sm"
       >
         Choose your coaching day <ArrowRight className="h-3.5 w-3.5" />
       </Link>
@@ -132,7 +132,7 @@ function PlanCta({ selfStudy, variant }: CtaButtonsProps) {
       href={BOOK_A_CALL_URL}
       target="_blank"
       rel="noopener noreferrer"
-      className="block w-full rounded-lg border border-stone-300 px-2 py-2.5 text-[11px] font-medium text-heading transition-colors hover:bg-surface-warm sm:text-sm"
+      className="block w-full rounded-full border border-stone-400 px-2 py-3 text-center text-[13px] font-semibold text-heading transition-colors hover:bg-surface-warm sm:py-2.5 sm:text-sm"
     >
       Book a call
     </a>
