@@ -3,38 +3,30 @@
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight } from 'lucide-react';
 import FeedbackReport from '@/components/clinical-master/FeedbackReport';
 import PricingTable from '@/components/landing/v5/PricingTable';
 import { GuaranteeCard } from '@/components/landing/v5';
+import EmailVerificationGate from '@/components/try/EmailVerificationGate';
 import {
   TRIAL_EMAIL_KEY,
   TRIAL_FEEDBACK_URL_KEY,
   TRIAL_USED_KEY,
 } from '@/lib/trial/storage';
-import { SCA_SIT_DATES, TRAINING_STAGES } from '@/lib/trial/leadFields';
-
-const GATE_FIELD_CLASSES =
-  'w-full rounded-xl border border-stone-200 bg-white px-4 py-3 text-[14px] text-heading outline-none transition-colors focus:border-primary';
 
 /**
- * The free mock station reveal: an email-only gate sits between finishing the
- * consultation and the full feedback report, which renders with the pricing
- * table directly beneath it. No password, no account, no confirmation email.
+ * The free mock station reveal: a verified email gate sits between finishing
+ * the consultation and the full feedback report, which renders with the
+ * pricing table directly beneath it. The gate emails a 6-digit code, so only
+ * a deliverable address unlocks the report.
  */
 export default function TryFeedbackPage() {
   const params = useParams();
   const sessionId = params.sessionId as string;
 
-  const [email, setEmail] = useState('');
-  const [trainingStage, setTrainingStage] = useState('');
-  const [scaSitDate, setScaSitDate] = useState('');
   const [unlocked, setUnlocked] = useState(false);
   const [checkingGate, setCheckingGate] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  // Returning visitors who already gave their email skip the gate.
+  // Returning visitors who already verified their email skip the gate.
   useEffect(() => {
     try {
       if (window.localStorage.getItem(TRIAL_EMAIL_KEY)) {
@@ -46,37 +38,15 @@ export default function TryFeedbackPage() {
     setCheckingGate(false);
   }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (submitting) return;
-    setSubmitting(true);
-    setError(null);
-
+  function handleUnlock(email: string) {
     try {
-      const res = await fetch('/api/try/capture-lead', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, email: email.trim(), trainingStage, scaSitDate }),
-      });
-      const data = (await res.json()) as { ok?: boolean; error?: string };
-      if (!res.ok || !data.ok) {
-        setError(data.error ?? 'Something went wrong — please try again.');
-        setSubmitting(false);
-        return;
-      }
-
-      try {
-        window.localStorage.setItem(TRIAL_EMAIL_KEY, email.trim().toLowerCase());
-        window.localStorage.setItem(TRIAL_USED_KEY, '1');
-        window.localStorage.setItem(TRIAL_FEEDBACK_URL_KEY, `/try/feedback/${sessionId}`);
-      } catch {
-        // Storage unavailable — the reveal still works for this visit.
-      }
-      setUnlocked(true);
+      window.localStorage.setItem(TRIAL_EMAIL_KEY, email);
+      window.localStorage.setItem(TRIAL_USED_KEY, '1');
+      window.localStorage.setItem(TRIAL_FEEDBACK_URL_KEY, `/try/feedback/${sessionId}`);
     } catch {
-      setError('Something went wrong — please try again.');
-      setSubmitting(false);
+      // Storage unavailable — the reveal still works for this visit.
     }
+    setUnlocked(true);
   }
 
   if (checkingGate) {
@@ -92,123 +62,7 @@ export default function TryFeedbackPage() {
   }
 
   if (!unlocked) {
-    return (
-      <div className="min-h-[100dvh] flex items-center justify-center px-6 py-16">
-        <motion.div
-          className="w-full max-w-md"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ type: 'spring', stiffness: 60, damping: 20 }}
-        >
-          <div className="rounded-[22px] border border-black/[0.06] bg-surface-raised p-7 text-center shadow-[0_16px_42px_rgba(180,83,9,0.06)] sm:p-9">
-            <span
-              className="mb-4 inline-flex items-center gap-1.5 rounded-lg px-3 py-1 text-[11px] font-semibold uppercase tracking-wide"
-              style={{ background: 'rgba(22,163,74,0.08)', color: '#16A34A' }}
-            >
-              Consultation complete
-            </span>
-            <h1 className="mb-2 text-[26px] font-bold tracking-[-0.02em] text-heading">
-              Your report is being marked
-            </h1>
-            <p className="mb-7 text-[14px] leading-relaxed text-muted">
-              Enter your email to unlock your full feedback report — scored across the three SCA
-              marking domains, just like the real exam.
-            </p>
-
-            <form onSubmit={handleSubmit} className="space-y-4 text-left">
-              <div>
-                <label
-                  htmlFor="trial-email"
-                  className="mb-1.5 block text-[13px] font-medium text-heading"
-                >
-                  Email address
-                </label>
-                <input
-                  id="trial-email"
-                  type="email"
-                  required
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="doctor@example.com"
-                  className={`${GATE_FIELD_CLASSES} placeholder:text-stone-400`}
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="trial-stage"
-                  className="mb-1.5 block text-[13px] font-medium text-heading"
-                >
-                  Stage of training
-                </label>
-                <select
-                  id="trial-stage"
-                  required
-                  value={trainingStage}
-                  onChange={(e) => setTrainingStage(e.target.value)}
-                  className={`${GATE_FIELD_CLASSES} ${trainingStage ? '' : 'text-stone-400'}`}
-                >
-                  <option value="" disabled>
-                    Select your stage
-                  </option>
-                  {TRAINING_STAGES.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="trial-sit-date"
-                  className="mb-1.5 block text-[13px] font-medium text-heading"
-                >
-                  When do you plan to sit the SCA?
-                </label>
-                <select
-                  id="trial-sit-date"
-                  required
-                  value={scaSitDate}
-                  onChange={(e) => setScaSitDate(e.target.value)}
-                  className={`${GATE_FIELD_CLASSES} ${scaSitDate ? '' : 'text-stone-400'}`}
-                >
-                  <option value="" disabled>
-                    Select a window
-                  </option>
-                  {SCA_SIT_DATES.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {error && (
-                <div className="rounded-lg border border-danger/20 bg-danger/10 p-3">
-                  <p className="text-center text-sm text-danger">{error}</p>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={submitting}
-                className="cta-button w-full px-6 py-4 text-base"
-              >
-                {submitting ? 'Unlocking…' : 'See my feedback'}
-                {!submitting && <ArrowRight className="h-4 w-4" />}
-              </button>
-            </form>
-
-            <p className="mt-4 text-[11px] leading-relaxed text-muted">
-              By continuing you agree to receive occasional emails about the course — unsubscribe
-              anytime.
-            </p>
-          </div>
-        </motion.div>
-      </div>
-    );
+    return <EmailVerificationGate sessionId={sessionId} onUnlock={handleUnlock} />;
   }
 
   return (

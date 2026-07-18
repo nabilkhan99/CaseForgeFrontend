@@ -1,6 +1,6 @@
 /**
  * The extra qualification fields captured with the trial email gate.
- * Shared by the gate form and /api/try/capture-lead so the allowlists
+ * Shared by the gate form and /api/try/send-code so the allowlists
  * can never drift apart.
  */
 

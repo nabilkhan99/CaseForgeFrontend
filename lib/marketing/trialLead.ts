@@ -3,6 +3,7 @@ import { BrevoClient } from '@getbrevo/brevo'
 
 interface PushTrialLeadArgs {
   email: string
+  firstName?: string | null
   stationTitle: string | null
   score: string | null
   trainingStage?: string | null
@@ -16,6 +17,7 @@ interface PushTrialLeadArgs {
  */
 export async function pushTrialLeadToBrevo({
   email,
+  firstName,
   stationTitle,
   score,
   trainingStage,
@@ -36,6 +38,7 @@ export async function pushTrialLeadToBrevo({
       updateEnabled: true,
       ...(Number.isFinite(listId) && listId > 0 ? { listIds: [listId] } : {}),
       attributes: {
+        FIRSTNAME: firstName ?? '',
         TRIAL_STATION: stationTitle ?? '',
         TRIAL_SCORE: score ?? '',
         TRIAL_DATE: new Date().toISOString().slice(0, 10),
