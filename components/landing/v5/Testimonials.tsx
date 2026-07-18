@@ -9,53 +9,24 @@ interface Testimonial {
   avatar: React.ReactNode;
 }
 
-const SarahAvatar = (
-  <svg viewBox="0 0 34 34" width="34" height="34" aria-hidden="true">
-    <rect width="34" height="34" fill="#DCE8D5" />
-    <circle cx="17" cy="13" r="6.5" fill="#F1C9A5" />
-    <path
-      d="M17 6 a6.5 6.5 0 0 1 6.5 6.5 q-2 -3 -6.5 -3 -4.5 0 -6.5 3 a6.5 6.5 0 0 1 6.5 -6.5z"
-      fill="#6B4226"
-    />
-    <path d="M10.5 12 q-1 8 2 11 l-3.5 0 q-1 -6 1.5 -11z" fill="#6B4226" />
-    <path d="M23.5 12 q1 8 -2 11 l3.5 0 q1 -6 -1.5 -11z" fill="#6B4226" />
-    <path d="M5 34 q0 -12 12 -12 q12 0 12 12z" fill="#37536B" />
-    <circle cx="14.5" cy="12.5" r="0.9" fill="#1B1B1B" />
-    <circle cx="19.5" cy="12.5" r="0.9" fill="#1B1B1B" />
-    <path
-      d="M15 16 q2 1.5 4 0"
-      stroke="#1B1B1B"
-      strokeWidth="0.8"
-      fill="none"
-      strokeLinecap="round"
-    />
-  </svg>
+const AmirAvatar = (
+  <img
+    src="/images/reviews/amir-hussain.jpeg"
+    alt="Dr Amir Hussain"
+    width={68}
+    height={68}
+    className="h-full w-full rounded-full object-cover"
+  />
 );
 
-const JamesAvatar = (
-  <svg viewBox="0 0 34 34" width="34" height="34" aria-hidden="true">
-    <rect width="34" height="34" fill="#E8DED2" />
-    <circle cx="17" cy="13" r="6.5" fill="#EAC086" />
-    <path
-      d="M17 6 a6.5 6.5 0 0 1 6.5 7 l-1.8 -0.6 q0.5 -3 -2 -4.4 -1.5 1.5 -4.7 1.5 -2.7 0 -3.5 -1 -1 1 -1 4 l-1.8 0.5 a6.5 6.5 0 0 1 8.3 -7z"
-      fill="#2B2B2B"
-    />
-    <path d="M5 34 q0 -12 12 -12 q12 0 12 12z" fill="#5F7470" />
-    <circle cx="14.5" cy="13" r="0.9" fill="#1B1B1B" />
-    <circle cx="19.5" cy="13" r="0.9" fill="#1B1B1B" />
-    <path
-      d="M15 16.5 q2 1.5 4 0"
-      stroke="#1B1B1B"
-      strokeWidth="0.8"
-      fill="none"
-      strokeLinecap="round"
-    />
-    <path
-      d="M13.5 19 q3.5 2.5 7 0 l0 1.5 q-3.5 2 -7 0z"
-      fill="#2B2B2B"
-      opacity="0.55"
-    />
-  </svg>
+const HarmeetAvatar = (
+  <img
+    src="/images/reviews/harmeet-makan.jpeg"
+    alt="Dr Harmeet Makan"
+    width={68}
+    height={68}
+    className="h-full w-full rounded-full object-cover"
+  />
 );
 
 const ZainAvatar = (
@@ -72,14 +43,14 @@ const TESTIMONIALS: Testimonial[] = [
   {
     name: 'Dr Amir Hussain',
     meta: 'GP Registrar, Wessex',
-    avatar: SarahAvatar,
+    avatar: AmirAvatar,
     quote:
       'I’d tried other AI tools before and wasn’t impressed, so I went in sceptical. But with Fourteen Fisherman, the AI patients behave like the ones in my actual clinics, and the feedback was specific enough to feel like having my ES sit in on the consult. I fitted it into odd bits of time between clinics, which would’ve been impossible to arrange with a study partner.',
   },
   {
     name: 'Dr Harmeet Makan',
     meta: 'GP Registrar, East Midlands',
-    avatar: JamesAvatar,
+    avatar: HarmeetAvatar,
     quote:
       'Consulting a full mock in front of five other trainees was as grim as it sounds, at first. But there were only six of us, so the tutor had time to take my consultation apart properly and show me exactly where I was going wrong and how to fix it. I picked up as much watching the others as I did from my own turn.',
   },
