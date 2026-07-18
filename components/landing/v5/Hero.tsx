@@ -25,12 +25,14 @@ export default function Hero() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.08 }}
-          className="mb-6 font-[family-name:var(--font-display)] text-[2.6rem] font-medium leading-[1.12] tracking-tight text-heading sm:mb-8 sm:text-6xl lg:text-7xl"
+          className="mb-6 font-[family-name:var(--font-display)] text-[2.9rem] font-bold leading-[1.04] tracking-[-0.03em] text-heading sm:mb-8 sm:text-7xl lg:text-[6.5rem]"
         >
-          We&apos;re betting{' '}
-          <span className="whitespace-nowrap rounded-xl bg-[#EAF3DE] px-2.5 py-0.5 text-[#3D6212] sm:rounded-2xl sm:px-4">
-            £500
-          </span>{' '}
+          We&apos;re betting
+          <span className="my-1.5 block sm:my-2.5">
+            <span className="inline-block rounded-2xl bg-[#E7F1D6] px-4 pb-1 pt-0.5 text-[#4A6B1F] sm:rounded-[1.75rem] sm:px-7">
+              £500
+            </span>
+          </span>
           that you&apos;ll pass.
         </motion.h1>
 
@@ -39,7 +41,7 @@ export default function Hero() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.14 }}
-          className="mx-auto mb-8 max-w-md text-sm leading-relaxed text-body sm:mb-10 sm:max-w-xl sm:text-lg"
+          className="mx-auto mb-8 max-w-md text-sm leading-relaxed text-body sm:mb-10 sm:max-w-2xl sm:text-lg"
         >
           Pass all 200 mock stations, fail your real SCA, and we pay you £500
           cash.
