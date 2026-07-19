@@ -9,7 +9,6 @@ import { createClient } from '@/lib/supabase/client';
 import ConsultationTimer from '@/components/clinical-master/ConsultationTimer';
 import AudioVisualizer from '@/components/clinical-master/AudioVisualizer';
 import LiveTranscript from '@/components/clinical-master/LiveTranscript';
-import InterruptButton from '@/components/clinical-master/InterruptButton';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 
 interface StationData {
@@ -70,7 +69,7 @@ function LiveConsultationContent() {
     router.push(feedbackUrl);
   }, [router, sessionId, from]);
 
-  const { isConnected, isSpeaking, transcript, connect, endConsultation, disconnect, setMicMuted, interruptPatient, error, status } =
+  const { isConnected, isSpeaking, transcript, connect, endConsultation, disconnect, setMicMuted, error, status } =
     useRealtimeSession({
       sessionId,
       stationId: stationId || undefined,
@@ -232,9 +231,6 @@ function LiveConsultationContent() {
             {station?.patient_name || 'Patient'}
           </div>
         </div>
-
-        {/* Cut the patient off mid-speech without ending the session */}
-        <InterruptButton visible={isSpeaking} onInterrupt={interruptPatient} />
 
         {/* Waveform or Transcript */}
         {showTranscript ? (
