@@ -78,14 +78,6 @@ export function buildSessionPayload(stationData: StationData | null, opts: Sessi
             threshold: 0.5,
             prefix_padding_ms: 300,
             silence_duration_ms: 900,
-            // The API DEFAULT for interrupt_response is true, which lets any
-            // VAD speech_started — including speaker echo of the patient's
-            // own voice — cancel the in-flight response, so the patient kept
-            // cutting itself off mid-sentence. No barge-in: the patient
-            // always finishes speaking; the trainee's turn is picked up when
-            // it actually ends.
-            interrupt_response: false,
-            create_response: true,
           },
         },
         output: {
