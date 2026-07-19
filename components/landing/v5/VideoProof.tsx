@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Play } from 'lucide-react';
+import { Pill } from '@/components/landing/v5/editorial';
 
 interface VideoCardData {
   handle: string;
@@ -201,41 +202,42 @@ function MobileVideoCarousel() {
 
 export default function VideoProof() {
   return (
-    <section className="px-5 py-6 text-center sm:px-8 sm:py-10">
-      <motion.p
+    <section className="px-5 py-10 text-center sm:px-8 sm:py-16">
+      <motion.div
         initial={{ opacity: 0, y: 12 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.5 }}
-        className="mb-2 text-xs font-medium uppercase tracking-[0.08em] text-[#854F0B] sm:text-sm"
       >
-        What doctors are saying about the course
-      </motion.p>
+        <Pill>What doctors are saying about the course</Pill>
+      </motion.div>
 
-      <motion.p
+      <motion.h2
         initial={{ opacity: 0, y: 12 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.5, delay: 0.06 }}
-        className="mb-6 text-lg font-medium text-heading sm:mb-10 sm:text-2xl"
+        className="mx-auto mt-7 max-w-2xl text-3xl font-medium leading-[1.12] tracking-tight text-heading sm:text-5xl"
       >
         Don&apos;t just take our word for it.
-      </motion.p>
+      </motion.h2>
 
-      <MobileVideoCarousel />
+      <div className="mt-12 sm:mt-14">
+        <MobileVideoCarousel />
 
-      <div className="mx-auto hidden max-w-3xl grid-cols-3 gap-3 sm:grid sm:gap-6">
-        {VIDEOS.map((video, i) => (
-          <motion.div
-            key={video.handle}
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: i * 0.08 }}
-          >
-            <VideoCard {...video} />
-          </motion.div>
-        ))}
+        <div className="mx-auto hidden max-w-3xl grid-cols-3 gap-3 sm:grid sm:gap-6">
+          {VIDEOS.map((video, i) => (
+            <motion.div
+              key={video.handle}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: i * 0.08 }}
+            >
+              <VideoCard {...video} />
+            </motion.div>
+          ))}
+        </div>
       </div>
     </section>
   );

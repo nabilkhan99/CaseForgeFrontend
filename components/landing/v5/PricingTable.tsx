@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { ArrowRight, Info, X } from 'lucide-react';
+import { ArrowRight, Info } from 'lucide-react';
 import { ACCESS_OPENS_LABEL, BOOK_A_CALL_URL } from '@/lib/commerce/plans';
+import { Pill } from './editorial';
 
 interface FeatureCell {
   text: string;
@@ -41,6 +42,9 @@ const FEATURE_ROWS: readonly FeatureRow[] = [
     cells: [{ text: '', cross: true }, { text: '', cross: true }, { text: '12 x 1hr sessions' }],
   },
 ];
+
+/** The warm tint behind the highlighted (Complete) column. */
+const HIGHLIGHT_BG = 'bg-[#FDF6E7]';
 
 /** Kicks off Stripe checkout for the Self-Study plan (no coaching day needed). */
 function useSelfStudyCheckout() {
@@ -87,7 +91,7 @@ function GuaranteeInfo({ align = 'left' }: { align?: 'left' | 'right' }) {
       </button>
       <div
         role="tooltip"
-        className={`pointer-events-none absolute top-full z-20 mt-1 w-52 rounded-lg border border-[#E4DDC9] bg-white p-2.5 text-left text-[10px] leading-snug text-body opacity-0 shadow-elevation-3 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 sm:text-[11px] ${
+        className={`pointer-events-none absolute top-full z-20 mt-1 w-52 rounded-lg border border-heading/10 bg-white p-2.5 text-left text-[10px] leading-snug text-body opacity-0 shadow-elevation-3 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 sm:text-[11px] ${
           align === 'right' ? 'right-0' : 'left-0'
         }`}
       >
@@ -101,7 +105,6 @@ function GuaranteeInfo({ align = 'left' }: { align?: 'left' | 'right' }) {
 interface CtaButtonsProps {
   selfStudy: ReturnType<typeof useSelfStudyCheckout>;
   variant: 'self_study' | 'complete' | 'intensive';
-  fullWidth?: boolean;
 }
 
 function PlanCta({ selfStudy, variant }: CtaButtonsProps) {
@@ -111,7 +114,7 @@ function PlanCta({ selfStudy, variant }: CtaButtonsProps) {
         type="button"
         onClick={selfStudy.start}
         disabled={selfStudy.submitting}
-        className="w-full rounded-full border border-stone-400 px-2 py-3 text-[13px] font-semibold text-heading transition-colors hover:bg-surface-warm disabled:opacity-60 sm:py-2.5 sm:text-sm"
+        className="w-full rounded-full border border-heading/15 bg-white px-2 py-3 text-[13px] font-semibold text-heading transition-colors hover:bg-surface-warm disabled:opacity-60 sm:py-2.5 sm:text-sm"
       >
         {selfStudy.submitting ? 'Redirecting…' : 'Pre-order now'}
       </button>
@@ -121,7 +124,7 @@ function PlanCta({ selfStudy, variant }: CtaButtonsProps) {
     return (
       <Link
         href="/coaching-day"
-        className="cta-button w-full gap-1.5 px-2 py-3.5 text-[13px] sm:py-3 sm:text-sm"
+        className="cta-button w-full gap-1.5 !rounded-full px-2 py-3.5 text-[13px] sm:py-3 sm:text-sm"
       >
         Choose your coaching day <ArrowRight className="h-3.5 w-3.5" />
       </Link>
@@ -132,10 +135,19 @@ function PlanCta({ selfStudy, variant }: CtaButtonsProps) {
       href={BOOK_A_CALL_URL}
       target="_blank"
       rel="noopener noreferrer"
-      className="block w-full rounded-full border border-stone-400 px-2 py-3 text-center text-[13px] font-semibold text-heading transition-colors hover:bg-surface-warm sm:py-2.5 sm:text-sm"
+      className="block w-full rounded-full border border-heading/15 bg-white px-2 py-3 text-center text-[13px] font-semibold text-heading transition-colors hover:bg-surface-warm sm:py-2.5 sm:text-sm"
     >
       Book a call
     </a>
+  );
+}
+
+/** Mono uppercase plan name, per the editorial system. */
+function PlanName({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-heading sm:text-[11px]">
+      {children}
+    </p>
   );
 }
 
@@ -182,40 +194,36 @@ function MobileCards({ selfStudy }: { selfStudy: ReturnType<typeof useSelfStudyC
       {cards.map((card) => (
         <div
           key={card.key}
-          className={`overflow-hidden rounded-2xl border shadow-elevation-2 ${
-            card.highlighted ? 'border-[#1D9E75]/40 bg-[#E1F5EE]' : 'border-[#E4DDC9] bg-white'
+          className={`overflow-hidden rounded-3xl border shadow-elevation-2 backdrop-blur ${
+            card.highlighted
+              ? `border-primary/25 ${HIGHLIGHT_BG}`
+              : 'border-heading/[0.06] bg-white/80'
           }`}
         >
-          <div className="relative px-5 pb-4 pt-6 text-center">
+          <div className="relative px-5 pb-4 pt-7 text-center">
             {card.badge && (
-              <span className="absolute left-1/2 top-2 -translate-x-1/2 whitespace-nowrap rounded-full bg-[#1D9E75] px-2.5 py-0.5 text-[9px] font-medium text-white">
+              <span className="absolute left-1/2 top-2 -translate-x-1/2 whitespace-nowrap rounded-full bg-primary px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white">
                 {card.badge}
               </span>
             )}
-            <p className={`text-sm font-medium ${card.highlighted ? 'text-[#085041]' : 'text-heading'}`}>
-              {card.name}
-            </p>
-            <p className={`mt-1 text-2xl font-medium ${card.highlighted ? 'text-[#085041]' : 'text-heading'}`}>
+            <PlanName>{card.name}</PlanName>
+            <p className="mt-2 text-3xl font-medium tracking-tight text-heading">
               {card.price}{' '}
-              {card.suffix && (
-                <span className={`text-xs font-normal ${card.highlighted ? 'text-[#0F6E56]' : 'text-body'}`}>
-                  {card.suffix}
-                </span>
-              )}
+              {card.suffix && <span className="text-xs font-normal text-muted">{card.suffix}</span>}
             </p>
-            <p className={`mt-0.5 text-xs ${card.highlighted ? 'text-[#0F6E56]' : 'text-body'}`}>{card.tagline}</p>
-            {card.valueLine && <p className="mt-0.5 text-xs text-muted line-through">{card.valueLine}</p>}
+            <p className="mt-0.5 text-xs text-muted">{card.tagline}</p>
+            {card.valueLine && (
+              <p className="mt-0.5 text-xs text-muted line-through">{card.valueLine}</p>
+            )}
           </div>
 
-          <div className={`border-t ${card.highlighted ? 'border-[#1D9E75]/20' : 'border-[#E4DDC9]'}`}>
+          <div className="border-t border-heading/[0.08]">
             {FEATURE_ROWS.map((row) => {
               const cell = row.cells[card.cellIndex];
               return (
                 <div
                   key={row.label}
-                  className={`flex items-center justify-between gap-3 border-b px-5 py-3 ${
-                    card.highlighted ? 'border-[#1D9E75]/15' : 'border-[#E4DDC9]/70'
-                  }`}
+                  className="flex items-center justify-between gap-3 border-b border-heading/[0.06] px-5 py-3"
                 >
                   <div>
                     <p className="text-[13px] font-medium text-heading">{row.label}</p>
@@ -223,13 +231,13 @@ function MobileCards({ selfStudy }: { selfStudy: ReturnType<typeof useSelfStudyC
                   </div>
                   <div className="text-right">
                     {cell.cross ? (
-                      <X className="ml-auto h-4 w-4 text-stone-300" aria-label="Not included" />
+                      <span className="text-sm text-stone-300" aria-label="Not included">
+                        —
+                      </span>
                     ) : (
                       <>
-                        <p className={`text-[13px] font-medium ${card.highlighted ? 'text-[#085041]' : 'text-heading'}`}>
-                          {cell.text}
-                        </p>
-                        {cell.sub && <p className="text-[11px] text-[#0F6E56]">{cell.sub}</p>}
+                        <p className="text-[13px] font-medium text-heading">{cell.text}</p>
+                        {cell.sub && <p className="text-[11px] text-muted">{cell.sub}</p>}
                       </>
                     )}
                   </div>
@@ -268,11 +276,11 @@ export default function PricingTable() {
           viewport={{ once: true, margin: '-80px' }}
           transition={{ duration: 0.55, ease: 'easeOut' }}
         >
-          <p className="mb-2 text-center text-[11px] font-medium uppercase tracking-[0.08em] text-[#0F6E56] sm:text-xs">
-            Choose your prep
+          <p className="mb-3 flex justify-center">
+            <Pill>Choose your prep</Pill>
           </p>
 
-          <p className="mb-5 flex justify-center">
+          <p className="mb-6 flex justify-center">
             <span className="inline-flex items-center gap-2 rounded-full bg-[#FAEEDA] px-4 py-1.5 text-center text-xs font-semibold text-[#854F0B] sm:text-[13px]">
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#B45309]" aria-hidden="true" />
               Pre-order — everything starts {ACCESS_OPENS_LABEL}
@@ -281,56 +289,68 @@ export default function PricingTable() {
 
           <MobileCards selfStudy={selfStudy} />
 
-          <div className="hidden overflow-hidden rounded-2xl border border-[#E4DDC9] bg-white shadow-elevation-2 sm:block">
-            <div className="grid grid-cols-[minmax(84px,150px)_repeat(3,minmax(0,1fr))]">
+          <div className="hidden overflow-hidden rounded-3xl border border-heading/[0.06] bg-white/80 shadow-elevation-2 backdrop-blur sm:block">
+            <div className="grid grid-cols-[minmax(84px,170px)_repeat(3,minmax(0,1fr))]">
               {/* Plan headers */}
               <div />
-              <div className="px-2 pb-4 pt-7 text-center sm:pb-5 sm:pt-8">
-                <p className="text-xs font-medium text-heading sm:text-sm">Self-Study</p>
-                <p className="mt-1 text-lg font-medium text-heading sm:text-2xl">
-                  £299 <span className="text-[10px] font-normal text-body sm:text-xs">one-off</span>
+              <div className="px-3 pb-5 pt-9 text-center">
+                <PlanName>Self-Study</PlanName>
+                <p className="mt-2.5 text-lg font-medium tracking-tight text-heading sm:text-3xl">
+                  £299 <span className="text-[10px] font-normal text-muted sm:text-xs">one-off</span>
                 </p>
-                <p className="mt-0.5 text-[10px] text-body sm:text-xs">3 months&rsquo; access</p>
+                <p className="mt-1 text-[10px] text-muted sm:text-xs">3 months&rsquo; access</p>
               </div>
-              <div className="relative bg-[#E1F5EE] px-2 pb-3 pt-7 text-center sm:pt-8">
-                <span className="absolute left-1/2 top-2 -translate-x-1/2 whitespace-nowrap rounded-full bg-[#1D9E75] px-2.5 py-0.5 text-[9px] font-medium text-white sm:text-[10px]">
+              <div className={`relative ${HIGHLIGHT_BG} px-3 pb-5 pt-9 text-center`}>
+                <span className="absolute left-1/2 top-3 -translate-x-1/2 whitespace-nowrap rounded-full bg-primary px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white sm:text-[10px]">
                   Most popular
                 </span>
-                <p className="text-xs font-medium text-[#085041] sm:text-sm">Complete SCA Course</p>
-                <p className="mt-1 text-lg font-medium text-[#085041] sm:text-2xl">
-                  £599 <span className="text-[10px] font-normal text-[#0F6E56] sm:text-xs">one-off</span>
+                <PlanName>Complete SCA Course</PlanName>
+                <p className="mt-2.5 text-lg font-medium tracking-tight text-heading sm:text-3xl">
+                  £599 <span className="text-[10px] font-normal text-muted sm:text-xs">one-off</span>
                 </p>
-                <p className="mt-0.5 text-[10px] text-[#0F6E56] sm:text-xs">3 months&rsquo; access</p>
-                <p className="mt-0.5 text-[10px] text-muted line-through sm:text-xs">£1,497 total value</p>
+                <p className="mt-1 text-[10px] text-muted sm:text-xs">
+                  3 months&rsquo; access ·{' '}
+                  <span className="line-through">£1,497 value</span>
+                </p>
               </div>
-              <div className="px-2 pb-4 pt-7 text-center sm:pb-5 sm:pt-8">
-                <p className="text-xs font-medium text-heading sm:text-sm">Intensive</p>
-                <p className="mt-1 text-base font-medium text-heading sm:text-xl">From £2,999</p>
-                <p className="mt-0.5 text-[10px] text-body sm:text-xs">By application</p>
+              <div className="px-3 pb-5 pt-9 text-center">
+                <PlanName>Intensive</PlanName>
+                <p className="mt-2.5 text-base font-medium tracking-tight text-heading sm:text-2xl">
+                  From £2,999
+                </p>
+                <p className="mt-1 text-[10px] text-muted sm:text-xs">By application</p>
               </div>
 
-              {/* Feature rows */}
+              {/* Feature rows — horizontal hairlines only, no column grid */}
               {FEATURE_ROWS.map((row) => (
                 <div key={row.label} className="contents">
-                  <div className="border-t border-[#E4DDC9] px-2.5 py-3 sm:px-4">
-                    <p className="text-[11px] font-medium leading-tight text-heading sm:text-sm">{row.label}</p>
-                    {row.labelSub && <p className="mt-0.5 text-[9px] text-muted sm:text-xs">{row.labelSub}</p>}
+                  <div className="border-t border-heading/[0.06] py-4 pl-6 pr-3 sm:pl-8">
+                    <p className="text-[11px] font-medium leading-tight text-heading sm:text-sm">
+                      {row.label}
+                    </p>
+                    {row.labelSub && (
+                      <p className="mt-0.5 text-[9px] text-muted sm:text-xs">{row.labelSub}</p>
+                    )}
                   </div>
                   {row.cells.map((cell, i) => (
                     <div
                       key={i}
-                      className={`flex flex-col items-center justify-center border-l border-t border-[#E4DDC9] px-1.5 py-3 text-center ${
-                        i === 1 ? 'bg-[#E1F5EE]' : ''
+                      className={`flex flex-col items-center justify-center border-t border-heading/[0.06] px-2 py-4 text-center ${
+                        i === 1 ? HIGHLIGHT_BG : ''
                       }`}
                     >
                       {cell.cross ? (
-                        <X className="h-4 w-4 text-stone-300" aria-label="Not included" />
+                        <span className="text-sm text-stone-300" aria-label="Not included">
+                          —
+                        </span>
                       ) : (
                         <>
-                          <p className={`text-[11px] font-medium sm:text-sm ${i === 1 ? 'text-[#085041]' : 'text-heading'}`}>
+                          <p className="text-[11px] font-medium text-heading sm:text-sm">
                             {cell.text}
                           </p>
-                          {cell.sub && <p className="mt-0.5 text-[9px] text-[#0F6E56] sm:text-xs">{cell.sub}</p>}
+                          {cell.sub && (
+                            <p className="mt-0.5 text-[9px] text-muted sm:text-xs">{cell.sub}</p>
+                          )}
                         </>
                       )}
                     </div>
@@ -338,30 +358,24 @@ export default function PricingTable() {
                 </div>
               ))}
 
-              {/* Guarantee row */}
-              <div className="border-t border-[#E4DDC9] bg-[#EAF3DE] px-2.5 py-3.5 sm:px-4">
-                <GuaranteeInfo />
-              </div>
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="border-l border-t border-[#E4DDC9] bg-[#EAF3DE] px-1.5 py-3.5 text-center">
-                  <p className="text-[10px] leading-snug text-[#27500A] sm:text-xs">
-                    Don’t pass?
-                    <br />
-                    We pay you £500
-                  </p>
-                </div>
-              ))}
-
               {/* CTA row */}
-              <div className="border-t border-[#E4DDC9]" />
-              <div className="border-t border-[#E4DDC9] p-1.5 text-center sm:p-2.5">
+              <div className="border-t border-heading/[0.06]" />
+              <div className="border-t border-heading/[0.06] px-4 py-4">
                 <PlanCta selfStudy={selfStudy} variant="self_study" />
               </div>
-              <div className="border-t border-[#E4DDC9] bg-[#E1F5EE] p-1.5 text-center sm:p-2.5">
+              <div className={`border-t border-heading/[0.06] ${HIGHLIGHT_BG} px-4 py-4`}>
                 <PlanCta selfStudy={selfStudy} variant="complete" />
               </div>
-              <div className="border-t border-[#E4DDC9] p-1.5 text-center sm:p-2.5">
+              <div className="border-t border-heading/[0.06] px-4 py-4">
                 <PlanCta selfStudy={selfStudy} variant="intensive" />
+              </div>
+
+              {/* One guarantee strip for the whole table */}
+              <div className="col-span-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-[#EAF3DE] px-6 py-3.5 text-center">
+                <GuaranteeInfo />
+                <p className="text-[11px] text-[#27500A] sm:text-xs">
+                  Every plan — don&rsquo;t pass, and we pay you £500.
+                </p>
               </div>
             </div>
           </div>

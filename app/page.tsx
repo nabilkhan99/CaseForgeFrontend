@@ -16,6 +16,8 @@ import {
   Faq,
 } from '@/components/landing/v5';
 import PricingTable from '@/components/landing/v5/PricingTable';
+import FinalCta from '@/components/landing/v5/FinalCta';
+import { WASH } from '@/components/landing/v5/editorial';
 
 export default function LandingPage() {
   const [user, setUser] = useState<{ id: string } | null>(null);
@@ -26,7 +28,7 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div className="min-h-[100dvh] bg-[#F7F2E7] font-sans">
+    <div className="min-h-[100dvh] font-sans" style={WASH}>
       <LandingNavbar user={user} />
       <main className="flex flex-col pb-16 sm:pb-20">
         <Hero />
@@ -39,6 +41,7 @@ export default function LandingPage() {
         <StudyBudgetChecker />
         <PricingTable />
         <Faq />
+        <FinalCta />
       </main>
       <LandingFooter />
     </div>
