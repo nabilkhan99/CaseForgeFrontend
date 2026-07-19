@@ -148,6 +148,7 @@ export function useRealtimeSession({
         micStreamRef.current = null;
         micTrackRef.current = null;
         if (audioElRef.current) {
+            audioElRef.current.pause();
             audioElRef.current.srcObject = null;
             audioElRef.current.remove();
             audioElRef.current = null;
@@ -156,7 +157,10 @@ export function useRealtimeSession({
         setStatus('disconnected');
     }, []);
 
-    // Graceful end: persist transcript, move session to 'processing', then notify.
+    // Graceful end: silence the patient immediately, then persist the
+    // transcript and notify. Teardown must come FIRST — the save round-trip
+    // can take seconds (cold start), and while it ran the WebRTC connection
+    // used to stay live with the patient still talking.
     const endRoutine = useCallback(async () => {
         if (endedRef.current) return;
         endedRef.current = true;
@@ -164,6 +168,7 @@ export function useRealtimeSession({
             clearTimeout(timerRef.current);
             timerRef.current = null;
         }
+        teardown();
         try {
             await fetch(saveEndpoint, {
                 method: 'POST',
@@ -173,7 +178,6 @@ export function useRealtimeSession({
         } catch {
             /* best-effort — feedback route also tolerates retries */
         }
-        teardown();
         onConsultationEnded?.();
     }, [saveEndpoint, sessionId, teardown, onConsultationEnded]);
 
