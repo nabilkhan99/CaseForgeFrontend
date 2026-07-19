@@ -47,6 +47,15 @@ export async function GET(request: Request, { params }: RouteContext) {
         path: '/',
         maxAge: COOKIE_MAX_AGE,
       })
+
+      // Track the click atomically (dashboard analytics). Non-fatal: a failure
+      // here must never break attribution — the cookie is already set above.
+      const { error: clickError } = await supabase.rpc('increment_referral_click', {
+        p_code: data.code,
+      })
+      if (clickError) {
+        console.error('[referral-link] click increment failed', { code: data.code, clickError })
+      }
     }
   } catch (error: unknown) {
     console.error('[referral-link] unexpected error', error)

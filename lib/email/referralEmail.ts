@@ -18,9 +18,12 @@ interface SendReferralEmailResult {
   error?: string
 }
 
-/** Format pence as a whole-pound string, e.g. 10000 -> "£100". */
-function formatPounds(pence: number): string {
-  return `£${Math.round(pence / 100)}`
+/**
+ * Format pence as a pound string. Whole pounds render bare (10000 -> "£100");
+ * anything with pence renders to two decimals (2550 -> "£25.50").
+ */
+export function formatPounds(pence: number): string {
+  return pence % 100 === 0 ? `£${pence / 100}` : `£${(pence / 100).toFixed(2)}`
 }
 
 /**

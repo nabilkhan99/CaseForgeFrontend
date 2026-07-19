@@ -1,16 +1,9 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { createClient } from '@supabase/supabase-js';
 import { getStripe } from '@/lib/commerce/stripe';
 import { getPlan, stripePriceIdFor, type CoachingDayAvailability, type PlanKey } from '@/lib/commerce/plans';
-import { getSupabaseAdmin as getStrictSupabaseAdmin } from '@/lib/supabase/admin';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { REFERRAL_COOKIE, normalizeCode } from '@/lib/commerce/referrals';
-
-function getSupabaseAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
-}
 
 interface CheckoutBody {
   plan?: string;
@@ -35,7 +28,7 @@ async function resolveReferralCode(): Promise<string | null> {
     const code = normalizeCode(raw);
     if (!code) return null;
 
-    const { data, error } = await getStrictSupabaseAdmin()
+    const { data, error } = await getSupabaseAdmin()
       .from('referral_codes')
       .select('code, active')
       .eq('code', code)

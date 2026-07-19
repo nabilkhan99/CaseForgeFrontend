@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/admin/guard';
 import { qualificationCutoff } from '@/lib/commerce/referrals';
+import {
+  computeDashboardStats,
+  type CodeRow,
+  type ReferralRow,
+} from '@/lib/commerce/referralStats';
 
 export interface AdminReferral {
   id: string;
@@ -33,7 +38,8 @@ export async function GET() {
   const supabase = getSupabaseAdmin();
 
   // ── Lazy qualification (no cron) ──
-  // Flip pending -> qualified for rows past the 14-day window whose preorder is
+  // Flip pending -> qualified for rows past the qualification window (5 days,
+  // floored at the 1 Sept 2026 launch — see PAYOUT_FLOOR_DATE) whose preorder is
   // still paid. Two-step: select eligible ids (guarded by preorder status), then
   // update just those ids so a refunded/canceled preorder can never qualify.
   try {
@@ -83,7 +89,27 @@ export async function GET() {
     return NextResponse.json({ error: 'Failed to load referrals' }, { status: 500 });
   }
 
-  return NextResponse.json({ referrals: (data ?? []) as AdminReferral[] });
+  const referrals = (data ?? []) as AdminReferral[];
+
+  // ── Dashboard aggregates ──
+  // Fetch the advocate codes (including zero-referral ones — their clicks still
+  // count) and roll everything up with the pure computeDashboardStats. A codes
+  // query failure degrades gracefully: the payout queue still renders from
+  // `referrals`, only the stats strip falls back to an empty aggregate.
+  const { data: codeData, error: codesError } = await supabase
+    .from('referral_codes')
+    .select('code, owner_email, owner_name, active, click_count, created_at');
+
+  if (codesError) {
+    console.error('[admin-referrals] codes query failed', codesError);
+  }
+
+  const stats = computeDashboardStats(
+    (codeData ?? []) as CodeRow[],
+    referrals as ReferralRow[],
+  );
+
+  return NextResponse.json({ referrals, stats });
 }
 
 interface PostBody {
