@@ -80,14 +80,6 @@ export function useRealtimeSession({
     const messageCountRef = useRef(0);
     const sessionStartRef = useRef<number>(0);
     const vadRef = useRef<Record<string, { start_ms?: number; end_ms?: number }>>({});
-    // Interrupt bookkeeping: the response currently generating, the assistant
-    // item whose audio is playing (and when playback started), and the
-    // streamed patient transcript for the in-flight turn so an interrupted
-    // (cancelled) response still lands in the transcript.
-    const activeResponseIdRef = useRef<string | null>(null);
-    const lastAssistantItemRef = useRef<string | null>(null);
-    const speakingItemRef = useRef<{ itemId: string; startedAt: number } | null>(null);
-    const pendingPatientTurnRef = useRef<{ itemId: string; text: string } | null>(null);
 
     const relNow = useCallback((): number | undefined => {
         return sessionStartRef.current ? Date.now() - sessionStartRef.current : undefined;
@@ -129,36 +121,6 @@ export function useRealtimeSession({
             dc.send(JSON.stringify(event));
         }
     }, []);
-
-    /**
-     * Stop the patient mid-speech WITHOUT ending the session: cancel the
-     * response still generating (if any), truncate the conversation item to
-     * the audio actually heard, and flush the queued WebRTC audio buffer.
-     * Over WebRTC generation finishes well before playback, so the buffer
-     * flush — not the cancel — is what actually silences a long monologue.
-     */
-    const interruptPatient = useCallback(() => {
-        const playing = speakingItemRef.current;
-        if (activeResponseIdRef.current) {
-            sendEvent({ type: 'response.cancel' });
-            activeResponseIdRef.current = null;
-        }
-        if (playing) {
-            if (playing.itemId) {
-                // Keep the model's view of the conversation in sync with what
-                // the trainee actually heard.
-                sendEvent({
-                    type: 'conversation.item.truncate',
-                    item_id: playing.itemId,
-                    content_index: 0,
-                    audio_end_ms: Math.max(0, Date.now() - playing.startedAt),
-                });
-            }
-            sendEvent({ type: 'output_audio_buffer.clear' });
-            speakingItemRef.current = null;
-            setIsSpeaking(false);
-        }
-    }, [sendEvent]);
 
     // Tear down media/connection without persisting (used for leave + unmount).
     const teardown = useCallback(() => {
@@ -244,11 +206,6 @@ export function useRealtimeSession({
             }
             switch (evt.type) {
                 case 'input_audio_buffer.speech_started': {
-                    // Barge-in: the trainee started talking over the patient.
-                    // interrupt_response cancels generation server-side, but the
-                    // already-buffered WebRTC audio keeps playing — cancel and
-                    // flush from the client too so the patient goes quiet now.
-                    interruptPatient();
                     const id = String(evt.item_id ?? '');
                     if (id) {
                         vadRef.current[id] = {
@@ -281,38 +238,10 @@ export function useRealtimeSession({
                     if (id) delete vadRef.current[id];
                     break;
                 }
-                case 'response.created': {
-                    const responseId = (evt.response as { id?: string } | undefined)?.id;
-                    activeResponseIdRef.current = responseId ? String(responseId) : null;
-                    break;
-                }
-                case 'response.output_item.added': {
-                    const item = evt.item as
-                        | { id?: string; type?: string; role?: string }
-                        | undefined;
-                    if (item?.type === 'message' && item.role === 'assistant' && item.id) {
-                        lastAssistantItemRef.current = item.id;
-                    }
-                    break;
-                }
-                // Stream the patient's words as they generate so an interrupted
-                // (cancelled) turn can still be flushed to the transcript.
-                case 'response.output_audio_transcript.delta':
-                case 'response.audio_transcript.delta': {
-                    const id = String(evt.item_id ?? '');
-                    const delta = String(evt.delta ?? '');
-                    const pending = pendingPatientTurnRef.current;
-                    pendingPatientTurnRef.current =
-                        pending && pending.itemId === id
-                            ? { itemId: id, text: pending.text + delta }
-                            : { itemId: id, text: delta };
-                    break;
-                }
                 // GA emits response.output_audio_transcript.done; older builds use response.audio_transcript.done.
                 // The patient turn is generated text, so its ASR confidence is 1.0.
                 case 'response.output_audio_transcript.done':
                 case 'response.audio_transcript.done':
-                    pendingPatientTurnRef.current = null;
                     appendTurn({
                         speaker: 'patient',
                         text: String(evt.transcript ?? ''),
@@ -320,42 +249,11 @@ export function useRealtimeSession({
                         asr_confidence: 1,
                     });
                     break;
-                case 'response.done': {
-                    const response = evt.response as
-                        | { id?: string; output?: Array<{ id?: string }> }
-                        | undefined;
-                    // Only clear the guard for the response we're tracking — a
-                    // stale done for an already-cancelled response must not
-                    // clobber the id of a newer auto-created response.
-                    if (response?.id && response.id === activeResponseIdRef.current) {
-                        activeResponseIdRef.current = null;
-                    }
-                    // A cancelled response never emits transcript.done — flush
-                    // what the patient managed to say before the interruption.
-                    // Correlate via the response's own output items so a stale
-                    // done can't flush (and later duplicate) a newer turn.
-                    const pending = pendingPatientTurnRef.current;
-                    if (pending && (response?.output ?? []).some((i) => i?.id === pending.itemId)) {
-                        pendingPatientTurnRef.current = null;
-                        appendTurn({
-                            speaker: 'patient',
-                            text: pending.text,
-                            start_ms: relNow(),
-                            asr_confidence: 1,
-                        });
-                    }
-                    break;
-                }
                 case 'output_audio_buffer.started':
-                    speakingItemRef.current = {
-                        itemId: lastAssistantItemRef.current ?? '',
-                        startedAt: Date.now(),
-                    };
                     setIsSpeaking(true);
                     break;
                 case 'output_audio_buffer.stopped':
                 case 'output_audio_buffer.cleared':
-                    speakingItemRef.current = null;
                     setIsSpeaking(false);
                     break;
                 case 'response.function_call_arguments.done':
@@ -366,12 +264,8 @@ export function useRealtimeSession({
                     );
                     break;
                 case 'error': {
-                    const err = evt.error as { message?: string; code?: string } | undefined;
-                    const message = err?.message ?? 'Realtime error';
-                    // Interrupt races are benign and expected: cancelling a
-                    // response that just finished, or truncating an item whose
-                    // audio already played out. Don't surface them to the UI.
-                    if (/cancel|truncat/i.test(`${err?.code ?? ''} ${message}`)) break;
+                    const message =
+                        (evt.error as { message?: string } | undefined)?.message ?? 'Realtime error';
                     setError(message);
                     onError?.(message);
                     break;
@@ -380,7 +274,7 @@ export function useRealtimeSession({
                     break;
             }
         },
-        [appendTurn, relNow, handleFunctionCall, interruptPatient, onError]
+        [appendTurn, relNow, handleFunctionCall, onError]
     );
 
     const connect = useCallback(async () => {
@@ -437,10 +331,6 @@ export function useRealtimeSession({
                 setStatus('connected');
                 sessionStartRef.current = Date.now();
                 vadRef.current = {};
-                activeResponseIdRef.current = null;
-                lastAssistantItemRef.current = null;
-                speakingItemRef.current = null;
-                pendingPatientTurnRef.current = null;
                 onSessionStarted?.();
                 // Patient speaks first — greeting ONLY, then waits (greeting-first behaviour).
                 sendEvent({
@@ -529,7 +419,6 @@ export function useRealtimeSession({
         endConsultation,
         disconnect,
         setMicMuted,
-        interruptPatient,
         error,
         status,
     };

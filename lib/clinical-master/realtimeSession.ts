@@ -78,10 +78,6 @@ export function buildSessionPayload(stationData: StationData | null, opts: Sessi
             threshold: 0.5,
             prefix_padding_ms: 300,
             silence_duration_ms: 900,
-            // Barge-in must cancel the in-flight response — don't rely on
-            // Azure defaults for this (ISH-15: patient talking indefinitely).
-            create_response: true,
-            interrupt_response: true,
           },
         },
         output: {
