@@ -6,11 +6,13 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { formatBriefMarkdown } from '@/lib/clinical-master/formatBrief';
 import { createClient } from '@/lib/supabase/client';
 import Container from '@/components/ui/Container';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import DomainTag from '@/components/ui/DomainTag';
 import ConsultationTimer from '@/components/clinical-master/ConsultationTimer';
+import AudioSetupNotice from '@/components/clinical-master/AudioSetupNotice';
 
 interface StationData {
   id: string;
@@ -207,7 +209,7 @@ function ReadingPhaseContent() {
                     h3: ({ children }) => <h4 className="text-[14px] font-bold text-heading mt-3 mb-1">{children}</h4>,
                   }}
                 >
-                  {station.candidate_instructions}
+                  {formatBriefMarkdown(station.candidate_instructions)}
                 </ReactMarkdown>
               </div>
             </div>
@@ -222,6 +224,9 @@ function ReadingPhaseContent() {
                 {error}
               </motion.div>
             )}
+
+            {/* Audio setup guidance */}
+            <AudioSetupNotice />
 
             {/* CTA */}
             <div ref={ctaRef}>

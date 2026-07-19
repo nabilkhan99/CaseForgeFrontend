@@ -101,7 +101,7 @@ export async function getPerformanceMetrics(userId: string): Promise<Performance
 
     const { data: results } = await supabase
         .from('session_results')
-        .select('domains')
+        .select('domains, weighted_score')
         .in('session_id', sessionIds);
 
     if (!results || results.length === 0) {
@@ -118,9 +118,14 @@ export async function getPerformanceMetrics(userId: string): Promise<Performance
         relating_to_others: [],
     };
     for (const r of results) {
-        for (const d of gradesFromResult((r as { domains?: unknown }).domains)) {
-            if (d.domain && d.grade && d.domain in buckets) {
-                buckets[d.domain].push(GRADE_PCT[d.grade] ?? 0);
+        const row = r as { domains?: unknown; weighted_score?: number | string | null };
+        // Skip legacy artefact results (0.0 overall = the engine marking an empty
+        // pre-engine transcript) — counting their CF grades as 0 drags every
+        // average down for sessions that were never genuinely consulted.
+        if (Number(row.weighted_score ?? 0) <= 0) continue;
+        for (const d of gradesFromResult(row.domains)) {
+            if (d.domain && d.grade && d.domain in buckets && d.grade in GRADE_PCT) {
+                buckets[d.domain].push(GRADE_PCT[d.grade]);
             }
         }
     }
@@ -171,24 +176,29 @@ export async function getBlueprintDomains(userId: string): Promise<BlueprintDoma
         .eq('user_id', userId)
         .eq('status', 'completed');
 
-    // Compute per-domain: completed count + average score
-    const domainStats: Record<string, { completed: number; totalScore: number }> = {};
+    // Compute per-domain: completed count + average score. Sessions without a
+    // score (legacy, pre-marking-engine) count as completed but are excluded
+    // from the average so they don't read as 0-mark attempts.
+    const domainStats: Record<string, { completed: number; scored: number; totalScore: number }> = {};
     completedSessions?.forEach(s => {
         const station = s.stations as unknown as { domain_id: string } | null;
         const domainId = station?.domain_id;
         if (!domainId) return;
         if (!domainStats[domainId]) {
-            domainStats[domainId] = { completed: 0, totalScore: 0 };
+            domainStats[domainId] = { completed: 0, scored: 0, totalScore: 0 };
         }
         domainStats[domainId].completed += 1;
-        domainStats[domainId].totalScore += s.overall_score ?? 0;
+        if (typeof s.overall_score === 'number' && s.overall_score > 0) {
+            domainStats[domainId].scored += 1;
+            domainStats[domainId].totalScore += s.overall_score;
+        }
     });
 
     return domains.map((domain, index) => {
-        const stats = domainStats[domain.id] || { completed: 0, totalScore: 0 };
+        const stats = domainStats[domain.id] || { completed: 0, scored: 0, totalScore: 0 };
         const total = countByDomain[domain.id] || 0;
         // clinical_sessions.overall_score is now the weighted score (0 to 10.5).
-        const avgWeighted = stats.completed > 0 ? stats.totalScore / stats.completed : 0;
+        const avgWeighted = stats.scored > 0 ? stats.totalScore / stats.scored : 0;
         const percentage = Math.round((avgWeighted / MAX_WEIGHTED) * 100);
 
         return {
@@ -269,6 +279,10 @@ export interface SessionHistoryItem {
     weightedScore: number;
     maxScore: number;
     passed: boolean;
+    /** True when a marking result exists. False = legacy/unmarked session: show neutral copy, never a score or FAIL. */
+    scored: boolean;
+    /** True while a recent session is still being marked (results may still arrive). */
+    marking: boolean;
 }
 
 export async function getSessionHistory(
@@ -282,6 +296,7 @@ export async function getSessionHistory(
         .from('clinical_sessions')
         .select(`
             id,
+            status,
             completed_at,
             stations (
                 id,
@@ -315,6 +330,17 @@ export async function getSessionHistory(
             max_score: number | null;
         } | null;
 
+        // A verdict with a 0.0 weighted score is a legacy artefact (the engine
+        // marking an empty pre-engine transcript), not a real consultation mark —
+        // render those neutrally rather than as a red FAIL row.
+        const scored = Boolean(result?.verdict) && Number(result?.weighted_score ?? 0) > 0;
+        // A 'processing' session from the last hour may still get results; anything
+        // older without a verdict is a legacy/unmarked session that never will.
+        const ageMs = session.completed_at
+            ? Date.now() - new Date(session.completed_at).getTime()
+            : Number.POSITIVE_INFINITY;
+        const marking = !scored && session.status === 'processing' && ageMs < 60 * 60 * 1000;
+
         return {
             id: session.id,
             stationId: station?.id || '',
@@ -325,6 +351,8 @@ export async function getSessionHistory(
             weightedScore: Number(result?.weighted_score ?? 0),
             maxScore: Number(result?.max_score ?? MAX_WEIGHTED),
             passed: result?.verdict ? PASSING_VERDICTS.includes(result.verdict) : false,
+            scored,
+            marking,
         };
     });
 }
