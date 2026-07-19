@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Square } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { Accent, Pill, TILE } from './editorial';
 
 interface FeatureRow {
@@ -60,10 +60,10 @@ function FeatureRows({ rows, color }: { rows: FeatureRow[]; color: string }) {
           key={row.lead}
           className={`flex gap-3 py-3 ${index > 0 ? 'border-t border-heading/[0.06]' : ''}`}
         >
-          <Square
+          <Check
             className="mt-0.5 h-4 w-4 flex-shrink-0"
             style={{ color }}
-            strokeWidth={1.75}
+            strokeWidth={2.5}
             aria-hidden="true"
           />
           <div className="min-w-0">
