@@ -27,10 +27,20 @@ const nextConfig = {
       'select-experience-groups',
     ];
 
-    return azureRoutes.map(route => ({
-      source: `/api/${route}`,
-      destination: `${backendUrl}/api/${route}`,
-    }));
+    return [
+      // Approver-facing course specification. The study budget checker's
+      // pre-approval emails link to fourteenfisherman.com/course-spec
+      // verbatim, so this URL must stay stable. Served as a static
+      // document from public/course-spec.html.
+      {
+        source: '/course-spec',
+        destination: '/course-spec.html',
+      },
+      ...azureRoutes.map(route => ({
+        source: `/api/${route}`,
+        destination: `${backendUrl}/api/${route}`,
+      })),
+    ];
   },
 }
 

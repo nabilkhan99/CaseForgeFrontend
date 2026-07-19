@@ -112,8 +112,9 @@ export default async function ThanksPage({ searchParams }: ThanksPageProps) {
           ) : (
             <>A receipt is on its way to your inbox. </>
           )}
-          We’ll email you with everything you need to get started. Your access runs for 3 months
-          from today — or from 1 September 2026 if you’ve bought before launch.
+          This is a pre-order: everything starts on 1 September 2026 — your AI practice,
+          on-demand lectures and coaching. Your 3 months’ access runs from that date, and
+          we’ll email you everything you need before launch.
         </p>
 
         {/* ── Referral block (read-only; code is minted by the Stripe webhook) ── */}

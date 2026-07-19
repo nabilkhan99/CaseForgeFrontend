@@ -127,7 +127,7 @@ export default function ProductShowcase() {
           {STEPS.map((s, i) => (
             <motion.div
               key={s.key}
-              className="col-start-1 row-start-1 flex flex-col justify-center"
+              className="col-start-1 row-start-1 flex flex-col"
               initial={false}
               animate={{ opacity: i === active ? 1 : 0 }}
               transition={{ duration: 0.28, ease: 'easeOut' }}

@@ -27,9 +27,10 @@ function countdownLabel(cutoffAt: string, now: number): string | null {
   return `Closes in ${hours}h ${minutes}m`;
 }
 
-function stockLine(day: CoachingDayAvailability): { text: string; tone: 'calm' | 'urgent' | 'soldout' } {
-  if (day.status === 'sold_out') return { text: 'Sold out', tone: 'soldout' };
-  if (day.places_left >= 6) return { text: 'Only 6 places per class', tone: 'calm' };
+function stockLine(day: CoachingDayAvailability): { text: string; tone: 'calm' | 'urgent' | 'muted' } {
+  if (day.status === 'sold_out') return { text: 'Sold out', tone: 'muted' };
+  if (day.status === 'closed') return { text: 'Bookings closed', tone: 'muted' };
+  if (day.places_left >= day.capacity) return { text: `Only ${day.capacity} places per class`, tone: 'calm' };
   if (day.places_left === 1) return { text: 'Only 1 place left', tone: 'urgent' };
   return { text: `Only ${day.places_left} places left`, tone: 'urgent' };
 }
@@ -103,21 +104,22 @@ export default function CoachingDayPage() {
           </Link>
 
           <p className="mt-6 text-[11px] font-medium uppercase tracking-[0.08em] text-[#854F0B] sm:text-xs">
-            Complete SCA Course · £599 one-off
+            Pre-order · Complete SCA Course · £599 one-off
           </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-heading sm:text-4xl">
             Choose your coaching day
           </h1>
           <p className="mt-3 max-w-lg text-sm leading-relaxed text-body sm:text-base">
             One full day of live Small-Group Coaching, 9am to 6pm, remote, with a maximum class of
-            six. Your AI practice and on-demand lectures are separate — they unlock the moment you
-            buy, for 3 months.
+            six. Your AI practice and on-demand lectures are separate — they open alongside
+            everything else, for 3 months.
           </p>
-          <p className="mt-3 inline-flex rounded-lg bg-[#FDF6EC] px-3 py-1.5 text-[12px] font-medium text-[#854F0B]">
-            Access opens {ACCESS_OPENS_LABEL} — buy before then and your 3 months start on launch day.
+          <p className="mt-3 inline-flex max-w-lg rounded-lg bg-[#FDF6EC] px-3 py-1.5 text-[12px] font-medium leading-relaxed text-[#854F0B]">
+            This is a pre-order: everything starts {ACCESS_OPENS_LABEL} — AI practice, lectures and
+            coaching. Your 3 months run from that date.
           </p>
 
-          <div className="mt-8 flex flex-col gap-2.5">
+          <div role="radiogroup" aria-label="Available coaching days" className="mt-8 flex flex-col gap-2.5">
             {days === null && !loadError && (
               <div className="flex items-center justify-center rounded-xl border border-stone-200 bg-white py-10">
                 <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -143,9 +145,11 @@ export default function CoachingDayPage() {
                 <button
                   key={day.day}
                   type="button"
+                  role="radio"
+                  aria-checked={isSelected}
                   disabled={disabled}
                   onClick={() => setSelected(day.day)}
-                  className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3.5 text-left transition-all ${
+                  className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3.5 text-left transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
                     isSelected
                       ? 'border-primary bg-[#FDF6EC] shadow-elevation-1'
                       : disabled
@@ -153,25 +157,35 @@ export default function CoachingDayPage() {
                         : 'border-stone-200 bg-white hover:border-stone-300'
                   }`}
                 >
-                  <div>
-                    <p className={`text-sm font-semibold ${soldOut ? 'text-stone-500' : 'text-heading'}`}>
-                      {day.label}
-                    </p>
-                    <p className="mt-0.5 text-xs text-body">9am to 6pm · Remote · Live</p>
-                    {countdown && (
-                      <p className="mt-0.5 text-xs font-semibold text-[#B42318]">{countdown}</p>
-                    )}
+                  <div className="flex items-center gap-3">
+                    <span
+                      aria-hidden="true"
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+                        isSelected ? 'border-primary' : disabled ? 'border-stone-200' : 'border-stone-300'
+                      }`}
+                    >
+                      {isSelected && <span className="h-2.5 w-2.5 rounded-full bg-primary" />}
+                    </span>
+                    <div>
+                      <p className={`text-sm font-semibold ${disabled ? 'text-stone-500' : 'text-heading'}`}>
+                        {day.label}
+                      </p>
+                      <p className="mt-0.5 text-xs text-body">9am to 6pm · Remote · Live</p>
+                      {countdown && (
+                        <p className="mt-0.5 text-xs font-semibold text-[#B42318]">{countdown}</p>
+                      )}
+                    </div>
                   </div>
                   <span
                     className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] ${
-                      stock.tone === 'soldout'
+                      stock.tone === 'muted'
                         ? 'bg-stone-200 font-semibold text-stone-700'
                         : stock.tone === 'urgent'
                           ? 'bg-[#FDECEC] font-bold text-[#B42318]'
                           : 'bg-[#FDF6EC] font-medium text-[#854F0B]'
                     }`}
                   >
-                    {stock.tone !== 'soldout' && <Users className="h-3 w-3" aria-hidden="true" />}
+                    {stock.tone !== 'muted' && <Users className="h-3 w-3" aria-hidden="true" />}
                     {stock.text}
                   </span>
                 </button>
@@ -188,21 +202,29 @@ export default function CoachingDayPage() {
             )}
           </div>
 
-          {error && <p className="mt-4 text-sm font-medium text-danger">{error}</p>}
+          {error && (
+            <p role="alert" className="mt-4 text-sm font-medium text-danger">
+              {error}
+            </p>
+          )}
 
-          <button
-            type="button"
-            onClick={handleContinue}
-            disabled={!selected || submitting || selectable.length === 0}
-            className="mt-7 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#EF9F27] px-6 py-3.5 text-sm font-semibold text-[#2C2C2A] shadow-[0_3px_12px_rgba(186,117,23,0.4)] transition-all hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {submitting ? 'Redirecting to secure checkout…' : 'Continue to payment'}
-            {!submitting && <ArrowRight className="h-4 w-4" />}
-          </button>
-          <p className="mt-3 text-center text-[11px] text-muted">
-            Secure payment via Stripe · Receipt emailed instantly · Bookings close at midnight the
-            day before each class
-          </p>
+          {selectable.length > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={handleContinue}
+                disabled={!selected || submitting}
+                className="cta-button mt-7 w-full px-6 py-4 text-base"
+              >
+                {submitting ? 'Redirecting to secure checkout…' : 'Continue to payment'}
+                {!submitting && <ArrowRight className="h-4 w-4" />}
+              </button>
+              <p className="mt-3 text-center text-[11px] text-muted">
+                Secure payment via Stripe · Receipt emailed instantly · Bookings close at midnight
+                the day before each class
+              </p>
+            </>
+          )}
         </motion.div>
       </main>
       <LandingFooter />

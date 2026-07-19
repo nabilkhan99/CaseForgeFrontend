@@ -38,8 +38,7 @@ const FAQS: QA[] = [
   {
     question: 'Can I start practising straight away?',
     answer: [
-      'Yes. Your AI practice unlocks the moment you buy, and on the Complete SCA Course your on-demand lectures unlock at the same time. Your access runs for 3 months from the day of purchase, on every plan, so you set the pace: there is no fixed schedule to follow.',
-      'One exception applies before launch. The course goes live on 1 September 2026, so if you buy before then, your access starts on 1 September rather than your purchase date.',
+      "Not yet — this is a pre-order. The course goes live on 1 September 2026, and everything starts together on that date: your AI practice, the on-demand lectures, and the coaching days. Your 3 months' access runs from 1 September, not from the day you order, so ordering early costs you nothing — it locks in your place and your pick of coaching day.",
     ],
   },
   {

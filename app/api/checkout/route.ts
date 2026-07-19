@@ -118,8 +118,8 @@ export async function POST(request: Request) {
       },
       payment_intent_data: {
         description: coachingDay
-          ? `Fourteen Fisherman — ${plan.name}, coaching day ${coachingDay.label}`
-          : `Fourteen Fisherman — ${plan.name}`,
+          ? `Fourteen Fisherman — ${plan.name} (pre-order, starts 1 September 2026), coaching day ${coachingDay.label}`
+          : `Fourteen Fisherman — ${plan.name} (pre-order, starts 1 September 2026)`,
       },
     });
 
