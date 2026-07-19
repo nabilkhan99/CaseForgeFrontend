@@ -3,44 +3,14 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { ArrowRight, Info, X } from 'lucide-react';
+import { ArrowRight, Check, Info, X } from 'lucide-react';
 import { ACCESS_OPENS_LABEL, BOOK_A_CALL_URL } from '@/lib/commerce/plans';
+import { Pill } from './editorial';
 
-interface FeatureCell {
-  text: string;
-  sub?: string;
-  cross?: boolean;
-}
-
-interface FeatureRow {
-  label: string;
-  labelSub?: string;
-  cells: [FeatureCell, FeatureCell, FeatureCell]; // self_study, complete, intensive
-}
-
-const FEATURE_ROWS: readonly FeatureRow[] = [
-  {
-    label: 'AI consultations',
-    labelSub: '200 stations',
-    cells: [{ text: 'Unlimited' }, { text: 'Unlimited', sub: '£299 value' }, { text: 'Unlimited' }],
-  },
-  {
-    label: 'On-demand Lectures',
-    cells: [{ text: '', cross: true }, { text: '12 hours', sub: '£599 value' }, { text: '12 hours' }],
-  },
-  {
-    label: 'Small-Group Coaching',
-    cells: [
-      { text: '', cross: true },
-      { text: 'One full day, 9am to 6pm', sub: 'Max class of 6 · £599 value' },
-      { text: 'One full day, 9am to 6pm' },
-    ],
-  },
-  {
-    label: '1:1 weekly coaching',
-    cells: [{ text: '', cross: true }, { text: '', cross: true }, { text: '12 x 1hr sessions' }],
-  },
-];
+/**
+ * v5 pricing content as Confetto-style plan cards — every feature cell,
+ * value line, CTA and the guarantee row preserved; checkout logic intact.
+ */
 
 /** Kicks off Stripe checkout for the Self-Study plan (no coaching day needed). */
 function useSelfStudyCheckout() {
@@ -73,58 +43,123 @@ function useSelfStudyCheckout() {
   return { start, submitting, error };
 }
 
-function GuaranteeInfo({ align = 'left' }: { align?: 'left' | 'right' }) {
+interface Include {
+  label: string;
+  value?: string;
+  sub?: string;
+  excluded?: boolean;
+}
+
+interface Plan {
+  key: 'self_study' | 'complete' | 'intensive';
+  name: string;
+  price: string;
+  note?: string;
+  tagline: string;
+  valueLine?: string;
+  badge?: string;
+  highlighted?: boolean;
+  includes: Include[];
+}
+
+const PLANS: Plan[] = [
+  {
+    key: 'self_study',
+    name: 'Self-Study',
+    price: '£299',
+    note: 'one-off',
+    tagline: "3 months' access",
+    includes: [
+      { label: 'AI consultations', value: 'Unlimited', sub: '200 stations' },
+      { label: 'On-demand Lectures', excluded: true },
+      { label: 'Small-Group Coaching', excluded: true },
+      { label: '1:1 weekly coaching', excluded: true },
+    ],
+  },
+  {
+    key: 'complete',
+    name: 'Complete SCA Course',
+    price: '£599',
+    note: 'one-off',
+    tagline: "3 months' access",
+    valueLine: '£1,497 total value',
+    badge: 'Most popular',
+    highlighted: true,
+    includes: [
+      { label: 'AI consultations', value: 'Unlimited', sub: '£299 value' },
+      { label: 'On-demand Lectures', value: '12 hours', sub: '£599 value' },
+      { label: 'Small-Group Coaching', value: 'One full day, 9am to 6pm', sub: 'Max class of 6 · £599 value' },
+      { label: '1:1 weekly coaching', excluded: true },
+    ],
+  },
+  {
+    key: 'intensive',
+    name: 'Intensive',
+    price: 'From £2,999',
+    tagline: 'By application',
+    includes: [
+      { label: 'AI consultations', value: 'Unlimited', sub: '200 stations' },
+      { label: 'On-demand Lectures', value: '12 hours' },
+      { label: 'Small-Group Coaching', value: 'One full day, 9am to 6pm' },
+      { label: '1:1 weekly coaching', value: '12 x 1hr sessions' },
+    ],
+  },
+];
+
+function GuaranteeLine() {
   return (
-    <div className="group relative inline-flex items-center gap-1">
-      <p className="text-[11px] font-medium text-[#27500A] sm:text-sm">SCA Guarantee</p>
-      <button
-        type="button"
-        aria-label="About the SCA Guarantee: conditional on passing all 200 AI stations"
-        title="Conditional guarantee: to qualify you must first pass all 200 AI stations."
-        className="inline-flex shrink-0 items-center justify-center rounded-full text-[#27500A]/70 transition-colors hover:text-[#27500A] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#27500A]/40"
-      >
-        <Info className="h-3.5 w-3.5" aria-hidden="true" />
-      </button>
-      <div
-        role="tooltip"
-        className={`pointer-events-none absolute top-full z-20 mt-1 w-52 rounded-lg border border-[#E4DDC9] bg-white p-2.5 text-left text-[10px] leading-snug text-body opacity-0 shadow-elevation-3 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 sm:text-[11px] ${
-          align === 'right' ? 'right-0' : 'left-0'
-        }`}
-      >
-        This is a <span className="font-medium text-[#27500A]">conditional</span> guarantee — to qualify
-        you must first pass all 200 AI stations.
+    <div className="flex items-center justify-between gap-3 rounded-xl bg-[#EAF3DE] px-4 py-3">
+      <div className="group relative inline-flex items-center gap-1">
+        <p className="text-[11px] font-medium text-[#27500A] sm:text-xs">SCA Guarantee</p>
+        <button
+          type="button"
+          aria-label="About the SCA Guarantee: conditional on passing all 200 AI stations"
+          title="Conditional guarantee: to qualify you must first pass all 200 AI stations."
+          className="inline-flex shrink-0 items-center justify-center rounded-full text-[#27500A]/70 transition-colors hover:text-[#27500A] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#27500A]/40"
+        >
+          <Info className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+        <div
+          role="tooltip"
+          className="pointer-events-none absolute bottom-full left-0 z-20 mb-1.5 w-52 rounded-lg border border-heading/10 bg-white p-2.5 text-left text-[10px] leading-snug text-body opacity-0 shadow-elevation-3 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 sm:text-[11px]"
+        >
+          This is a <span className="font-medium text-[#27500A]">conditional</span> guarantee — to
+          qualify you must first pass all 200 AI stations.
+        </div>
       </div>
+      <p className="text-right text-[11px] leading-snug text-[#27500A]">
+        Don’t pass?
+        <br />
+        We pay you £500
+      </p>
     </div>
   );
 }
 
-interface CtaButtonsProps {
+function PlanCta({
+  plan,
+  selfStudy,
+}: {
+  plan: Plan;
   selfStudy: ReturnType<typeof useSelfStudyCheckout>;
-  variant: 'self_study' | 'complete' | 'intensive';
-  fullWidth?: boolean;
-}
-
-function PlanCta({ selfStudy, variant }: CtaButtonsProps) {
-  if (variant === 'self_study') {
+}) {
+  if (plan.key === 'complete') {
+    return (
+      <Link href="/coaching-day" className="primary-button w-full justify-center !rounded-full text-sm">
+        Choose your coaching day <ArrowRight className="h-4 w-4" aria-hidden="true" />
+      </Link>
+    );
+  }
+  if (plan.key === 'self_study') {
     return (
       <button
         type="button"
         onClick={selfStudy.start}
         disabled={selfStudy.submitting}
-        className="w-full rounded-full border border-stone-400 px-2 py-3 text-[13px] font-semibold text-heading transition-colors hover:bg-surface-warm disabled:opacity-60 sm:py-2.5 sm:text-sm"
+        className="w-full rounded-full border border-heading/15 bg-white px-6 py-3 text-sm font-medium text-heading transition-colors hover:bg-surface-warm disabled:opacity-60"
       >
         {selfStudy.submitting ? 'Redirecting…' : 'Pre-order now'}
       </button>
-    );
-  }
-  if (variant === 'complete') {
-    return (
-      <Link
-        href="/coaching-day"
-        className="cta-button w-full gap-1.5 px-2 py-3.5 text-[13px] sm:py-3 sm:text-sm"
-      >
-        Choose your coaching day <ArrowRight className="h-3.5 w-3.5" />
-      </Link>
     );
   }
   return (
@@ -132,242 +167,97 @@ function PlanCta({ selfStudy, variant }: CtaButtonsProps) {
       href={BOOK_A_CALL_URL}
       target="_blank"
       rel="noopener noreferrer"
-      className="block w-full rounded-full border border-stone-400 px-2 py-3 text-center text-[13px] font-semibold text-heading transition-colors hover:bg-surface-warm sm:py-2.5 sm:text-sm"
+      className="block w-full rounded-full border border-heading/15 bg-white px-6 py-3 text-center text-sm font-medium text-heading transition-colors hover:bg-surface-warm"
     >
       Book a call
     </a>
   );
 }
 
-/** Mobile: one full-width card per plan, same content as its desktop column. */
-function MobileCards({ selfStudy }: { selfStudy: ReturnType<typeof useSelfStudyCheckout> }) {
-  const cards = [
-    {
-      key: 'self_study' as const,
-      name: 'Self-Study',
-      price: '£299',
-      suffix: 'one-off',
-      tagline: "3 months' access",
-      highlighted: false,
-      badge: null,
-      valueLine: null,
-      cellIndex: 0,
-    },
-    {
-      key: 'complete' as const,
-      name: 'Complete SCA Course',
-      price: '£599',
-      suffix: 'one-off',
-      tagline: "3 months' access",
-      highlighted: true,
-      badge: 'Most popular',
-      valueLine: '£1,497 total value',
-      cellIndex: 1,
-    },
-    {
-      key: 'intensive' as const,
-      name: 'Intensive',
-      price: 'From £2,999',
-      suffix: '',
-      tagline: 'By application',
-      highlighted: false,
-      badge: null,
-      valueLine: null,
-      cellIndex: 2,
-    },
-  ];
-
-  return (
-    <div className="flex flex-col gap-4 sm:hidden">
-      {cards.map((card) => (
-        <div
-          key={card.key}
-          className={`overflow-hidden rounded-2xl border shadow-elevation-2 ${
-            card.highlighted ? 'border-[#1D9E75]/40 bg-[#E1F5EE]' : 'border-[#E4DDC9] bg-white'
-          }`}
-        >
-          <div className="relative px-5 pb-4 pt-6 text-center">
-            {card.badge && (
-              <span className="absolute left-1/2 top-2 -translate-x-1/2 whitespace-nowrap rounded-full bg-[#1D9E75] px-2.5 py-0.5 text-[9px] font-medium text-white">
-                {card.badge}
-              </span>
-            )}
-            <p className={`text-sm font-medium ${card.highlighted ? 'text-[#085041]' : 'text-heading'}`}>
-              {card.name}
-            </p>
-            <p className={`mt-1 text-2xl font-medium ${card.highlighted ? 'text-[#085041]' : 'text-heading'}`}>
-              {card.price}{' '}
-              {card.suffix && (
-                <span className={`text-xs font-normal ${card.highlighted ? 'text-[#0F6E56]' : 'text-body'}`}>
-                  {card.suffix}
-                </span>
-              )}
-            </p>
-            <p className={`mt-0.5 text-xs ${card.highlighted ? 'text-[#0F6E56]' : 'text-body'}`}>{card.tagline}</p>
-            {card.valueLine && <p className="mt-0.5 text-xs text-muted line-through">{card.valueLine}</p>}
-          </div>
-
-          <div className={`border-t ${card.highlighted ? 'border-[#1D9E75]/20' : 'border-[#E4DDC9]'}`}>
-            {FEATURE_ROWS.map((row) => {
-              const cell = row.cells[card.cellIndex];
-              return (
-                <div
-                  key={row.label}
-                  className={`flex items-center justify-between gap-3 border-b px-5 py-3 ${
-                    card.highlighted ? 'border-[#1D9E75]/15' : 'border-[#E4DDC9]/70'
-                  }`}
-                >
-                  <div>
-                    <p className="text-[13px] font-medium text-heading">{row.label}</p>
-                    {row.labelSub && <p className="text-[11px] text-muted">{row.labelSub}</p>}
-                  </div>
-                  <div className="text-right">
-                    {cell.cross ? (
-                      <X className="ml-auto h-4 w-4 text-stone-300" aria-label="Not included" />
-                    ) : (
-                      <>
-                        <p className={`text-[13px] font-medium ${card.highlighted ? 'text-[#085041]' : 'text-heading'}`}>
-                          {cell.text}
-                        </p>
-                        {cell.sub && <p className="text-[11px] text-[#0F6E56]">{cell.sub}</p>}
-                      </>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Guarantee row */}
-            <div className="flex items-center justify-between gap-3 bg-[#EAF3DE] px-5 py-3.5">
-              <GuaranteeInfo />
-              <p className="text-right text-[11px] leading-snug text-[#27500A]">
-                Don’t pass? We pay you £500
-              </p>
-            </div>
-          </div>
-
-          <div className="p-3">
-            <PlanCta selfStudy={selfStudy} variant={card.key} />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/** The three-tier pricing table: matrix on desktop, stacked cards on mobile. */
+/** The three-tier pricing table as Confetto-style plan cards. */
 export default function PricingTable() {
   const selfStudy = useSelfStudyCheckout();
 
   return (
-    <section id="pricing" className="scroll-mt-24 px-5 py-6 sm:px-8 sm:py-10">
-      <div className="mx-auto max-w-5xl">
+    <section id="pricing" className="scroll-mt-24 px-5 py-10 sm:px-8 sm:py-16">
+      <div className="mx-auto max-w-6xl">
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-80px' }}
           transition={{ duration: 0.55, ease: 'easeOut' }}
         >
-          <p className="mb-2 text-center text-[11px] font-medium uppercase tracking-[0.08em] text-[#0F6E56] sm:text-xs">
-            Choose your prep
-          </p>
+          <div className="text-center">
+            <Pill>Choose your prep</Pill>
+          </div>
 
-          <p className="mb-5 flex justify-center">
+          <p className="mt-5 flex justify-center">
             <span className="inline-flex items-center gap-2 rounded-full bg-[#FAEEDA] px-4 py-1.5 text-center text-xs font-semibold text-[#854F0B] sm:text-[13px]">
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#B45309]" aria-hidden="true" />
               Pre-order — everything starts {ACCESS_OPENS_LABEL}
             </span>
           </p>
 
-          <MobileCards selfStudy={selfStudy} />
+          <div className="mt-10 grid grid-cols-1 gap-5 sm:mt-12 sm:gap-6 lg:grid-cols-3">
+            {PLANS.map((plan) => (
+              <div
+                key={plan.key}
+                className={`relative flex flex-col rounded-3xl border p-7 shadow-elevation-2 backdrop-blur sm:p-8 ${
+                  plan.highlighted
+                    ? 'border-primary/25 bg-[#FDF6E7]'
+                    : 'border-heading/[0.06] bg-white/80'
+                }`}
+              >
+                {plan.badge && (
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-primary px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white">
+                    {plan.badge}
+                  </span>
+                )}
 
-          <div className="hidden overflow-hidden rounded-2xl border border-[#E4DDC9] bg-white shadow-elevation-2 sm:block">
-            <div className="grid grid-cols-[minmax(84px,150px)_repeat(3,minmax(0,1fr))]">
-              {/* Plan headers */}
-              <div />
-              <div className="px-2 pb-4 pt-7 text-center sm:pb-5 sm:pt-8">
-                <p className="text-xs font-medium text-heading sm:text-sm">Self-Study</p>
-                <p className="mt-1 text-lg font-medium text-heading sm:text-2xl">
-                  £299 <span className="text-[10px] font-normal text-body sm:text-xs">one-off</span>
+                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-heading">
+                  {plan.name}
                 </p>
-                <p className="mt-0.5 text-[10px] text-body sm:text-xs">3 months&rsquo; access</p>
-              </div>
-              <div className="relative bg-[#E1F5EE] px-2 pb-3 pt-7 text-center sm:pt-8">
-                <span className="absolute left-1/2 top-2 -translate-x-1/2 whitespace-nowrap rounded-full bg-[#1D9E75] px-2.5 py-0.5 text-[9px] font-medium text-white sm:text-[10px]">
-                  Most popular
-                </span>
-                <p className="text-xs font-medium text-[#085041] sm:text-sm">Complete SCA Course</p>
-                <p className="mt-1 text-lg font-medium text-[#085041] sm:text-2xl">
-                  £599 <span className="text-[10px] font-normal text-[#0F6E56] sm:text-xs">one-off</span>
+                <p className="mt-4 text-4xl font-medium tracking-tight text-heading">
+                  {plan.price}{' '}
+                  {plan.note && <span className="text-sm font-normal text-muted">{plan.note}</span>}
                 </p>
-                <p className="mt-0.5 text-[10px] text-[#0F6E56] sm:text-xs">3 months&rsquo; access</p>
-                <p className="mt-0.5 text-[10px] text-muted line-through sm:text-xs">£1,497 total value</p>
-              </div>
-              <div className="px-2 pb-4 pt-7 text-center sm:pb-5 sm:pt-8">
-                <p className="text-xs font-medium text-heading sm:text-sm">Intensive</p>
-                <p className="mt-1 text-base font-medium text-heading sm:text-xl">From £2,999</p>
-                <p className="mt-0.5 text-[10px] text-body sm:text-xs">By application</p>
-              </div>
+                <p className="mt-1 text-sm text-muted">{plan.tagline}</p>
+                {plan.valueLine && (
+                  <p className="mt-0.5 text-sm text-muted line-through">{plan.valueLine}</p>
+                )}
 
-              {/* Feature rows */}
-              {FEATURE_ROWS.map((row) => (
-                <div key={row.label} className="contents">
-                  <div className="border-t border-[#E4DDC9] px-2.5 py-3 sm:px-4">
-                    <p className="text-[11px] font-medium leading-tight text-heading sm:text-sm">{row.label}</p>
-                    {row.labelSub && <p className="mt-0.5 text-[9px] text-muted sm:text-xs">{row.labelSub}</p>}
-                  </div>
-                  {row.cells.map((cell, i) => (
-                    <div
-                      key={i}
-                      className={`flex flex-col items-center justify-center border-l border-t border-[#E4DDC9] px-1.5 py-3 text-center ${
-                        i === 1 ? 'bg-[#E1F5EE]' : ''
-                      }`}
-                    >
-                      {cell.cross ? (
-                        <X className="h-4 w-4 text-stone-300" aria-label="Not included" />
+                <div className="mt-7 flex flex-1 flex-col gap-3.5 border-t border-heading/[0.08] pt-6">
+                  {plan.includes.map((inc) => (
+                    <div key={inc.label} className="flex items-start gap-3">
+                      {inc.excluded ? (
+                        <X className="mt-0.5 h-4 w-4 flex-shrink-0 text-stone-300" aria-label="Not included" />
                       ) : (
-                        <>
-                          <p className={`text-[11px] font-medium sm:text-sm ${i === 1 ? 'text-[#085041]' : 'text-heading'}`}>
-                            {cell.text}
-                          </p>
-                          {cell.sub && <p className="mt-0.5 text-[9px] text-[#0F6E56] sm:text-xs">{cell.sub}</p>}
-                        </>
+                        <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary" aria-hidden="true" />
                       )}
+                      <div className="min-w-0">
+                        <p className={`text-sm leading-snug ${inc.excluded ? 'text-muted' : 'font-medium text-heading'}`}>
+                          {inc.label}
+                          {inc.value && <span className="font-normal text-body"> — {inc.value}</span>}
+                        </p>
+                        {inc.sub && <p className="mt-0.5 text-xs text-muted">{inc.sub}</p>}
+                      </div>
                     </div>
                   ))}
                 </div>
-              ))}
 
-              {/* Guarantee row */}
-              <div className="border-t border-[#E4DDC9] bg-[#EAF3DE] px-2.5 py-3.5 sm:px-4">
-                <GuaranteeInfo />
-              </div>
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="border-l border-t border-[#E4DDC9] bg-[#EAF3DE] px-1.5 py-3.5 text-center">
-                  <p className="text-[10px] leading-snug text-[#27500A] sm:text-xs">
-                    Don’t pass?
-                    <br />
-                    We pay you £500
-                  </p>
+                <div className="mt-7">
+                  <GuaranteeLine />
                 </div>
-              ))}
 
-              {/* CTA row */}
-              <div className="border-t border-[#E4DDC9]" />
-              <div className="border-t border-[#E4DDC9] p-1.5 text-center sm:p-2.5">
-                <PlanCta selfStudy={selfStudy} variant="self_study" />
+                <div className="mt-5">
+                  <PlanCta plan={plan} selfStudy={selfStudy} />
+                </div>
               </div>
-              <div className="border-t border-[#E4DDC9] bg-[#E1F5EE] p-1.5 text-center sm:p-2.5">
-                <PlanCta selfStudy={selfStudy} variant="complete" />
-              </div>
-              <div className="border-t border-[#E4DDC9] p-1.5 text-center sm:p-2.5">
-                <PlanCta selfStudy={selfStudy} variant="intensive" />
-              </div>
-            </div>
+            ))}
           </div>
 
           {selfStudy.error && (
-            <p className="mt-3 text-center text-sm font-medium text-danger">{selfStudy.error}</p>
+            <p className="mt-4 text-center text-sm font-medium text-danger">{selfStudy.error}</p>
           )}
         </motion.div>
       </div>

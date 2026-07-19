@@ -65,32 +65,36 @@ export default function TrustBar() {
   const inView = useInView(ref, { once: true, amount: 0.5 });
 
   return (
-    <section className="px-5 py-6 sm:px-8 sm:py-10">
+    <section className="px-5 py-10 sm:px-8 sm:py-16">
       <motion.div
         ref={ref}
         initial={{ opacity: 0, y: 16 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.5 }}
-        className="mx-auto flex max-w-5xl flex-col divide-y divide-[#E4DDC9] text-center sm:flex-row sm:divide-x sm:divide-y-0"
+        className="mx-auto grid max-w-5xl grid-cols-1 gap-10 text-center sm:grid-cols-3 sm:gap-6"
       >
         {STATS.map((stat) => (
-          <div key={stat.headline} className="flex-1 px-2 py-4 first:pt-0 last:pb-0 sm:px-8 sm:py-0 sm:first:pt-0 sm:last:pb-0">
-            <p className="mb-1 text-base font-medium text-heading sm:mb-2 sm:text-2xl">
+          <div key={stat.headline}>
+            <p className="font-medium tracking-tight text-heading">
               {stat.count ? (
                 <>
-                  <CountUp
-                    to={stat.count.to}
-                    suffix={stat.count.suffix}
-                    start={inView}
-                  />
-                  {stat.count.after}
+                  <span className="font-[family-name:var(--font-serif)] text-4xl font-normal italic text-primary sm:text-5xl">
+                    <CountUp
+                      to={stat.count.to}
+                      suffix={stat.count.suffix}
+                      start={inView}
+                    />
+                  </span>
+                  <span className="text-2xl sm:text-3xl">{stat.count.after}</span>
                 </>
               ) : (
-                stat.headline
+                <span className="text-2xl leading-tight sm:text-3xl">
+                  {stat.headline}
+                </span>
               )}
             </p>
-            <p className="text-xs leading-relaxed text-body sm:text-sm">
+            <p className="mx-auto mt-2 max-w-[240px] text-sm leading-relaxed text-body">
               {stat.subline}
             </p>
           </div>

@@ -5,6 +5,8 @@ import { motion } from 'framer-motion';
 import ChapterBrief from './chapters/ChapterBrief';
 import ChapterConsultation from './chapters/ChapterConsultation';
 import ChapterScore from './chapters/ChapterScore';
+import Chrome from './Chrome';
+import { CROSSHATCH_DARK, Pill } from './editorial';
 
 const AUTO_ADVANCE_MS = 5000;
 
@@ -13,6 +15,8 @@ interface Step {
   tab: string;
   title: string;
   copy: string;
+  chromeLabel: string;
+  chromeMeta: string;
   Mockup: () => React.JSX.Element;
 }
 
@@ -22,6 +26,8 @@ const STEPS: readonly Step[] = [
     tab: 'Brief',
     title: 'Read your patient brief',
     copy: 'Three minutes to prepare, same format as exam day.',
+    chromeLabel: 'Patient brief',
+    chromeMeta: '03:00',
     Mockup: ChapterBrief,
   },
   {
@@ -29,6 +35,8 @@ const STEPS: readonly Step[] = [
     tab: 'Consultation',
     title: 'Have the conversation',
     copy: 'Your patient responds in real time with voice.',
+    chromeLabel: 'Station 047 — ECG request',
+    chromeMeta: '07:32',
     Mockup: ChapterConsultation,
   },
   {
@@ -36,11 +44,16 @@ const STEPS: readonly Step[] = [
     tab: 'Feedback',
     title: 'See exactly where you stand',
     copy: 'Instant, domain-level scores on the three SCA marking criteria.',
+    chromeLabel: 'Feedback report',
+    chromeMeta: '+9s',
     Mockup: ChapterScore,
   },
 ] as const;
 
-/** Compact tabbed product tour: one frame, three steps, gentle auto-advance. */
+/**
+ * Compact tabbed product tour as the page's dark rhythm-break: one browser-
+ * chrome frame, three steps, gentle auto-advance.
+ */
 export default function ProductShowcase() {
   const [active, setActive] = useState(0);
   const [inView, setInView] = useState(false);
@@ -62,24 +75,30 @@ export default function ProductShowcase() {
 
   return (
     <motion.section
-      className="px-5 py-6 sm:px-8 sm:py-10"
-      initial={{ opacity: 0, y: 24 }}
-      whileInView={{ opacity: 1, y: 0 }}
+      className="relative overflow-hidden bg-[#1C1917] px-5 py-14 sm:px-8 sm:py-20"
+      style={CROSSHATCH_DARK}
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
       viewport={{ once: true, margin: '-80px' }}
       transition={{ duration: 0.55, ease: 'easeOut' }}
       onViewportEnter={() => setInView(true)}
       onViewportLeave={() => setInView(false)}
     >
-      <div className="mx-auto max-w-2xl text-center">
-        <p className="mb-5 text-xs font-medium uppercase tracking-[0.08em] text-[#854F0B] sm:mb-6 sm:text-sm">
-          How a station works
-        </p>
+      {/* Warm glow at the top of the dark band */}
+      <div
+        className="pointer-events-none absolute left-1/2 top-0 h-[380px] w-[720px] -translate-x-1/2 rounded-full"
+        style={{ background: 'radial-gradient(ellipse, rgba(217,119,6,0.13) 0%, transparent 65%)' }}
+        aria-hidden="true"
+      />
+
+      <div className="relative mx-auto max-w-3xl text-center">
+        <Pill dark>How a station works</Pill>
 
         {/* Step tabs */}
         <div
           role="tablist"
           aria-label="Product tour steps"
-          className="mx-auto mb-5 flex w-fit max-w-full gap-1 overflow-x-auto rounded-full border border-[#E4DDC9] bg-white p-1 sm:gap-1.5"
+          className="mx-auto mt-7 flex w-fit max-w-full gap-1 overflow-x-auto rounded-full border border-white/15 bg-white/[0.06] p-1 sm:gap-1.5"
         >
           {STEPS.map((s, i) => (
             <button
@@ -89,9 +108,7 @@ export default function ProductShowcase() {
               aria-selected={i === active}
               onClick={() => selectStep(i)}
               className={`whitespace-nowrap rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors sm:px-4 sm:text-xs ${
-                i === active
-                  ? 'bg-[#1C1C1A] text-[#FAC775]'
-                  : 'text-body hover:bg-surface-warm'
+                i === active ? 'bg-[#EF9F27] text-[#2C2C2A]' : 'text-stone-300 hover:bg-white/10'
               }`}
             >
               <span className="mr-1 opacity-60">{String(i + 1).padStart(2, '0')}</span>
@@ -100,9 +117,9 @@ export default function ProductShowcase() {
           ))}
         </div>
 
-        {/* Step caption — read first, then the mockup below. Same stacking
+        {/* Step caption — read first, then the frame below. Same stacking
             trick to avoid height wobble between tabs. */}
-        <div className="mb-5 grid">
+        <div className="mt-6 grid">
           {STEPS.map((s, i) => (
             <motion.div
               key={s.key}
@@ -112,8 +129,8 @@ export default function ProductShowcase() {
               transition={{ duration: 0.24 }}
               aria-hidden={i !== active}
             >
-              <p className="text-sm font-medium text-heading sm:text-base">{s.title}</p>
-              <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-body sm:text-sm">
+              <p className="text-lg font-medium text-white sm:text-2xl">{s.title}</p>
+              <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-stone-400">
                 {s.copy}
               </p>
             </motion.div>
@@ -121,9 +138,8 @@ export default function ProductShowcase() {
         </div>
 
         {/* Product frame — all steps stacked in one grid cell so the frame
-            keeps the tallest step's height and never jumps between tabs.
-            Capped in size so the whole tour fits one desktop viewport. */}
-        <div className="mx-auto grid w-full max-w-md overflow-hidden rounded-2xl border border-[#E4DDC9] bg-white text-left shadow-elevation-2">
+            keeps the tallest step's height and never jumps between tabs. */}
+        <div className="mx-auto mt-8 grid w-full max-w-md text-left sm:max-w-lg">
           {STEPS.map((s, i) => (
             <motion.div
               key={s.key}
@@ -134,7 +150,13 @@ export default function ProductShowcase() {
               style={{ pointerEvents: i === active ? 'auto' : 'none' }}
               aria-hidden={i !== active}
             >
-              <s.Mockup />
+              <Chrome
+                label={s.chromeLabel}
+                meta={s.chromeMeta}
+                className="h-full border-white/10 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.55)]"
+              >
+                <s.Mockup />
+              </Chrome>
             </motion.div>
           ))}
         </div>

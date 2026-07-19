@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { TILE } from './editorial';
 
 interface Testimonial {
   name: string;
@@ -65,36 +66,36 @@ const TESTIMONIALS: Testimonial[] = [
 
 export default function Testimonials() {
   return (
-    <section className="px-5 py-6 sm:px-8 sm:py-10">
+    <section className="px-5 py-10 sm:px-8 sm:py-16">
       <div className="mx-auto flex max-w-5xl snap-x snap-mandatory gap-4 overflow-x-auto pb-2 sm:grid sm:grid-cols-3 sm:gap-6 sm:overflow-visible sm:pb-0">
         {TESTIMONIALS.map((t, i) => (
-          <motion.div
+          <motion.figure
             key={t.name}
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5, delay: i * 0.08 }}
-            className="w-[80%] flex-shrink-0 snap-start rounded-2xl border border-[#E4DDC9] bg-white p-5 shadow-elevation-1 sm:w-auto sm:p-6"
+            className={`flex w-[80%] flex-shrink-0 snap-start flex-col ${TILE} p-6 sm:w-auto sm:p-7`}
           >
-            <div className="mb-2 flex items-center gap-2">
-              <div className="h-[34px] w-[34px] flex-shrink-0 overflow-hidden rounded-full">
+            <div className="flex items-center gap-3">
+              <span className="h-11 w-11 flex-shrink-0 overflow-hidden rounded-full">
                 {t.avatar}
-              </div>
-              <div>
-                <div
-                  className="text-xs tracking-widest text-[#EF9F27]"
-                  aria-label="5 out of 5 stars"
-                >
-                  ★★★★★
-                </div>
-                <p className="text-xs font-medium text-heading sm:text-sm">{t.name}</p>
-                <p className="text-[11px] text-muted sm:text-xs">{t.meta}</p>
-              </div>
+              </span>
+              <span>
+                <span className="block text-sm font-semibold text-heading">{t.name}</span>
+                <span className="block text-xs text-muted">{t.meta}</span>
+              </span>
+              <span
+                className="ml-auto text-[11px] tracking-widest text-[#EF9F27]"
+                aria-label="5 out of 5 stars"
+              >
+                ★★★★★
+              </span>
             </div>
-            <p className="text-xs leading-relaxed text-body sm:text-sm">
-              {t.quote}
-            </p>
-          </motion.div>
+            <blockquote className="mt-5 flex-1">
+              <p className="text-[15px] leading-[1.65] text-body">{t.quote}</p>
+            </blockquote>
+          </motion.figure>
         ))}
       </div>
     </section>

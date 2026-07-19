@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { Square } from 'lucide-react';
+import { Accent, Pill, TILE } from './editorial';
 
 interface FeatureRow {
   lead: string;
@@ -57,7 +58,7 @@ function FeatureRows({ rows, color }: { rows: FeatureRow[]; color: string }) {
       {rows.map((row, index) => (
         <div
           key={row.lead}
-          className={`flex gap-3 py-3 ${index > 0 ? 'border-t-[0.5px] border-[#E4DDC9]' : ''}`}
+          className={`flex gap-3 py-3 ${index > 0 ? 'border-t border-heading/[0.06]' : ''}`}
         >
           <Square
             className="mt-0.5 h-4 w-4 flex-shrink-0"
@@ -77,7 +78,7 @@ function FeatureRows({ rows, color }: { rows: FeatureRow[]; color: string }) {
 
 function ZoneLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-500 sm:text-xs">
+    <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.2em] text-stone-500">
       {children}
     </p>
   );
@@ -119,96 +120,89 @@ const fadeUp = {
 /** "The Complete Course" section: what you get, and your coaching day. */
 export default function CompleteCourse() {
   return (
-    <section className="px-5 py-8 sm:px-8 sm:py-12">
-      <div className="mx-auto max-w-4xl">
+    <section className="px-5 py-10 sm:px-8 sm:py-16">
+      <div className="mx-auto max-w-5xl">
         {/* Heading block */}
         <motion.div {...fadeUp} className="text-center">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-[#B45309] sm:text-sm">
-            The Complete Course
-          </p>
-          <p className="mx-auto max-w-2xl text-base leading-relaxed text-heading sm:text-xl">
-            3 months of unlimited AI stations and lectures, from the day you buy.
-          </p>
-          <p className="mx-auto max-w-2xl text-base leading-relaxed text-heading sm:text-xl">
-            Plus one live coaching day, on a date you choose.
-          </p>
-        </motion.div>
-
-        {/* Plus-strip: inline on desktop, stacked with centred + on mobile */}
-        <motion.div
-          {...fadeUp}
-          className="mt-7 flex flex-col items-center gap-1.5 sm:mt-9 sm:flex-row sm:justify-center sm:gap-3"
-        >
-          {['Unlimited AI Practice', '12 Hours of On-Demand Lectures', '9-Hour Coaching Day'].map(
-            (chip, index) => (
-              <div key={chip} className="contents">
-                {index > 0 && (
-                  <span className="text-lg font-medium text-muted" aria-hidden="true">
-                    +
-                  </span>
-                )}
-                <span className="rounded-xl border border-[#E4DDC9] bg-white px-5 py-2.5 text-center text-sm font-medium text-heading shadow-elevation-1">
-                  {chip}
+          <Pill>The Complete Course</Pill>
+          <h2 className="mx-auto mt-7 max-w-2xl text-3xl font-medium leading-[1.14] tracking-tight text-heading sm:text-5xl">
+            3 months of unlimited AI stations and lectures, from the day you buy.{' '}
+            <Accent>Plus one live coaching day, on a date you choose.</Accent>
+          </h2>
+          <p className="mx-auto mt-7 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-[15px] font-medium text-heading sm:text-lg">
+            {['Unlimited AI Practice', '12 Hours of On-Demand Lectures', '9-Hour Coaching Day'].map(
+              (chip, index) => (
+                <span key={chip} className="contents">
+                  {index > 0 && (
+                    <span className="text-primary" aria-hidden="true">
+                      +
+                    </span>
+                  )}
+                  <span>{chip}</span>
                 </span>
-              </div>
-            ),
-          )}
+              ),
+            )}
+          </p>
         </motion.div>
 
         {/* Zone 1 — every day, at your pace */}
-        <motion.div {...fadeUp} className="mt-10 sm:mt-14">
+        <motion.div {...fadeUp} className="mt-14 sm:mt-16">
           <ZoneLabel>Every day, at your pace</ZoneLabel>
           <div className="grid gap-5 sm:grid-cols-2 sm:gap-6">
-            <div className="rounded-2xl border border-[#E4DDC9] bg-white px-5 py-5 shadow-elevation-1 sm:px-6">
-              <p className="text-lg font-semibold text-heading">AI Practice</p>
+            <div className={`${TILE} px-6 py-6 sm:px-7`}>
+              <p className="text-xl font-semibold text-heading">AI Practice</p>
               <p className="mt-0.5 text-[13px] font-medium" style={{ color: TEAL }}>
                 3 months of access · unlimited
               </p>
               <div className="mt-3">
                 <FeatureRows rows={AI_PRACTICE_ROWS} color={TEAL} />
               </div>
-              <p className="mt-2 border-t-[0.5px] border-[#E4DDC9] pt-3 text-xs text-muted">£299 value</p>
+              <p className="mt-2 border-t border-heading/[0.06] pt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-muted">
+                £299 value
+              </p>
             </div>
 
-            <div className="rounded-2xl border border-[#E4DDC9] bg-white px-5 py-5 shadow-elevation-1 sm:px-6">
-              <p className="text-lg font-semibold text-heading">On-Demand Lectures</p>
+            <div className={`${TILE} px-6 py-6 sm:px-7`}>
+              <p className="text-xl font-semibold text-heading">On-Demand Lectures</p>
               <p className="mt-0.5 text-[13px] font-medium" style={{ color: TEAL }}>
                 3 months of access · watch anytime
               </p>
               <div className="mt-3">
                 <FeatureRows rows={LECTURE_ROWS} color={TEAL} />
               </div>
-              <p className="mt-2 border-t-[0.5px] border-[#E4DDC9] pt-3 text-xs text-muted">£599 value</p>
+              <p className="mt-2 border-t border-heading/[0.06] pt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-muted">
+                £599 value
+              </p>
             </div>
           </div>
         </motion.div>
 
         {/* Zone 2 — one day, live */}
-        <motion.div {...fadeUp} className="mt-10 sm:mt-14">
+        <motion.div {...fadeUp} className="mt-12 sm:mt-14">
           <ZoneLabel>One day, live</ZoneLabel>
-          <div className="rounded-2xl border border-[#E4DDC9] bg-white px-5 py-5 shadow-elevation-1 sm:px-6">
+          <div className={`${TILE} px-6 py-6 sm:px-7`}>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-lg font-semibold text-heading">Small-Group Coaching</p>
-              <span className="self-start rounded-lg bg-[#FAEEDA] px-3 py-1 text-[12px] font-medium text-[#854F0B]">
+              <p className="text-xl font-semibold text-heading">Small-Group Coaching</p>
+              <span className="self-start rounded-full bg-[#FAEEDA] px-3 py-1 text-[12px] font-medium text-[#854F0B]">
                 One full day · 9am to 6pm · Remote
               </span>
             </div>
 
-            <div className="mt-4 flex flex-col sm:flex-row sm:gap-8">
+            <div className="mt-4 flex flex-col sm:flex-row sm:gap-10">
               <div className="sm:flex-1">
                 <FeatureRows rows={COACHING_ROWS} color={AMBER} />
                 {/* Desktop: value under the rows; mobile: moved below the timetable */}
-                <p className="mt-2 hidden border-t-[0.5px] border-[#E4DDC9] pt-3 text-xs text-muted sm:block">
+                <p className="mt-2 hidden border-t border-heading/[0.06] pt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-muted sm:block">
                   Max 6 · £599 value
                 </p>
               </div>
 
-              <div className="mt-5 border-t-[0.5px] border-[#E4DDC9] pt-5 sm:mt-0 sm:w-[46%] sm:flex-shrink-0 sm:border-l-[0.5px] sm:border-t-0 sm:pl-8 sm:pt-0">
+              <div className="mt-5 border-t border-heading/[0.06] pt-5 sm:mt-0 sm:w-[46%] sm:flex-shrink-0 sm:border-l sm:border-t-0 sm:pl-10 sm:pt-0">
                 <Timetable />
               </div>
             </div>
 
-            <p className="mt-4 border-t-[0.5px] border-[#E4DDC9] pt-3 text-xs text-muted sm:hidden">
+            <p className="mt-4 border-t border-heading/[0.06] pt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-muted sm:hidden">
               Max 6 · £599 value
             </p>
           </div>

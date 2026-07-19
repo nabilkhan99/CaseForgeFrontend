@@ -2,11 +2,24 @@
 
 import { motion } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
+import { CROSSHATCH } from './editorial';
 
 export default function Hero() {
   return (
-    <section className="relative overflow-hidden px-5 pb-10 pt-32 text-center sm:px-8 sm:pb-16 sm:pt-40">
-      <div className="mx-auto max-w-4xl">
+    <section
+      className="relative overflow-hidden px-5 pb-10 pt-32 text-center sm:px-8 sm:pb-16 sm:pt-40"
+      style={CROSSHATCH}
+    >
+      {/* Warm glow behind the headline */}
+      <div
+        className="pointer-events-none absolute left-1/2 top-[-10%] h-[520px] w-[820px] -translate-x-1/2 rounded-full"
+        style={{
+          background:
+            'radial-gradient(closest-side, rgba(217,119,6,0.10) 0%, rgba(217,119,6,0.03) 55%, transparent 75%)',
+        }}
+        aria-hidden="true"
+      />
+      <div className="relative mx-auto max-w-4xl">
         <motion.p
           initial={{ opacity: 0, y: 12 }}
           whileInView={{ opacity: 1, y: 0 }}
