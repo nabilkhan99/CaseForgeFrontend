@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { ArrowRight, Info, X } from 'lucide-react';
+import { ArrowRight, Info } from 'lucide-react';
 import { ACCESS_OPENS_LABEL, BOOK_A_CALL_URL } from '@/lib/commerce/plans';
 import { Pill } from './editorial';
 
@@ -231,11 +231,13 @@ function MobileCards({ selfStudy }: { selfStudy: ReturnType<typeof useSelfStudyC
                   </div>
                   <div className="text-right">
                     {cell.cross ? (
-                      <X className="ml-auto h-4 w-4 text-stone-300" aria-label="Not included" />
+                      <span className="text-sm text-stone-300" aria-label="Not included">
+                        —
+                      </span>
                     ) : (
                       <>
                         <p className="text-[13px] font-medium text-heading">{cell.text}</p>
-                        {cell.sub && <p className="text-[11px] text-[#0F6E56]">{cell.sub}</p>}
+                        {cell.sub && <p className="text-[11px] text-muted">{cell.sub}</p>}
                       </>
                     )}
                   </div>
@@ -288,41 +290,41 @@ export default function PricingTable() {
           <MobileCards selfStudy={selfStudy} />
 
           <div className="hidden overflow-hidden rounded-3xl border border-heading/[0.06] bg-white/80 shadow-elevation-2 backdrop-blur sm:block">
-            <div className="grid grid-cols-[minmax(84px,150px)_repeat(3,minmax(0,1fr))]">
+            <div className="grid grid-cols-[minmax(84px,170px)_repeat(3,minmax(0,1fr))]">
               {/* Plan headers */}
               <div />
-              <div className="px-2 pb-4 pt-7 text-center sm:pb-5 sm:pt-9">
+              <div className="px-3 pb-5 pt-9 text-center">
                 <PlanName>Self-Study</PlanName>
-                <p className="mt-2 text-lg font-medium tracking-tight text-heading sm:text-3xl">
+                <p className="mt-2.5 text-lg font-medium tracking-tight text-heading sm:text-3xl">
                   £299 <span className="text-[10px] font-normal text-muted sm:text-xs">one-off</span>
                 </p>
                 <p className="mt-1 text-[10px] text-muted sm:text-xs">3 months&rsquo; access</p>
               </div>
-              <div className={`relative ${HIGHLIGHT_BG} px-2 pb-3 pt-7 text-center sm:pt-9`}>
-                <span className="absolute left-1/2 top-2.5 -translate-x-1/2 whitespace-nowrap rounded-full bg-primary px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white sm:text-[10px]">
+              <div className={`relative ${HIGHLIGHT_BG} px-3 pb-5 pt-9 text-center`}>
+                <span className="absolute left-1/2 top-3 -translate-x-1/2 whitespace-nowrap rounded-full bg-primary px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white sm:text-[10px]">
                   Most popular
                 </span>
                 <PlanName>Complete SCA Course</PlanName>
-                <p className="mt-2 text-lg font-medium tracking-tight text-heading sm:text-3xl">
+                <p className="mt-2.5 text-lg font-medium tracking-tight text-heading sm:text-3xl">
                   £599 <span className="text-[10px] font-normal text-muted sm:text-xs">one-off</span>
                 </p>
-                <p className="mt-1 text-[10px] text-muted sm:text-xs">3 months&rsquo; access</p>
-                <p className="mt-0.5 text-[10px] text-muted line-through sm:text-xs">
-                  £1,497 total value
+                <p className="mt-1 text-[10px] text-muted sm:text-xs">
+                  3 months&rsquo; access ·{' '}
+                  <span className="line-through">£1,497 value</span>
                 </p>
               </div>
-              <div className="px-2 pb-4 pt-7 text-center sm:pb-5 sm:pt-9">
+              <div className="px-3 pb-5 pt-9 text-center">
                 <PlanName>Intensive</PlanName>
-                <p className="mt-2 text-base font-medium tracking-tight text-heading sm:text-2xl">
+                <p className="mt-2.5 text-base font-medium tracking-tight text-heading sm:text-2xl">
                   From £2,999
                 </p>
                 <p className="mt-1 text-[10px] text-muted sm:text-xs">By application</p>
               </div>
 
-              {/* Feature rows */}
+              {/* Feature rows — horizontal hairlines only, no column grid */}
               {FEATURE_ROWS.map((row) => (
                 <div key={row.label} className="contents">
-                  <div className="border-t border-heading/[0.08] px-2.5 py-3 sm:px-4">
+                  <div className="border-t border-heading/[0.06] py-4 pl-6 pr-3 sm:pl-8">
                     <p className="text-[11px] font-medium leading-tight text-heading sm:text-sm">
                       {row.label}
                     </p>
@@ -333,19 +335,21 @@ export default function PricingTable() {
                   {row.cells.map((cell, i) => (
                     <div
                       key={i}
-                      className={`flex flex-col items-center justify-center border-l border-t border-heading/[0.08] px-1.5 py-3 text-center ${
+                      className={`flex flex-col items-center justify-center border-t border-heading/[0.06] px-2 py-4 text-center ${
                         i === 1 ? HIGHLIGHT_BG : ''
                       }`}
                     >
                       {cell.cross ? (
-                        <X className="h-4 w-4 text-stone-300" aria-label="Not included" />
+                        <span className="text-sm text-stone-300" aria-label="Not included">
+                          —
+                        </span>
                       ) : (
                         <>
                           <p className="text-[11px] font-medium text-heading sm:text-sm">
                             {cell.text}
                           </p>
                           {cell.sub && (
-                            <p className="mt-0.5 text-[9px] text-[#0F6E56] sm:text-xs">{cell.sub}</p>
+                            <p className="mt-0.5 text-[9px] text-muted sm:text-xs">{cell.sub}</p>
                           )}
                         </>
                       )}
@@ -354,33 +358,24 @@ export default function PricingTable() {
                 </div>
               ))}
 
-              {/* Guarantee row */}
-              <div className="border-t border-heading/[0.08] bg-[#EAF3DE] px-2.5 py-3.5 sm:px-4">
-                <GuaranteeInfo />
-              </div>
-              {[0, 1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="border-l border-t border-heading/[0.08] bg-[#EAF3DE] px-1.5 py-3.5 text-center"
-                >
-                  <p className="text-[10px] leading-snug text-[#27500A] sm:text-xs">
-                    Don’t pass?
-                    <br />
-                    We pay you £500
-                  </p>
-                </div>
-              ))}
-
               {/* CTA row */}
-              <div className="border-t border-heading/[0.08]" />
-              <div className="border-t border-heading/[0.08] p-2 text-center sm:p-3">
+              <div className="border-t border-heading/[0.06]" />
+              <div className="border-t border-heading/[0.06] px-4 py-4">
                 <PlanCta selfStudy={selfStudy} variant="self_study" />
               </div>
-              <div className={`border-t border-heading/[0.08] ${HIGHLIGHT_BG} p-2 text-center sm:p-3`}>
+              <div className={`border-t border-heading/[0.06] ${HIGHLIGHT_BG} px-4 py-4`}>
                 <PlanCta selfStudy={selfStudy} variant="complete" />
               </div>
-              <div className="border-t border-heading/[0.08] p-2 text-center sm:p-3">
+              <div className="border-t border-heading/[0.06] px-4 py-4">
                 <PlanCta selfStudy={selfStudy} variant="intensive" />
+              </div>
+
+              {/* One guarantee strip for the whole table */}
+              <div className="col-span-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-[#EAF3DE] px-6 py-3.5 text-center">
+                <GuaranteeInfo />
+                <p className="text-[11px] text-[#27500A] sm:text-xs">
+                  Every plan — don&rsquo;t pass, and we pay you £500.
+                </p>
               </div>
             </div>
           </div>
