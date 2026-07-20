@@ -47,6 +47,15 @@ export interface SessionConfigOptions {
   model: string;
   voice?: string;
   transcriptionModel?: string;
+  /**
+   * Disable barge-in (interrupt_response) for browsers whose echo
+   * cancellation leaks the patient's own voice back into the mic
+   * (Safari, Firefox). On those browsers the leaked echo trips server
+   * VAD and the default interrupt_response: true makes the patient
+   * cancel itself mid-sentence. Chrome's AEC is clean, so it keeps the
+   * API default and the trainee can still barge in.
+   */
+  disableBargeIn?: boolean;
 }
 
 /**
@@ -78,6 +87,7 @@ export function buildSessionPayload(stationData: StationData | null, opts: Sessi
             threshold: 0.5,
             prefix_padding_ms: 300,
             silence_duration_ms: 900,
+            ...(opts.disableBargeIn ? { interrupt_response: false } : {}),
           },
         },
         output: {
