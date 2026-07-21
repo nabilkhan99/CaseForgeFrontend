@@ -9,7 +9,6 @@
  */
 
 import { buildSessionPayload, DEFAULT_VOICE } from './realtimeSession';
-import { unreliableEchoCancellation } from './echoCancellation';
 import type { StationData } from './patientPrompt';
 
 export interface EphemeralKeyResult {
@@ -24,8 +23,21 @@ export interface MintOptions {
   disableBargeIn?: boolean;
 }
 
-/** See lib/clinical-master/echoCancellation.ts for the full rationale. */
-export const bargeInUnsupported = unreliableEchoCancellation;
+/**
+ * True for browsers whose acoustic echo cancellation leaks the patient's
+ * own voice back into the mic (Safari/WebKit, Firefox). Chrome's AEC is
+ * reliable, so barge-in stays enabled there. Chrome-family UAs contain
+ * "Chrome"/"CriOS"; real Safari and Firefox never do.
+ */
+export function bargeInUnsupported(userAgent: string | null): boolean {
+  if (!userAgent) return false;
+  if (/firefox|fxios/i.test(userAgent)) return true;
+  // Every iOS browser (including Chrome/CriOS) runs on WebKit, so they all
+  // share Safari's echo cancellation.
+  if (/iphone|ipad|ipod/i.test(userAgent)) return true;
+  const isSafari = /safari/i.test(userAgent) && !/chrome|chromium|crios|edg|android/i.test(userAgent);
+  return isSafari;
+}
 
 export async function mintEphemeralKey(
   stationData: StationData | null,
