@@ -48,14 +48,20 @@ export interface SessionConfigOptions {
   voice?: string;
   transcriptionModel?: string;
   /**
-   * Disable barge-in (interrupt_response) for browsers whose echo
-   * cancellation leaks the patient's own voice back into the mic
-   * (Safari, Firefox). On those browsers the leaked echo trips server
-   * VAD and the default interrupt_response: true makes the patient
-   * cancel itself mid-sentence. Chrome's AEC is clean, so it keeps the
-   * API default and the trainee can still barge in.
+   * The connecting browser's echo cancellation can't be trusted
+   * (Safari, Firefox, anything on iOS): playback of the patient's own
+   * voice leaks back into the mic, trips server VAD, and the patient
+   * interrupts itself / answers itself. For these browsers the session
+   * is hardened server-side (community-validated combination):
+   *  - far_field noise reduction, which filters the input BEFORE VAD so
+   *    the leaked echo doesn't register as speech;
+   *  - VAD threshold 0.75 instead of 0.5;
+   *  - interrupt_response: false so residual echo can never cancel the
+   *    patient mid-sentence.
+   * Chrome-family browsers have reliable AEC and keep the defaults,
+   * including barge-in.
    */
-  disableBargeIn?: boolean;
+  unreliableAec?: boolean;
 }
 
 /**
@@ -84,11 +90,12 @@ export function buildSessionPayload(stationData: StationData | null, opts: Sessi
           // (mirrors the old LiveKit min/max endpointing of 0.8s/3.0s).
           turn_detection: {
             type: 'server_vad',
-            threshold: 0.5,
+            threshold: opts.unreliableAec ? 0.75 : 0.5,
             prefix_padding_ms: 300,
             silence_duration_ms: 900,
-            ...(opts.disableBargeIn ? { interrupt_response: false } : {}),
+            ...(opts.unreliableAec ? { interrupt_response: false } : {}),
           },
+          ...(opts.unreliableAec ? { noise_reduction: { type: 'far_field' } } : {}),
         },
         output: {
           voice: opts.voice ?? DEFAULT_VOICE,

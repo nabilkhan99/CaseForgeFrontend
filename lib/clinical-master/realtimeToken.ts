@@ -19,24 +19,22 @@ export interface EphemeralKeyResult {
 }
 
 export interface MintOptions {
-  /** See SessionConfigOptions.disableBargeIn. */
-  disableBargeIn?: boolean;
+  /** See SessionConfigOptions.unreliableAec. */
+  unreliableAec?: boolean;
 }
 
 /**
  * True for browsers whose acoustic echo cancellation leaks the patient's
- * own voice back into the mic (Safari/WebKit, Firefox). Chrome's AEC is
- * reliable, so barge-in stays enabled there. Chrome-family UAs contain
- * "Chrome"/"CriOS"; real Safari and Firefox never do.
+ * own voice back into the mic: Safari (WebKit), Firefox, and every iOS
+ * browser (all WebKit under the hood, whatever the brand). Chrome-family
+ * UAs contain "Chrome"/"CriOS"; real Safari and Firefox never do. The
+ * session is hardened for these — see SessionConfigOptions.unreliableAec.
  */
-export function bargeInUnsupported(userAgent: string | null): boolean {
+export function unreliableEchoCancellation(userAgent: string | null): boolean {
   if (!userAgent) return false;
   if (/firefox|fxios/i.test(userAgent)) return true;
-  // Every iOS browser (including Chrome/CriOS) runs on WebKit, so they all
-  // share Safari's echo cancellation.
   if (/iphone|ipad|ipod/i.test(userAgent)) return true;
-  const isSafari = /safari/i.test(userAgent) && !/chrome|chromium|crios|edg|android/i.test(userAgent);
-  return isSafari;
+  return /safari/i.test(userAgent) && !/chrome|chromium|crios|edg|android/i.test(userAgent);
 }
 
 export async function mintEphemeralKey(
@@ -56,7 +54,7 @@ export async function mintEphemeralKey(
   const payload = buildSessionPayload(stationData, {
     model: deployment,
     voice,
-    disableBargeIn: mintOpts.disableBargeIn,
+    unreliableAec: mintOpts.unreliableAec,
   });
 
   const res = await fetch(`${base}/openai/v1/realtime/client_secrets`, {
