@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { bargeInUnsupported, mintEphemeralKey } from '@/lib/clinical-master/realtimeToken';
+import { mintEphemeralKey, unreliableEchoCancellation } from '@/lib/clinical-master/realtimeToken';
 
 /**
  * Mint an Azure gpt-realtime ephemeral key for a guest (free-trial) consultation.
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await mintEphemeralKey(station, undefined, {
-      disableBargeIn: bargeInUnsupported(req.headers.get('user-agent')),
+      unreliableAec: unreliableEchoCancellation(req.headers.get('user-agent')),
     });
 
     if (existing) {
