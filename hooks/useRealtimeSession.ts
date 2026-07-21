@@ -2,6 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TranscriptItem } from '@/lib/clinical-master/types';
+import { unreliableEchoCancellation } from '@/lib/clinical-master/echoCancellation';
+
+/** How long after patient audio stops before the echo-gated mic re-opens —
+ *  covers the playback tail and room reverb on broken-AEC browsers. */
+const AEC_GATE_RELEASE_MS = 400;
 
 /** Mean token probability from transcription logprobs, as a 0..1 confidence. */
 function meanProbFromLogprobs(logprobs: unknown): number | undefined {
@@ -78,6 +83,14 @@ export function useRealtimeSession({
     const greetingWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const patientAudioStartedRef = useRef(false);
     const endedRef = useRef(false);
+    // Half-duplex mic gate for browsers with unreliable echo cancellation
+    // (Safari/Firefox/iOS): while the patient's audio is playing, the mic
+    // track is hard-disabled so the playback echo can never reach Azure,
+    // where it would be transcribed as the doctor and answered. The gate
+    // releases shortly after playback stops to cover the reverb tail.
+    const userMutedRef = useRef(false);
+    const aecGateActiveRef = useRef(false);
+    const aecGateReleaseRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const transcriptRef = useRef<TranscriptItem[]>([]);
     const messageCountRef = useRef(0);
     const sessionStartRef = useRef<number>(0);
@@ -124,6 +137,35 @@ export function useRealtimeSession({
         }
     }, []);
 
+    // The mic is live only when the user hasn't muted AND the echo gate is
+    // closed. Both paths (manual mute, echo gate) funnel through here so
+    // they can never fight over track.enabled.
+    const applyMicEnabled = useCallback(() => {
+        if (micTrackRef.current) {
+            micTrackRef.current.enabled = !userMutedRef.current && !aecGateActiveRef.current;
+        }
+    }, []);
+
+    const gateMicForPlayback = useCallback(() => {
+        if (!unreliableEchoCancellation(navigator.userAgent)) return;
+        if (aecGateReleaseRef.current) {
+            clearTimeout(aecGateReleaseRef.current);
+            aecGateReleaseRef.current = null;
+        }
+        aecGateActiveRef.current = true;
+        applyMicEnabled();
+    }, [applyMicEnabled]);
+
+    const releaseMicAfterPlayback = useCallback(() => {
+        if (!aecGateActiveRef.current) return;
+        if (aecGateReleaseRef.current) clearTimeout(aecGateReleaseRef.current);
+        aecGateReleaseRef.current = setTimeout(() => {
+            aecGateReleaseRef.current = null;
+            aecGateActiveRef.current = false;
+            applyMicEnabled();
+        }, AEC_GATE_RELEASE_MS);
+    }, [applyMicEnabled]);
+
     // Tear down media/connection without persisting (used for leave + unmount).
     const teardown = useCallback(() => {
         if (timerRef.current) {
@@ -138,6 +180,11 @@ export function useRealtimeSession({
             clearTimeout(greetingWatchdogRef.current);
             greetingWatchdogRef.current = null;
         }
+        if (aecGateReleaseRef.current) {
+            clearTimeout(aecGateReleaseRef.current);
+            aecGateReleaseRef.current = null;
+        }
+        aecGateActiveRef.current = false;
         try {
             dcRef.current?.close();
         } catch {
@@ -267,10 +314,12 @@ export function useRealtimeSession({
                         clearTimeout(greetingWatchdogRef.current);
                         greetingWatchdogRef.current = null;
                     }
+                    gateMicForPlayback();
                     setIsSpeaking(true);
                     break;
                 case 'output_audio_buffer.stopped':
                 case 'output_audio_buffer.cleared':
+                    releaseMicAfterPlayback();
                     setIsSpeaking(false);
                     break;
                 case 'response.function_call_arguments.done':
@@ -291,7 +340,7 @@ export function useRealtimeSession({
                     break;
             }
         },
-        [appendTurn, relNow, handleFunctionCall, onError]
+        [appendTurn, relNow, handleFunctionCall, onError, gateMicForPlayback, releaseMicAfterPlayback]
     );
 
     const connect = useCallback(async () => {
@@ -436,12 +485,14 @@ export function useRealtimeSession({
         teardown();
     }, [teardown]);
 
-    const setMicMuted = useCallback((muted: boolean) => {
-        setIsMuted(muted);
-        if (micTrackRef.current) {
-            micTrackRef.current.enabled = !muted;
-        }
-    }, []);
+    const setMicMuted = useCallback(
+        (muted: boolean) => {
+            setIsMuted(muted);
+            userMutedRef.current = muted;
+            applyMicEnabled();
+        },
+        [applyMicEnabled]
+    );
 
     // Cleanup on unmount — teardown only (no save)
     useEffect(() => {
