@@ -23,19 +23,7 @@ export interface MintOptions {
   unreliableAec?: boolean;
 }
 
-/**
- * True for browsers whose acoustic echo cancellation leaks the patient's
- * own voice back into the mic: Safari (WebKit), Firefox, and every iOS
- * browser (all WebKit under the hood, whatever the brand). Chrome-family
- * UAs contain "Chrome"/"CriOS"; real Safari and Firefox never do. The
- * session is hardened for these — see SessionConfigOptions.unreliableAec.
- */
-export function unreliableEchoCancellation(userAgent: string | null): boolean {
-  if (!userAgent) return false;
-  if (/firefox|fxios/i.test(userAgent)) return true;
-  if (/iphone|ipad|ipod/i.test(userAgent)) return true;
-  return /safari/i.test(userAgent) && !/chrome|chromium|crios|edg|android/i.test(userAgent);
-}
+export { unreliableEchoCancellation } from './echoCancellation';
 
 export async function mintEphemeralKey(
   stationData: StationData | null,
