@@ -2,6 +2,45 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TranscriptItem } from '@/lib/clinical-master/types';
+import { unreliableEchoCancellation } from '@/lib/clinical-master/echoCancellation';
+
+/**
+ * Double-talk barge-in for browsers with unreliable echo cancellation
+ * (Safari/Firefox/iOS — see echoCancellation.ts). Their AEC leaks the
+ * patient's voice into the mic, so server-side barge-in is disabled for
+ * them (interrupt_response: false) — otherwise the patient cancels
+ * itself. To still let the doctor interrupt, we detect *deliberate*
+ * speech over the patient locally: leaked echo can only ever be a
+ * fraction of the playback level (an adaptively calibrated coupling
+ * ratio), so sustained mic energy well above that prediction means a
+ * real voice — and we cancel the patient client-side.
+ */
+const DT_FRAME_MS = 50;
+/** Consecutive loud frames (~200ms) before we call it deliberate speech. */
+const DT_SUSTAIN_FRAMES = 4;
+/** Mic RMS must exceed this multiple of the predicted echo level. */
+const DT_MARGIN = 3;
+/** Absolute mic RMS floor (~-40dBFS) so silence can never trigger. */
+const DT_MIC_FLOOR = 0.01;
+/** Minimum gap between client-side interrupts. */
+const DT_COOLDOWN_MS = 1500;
+/** Calibration warm-up after connect — no interrupts while the coupling
+ *  ratio is still settling. */
+const DT_WARMUP_MS = 1500;
+/** EMA rate for the echo-coupling estimate. */
+const DT_COUPLING_EMA = 0.05;
+
+/** Byte time-domain RMS (0..~1). getByteTimeDomainData works on every
+ *  Safari version, unlike the float variant. */
+function analyserRms(analyser: AnalyserNode, buf: Uint8Array): number {
+    analyser.getByteTimeDomainData(buf);
+    let sum = 0;
+    for (let i = 0; i < buf.length; i++) {
+        const v = (buf[i] - 128) / 128;
+        sum += v * v;
+    }
+    return Math.sqrt(sum / buf.length);
+}
 
 /** Mean token probability from transcription logprobs, as a 0..1 confidence. */
 function meanProbFromLogprobs(logprobs: unknown): number | undefined {
@@ -82,6 +121,25 @@ export function useRealtimeSession({
     const messageCountRef = useRef(0);
     const sessionStartRef = useRef<number>(0);
     const vadRef = useRef<Record<string, { start_ms?: number; end_ms?: number }>>({});
+    // --- double-talk barge-in state (unreliable-AEC browsers only) ---
+    const audioCtxRef = useRef<AudioContext | null>(null);
+    const micAnalyserRef = useRef<AnalyserNode | null>(null);
+    const patientAnalyserRef = useRef<AnalyserNode | null>(null);
+    const analyserBufRef = useRef<Uint8Array | null>(null);
+    const remoteStreamRef = useRef<MediaStream | null>(null);
+    const detectorIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const detectorStartedAtRef = useRef(0);
+    /** Echo-coupling estimate: micRms ≈ coupling × patientRms. Starts high
+     *  (conservative — over-predicts echo) and calibrates down via EMA. */
+    const couplingRef = useRef(0.2);
+    const doubleTalkFramesRef = useRef(0);
+    const lastInterruptAtRef = useRef(0);
+    const remoteSilentFramesRef = useRef(0);
+    const detectorDisabledRef = useRef(false);
+    const speakingRef = useRef(false);
+    const speakingSinceRef = useRef(0);
+    const activeResponseIdRef = useRef<string | null>(null);
+    const lastAssistantItemRef = useRef<string | null>(null);
 
     const relNow = useCallback((): number | undefined => {
         return sessionStartRef.current ? Date.now() - sessionStartRef.current : undefined;
@@ -124,6 +182,121 @@ export function useRealtimeSession({
         }
     }, []);
 
+    /**
+     * Client-side barge-in: cancel the in-flight response (if any), sync the
+     * model's context to the audio actually heard, and flush the buffered
+     * WebRTC audio so the patient goes quiet immediately. Only the
+     * double-talk detector calls this — on unreliable-AEC browsers server
+     * barge-in is off (interrupt_response: false), so a deliberate
+     * interruption has to be actioned from here.
+     */
+    const interruptPatient = useCallback(() => {
+        if (activeResponseIdRef.current) {
+            sendEvent({ type: 'response.cancel' });
+            activeResponseIdRef.current = null;
+        }
+        if (speakingRef.current && lastAssistantItemRef.current) {
+            sendEvent({
+                type: 'conversation.item.truncate',
+                item_id: lastAssistantItemRef.current,
+                content_index: 0,
+                audio_end_ms: Math.max(0, Date.now() - speakingSinceRef.current),
+            });
+        }
+        sendEvent({ type: 'output_audio_buffer.clear' });
+        speakingRef.current = false;
+        setIsSpeaking(false);
+    }, [sendEvent]);
+
+    /** Tap the patient's remote stream for level analysis. Analysis only —
+     *  never connected to the destination, so playback is untouched. */
+    const attachPatientAnalyser = useCallback(() => {
+        const ctx = audioCtxRef.current;
+        const stream = remoteStreamRef.current;
+        if (!ctx || !stream || patientAnalyserRef.current) return;
+        try {
+            const analyser = ctx.createAnalyser();
+            analyser.fftSize = 1024;
+            ctx.createMediaStreamSource(stream).connect(analyser);
+            patientAnalyserRef.current = analyser;
+        } catch {
+            detectorDisabledRef.current = true;
+        }
+    }, []);
+
+    const detectorTick = useCallback(() => {
+        if (detectorDisabledRef.current || !speakingRef.current) return;
+        const micAnalyser = micAnalyserRef.current;
+        const patientAnalyser = patientAnalyserRef.current;
+        const buf = analyserBufRef.current;
+        if (!micAnalyser || !patientAnalyser || !buf) return;
+        const patientRms = analyserRms(patientAnalyser, buf);
+        const micRms = analyserRms(micAnalyser, buf);
+
+        // Safari has historically returned silence from WebAudio taps on
+        // remote WebRTC streams. If the patient analyser reads nothing while
+        // audio is audibly playing, the analysis is untrustworthy — disable
+        // the detector for this session rather than risk false interrupts.
+        if (patientRms < 0.003) {
+            remoteSilentFramesRef.current += 1;
+            if (remoteSilentFramesRef.current > 20) detectorDisabledRef.current = true;
+            return;
+        }
+        remoteSilentFramesRef.current = 0;
+
+        const predictedEcho = couplingRef.current * patientRms;
+        if (micRms > Math.max(DT_MIC_FLOOR, DT_MARGIN * predictedEcho)) {
+            doubleTalkFramesRef.current += 1;
+            const now = Date.now();
+            if (
+                doubleTalkFramesRef.current >= DT_SUSTAIN_FRAMES &&
+                now - detectorStartedAtRef.current > DT_WARMUP_MS &&
+                now - lastInterruptAtRef.current > DT_COOLDOWN_MS
+            ) {
+                lastInterruptAtRef.current = now;
+                doubleTalkFramesRef.current = 0;
+                interruptPatient();
+            }
+        } else {
+            doubleTalkFramesRef.current = 0;
+            // Mic is echo-only right now — refine the coupling estimate.
+            const ratio = micRms / patientRms;
+            couplingRef.current = Math.min(
+                1,
+                Math.max(0.005, (1 - DT_COUPLING_EMA) * couplingRef.current + DT_COUPLING_EMA * ratio)
+            );
+        }
+    }, [interruptPatient]);
+
+    /** Arm the double-talk detector (unreliable-AEC browsers only). Called
+     *  once the mic stream exists; a detector failure only ever degrades to
+     *  the no-barge-in behaviour, never breaks the session. */
+    const startDoubleTalkDetector = useCallback(() => {
+        if (!unreliableEchoCancellation(navigator.userAgent)) return;
+        if (audioCtxRef.current || !micStreamRef.current) return;
+        try {
+            const Ctor =
+                window.AudioContext ??
+                (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+            if (!Ctor) return;
+            const ctx = new Ctor();
+            audioCtxRef.current = ctx;
+            const micAnalyser = ctx.createAnalyser();
+            micAnalyser.fftSize = 1024;
+            ctx.createMediaStreamSource(micStreamRef.current).connect(micAnalyser);
+            micAnalyserRef.current = micAnalyser;
+            analyserBufRef.current = new Uint8Array(micAnalyser.fftSize);
+            attachPatientAnalyser();
+            detectorStartedAtRef.current = Date.now();
+            detectorIntervalRef.current = setInterval(detectorTick, DT_FRAME_MS);
+            void ctx.resume().catch(() => {
+                /* connect() runs from a user gesture, resume is belt-and-braces */
+            });
+        } catch {
+            detectorDisabledRef.current = true;
+        }
+    }, [attachPatientAnalyser, detectorTick]);
+
     // Tear down media/connection without persisting (used for leave + unmount).
     const teardown = useCallback(() => {
         if (timerRef.current) {
@@ -137,6 +310,23 @@ export function useRealtimeSession({
         if (greetingWatchdogRef.current) {
             clearTimeout(greetingWatchdogRef.current);
             greetingWatchdogRef.current = null;
+        }
+        if (detectorIntervalRef.current) {
+            clearInterval(detectorIntervalRef.current);
+            detectorIntervalRef.current = null;
+        }
+        micAnalyserRef.current = null;
+        patientAnalyserRef.current = null;
+        remoteStreamRef.current = null;
+        speakingRef.current = false;
+        activeResponseIdRef.current = null;
+        lastAssistantItemRef.current = null;
+        detectorDisabledRef.current = false;
+        if (audioCtxRef.current) {
+            void audioCtxRef.current.close().catch(() => {
+                /* already closed */
+            });
+            audioCtxRef.current = null;
         }
         try {
             dcRef.current?.close();
@@ -259,6 +449,27 @@ export function useRealtimeSession({
                         asr_confidence: 1,
                     });
                     break;
+                case 'response.created': {
+                    const responseId = (evt.response as { id?: string } | undefined)?.id;
+                    activeResponseIdRef.current = responseId ? String(responseId) : null;
+                    break;
+                }
+                case 'response.done': {
+                    const responseId = (evt.response as { id?: string } | undefined)?.id;
+                    if (responseId && responseId === activeResponseIdRef.current) {
+                        activeResponseIdRef.current = null;
+                    }
+                    break;
+                }
+                case 'response.output_item.added': {
+                    const item = evt.item as
+                        | { id?: string; type?: string; role?: string }
+                        | undefined;
+                    if (item?.type === 'message' && item.role === 'assistant' && item.id) {
+                        lastAssistantItemRef.current = item.id;
+                    }
+                    break;
+                }
                 case 'output_audio_buffer.started':
                     // First patient audio proves the session is genuinely live —
                     // stand down the greeting watchdog.
@@ -267,10 +478,13 @@ export function useRealtimeSession({
                         clearTimeout(greetingWatchdogRef.current);
                         greetingWatchdogRef.current = null;
                     }
+                    speakingRef.current = true;
+                    speakingSinceRef.current = Date.now();
                     setIsSpeaking(true);
                     break;
                 case 'output_audio_buffer.stopped':
                 case 'output_audio_buffer.cleared':
+                    speakingRef.current = false;
                     setIsSpeaking(false);
                     break;
                 case 'response.function_call_arguments.done':
@@ -283,6 +497,10 @@ export function useRealtimeSession({
                 case 'error': {
                     const message =
                         (evt.error as { message?: string } | undefined)?.message ?? 'Realtime error';
+                    // Benign races from client-side barge-in: cancelling a
+                    // response that just finished, or truncating audio shorter
+                    // than requested. Not session errors — ignore.
+                    if (/cancel|truncat/i.test(message)) break;
                     setError(message);
                     onError?.(message);
                     break;
@@ -319,6 +537,7 @@ export function useRealtimeSession({
             });
             micStreamRef.current = micStream;
             micTrackRef.current = micStream.getAudioTracks()[0] ?? null;
+            startDoubleTalkDetector();
 
             // 3. Peer connection
             const pc = new RTCPeerConnection();
@@ -347,6 +566,8 @@ export function useRealtimeSession({
                     audioElRef.current = el;
                 }
                 el.srcObject = e.streams[0];
+                remoteStreamRef.current = e.streams[0] ?? null;
+                attachPatientAnalyser();
                 void el.play().catch(() => {
                     /* autoplay may require gesture; ignore */
                 });
@@ -424,6 +645,8 @@ export function useRealtimeSession({
         sendEvent,
         endRoutine,
         teardown,
+        startDoubleTalkDetector,
+        attachPatientAnalyser,
         onSessionStarted,
         onError,
     ]);
