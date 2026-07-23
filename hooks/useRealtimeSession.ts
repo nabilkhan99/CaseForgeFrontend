@@ -869,8 +869,16 @@ export function useRealtimeSession({
                     // Benign races from client-side barge-in / turn-taking:
                     // cancelling a response that just finished, truncating
                     // audio shorter than requested, or committing an input
-                    // buffer the server considers empty. Not session errors.
-                    if (/cancel|truncat|buffer/i.test(message)) break;
+                    // buffer the server considers empty. Match the SPECIFIC
+                    // messages — keyword matching (e.g. /truncat/) once hid a
+                    // whole class of fatal errors, like context-truncation
+                    // failures, behind a silent patient.
+                    if (
+                        /no active response|already shorter|buffer too small|buffer is empty|empty input audio buffer/i.test(
+                            message
+                        )
+                    )
+                        break;
                     setError(message);
                     flushVoiceLog('realtime-error');
                     onError?.(message);
