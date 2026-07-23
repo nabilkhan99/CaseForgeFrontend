@@ -2,6 +2,100 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TranscriptItem } from '@/lib/clinical-master/types';
+import { unreliableEchoCancellation } from '@/lib/clinical-master/echoCancellation';
+
+/**
+ * Double-talk barge-in for browsers with unreliable echo cancellation
+ * (Safari/Firefox/iOS — see echoCancellation.ts). Their AEC leaks the
+ * patient's voice into the mic, so server-side barge-in is disabled for
+ * them (interrupt_response: false) — otherwise the patient cancels
+ * itself. To still let the doctor interrupt, we detect *deliberate*
+ * speech over the patient locally: leaked echo can only ever be a
+ * fraction of the playback level (an adaptively calibrated coupling
+ * ratio), so sustained mic energy well above that prediction means a
+ * real voice — and we cancel the patient client-side.
+ */
+const DT_FRAME_MS = 50;
+/** Consecutive loud frames (~200ms) before we call it deliberate speech. */
+const DT_SUSTAIN_FRAMES = 4;
+/**
+ * Voice test is on the RESIDUAL: mic energy left after subtracting the
+ * predicted echo. Echo-only frames track the prediction (residual ≈ 0 ±
+ * envelope jitter); a real voice adds energy on top. The residual must
+ * exceed this fraction of the predicted echo (jitter guard) and the
+ * absolute floor.
+ */
+const DT_RESIDUAL_MARGIN = 0.5;
+/** Absolute mic RMS floor (~-40dBFS) so silence can never trigger. */
+const DT_MIC_FLOOR = 0.01;
+/** Minimum gap between client-side interrupts. */
+const DT_COOLDOWN_MS = 1500;
+/** Calibration warm-up after connect — no interrupts while the coupling
+ *  ratio is still settling. */
+const DT_WARMUP_MS = 1500;
+/** EMA rate for the echo-coupling estimate. */
+const DT_COUPLING_EMA = 0.05;
+/** Sustained voice frames (~250ms) before we open a doctor turn. */
+const DT_MIN_SPEECH_FRAMES = 5;
+/** Silence frames (~900ms) that close the doctor's turn — mirrors the old
+ *  server-VAD silence_duration_ms. */
+const DT_END_SILENCE_FRAMES = 18;
+/**
+ * Guard window after patient audio ends (natural stop OR barge-in). The
+ * mic keeps hearing the echo tail for hundreds of ms (Safari output
+ * latency + room reverb) — session logs showed every barge-in being
+ * followed ~250ms later by a phantom turn that committed a fragment of
+ * the patient's own words ("heart going.", "of voiding."). During the
+ * window no doctor turn may open, and at its end the input buffer is
+ * flushed unconditionally.
+ */
+const DT_ECHO_TAIL_MS = 700;
+/**
+ * Frames of peak-hold on the patient tap (~400ms). The tap reads the
+ * decoded stream instantaneously, but the mic hears it ~100–250ms later
+ * (output latency + acoustics). Predicting echo from the recent PEAK
+ * instead of the instant value keeps the prediction high through
+ * intra-sentence pauses, so the lagging mic tail can't read as voice.
+ */
+const DT_PEAK_FRAMES = 8;
+/** EMA rate for the smoothed envelopes used in coupling calibration —
+ *  instantaneous ratios are meaningless under lag misalignment (observed
+ *  k swinging 0.26→3.1 within seconds). */
+const DT_ENV_EMA = 0.15;
+/** Minimum patient-tap RMS for the echo reference to count as live. Below
+ *  this during playback the tap is dead (Safari muted-track quirk) — no
+ *  barge-in decisions are made on it, and the tap is re-attached. */
+const DT_REF_LIVE_MIN = 0.02;
+/** Minimum gap between patient-tap re-attach attempts. */
+const DT_REATTACH_MS = 1000;
+/**
+ * Calibration window at the start of each patient turn. A doctor
+ * essentially never interrupts within the first moments of the patient
+ * starting to speak, so whatever the mic hears then IS the echo — learn
+ * the mic/tap coupling aggressively from it and never barge-in during
+ * the window. This breaks the chicken-and-egg failure where an
+ * under-estimated coupling classifies echo as voice, which blocks the
+ * echo-only calibration path, which keeps the estimate wrong (observed
+ * in Safari session logs: mic echo 0.24–0.69 vs tap 0.004–0.11).
+ */
+const DT_CAL_WINDOW_MS = 600;
+/** Fast EMA used inside the calibration window. */
+const DT_CAL_EMA = 0.3;
+/** Coupling ceiling. Safari's tap under-reports playback level, so the
+ *  real mic-echo/tap ratio can far exceed 1. */
+const DT_COUPLING_MAX = 8;
+
+/** Byte time-domain RMS (0..~1). getByteTimeDomainData works on every
+ *  Safari version, unlike the float variant. */
+function analyserRms(analyser: AnalyserNode, buf: Uint8Array): number {
+    analyser.getByteTimeDomainData(buf);
+    let sum = 0;
+    for (let i = 0; i < buf.length; i++) {
+        const v = (buf[i] - 128) / 128;
+        sum += v * v;
+    }
+    return Math.sqrt(sum / buf.length);
+}
 
 /** Mean token probability from transcription logprobs, as a 0..1 confidence. */
 function meanProbFromLogprobs(logprobs: unknown): number | undefined {
@@ -82,6 +176,40 @@ export function useRealtimeSession({
     const messageCountRef = useRef(0);
     const sessionStartRef = useRef<number>(0);
     const vadRef = useRef<Record<string, { start_ms?: number; end_ms?: number }>>({});
+    // --- double-talk barge-in state (unreliable-AEC browsers only) ---
+    const audioCtxRef = useRef<AudioContext | null>(null);
+    const micAnalyserRef = useRef<AnalyserNode | null>(null);
+    const patientAnalyserRef = useRef<AnalyserNode | null>(null);
+    const analyserBufRef = useRef<Uint8Array | null>(null);
+    const remoteStreamRef = useRef<MediaStream | null>(null);
+    const detectorIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const detectorStartedAtRef = useRef(0);
+    /** Echo-coupling estimate: micRms ≈ coupling × patientRms. Starts high
+     *  (conservative — over-predicts echo) and calibrates down via EMA. */
+    const couplingRef = useRef(0.2);
+    const doubleTalkFramesRef = useRef(0);
+    const lastInterruptAtRef = useRef(0);
+    const lastReattachAtRef = useRef(0);
+    /** Ring buffer of recent patient-tap RMS values for peak-hold. */
+    const patRecentRef = useRef<number[]>([]);
+    /** Smoothed envelopes for coupling calibration. */
+    const micEnvRef = useRef(0);
+    const patEnvRef = useRef(0);
+    /** When patient audio last ended (stop, clear, or barge-in). */
+    const lastPatientEndAtRef = useRef(0);
+    const speakingRef = useRef(false);
+    const speakingSinceRef = useRef(0);
+    const activeResponseIdRef = useRef<string | null>(null);
+    const lastAssistantItemRef = useRef<string | null>(null);
+    /** A doctor turn is currently being captured (client-driven turn mode). */
+    const turnOpenRef = useRef(false);
+    const silenceFramesRef = useRef(0);
+    const bufferClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // --- voice debug capture (?voicedebug=1 on the session URL) ---
+    const debugEnabledRef = useRef(false);
+    const debugLogRef = useRef<Array<{ t: number; e: string; d?: unknown }>>([]);
+    const debugElRef = useRef<HTMLDivElement | null>(null);
+    const debugTickCountRef = useRef(0);
 
     const relNow = useCallback((): number | undefined => {
         return sessionStartRef.current ? Date.now() - sessionStartRef.current : undefined;
@@ -117,12 +245,317 @@ export function useRealtimeSession({
         []
     );
 
-    const sendEvent = useCallback((event: Record<string, unknown>) => {
-        const dc = dcRef.current;
-        if (dc && dc.readyState === 'open') {
-            dc.send(JSON.stringify(event));
-        }
+    /** Append to the in-memory voice debug log (no-op unless ?voicedebug=1). */
+    const logDebug = useCallback((e: string, d?: unknown) => {
+        if (!debugEnabledRef.current) return;
+        const log = debugLogRef.current;
+        log.push({ t: sessionStartRef.current ? Date.now() - sessionStartRef.current : 0, e, d });
+        if (log.length > 4000) log.splice(0, 1000);
     }, []);
+
+    /** Floating overlay with live detector numbers + a copy-log button. */
+    const ensureDebugOverlay = useCallback(() => {
+        if (!debugEnabledRef.current || debugElRef.current) return;
+        const wrap = document.createElement('div');
+        wrap.style.cssText =
+            'position:fixed;bottom:8px;left:8px;z-index:99999;background:rgba(0,0,0,0.85);' +
+            'color:#7CFC00;font:10px/1.5 monospace;padding:8px 10px;border-radius:8px;max-width:320px;pointer-events:auto;';
+        const info = document.createElement('div');
+        info.textContent = 'voice debug: waiting for session…';
+        const buildLine = document.createElement('div');
+        buildLine.style.cssText = 'opacity:0.7;margin-top:2px;';
+        buildLine.textContent = `build ${(process.env.NEXT_PUBLIC_COMMIT_SHA ?? 'unknown').slice(0, 7)}`;
+        const btn = document.createElement('button');
+        btn.textContent = 'Copy voice log';
+        btn.style.cssText =
+            'margin-top:6px;background:#7CFC00;color:#000;border:0;border-radius:4px;' +
+            'padding:3px 8px;font:10px monospace;cursor:pointer;';
+        btn.onclick = () => {
+            const payload = JSON.stringify({ ua: navigator.userAgent, log: debugLogRef.current });
+            void navigator.clipboard
+                .writeText(payload)
+                .then(() => {
+                    btn.textContent = `Copied (${debugLogRef.current.length} entries)`;
+                })
+                .catch(() => {
+                    // Clipboard blocked — show the JSON for manual copy.
+                    window.prompt('Copy the voice log:', payload);
+                });
+        };
+        wrap.appendChild(info);
+        wrap.appendChild(buildLine);
+        wrap.appendChild(btn);
+        document.body.appendChild(wrap);
+        debugElRef.current = wrap;
+    }, []);
+
+    const updateDebugOverlay = useCallback((text: string) => {
+        const el = debugElRef.current?.firstElementChild;
+        if (el) el.textContent = text;
+    }, []);
+
+    const sendEvent = useCallback(
+        (event: Record<string, unknown>) => {
+            const dc = dcRef.current;
+            if (dc && dc.readyState === 'open') {
+                dc.send(JSON.stringify(event));
+                logDebug(`tx:${String(event.type)}`);
+            } else {
+                logDebug(`tx-dropped:${String(event.type)}`);
+            }
+        },
+        [logDebug]
+    );
+
+    /**
+     * Client-side barge-in: cancel the in-flight response (if any), sync the
+     * model's context to the audio actually heard, and flush the buffered
+     * WebRTC audio so the patient goes quiet immediately. Only the
+     * double-talk detector calls this — on unreliable-AEC browsers server
+     * barge-in is off (interrupt_response: false), so a deliberate
+     * interruption has to be actioned from here.
+     */
+    const interruptPatient = useCallback(() => {
+        lastPatientEndAtRef.current = Date.now();
+        if (activeResponseIdRef.current) {
+            sendEvent({ type: 'response.cancel' });
+            activeResponseIdRef.current = null;
+        }
+        if (speakingRef.current && lastAssistantItemRef.current) {
+            sendEvent({
+                type: 'conversation.item.truncate',
+                item_id: lastAssistantItemRef.current,
+                content_index: 0,
+                audio_end_ms: Math.max(0, Date.now() - speakingSinceRef.current),
+            });
+        }
+        sendEvent({ type: 'output_audio_buffer.clear' });
+        speakingRef.current = false;
+        setIsSpeaking(false);
+    }, [sendEvent]);
+
+    /** Tap the patient's remote stream for level analysis. Analysis only —
+     *  never connected to the destination, so playback is untouched. */
+    const attachPatientAnalyser = useCallback(() => {
+        const ctx = audioCtxRef.current;
+        const stream = remoteStreamRef.current;
+        if (!ctx || !stream) return;
+        const track = stream.getAudioTracks()[0];
+        if (!track || track.readyState !== 'live') return;
+        // Safari: a MediaStreamSource created from a still-muted remote track
+        // reads silence FOREVER (confirmed in session logs — trackMuted:true
+        // at ontrack, pat 0 for the whole session). Only attach once RTP is
+        // actually flowing; ontrack registers an 'unmute' listener that calls
+        // back here, and detectorTick re-attaches if readings ever die.
+        if (track.muted) {
+            logDebug('patient-analyser:deferred (track muted)');
+            return;
+        }
+        try {
+            if (patientAnalyserRef.current) {
+                try {
+                    patientAnalyserRef.current.disconnect();
+                } catch {
+                    /* already disconnected */
+                }
+            }
+            const analyser = ctx.createAnalyser();
+            analyser.fftSize = 1024;
+            // A fresh MediaStream wrapping the live track — more reliable on
+            // WebKit than the ontrack-provided stream object.
+            ctx.createMediaStreamSource(new MediaStream([track])).connect(analyser);
+            patientAnalyserRef.current = analyser;
+            logDebug('patient-analyser:attached', {
+                muted: track.muted,
+                state: track.readyState,
+                ctxState: ctx.state,
+                ctxRate: ctx.sampleRate,
+            });
+        } catch (err) {
+            logDebug('patient-analyser:FAILED', String(err));
+        }
+    }, [logDebug]);
+
+    /**
+     * Client-driven turn-taking (unreliable-AEC browsers). Every 50ms:
+     * decide whether the mic holds a real voice (energy well above the
+     * calibrated echo prediction), and from that drive the whole turn
+     * lifecycle — barge-in while the patient speaks, opening a doctor turn
+     * in silence, and committing the turn + requesting the response after
+     * ~900ms of quiet. The server never decides anything, so the patient's
+     * echo can never become a phantom doctor turn.
+     */
+    const detectorTick = useCallback(() => {
+        const micAnalyser = micAnalyserRef.current;
+        const buf = analyserBufRef.current;
+        if (!micAnalyser || !buf) return;
+        const patientAnalyser = patientAnalyserRef.current;
+        const patientRms = patientAnalyser ? analyserRms(patientAnalyser, buf) : 0;
+        const micRms = analyserRms(micAnalyser, buf);
+        const now = Date.now();
+
+        // Peak-hold on the tap: the mic hears playback ~100–250ms late, so
+        // all echo reasoning uses the recent PEAK, which stays high through
+        // intra-sentence pauses and for ~400ms past the end of playback.
+        const recent = patRecentRef.current;
+        recent.push(patientRms);
+        if (recent.length > DT_PEAK_FRAMES) recent.shift();
+        const patPeak = Math.max(...recent);
+
+        // Smoothed envelopes — the only sane basis for calibrating the
+        // coupling under lag misalignment.
+        micEnvRef.current = (1 - DT_ENV_EMA) * micEnvRef.current + DT_ENV_EMA * micRms;
+        patEnvRef.current = (1 - DT_ENV_EMA) * patEnvRef.current + DT_ENV_EMA * patientRms;
+
+        // The echo reference is only trustworthy while its recent peak reads
+        // real signal. A dead tap (Safari muted-track quirk) means: no
+        // barge-in decisions, no coupling updates, and periodic re-attach
+        // attempts — but mic-side turn-taking below never depends on it.
+        const refLive = patPeak >= DT_REF_LIVE_MIN;
+        if (
+            speakingRef.current &&
+            !refLive &&
+            now - speakingSinceRef.current > 500 &&
+            now - lastReattachAtRef.current > DT_REATTACH_MS
+        ) {
+            lastReattachAtRef.current = now;
+            logDebug('ref-dead:re-attach', { pat: patientRms });
+            attachPatientAnalyser();
+        }
+
+        // Echo-tail guard: after patient audio ends (stop or barge-in) the
+        // mic keeps hearing the room for a while — no doctor turn may open,
+        // and voiced frames don't accumulate.
+        const inEchoTail =
+            !speakingRef.current &&
+            lastPatientEndAtRef.current > 0 &&
+            now - lastPatientEndAtRef.current < DT_ECHO_TAIL_MS;
+
+        // Periodic snapshot + live overlay (~1s cadence, debug mode only).
+        debugTickCountRef.current += 1;
+        if (debugEnabledRef.current && debugTickCountRef.current % 20 === 0) {
+            const snap = {
+                mic: Number(micRms.toFixed(4)),
+                pat: Number(patientRms.toFixed(4)),
+                peak: Number(patPeak.toFixed(4)),
+                k: Number(couplingRef.current.toFixed(4)),
+                speaking: speakingRef.current,
+                turnOpen: turnOpenRef.current,
+                dtFrames: doubleTalkFramesRef.current,
+                silFrames: silenceFramesRef.current,
+            };
+            logDebug('snap', snap);
+            updateDebugOverlay(
+                `mic ${snap.mic} | pat ${snap.pat} | k ${snap.k}\n` +
+                    `patientSpeaking ${snap.speaking} | turnOpen ${snap.turnOpen} | ` +
+                    `voiced ${snap.dtFrames} sil ${snap.silFrames}`
+            );
+        }
+
+        // Coupling calibration from smoothed envelopes. Fast inside the
+        // turn-start window (the mic can only be hearing echo there), slow
+        // and only on non-voiced frames otherwise.
+        const inCalWindow =
+            speakingRef.current && now - speakingSinceRef.current < DT_CAL_WINDOW_MS;
+        const envRatioValid = speakingRef.current && patEnvRef.current >= DT_REF_LIVE_MIN;
+
+        // Echo prediction from the coupling and the PEAK (lag-tolerant).
+        // Predict even just after playback ends — the ring buffer decays the
+        // peak naturally over ~400ms, covering the mic's lag.
+        const predictedEcho = couplingRef.current * patPeak;
+        const isVoice =
+            micRms - predictedEcho > Math.max(DT_MIC_FLOOR, DT_RESIDUAL_MARGIN * predictedEcho);
+
+        if (envRatioValid && (inCalWindow || !isVoice)) {
+            const ratio = micEnvRef.current / patEnvRef.current;
+            const ema = inCalWindow ? DT_CAL_EMA : DT_COUPLING_EMA;
+            couplingRef.current = Math.min(
+                DT_COUPLING_MAX,
+                Math.max(0.05, (1 - ema) * couplingRef.current + ema * ratio)
+            );
+        }
+
+        if (isVoice && !inEchoTail) {
+            doubleTalkFramesRef.current += 1;
+            silenceFramesRef.current = 0;
+            if (
+                speakingRef.current &&
+                refLive &&
+                !inCalWindow &&
+                doubleTalkFramesRef.current >= DT_SUSTAIN_FRAMES &&
+                now - detectorStartedAtRef.current > DT_WARMUP_MS &&
+                now - lastInterruptAtRef.current > DT_COOLDOWN_MS
+            ) {
+                // Barge-in: silence the patient and dump the echo-tainted
+                // input buffer; the doctor's continuing speech is captured
+                // from here and committed when they pause.
+                lastInterruptAtRef.current = now;
+                doubleTalkFramesRef.current = 0;
+                logDebug('BARGE-IN', {
+                    mic: micRms,
+                    pat: patientRms,
+                    patPeak,
+                    k: couplingRef.current,
+                });
+                interruptPatient();
+                sendEvent({ type: 'input_audio_buffer.clear' });
+            } else if (
+                !speakingRef.current &&
+                !turnOpenRef.current &&
+                doubleTalkFramesRef.current >= DT_MIN_SPEECH_FRAMES
+            ) {
+                turnOpenRef.current = true;
+                logDebug('turn-open', { mic: micRms });
+            }
+        } else {
+            if (inEchoTail) doubleTalkFramesRef.current = 0;
+            else if (!isVoice) doubleTalkFramesRef.current = 0;
+            if (turnOpenRef.current) {
+                silenceFramesRef.current += 1;
+                if (silenceFramesRef.current >= DT_END_SILENCE_FRAMES) {
+                    // End of the doctor's turn — hand it to the model.
+                    turnOpenRef.current = false;
+                    silenceFramesRef.current = 0;
+                    logDebug('turn-commit');
+                    sendEvent({ type: 'input_audio_buffer.commit' });
+                    sendEvent({ type: 'response.create' });
+                }
+            }
+        }
+    }, [interruptPatient, sendEvent, logDebug, updateDebugOverlay, attachPatientAnalyser]);
+
+    /** Arm the double-talk detector (unreliable-AEC browsers only). Called
+     *  once the mic stream exists; a detector failure only ever degrades to
+     *  the no-barge-in behaviour, never breaks the session. */
+    const startDoubleTalkDetector = useCallback(() => {
+        if (!unreliableEchoCancellation(navigator.userAgent)) return;
+        if (audioCtxRef.current || !micStreamRef.current) return;
+        try {
+            const Ctor =
+                window.AudioContext ??
+                (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+            if (!Ctor) {
+                logDebug('detector-arm:FAILED', 'no AudioContext constructor');
+                return;
+            }
+            const ctx = new Ctor();
+            audioCtxRef.current = ctx;
+            const micAnalyser = ctx.createAnalyser();
+            micAnalyser.fftSize = 1024;
+            ctx.createMediaStreamSource(micStreamRef.current).connect(micAnalyser);
+            micAnalyserRef.current = micAnalyser;
+            analyserBufRef.current = new Uint8Array(micAnalyser.fftSize);
+            attachPatientAnalyser();
+            detectorStartedAtRef.current = Date.now();
+            detectorIntervalRef.current = setInterval(detectorTick, DT_FRAME_MS);
+            logDebug('detector-arm:ok', { ctxState: ctx.state, ctxRate: ctx.sampleRate });
+            void ctx.resume().catch(() => {
+                /* connect() runs from a user gesture, resume is belt-and-braces */
+            });
+        } catch (err) {
+            logDebug('detector-arm:FAILED', String(err));
+        }
+    }, [attachPatientAnalyser, detectorTick, logDebug]);
 
     // Tear down media/connection without persisting (used for leave + unmount).
     const teardown = useCallback(() => {
@@ -137,6 +570,33 @@ export function useRealtimeSession({
         if (greetingWatchdogRef.current) {
             clearTimeout(greetingWatchdogRef.current);
             greetingWatchdogRef.current = null;
+        }
+        if (detectorIntervalRef.current) {
+            clearInterval(detectorIntervalRef.current);
+            detectorIntervalRef.current = null;
+        }
+        micAnalyserRef.current = null;
+        patientAnalyserRef.current = null;
+        remoteStreamRef.current = null;
+        speakingRef.current = false;
+        activeResponseIdRef.current = null;
+        lastAssistantItemRef.current = null;
+        lastReattachAtRef.current = 0;
+        turnOpenRef.current = false;
+        silenceFramesRef.current = 0;
+        patRecentRef.current = [];
+        micEnvRef.current = 0;
+        patEnvRef.current = 0;
+        lastPatientEndAtRef.current = 0;
+        if (bufferClearTimerRef.current) {
+            clearTimeout(bufferClearTimerRef.current);
+            bufferClearTimerRef.current = null;
+        }
+        if (audioCtxRef.current) {
+            void audioCtxRef.current.close().catch(() => {
+                /* already closed */
+            });
+            audioCtxRef.current = null;
         }
         try {
             dcRef.current?.close();
@@ -214,6 +674,15 @@ export function useRealtimeSession({
             } catch {
                 return;
             }
+            if (debugEnabledRef.current) {
+                const t = String(evt.type ?? '');
+                if (!t.endsWith('.delta')) {
+                    if (t === 'error') logDebug('rx:error', evt.error);
+                    else if (/transcript(ion)?\.(completed|done)$/.test(t))
+                        logDebug(`rx:${t}`, String(evt.transcript ?? ''));
+                    else logDebug(`rx:${t}`);
+                }
+            }
             switch (evt.type) {
                 case 'input_audio_buffer.speech_started': {
                     const id = String(evt.item_id ?? '');
@@ -259,6 +728,27 @@ export function useRealtimeSession({
                         asr_confidence: 1,
                     });
                     break;
+                case 'response.created': {
+                    const responseId = (evt.response as { id?: string } | undefined)?.id;
+                    activeResponseIdRef.current = responseId ? String(responseId) : null;
+                    break;
+                }
+                case 'response.done': {
+                    const responseId = (evt.response as { id?: string } | undefined)?.id;
+                    if (responseId && responseId === activeResponseIdRef.current) {
+                        activeResponseIdRef.current = null;
+                    }
+                    break;
+                }
+                case 'response.output_item.added': {
+                    const item = evt.item as
+                        | { id?: string; type?: string; role?: string }
+                        | undefined;
+                    if (item?.type === 'message' && item.role === 'assistant' && item.id) {
+                        lastAssistantItemRef.current = item.id;
+                    }
+                    break;
+                }
                 case 'output_audio_buffer.started':
                     // First patient audio proves the session is genuinely live —
                     // stand down the greeting watchdog.
@@ -267,11 +757,34 @@ export function useRealtimeSession({
                         clearTimeout(greetingWatchdogRef.current);
                         greetingWatchdogRef.current = null;
                     }
+                    speakingRef.current = true;
+                    speakingSinceRef.current = Date.now();
+                    // The patient has taken the floor — abandon any half-open
+                    // doctor turn so echo can never ride into a later commit.
+                    turnOpenRef.current = false;
+                    silenceFramesRef.current = 0;
+                    doubleTalkFramesRef.current = 0;
                     setIsSpeaking(true);
                     break;
                 case 'output_audio_buffer.stopped':
                 case 'output_audio_buffer.cleared':
+                    speakingRef.current = false;
+                    lastPatientEndAtRef.current = Date.now();
                     setIsSpeaking(false);
+                    // Client-driven turn mode: the input buffer now holds the
+                    // echo of the patient's turn, and the mic hears its tail
+                    // for a while yet. Turn opens are blocked for the tail
+                    // window (detectorTick), and at its end the buffer is
+                    // flushed so the doctor's next turn starts clean.
+                    if (audioCtxRef.current) {
+                        if (bufferClearTimerRef.current) clearTimeout(bufferClearTimerRef.current);
+                        bufferClearTimerRef.current = setTimeout(() => {
+                            bufferClearTimerRef.current = null;
+                            if (!turnOpenRef.current) {
+                                sendEvent({ type: 'input_audio_buffer.clear' });
+                            }
+                        }, DT_ECHO_TAIL_MS);
+                    }
                     break;
                 case 'response.function_call_arguments.done':
                     handleFunctionCall(
@@ -283,6 +796,11 @@ export function useRealtimeSession({
                 case 'error': {
                     const message =
                         (evt.error as { message?: string } | undefined)?.message ?? 'Realtime error';
+                    // Benign races from client-side barge-in / turn-taking:
+                    // cancelling a response that just finished, truncating
+                    // audio shorter than requested, or committing an input
+                    // buffer the server considers empty. Not session errors.
+                    if (/cancel|truncat|buffer/i.test(message)) break;
                     setError(message);
                     onError?.(message);
                     break;
@@ -291,7 +809,7 @@ export function useRealtimeSession({
                     break;
             }
         },
-        [appendTurn, relNow, handleFunctionCall, onError]
+        [appendTurn, relNow, handleFunctionCall, onError, sendEvent, logDebug]
     );
 
     const connect = useCallback(async () => {
@@ -300,6 +818,16 @@ export function useRealtimeSession({
             setStatus('connecting');
             setError(null);
             endedRef.current = false;
+            debugEnabledRef.current =
+                typeof window !== 'undefined' && window.location.search.includes('voicedebug');
+            if (debugEnabledRef.current) {
+                ensureDebugOverlay();
+                logDebug('connect:start', {
+                    build: (process.env.NEXT_PUBLIC_COMMIT_SHA ?? 'unknown').slice(0, 7),
+                    ua: navigator.userAgent,
+                    unreliableAec: unreliableEchoCancellation(navigator.userAgent),
+                });
+            }
 
             // 1. Mint ephemeral key + session config
             const res = await fetch(tokenEndpoint, {
@@ -319,6 +847,7 @@ export function useRealtimeSession({
             });
             micStreamRef.current = micStream;
             micTrackRef.current = micStream.getAudioTracks()[0] ?? null;
+            startDoubleTalkDetector();
 
             // 3. Peer connection
             const pc = new RTCPeerConnection();
@@ -347,6 +876,20 @@ export function useRealtimeSession({
                     audioElRef.current = el;
                 }
                 el.srcObject = e.streams[0];
+                remoteStreamRef.current = e.streams[0] ?? new MediaStream([e.track]);
+                logDebug('rx:ontrack', {
+                    streams: e.streams.length,
+                    trackMuted: e.track.muted,
+                    trackState: e.track.readyState,
+                });
+                // Remote tracks arrive muted and unmute when RTP flows —
+                // that's when a WebKit tap becomes viable (see
+                // attachPatientAnalyser). Re-attach on every unmute.
+                e.track.addEventListener('unmute', () => {
+                    logDebug('rx:track-unmute');
+                    attachPatientAnalyser();
+                });
+                attachPatientAnalyser();
                 void el.play().catch(() => {
                     /* autoplay may require gesture; ignore */
                 });
@@ -360,6 +903,35 @@ export function useRealtimeSession({
                 setStatus('connected');
                 sessionStartRef.current = Date.now();
                 vadRef.current = {};
+                // Session was minted with turn_detection: null for this
+                // browser, expecting the client detector to own turn-taking.
+                // Sole escape hatch: if WebAudio itself is unavailable (mic
+                // analyser never armed — essentially never on real browsers),
+                // the session would have NO turn-taking at all, so restore
+                // server VAD. A dead PATIENT tap is not this case — the mic
+                // side runs turn-taking regardless and the tap self-heals.
+                if (
+                    unreliableEchoCancellation(navigator.userAgent) &&
+                    (!audioCtxRef.current || !micAnalyserRef.current)
+                ) {
+                    logDebug('webaudio-unavailable:restoring server_vad');
+                    sendEvent({
+                        type: 'session.update',
+                        session: {
+                            audio: {
+                                input: {
+                                    turn_detection: {
+                                        type: 'server_vad',
+                                        threshold: 0.75,
+                                        prefix_padding_ms: 300,
+                                        silence_duration_ms: 900,
+                                        interrupt_response: false,
+                                    },
+                                },
+                            },
+                        },
+                    });
+                }
                 onSessionStarted?.();
                 // Patient speaks first — greeting ONLY, then waits (greeting-first behaviour).
                 sendEvent({
@@ -424,6 +996,10 @@ export function useRealtimeSession({
         sendEvent,
         endRoutine,
         teardown,
+        startDoubleTalkDetector,
+        attachPatientAnalyser,
+        ensureDebugOverlay,
+        logDebug,
         onSessionStarted,
         onError,
     ]);
