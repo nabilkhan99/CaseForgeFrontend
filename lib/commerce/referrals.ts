@@ -162,6 +162,13 @@ export interface ReferralDecisionInput {
   refereeEmail: string
   plan: string
   amountTotalPence: number
+  /**
+   * Optional per-code flat reward (pence) that supersedes the plan tier — for a
+   * negotiated affiliate/influencer deal (e.g. "£50 flat per signup"). When a
+   * number is supplied it becomes the reward; null/undefined falls back to
+   * {@link rewardFor}(plan).
+   */
+  rewardOverridePence?: number | null
 }
 
 export interface ReferralDecision {
@@ -174,8 +181,12 @@ export interface ReferralDecision {
  * Central, pure decision for an attributed referral. Returns the row's status,
  * void reason, and reward amount without touching any I/O.
  *
- * `rewardAmount` is ALWAYS {@link rewardFor}(plan) — recorded even on void rows
- * so the admin view shows what was forfeited (matching the prior behaviour).
+ * `rewardAmount` is `rewardOverridePence` when a number is supplied (a per-code
+ * negotiated flat fee), else {@link rewardFor}(plan). It is recorded even on
+ * void rows so the admin view shows what was forfeited (matching the prior
+ * behaviour). The override changes only the payout — the minimum-spend gate
+ * STILL uses the plan floor via {@link meetsMinimumSpend}, so an override can
+ * never mint a payout on a refunded/£0 purchase.
  *
  * Precedence:
  *   1. self-referral (referrer === referee) → void `self_referral`
@@ -183,8 +194,8 @@ export interface ReferralDecision {
  *   3. otherwise → pending
  */
 export function decideReferral(input: ReferralDecisionInput): ReferralDecision {
-  const { ownerEmail, refereeEmail, plan, amountTotalPence } = input
-  const rewardAmount = rewardFor(plan)
+  const { ownerEmail, refereeEmail, plan, amountTotalPence, rewardOverridePence } = input
+  const rewardAmount = typeof rewardOverridePence === 'number' ? rewardOverridePence : rewardFor(plan)
 
   if (isSelfReferral(ownerEmail, refereeEmail)) {
     return { status: 'void', voidReason: 'self_referral', rewardAmount }

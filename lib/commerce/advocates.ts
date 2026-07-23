@@ -1,0 +1,86 @@
+/**
+ * Pure, dependency-free validation for admin-issued advocate codes.
+ *
+ * The only import is {@link normalizeCode}/{@link generateReferralCode} from the
+ * sibling referrals module (themselves pure) — no Supabase / next / Stripe — so
+ * this is trivially unit-testable and safe to import from server routes. Every
+ * value returned is a fresh, cleaned snapshot: no I/O, no mutation of the input.
+ */
+
+import { generateReferralCode, normalizeCode } from './referrals'
+
+/** Raw create-code input from the admin form (already JSON-parsed). */
+export interface NewCodeInput {
+  ownerName?: string
+  ownerEmail?: string
+  code?: string
+  rewardOverridePence?: number | null
+}
+
+/** Cleaned, validated values ready to insert into `referral_codes`. */
+export interface ValidatedNewCode {
+  code: string
+  ownerName: string
+  ownerEmail: string
+  rewardOverridePence: number | null
+}
+
+/** Discriminated result: either the cleaned value or a user-facing error. */
+export type NewCodeResult =
+  | { ok: true; value: ValidatedNewCode }
+  | { ok: false; error: string }
+
+/**
+ * Basic email shape check. Deliberately permissive (one `@`, a dot-bearing
+ * domain, no spaces) — the goal is to reject obvious typos at the boundary, not
+ * to fully validate deliverability.
+ */
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/**
+ * Validate and clean a new advocate code request. Pure — returns a fresh
+ * {@link ValidatedNewCode} on success or a `{ ok: false, error }` describing the
+ * first failing rule:
+ *  - `ownerName` is trimmed and must be non-empty.
+ *  - `ownerEmail` is trimmed + lowercased and must match {@link EMAIL_RE}.
+ *  - `code`, if supplied, is normalized and must be 3–16 chars after
+ *    normalization; if absent it is generated from the owner's name.
+ *  - `rewardOverridePence`, if supplied, must be an integer >= 0; null/undefined
+ *    becomes `null` (fall back to the plan tier).
+ */
+export function validateNewCode(input: NewCodeInput): NewCodeResult {
+  const ownerName = (input.ownerName ?? '').trim()
+  if (ownerName.length === 0) {
+    return { ok: false, error: 'Name is required' }
+  }
+
+  const ownerEmail = (input.ownerEmail ?? '').trim().toLowerCase()
+  if (!EMAIL_RE.test(ownerEmail)) {
+    return { ok: false, error: 'A valid email is required' }
+  }
+
+  let code: string
+  if (input.code !== undefined && input.code !== null && input.code.trim() !== '') {
+    code = normalizeCode(input.code)
+    // normalizeCode caps its output at 16 chars; measure the pre-cap normalized
+    // length so an over-long custom code is rejected outright rather than
+    // silently truncated into a link the owner never chose.
+    const normalizedLength = input.code.toUpperCase().replace(/[^A-Z0-9]/g, '').length
+    if (normalizedLength < 3 || normalizedLength > 16) {
+      return { ok: false, error: 'Code must be 3–16 letters/numbers' }
+    }
+  } else {
+    code = generateReferralCode(ownerName)
+  }
+
+  let rewardOverridePence: number | null
+  if (input.rewardOverridePence === undefined || input.rewardOverridePence === null) {
+    rewardOverridePence = null
+  } else if (!Number.isInteger(input.rewardOverridePence) || input.rewardOverridePence < 0) {
+    return { ok: false, error: 'Reward override must be a whole number of pence, 0 or more' }
+  } else {
+    rewardOverridePence = input.rewardOverridePence
+  }
+
+  return { ok: true, value: { code, ownerName, ownerEmail, rewardOverridePence } }
+}

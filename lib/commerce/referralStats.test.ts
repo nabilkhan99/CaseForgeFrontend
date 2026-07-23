@@ -13,6 +13,8 @@ function code(overrides: Partial<CodeRow> = {}): CodeRow {
     active: true,
     click_count: 0,
     created_at: '2026-08-01T00:00:00.000Z',
+    code_type: 'customer',
+    reward_override_pence: null,
     ...overrides,
   }
 }
@@ -162,6 +164,34 @@ describe('computeDashboardStats — sorting', () => {
     const stats = computeDashboardStats(codes, referrals)
     // HIGH (10000) first; MIDA & MIDB tie on 2500 -> MIDB (9 clicks) before MIDA (5); LOW (0) last.
     expect(stats.advocates.map((a) => a.code)).toEqual(['HIGH', 'MIDB', 'MIDA', 'LOW'])
+  })
+})
+
+describe('computeDashboardStats — advocate code metadata', () => {
+  it('carries codeType and rewardOverridePence through the rollup', () => {
+    const stats = computeDashboardStats(
+      [
+        code({ code: 'AFFIL', code_type: 'affiliate', reward_override_pence: 5000, click_count: 3 }),
+        code({ code: 'CUST', owner_email: 'cust@x.com', code_type: 'customer', click_count: 1 }),
+      ],
+      [],
+    )
+    const affil = stats.advocates.find((a) => a.code === 'AFFIL')
+    const cust = stats.advocates.find((a) => a.code === 'CUST')
+    expect(affil?.codeType).toBe('affiliate')
+    expect(affil?.rewardOverridePence).toBe(5000)
+    expect(cust?.codeType).toBe('customer')
+    expect(cust?.rewardOverridePence).toBeNull()
+  })
+
+  it('surfaces a zero-referral affiliate code (deliberately issued, not yet used)', () => {
+    const stats = computeDashboardStats(
+      [code({ code: 'NEWAFF', code_type: 'affiliate', reward_override_pence: null, click_count: 0 })],
+      [],
+    )
+    expect(stats.advocates).toHaveLength(1)
+    expect(stats.advocates[0].code).toBe('NEWAFF')
+    expect(stats.advocates[0].codeType).toBe('affiliate')
   })
 })
 

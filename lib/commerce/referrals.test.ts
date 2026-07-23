@@ -215,6 +215,78 @@ describe('decideReferral', () => {
   })
 })
 
+describe('decideReferral — reward override', () => {
+  it('lets the override beat the plan tier (self_study buy, override £50)', () => {
+    expect(
+      decideReferral({
+        ownerEmail: 'owner@example.com',
+        refereeEmail: 'buyer@example.com',
+        plan: 'self_study',
+        amountTotalPence: 19900,
+        rewardOverridePence: 5000,
+      }),
+    ).toEqual({ status: 'pending', voidReason: null, rewardAmount: 5000 })
+  })
+
+  it('still voids below_min_spend on the plan floor, recording the override as reward', () => {
+    // Below the self_study floor (14950) — the override changes the payout, not
+    // the fraud gate, so this must still void with the override as rewardAmount.
+    expect(
+      decideReferral({
+        ownerEmail: 'owner@example.com',
+        refereeEmail: 'buyer@example.com',
+        plan: 'self_study',
+        amountTotalPence: 100,
+        rewardOverridePence: 5000,
+      }),
+    ).toEqual({ status: 'void', voidReason: 'below_min_spend', rewardAmount: 5000 })
+  })
+
+  it('still voids a self-referral even with an override (override recorded)', () => {
+    expect(
+      decideReferral({
+        ownerEmail: 'jane@example.com',
+        refereeEmail: 'jane@example.com',
+        plan: 'complete',
+        amountTotalPence: 59900,
+        rewardOverridePence: 5000,
+      }),
+    ).toEqual({ status: 'void', voidReason: 'self_referral', rewardAmount: 5000 })
+  })
+
+  it('accepts a £0 override (flat-free affiliate) as the reward', () => {
+    expect(
+      decideReferral({
+        ownerEmail: 'owner@example.com',
+        refereeEmail: 'buyer@example.com',
+        plan: 'complete',
+        amountTotalPence: 59900,
+        rewardOverridePence: 0,
+      }),
+    ).toEqual({ status: 'pending', voidReason: null, rewardAmount: 0 })
+  })
+
+  it('falls back to the standard plan tier when the override is null or omitted', () => {
+    expect(
+      decideReferral({
+        ownerEmail: 'owner@example.com',
+        refereeEmail: 'buyer@example.com',
+        plan: 'complete',
+        amountTotalPence: 59900,
+        rewardOverridePence: null,
+      }),
+    ).toEqual({ status: 'pending', voidReason: null, rewardAmount: 10000 })
+    expect(
+      decideReferral({
+        ownerEmail: 'owner@example.com',
+        refereeEmail: 'buyer@example.com',
+        plan: 'complete',
+        amountTotalPence: 59900,
+      }),
+    ).toEqual({ status: 'pending', voidReason: null, rewardAmount: 10000 })
+  })
+})
+
 describe('reward/min-spend catalogue drift guard', () => {
   const checkoutablePlanKeys = PLANS.filter((p) => p.cta === 'checkout').map((p) => p.key)
 

@@ -16,6 +16,10 @@ export interface CodeRow {
   active: boolean
   click_count: number
   created_at: string
+  /** 'customer' = auto-minted at purchase; 'affiliate' = deliberately issued. */
+  code_type: 'customer' | 'affiliate'
+  /** Per-code flat reward (pence) that supersedes the plan tier; null = tiers. */
+  reward_override_pence: number | null
 }
 
 /** One attributed purchase, as stored in `referrals`. */
@@ -34,6 +38,10 @@ export interface AdvocateStats {
   ownerEmail: string
   ownerName: string | null
   active: boolean
+  /** 'customer' = auto-minted at purchase; 'affiliate' = deliberately issued. */
+  codeType: 'customer' | 'affiliate'
+  /** Per-code flat reward (pence) that supersedes the plan tier; null = tiers. */
+  rewardOverridePence: number | null
   clicks: number
   /** Non-void referrals only (a £0-promo / refunded buy isn't a real purchase). */
   purchases: number
@@ -67,6 +75,8 @@ interface MutableAdvocate {
   ownerEmail: string
   ownerName: string | null
   active: boolean
+  codeType: 'customer' | 'affiliate'
+  rewardOverridePence: number | null
   clicks: number
   purchases: number
   revenuePence: number
@@ -106,6 +116,8 @@ export function computeDashboardStats(
       ownerEmail: c.owner_email,
       ownerName: c.owner_name,
       active: c.active,
+      codeType: c.code_type,
+      rewardOverridePence: c.reward_override_pence,
       clicks: c.click_count,
       purchases: 0,
       revenuePence: 0,
@@ -140,6 +152,8 @@ export function computeDashboardStats(
       ownerEmail: a.ownerEmail,
       ownerName: a.ownerName,
       active: a.active,
+      codeType: a.codeType,
+      rewardOverridePence: a.rewardOverridePence,
       clicks: a.clicks,
       purchases: a.purchases,
       conversionPct: conversion(a.purchases, a.clicks),

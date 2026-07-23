@@ -202,7 +202,7 @@ async function recordReferral(
 
   const { data: codeRow, error: codeError } = await supabase
     .from('referral_codes')
-    .select('code, owner_email, active')
+    .select('code, owner_email, active, reward_override_pence')
     .eq('code', referralCode)
     .maybeSingle();
 
@@ -218,6 +218,7 @@ async function recordReferral(
     refereeEmail,
     plan,
     amountTotalPence: amount,
+    rewardOverridePence: codeRow.reward_override_pence,
   });
 
   const { error: referralError } = await supabase.from('referrals').insert({
@@ -313,6 +314,14 @@ async function mintAdvocateAndInvite(supabase: SupabaseAdmin, args: MintArgs): P
     return;
   }
   if (invitedAt) return; // already invited on a previous attempt/purchase
+
+  // The auto-invite email is gated behind a flag (default OFF) so referral
+  // invites go out deliberately/systematically, not to every buyer. When off,
+  // the buyer still has their code (shown on /thanks) — only the email is
+  // suppressed, and invited_at stays null so enabling the flag later can still
+  // invite them on a subsequent webhook. Set REFERRAL_AUTO_INVITE_EMAIL=true
+  // to re-enable.
+  if (process.env.REFERRAL_AUTO_INVITE_EMAIL !== 'true') return;
 
   const result = await sendReferralEmail({
     toEmail: email,
