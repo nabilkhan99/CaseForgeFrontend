@@ -205,11 +205,19 @@ export function useRealtimeSession({
     const turnOpenRef = useRef(false);
     const silenceFramesRef = useRef(0);
     const bufferClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    // --- voice debug capture (?voicedebug=1 on the session URL) ---
+    // --- voice flight recorder ---
+    // The event ring ALWAYS records; ?voicedebug=1 only adds the on-page
+    // overlay. The ring uploads to /api/clinical-master/voice-log on a 60s
+    // cadence, on errors/disconnects, and via sendBeacon on pagehide — so a
+    // session that dies mid-call leaves evidence (a tester's session died
+    // at ~8 min and left none).
     const debugEnabledRef = useRef(false);
     const debugLogRef = useRef<Array<{ t: number; e: string; d?: unknown }>>([]);
     const debugElRef = useRef<HTMLDivElement | null>(null);
     const debugTickCountRef = useRef(0);
+    const lastSentIndexRef = useRef(0);
+    const voiceLogTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const pagehideHandlerRef = useRef<(() => void) | null>(null);
 
     const relNow = useCallback((): number | undefined => {
         return sessionStartRef.current ? Date.now() - sessionStartRef.current : undefined;
@@ -245,13 +253,53 @@ export function useRealtimeSession({
         []
     );
 
-    /** Append to the in-memory voice debug log (no-op unless ?voicedebug=1). */
+    /** Append to the in-memory voice event ring (always on). */
     const logDebug = useCallback((e: string, d?: unknown) => {
-        if (!debugEnabledRef.current) return;
         const log = debugLogRef.current;
         log.push({ t: sessionStartRef.current ? Date.now() - sessionStartRef.current : 0, e, d });
-        if (log.length > 4000) log.splice(0, 1000);
+        if (log.length > 4000) {
+            log.splice(0, 1000);
+            lastSentIndexRef.current = Math.max(0, lastSentIndexRef.current - 1000);
+        }
     }, []);
+
+    /** Upload the unsent slice of the event ring. sendBeacon on pagehide
+     *  (survives tab close); fetch keepalive everywhere else. Fire-and-forget:
+     *  the recorder must never affect the session it observes. */
+    const flushVoiceLog = useCallback(
+        (reason: string, useBeacon = false) => {
+            const events = debugLogRef.current.slice(lastSentIndexRef.current);
+            if (events.length === 0) return;
+            lastSentIndexRef.current = debugLogRef.current.length;
+            const payload = JSON.stringify({
+                sessionId,
+                reason,
+                build: (process.env.NEXT_PUBLIC_COMMIT_SHA ?? 'unknown').slice(0, 7),
+                ua: navigator.userAgent,
+                events,
+                transcriptTurns: transcriptRef.current.length,
+                transcriptTail: transcriptRef.current
+                    .slice(-6)
+                    .map((turn) => ({ role: turn.role, text: (turn.content ?? '').slice(0, 200) })),
+            });
+            if (useBeacon && typeof navigator.sendBeacon === 'function') {
+                navigator.sendBeacon(
+                    '/api/clinical-master/voice-log',
+                    new Blob([payload], { type: 'application/json' })
+                );
+                return;
+            }
+            void fetch('/api/clinical-master/voice-log', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: payload,
+                keepalive: true,
+            }).catch(() => {
+                /* recorder is best-effort */
+            });
+        },
+        [sessionId]
+    );
 
     /** Floating overlay with live detector numbers + a copy-log button. */
     const ensureDebugOverlay = useCallback(() => {
@@ -431,9 +479,10 @@ export function useRealtimeSession({
             lastPatientEndAtRef.current > 0 &&
             now - lastPatientEndAtRef.current < DT_ECHO_TAIL_MS;
 
-        // Periodic snapshot + live overlay (~1s cadence, debug mode only).
+        // Periodic snapshot (~1s cadence) into the recorder; live overlay
+        // only in ?voicedebug=1 mode.
         debugTickCountRef.current += 1;
-        if (debugEnabledRef.current && debugTickCountRef.current % 20 === 0) {
+        if (debugTickCountRef.current % 20 === 0) {
             const snap = {
                 mic: Number(micRms.toFixed(4)),
                 pat: Number(patientRms.toFixed(4)),
@@ -540,6 +589,18 @@ export function useRealtimeSession({
             }
             const ctx = new Ctor();
             audioCtxRef.current = ctx;
+            // Safari can suspend a running AudioContext mid-session (device
+            // switch, OS interruption). A suspended context freezes the
+            // detector — mic reads silence, turn-taking dies, the patient
+            // "goes quiet". Log it and fight back.
+            ctx.onstatechange = () => {
+                logDebug(`audioctx:${ctx.state}`);
+                if (ctx.state === 'suspended' && !endedRef.current) {
+                    void ctx.resume().catch(() => {
+                        /* resume may need a user gesture; the log tells us */
+                    });
+                }
+            };
             const micAnalyser = ctx.createAnalyser();
             micAnalyser.fftSize = 1024;
             ctx.createMediaStreamSource(micStreamRef.current).connect(micAnalyser);
@@ -559,6 +620,15 @@ export function useRealtimeSession({
 
     // Tear down media/connection without persisting (used for leave + unmount).
     const teardown = useCallback(() => {
+        flushVoiceLog('teardown');
+        if (voiceLogTimerRef.current) {
+            clearInterval(voiceLogTimerRef.current);
+            voiceLogTimerRef.current = null;
+        }
+        if (pagehideHandlerRef.current) {
+            window.removeEventListener('pagehide', pagehideHandlerRef.current);
+            pagehideHandlerRef.current = null;
+        }
         if (timerRef.current) {
             clearTimeout(timerRef.current);
             timerRef.current = null;
@@ -621,7 +691,7 @@ export function useRealtimeSession({
         }
         setIsSpeaking(false);
         setStatus('disconnected');
-    }, []);
+    }, [flushVoiceLog]);
 
     // Graceful end: silence the patient immediately, then persist the
     // transcript and notify. Teardown must come FIRST — the save round-trip
@@ -674,7 +744,7 @@ export function useRealtimeSession({
             } catch {
                 return;
             }
-            if (debugEnabledRef.current) {
+            {
                 const t = String(evt.type ?? '');
                 if (!t.endsWith('.delta')) {
                     if (t === 'error') logDebug('rx:error', evt.error);
@@ -799,9 +869,18 @@ export function useRealtimeSession({
                     // Benign races from client-side barge-in / turn-taking:
                     // cancelling a response that just finished, truncating
                     // audio shorter than requested, or committing an input
-                    // buffer the server considers empty. Not session errors.
-                    if (/cancel|truncat|buffer/i.test(message)) break;
+                    // buffer the server considers empty. Match the SPECIFIC
+                    // messages — keyword matching (e.g. /truncat/) once hid a
+                    // whole class of fatal errors, like context-truncation
+                    // failures, behind a silent patient.
+                    if (
+                        /no active response|already shorter|buffer too small|buffer is empty|empty input audio buffer/i.test(
+                            message
+                        )
+                    )
+                        break;
                     setError(message);
+                    flushVoiceLog('realtime-error');
                     onError?.(message);
                     break;
                 }
@@ -809,7 +888,7 @@ export function useRealtimeSession({
                     break;
             }
         },
-        [appendTurn, relNow, handleFunctionCall, onError, sendEvent, logDebug]
+        [appendTurn, relNow, handleFunctionCall, onError, sendEvent, logDebug, flushVoiceLog]
     );
 
     const connect = useCallback(async () => {
@@ -820,14 +899,12 @@ export function useRealtimeSession({
             endedRef.current = false;
             debugEnabledRef.current =
                 typeof window !== 'undefined' && window.location.search.includes('voicedebug');
-            if (debugEnabledRef.current) {
-                ensureDebugOverlay();
-                logDebug('connect:start', {
-                    build: (process.env.NEXT_PUBLIC_COMMIT_SHA ?? 'unknown').slice(0, 7),
-                    ua: navigator.userAgent,
-                    unreliableAec: unreliableEchoCancellation(navigator.userAgent),
-                });
-            }
+            if (debugEnabledRef.current) ensureDebugOverlay();
+            logDebug('connect:start', {
+                build: (process.env.NEXT_PUBLIC_COMMIT_SHA ?? 'unknown').slice(0, 7),
+                ua: navigator.userAgent,
+                unreliableAec: unreliableEchoCancellation(navigator.userAgent),
+            });
 
             // 1. Mint ephemeral key + session config
             const res = await fetch(tokenEndpoint, {
@@ -856,10 +933,12 @@ export function useRealtimeSession({
             // A stalled call must not look like a live one: surface transport
             // failures instead of leaving the UI on a frozen "Listening…" state.
             pc.onconnectionstatechange = () => {
+                logDebug(`pc:${pc.connectionState}`);
                 if (endedRef.current) return;
                 if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
                     const message = 'Connection to the patient was lost. Please try again.';
                     setError(message);
+                    flushVoiceLog('connection-lost');
                     teardown();
                     onError?.(message);
                 }
@@ -899,6 +978,10 @@ export function useRealtimeSession({
             const dc = pc.createDataChannel('oai-events');
             dcRef.current = dc;
             dc.onmessage = (e: MessageEvent) => handleServerEvent(e.data);
+            dc.onclose = () => {
+                logDebug('dc:close');
+                flushVoiceLog('dc-close');
+            };
             dc.onopen = () => {
                 setStatus('connected');
                 sessionStartRef.current = Date.now();
@@ -932,6 +1015,12 @@ export function useRealtimeSession({
                         },
                     });
                 }
+                // Flight recorder: periodic upload + tab-close beacon.
+                if (voiceLogTimerRef.current) clearInterval(voiceLogTimerRef.current);
+                voiceLogTimerRef.current = setInterval(() => flushVoiceLog('periodic'), 60000);
+                const onPagehide = () => flushVoiceLog('pagehide', true);
+                window.addEventListener('pagehide', onPagehide);
+                pagehideHandlerRef.current = onPagehide;
                 onSessionStarted?.();
                 // Patient speaks first — greeting ONLY, then waits (greeting-first behaviour).
                 sendEvent({
@@ -1000,6 +1089,7 @@ export function useRealtimeSession({
         attachPatientAnalyser,
         ensureDebugOverlay,
         logDebug,
+        flushVoiceLog,
         onSessionStarted,
         onError,
     ]);
