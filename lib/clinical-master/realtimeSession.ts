@@ -86,15 +86,23 @@ export function buildSessionPayload(stationData: StationData | null, opts: Sessi
           transcription: {
             model: opts.transcriptionModel ?? DEFAULT_TRANSCRIPTION_MODEL,
           },
-          // Relaxed server VAD so the trainee isn't cut off mid-sentence
-          // (mirrors the old LiveKit min/max endpointing of 0.8s/3.0s).
-          turn_detection: {
-            type: 'server_vad',
-            threshold: opts.unreliableAec ? 0.75 : 0.5,
-            prefix_padding_ms: 300,
-            silence_duration_ms: 900,
-            ...(opts.unreliableAec ? { interrupt_response: false } : {}),
-          },
+          // Reliable-AEC browsers: relaxed server VAD so the trainee isn't
+          // cut off mid-sentence (mirrors the old LiveKit endpointing).
+          // Unreliable-AEC browsers (Safari/Firefox/iOS): server VAD is
+          // DISABLED entirely — their echo leak passes every threshold and
+          // the patient ends up transcribing and answering its own voice.
+          // The client's double-talk detector owns turn-taking instead: it
+          // commits the input buffer and requests the response itself
+          // (useRealtimeSession.ts), and falls back to server VAD via
+          // session.update only if audio analysis is unavailable.
+          turn_detection: opts.unreliableAec
+            ? null
+            : {
+                type: 'server_vad',
+                threshold: 0.5,
+                prefix_padding_ms: 300,
+                silence_duration_ms: 900,
+              },
           ...(opts.unreliableAec ? { noise_reduction: { type: 'far_field' } } : {}),
         },
         output: {

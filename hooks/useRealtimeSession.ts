@@ -29,6 +29,14 @@ const DT_COOLDOWN_MS = 1500;
 const DT_WARMUP_MS = 1500;
 /** EMA rate for the echo-coupling estimate. */
 const DT_COUPLING_EMA = 0.05;
+/** Sustained voice frames (~250ms) before we open a doctor turn. */
+const DT_MIN_SPEECH_FRAMES = 5;
+/** Silence frames (~900ms) that close the doctor's turn — mirrors the old
+ *  server-VAD silence_duration_ms. */
+const DT_END_SILENCE_FRAMES = 18;
+/** After patient playback stops, wait this long for the echo/reverb tail
+ *  before dumping the input buffer. */
+const DT_ECHO_TAIL_MS = 400;
 
 /** Byte time-domain RMS (0..~1). getByteTimeDomainData works on every
  *  Safari version, unlike the float variant. */
@@ -140,6 +148,11 @@ export function useRealtimeSession({
     const speakingSinceRef = useRef(0);
     const activeResponseIdRef = useRef<string | null>(null);
     const lastAssistantItemRef = useRef<string | null>(null);
+    /** A doctor turn is currently being captured (client-driven turn mode). */
+    const turnOpenRef = useRef(false);
+    const silenceFramesRef = useRef(0);
+    const bufferClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const fallbackSentRef = useRef(false);
 
     const relNow = useCallback((): number | undefined => {
         return sessionStartRef.current ? Date.now() - sessionStartRef.current : undefined;
@@ -224,49 +237,114 @@ export function useRealtimeSession({
         }
     }, []);
 
+    /**
+     * On unreliable-AEC browsers server VAD is off entirely (the echo leak
+     * defeats every threshold), so losing the detector means losing
+     * turn-taking. Degrade to server VAD via session.update — the patient
+     * may echo-loop in the worst case, but the session stays usable.
+     */
+    const disableDetectorWithFallback = useCallback(() => {
+        if (fallbackSentRef.current) return;
+        fallbackSentRef.current = true;
+        detectorDisabledRef.current = true;
+        turnOpenRef.current = false;
+        sendEvent({
+            type: 'session.update',
+            session: {
+                audio: {
+                    input: {
+                        turn_detection: {
+                            type: 'server_vad',
+                            threshold: 0.75,
+                            prefix_padding_ms: 300,
+                            silence_duration_ms: 900,
+                            interrupt_response: false,
+                        },
+                    },
+                },
+            },
+        });
+    }, [sendEvent]);
+
+    /**
+     * Client-driven turn-taking (unreliable-AEC browsers). Every 50ms:
+     * decide whether the mic holds a real voice (energy well above the
+     * calibrated echo prediction), and from that drive the whole turn
+     * lifecycle — barge-in while the patient speaks, opening a doctor turn
+     * in silence, and committing the turn + requesting the response after
+     * ~900ms of quiet. The server never decides anything, so the patient's
+     * echo can never become a phantom doctor turn.
+     */
     const detectorTick = useCallback(() => {
-        if (detectorDisabledRef.current || !speakingRef.current) return;
+        if (detectorDisabledRef.current) return;
         const micAnalyser = micAnalyserRef.current;
         const patientAnalyser = patientAnalyserRef.current;
         const buf = analyserBufRef.current;
         if (!micAnalyser || !patientAnalyser || !buf) return;
         const patientRms = analyserRms(patientAnalyser, buf);
         const micRms = analyserRms(micAnalyser, buf);
+        const now = Date.now();
 
         // Safari has historically returned silence from WebAudio taps on
         // remote WebRTC streams. If the patient analyser reads nothing while
-        // audio is audibly playing, the analysis is untrustworthy — disable
-        // the detector for this session rather than risk false interrupts.
-        if (patientRms < 0.003) {
-            remoteSilentFramesRef.current += 1;
-            if (remoteSilentFramesRef.current > 20) detectorDisabledRef.current = true;
-            return;
+        // audio is audibly playing, the analysis is untrustworthy.
+        if (speakingRef.current) {
+            if (patientRms < 0.003) {
+                remoteSilentFramesRef.current += 1;
+                if (remoteSilentFramesRef.current > 20) disableDetectorWithFallback();
+                return;
+            }
+            remoteSilentFramesRef.current = 0;
         }
-        remoteSilentFramesRef.current = 0;
 
-        const predictedEcho = couplingRef.current * patientRms;
-        if (micRms > Math.max(DT_MIC_FLOOR, DT_MARGIN * predictedEcho)) {
+        const predictedEcho = speakingRef.current ? couplingRef.current * patientRms : 0;
+        const isVoice = micRms > Math.max(DT_MIC_FLOOR, DT_MARGIN * predictedEcho);
+
+        if (isVoice) {
             doubleTalkFramesRef.current += 1;
-            const now = Date.now();
+            silenceFramesRef.current = 0;
             if (
+                speakingRef.current &&
                 doubleTalkFramesRef.current >= DT_SUSTAIN_FRAMES &&
                 now - detectorStartedAtRef.current > DT_WARMUP_MS &&
                 now - lastInterruptAtRef.current > DT_COOLDOWN_MS
             ) {
+                // Barge-in: silence the patient and dump the echo-tainted
+                // input buffer; the doctor's continuing speech is captured
+                // from here and committed when they pause.
                 lastInterruptAtRef.current = now;
                 doubleTalkFramesRef.current = 0;
                 interruptPatient();
+                sendEvent({ type: 'input_audio_buffer.clear' });
+            } else if (
+                !speakingRef.current &&
+                !turnOpenRef.current &&
+                doubleTalkFramesRef.current >= DT_MIN_SPEECH_FRAMES
+            ) {
+                turnOpenRef.current = true;
             }
         } else {
             doubleTalkFramesRef.current = 0;
-            // Mic is echo-only right now — refine the coupling estimate.
-            const ratio = micRms / patientRms;
-            couplingRef.current = Math.min(
-                1,
-                Math.max(0.005, (1 - DT_COUPLING_EMA) * couplingRef.current + DT_COUPLING_EMA * ratio)
-            );
+            if (speakingRef.current && patientRms > 0) {
+                // Mic is echo-only right now — refine the coupling estimate.
+                const ratio = micRms / patientRms;
+                couplingRef.current = Math.min(
+                    1,
+                    Math.max(0.005, (1 - DT_COUPLING_EMA) * couplingRef.current + DT_COUPLING_EMA * ratio)
+                );
+            }
+            if (turnOpenRef.current) {
+                silenceFramesRef.current += 1;
+                if (silenceFramesRef.current >= DT_END_SILENCE_FRAMES) {
+                    // End of the doctor's turn — hand it to the model.
+                    turnOpenRef.current = false;
+                    silenceFramesRef.current = 0;
+                    sendEvent({ type: 'input_audio_buffer.commit' });
+                    sendEvent({ type: 'response.create' });
+                }
+            }
         }
-    }, [interruptPatient]);
+    }, [interruptPatient, sendEvent, disableDetectorWithFallback]);
 
     /** Arm the double-talk detector (unreliable-AEC browsers only). Called
      *  once the mic stream exists; a detector failure only ever degrades to
@@ -322,6 +400,13 @@ export function useRealtimeSession({
         activeResponseIdRef.current = null;
         lastAssistantItemRef.current = null;
         detectorDisabledRef.current = false;
+        fallbackSentRef.current = false;
+        turnOpenRef.current = false;
+        silenceFramesRef.current = 0;
+        if (bufferClearTimerRef.current) {
+            clearTimeout(bufferClearTimerRef.current);
+            bufferClearTimerRef.current = null;
+        }
         if (audioCtxRef.current) {
             void audioCtxRef.current.close().catch(() => {
                 /* already closed */
@@ -486,6 +571,19 @@ export function useRealtimeSession({
                 case 'output_audio_buffer.cleared':
                     speakingRef.current = false;
                     setIsSpeaking(false);
+                    // Client-driven turn mode: the input buffer now holds the
+                    // echo of the patient's turn. Once the reverb tail has
+                    // passed, dump it so the doctor's next turn starts clean —
+                    // unless the doctor is already mid-turn.
+                    if (audioCtxRef.current && !detectorDisabledRef.current) {
+                        if (bufferClearTimerRef.current) clearTimeout(bufferClearTimerRef.current);
+                        bufferClearTimerRef.current = setTimeout(() => {
+                            bufferClearTimerRef.current = null;
+                            if (!turnOpenRef.current && !detectorDisabledRef.current) {
+                                sendEvent({ type: 'input_audio_buffer.clear' });
+                            }
+                        }, DT_ECHO_TAIL_MS);
+                    }
                     break;
                 case 'response.function_call_arguments.done':
                     handleFunctionCall(
@@ -497,10 +595,11 @@ export function useRealtimeSession({
                 case 'error': {
                     const message =
                         (evt.error as { message?: string } | undefined)?.message ?? 'Realtime error';
-                    // Benign races from client-side barge-in: cancelling a
-                    // response that just finished, or truncating audio shorter
-                    // than requested. Not session errors — ignore.
-                    if (/cancel|truncat/i.test(message)) break;
+                    // Benign races from client-side barge-in / turn-taking:
+                    // cancelling a response that just finished, truncating
+                    // audio shorter than requested, or committing an input
+                    // buffer the server considers empty. Not session errors.
+                    if (/cancel|truncat|buffer/i.test(message)) break;
                     setError(message);
                     onError?.(message);
                     break;
@@ -581,6 +680,17 @@ export function useRealtimeSession({
                 setStatus('connected');
                 sessionStartRef.current = Date.now();
                 vadRef.current = {};
+                // Session was minted with turn_detection: null for this
+                // browser, expecting the client detector to own turn-taking.
+                // If arming failed (no WebAudio, construction threw), the
+                // session would have NO turn detection at all — restore
+                // server VAD before the consultation starts.
+                if (
+                    unreliableEchoCancellation(navigator.userAgent) &&
+                    (!audioCtxRef.current || detectorDisabledRef.current)
+                ) {
+                    disableDetectorWithFallback();
+                }
                 onSessionStarted?.();
                 // Patient speaks first — greeting ONLY, then waits (greeting-first behaviour).
                 sendEvent({
