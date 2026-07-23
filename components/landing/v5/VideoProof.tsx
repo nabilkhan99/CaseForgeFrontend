@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Play } from 'lucide-react';
 import { Pill } from '@/components/landing/v5/editorial';
@@ -102,47 +102,83 @@ const VIDEOS: VideoCardData[] = [
     handle: '@dr.kwame.gp',
     gradient: 'linear-gradient(160deg,#3D5A80,#293241)',
     avatar: KwameAvatar,
+    videoSrc: '/testimonials/testimonial-1.mp4',
+    poster: '/testimonials/testimonial-1.jpg',
   },
   {
     handle: '@priya.gpst3',
     gradient: 'linear-gradient(160deg,#9C6644,#6B4226)',
     avatar: PriyaAvatar,
+    videoSrc: '/testimonials/testimonial-2.mp4',
+    poster: '/testimonials/testimonial-2.jpg',
   },
   {
     handle: '@tom.talks.gp',
     gradient: 'linear-gradient(160deg,#5F7470,#2F3E46)',
     avatar: TomAvatar,
+    videoSrc: '/testimonials/testimonial-3.mp4',
+    poster: '/testimonials/testimonial-3.jpg',
   },
 ];
 
 function VideoCard({ handle, gradient, avatar, videoSrc, poster }: VideoCardData) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [playing, setPlaying] = useState(false);
+
+  const togglePlay = () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (video.paused) {
+      // Pause any other testimonial that's currently playing, so only one
+      // voice is ever heard at a time (duplicated across the mobile carousel).
+      document.querySelectorAll<HTMLVideoElement>('video[data-testimonial]').forEach((other) => {
+        if (other !== video) other.pause();
+      });
+      video.play().catch(() => {
+        /* Autoplay/gesture rejection — leave the poster visible. */
+      });
+    } else {
+      video.pause();
+    }
+  };
+
   return (
-    <div
-      className="relative aspect-[9/14] w-full overflow-hidden rounded-3xl"
+    <button
+      type="button"
+      onClick={videoSrc ? togglePlay : undefined}
+      aria-label={videoSrc ? 'Play testimonial video' : handle}
+      className="group/video relative block aspect-[9/14] w-full overflow-hidden rounded-3xl focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
       style={!videoSrc ? { background: gradient } : undefined}
     >
       {videoSrc ? (
         <video
+          ref={videoRef}
+          data-testimonial
           className="absolute inset-0 h-full w-full object-cover"
           src={videoSrc}
           poster={poster}
-          muted
           playsInline
+          loop
+          preload="none"
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
         />
       ) : (
         avatar
       )}
-      <div className="absolute left-1/2 top-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 sm:h-12 sm:w-12">
+      <div
+        className={`absolute left-1/2 top-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 transition-opacity duration-200 sm:h-12 sm:w-12 ${
+          playing ? 'opacity-0' : 'opacity-100 group-hover/video:bg-white'
+        }`}
+      >
         <Play
           className="ml-0.5 h-4 w-4 text-[#1C1C1A] sm:h-5 sm:w-5"
           fill="currentColor"
           aria-hidden="true"
         />
       </div>
-      <span className="absolute bottom-2 left-2 text-[10px] font-medium text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.5)] sm:bottom-3 sm:left-3 sm:text-sm">
-        {handle}
-      </span>
-    </div>
+    </button>
   );
 }
 
