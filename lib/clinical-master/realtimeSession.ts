@@ -16,6 +16,28 @@ import { buildPatientPrompt, StationData } from './patientPrompt';
  *  echo, sage, shimmer, verse, marin, cedar. "marin" is a newer natural voice. */
 export const DEFAULT_VOICE = 'marin';
 
+/** Voice used when the person speaking to the doctor is female (the default). */
+export const FEMALE_VOICE = 'marin';
+/** Voice used when the person speaking to the doctor is male. "cedar" is marin's
+ *  natural male counterpart in the gpt-realtime voice set. */
+export const MALE_VOICE = 'cedar';
+
+/**
+ * Pick the patient voice from the station's `voice_gender` — the gender of the
+ * person the doctor actually speaks to (the standardised patient, or, in a
+ * paediatric / third-party case, the parent, carer, or paramedic voicing the
+ * case). Falls back to the default female voice when gender is unknown, so
+ * behaviour is unchanged for any station that hasn't been tagged yet.
+ */
+export function voiceForStation(
+  station?: { voice_gender?: string | null } | null
+): string {
+  const g = (station?.voice_gender ?? '').toString().trim().toLowerCase();
+  if (g === 'male' || g === 'm' || g === 'man' || g === 'boy') return MALE_VOICE;
+  if (g === 'female' || g === 'f' || g === 'woman' || g === 'girl') return FEMALE_VOICE;
+  return DEFAULT_VOICE;
+}
+
 /** Model used to transcribe the doctor's microphone audio (so we capture the
  *  user side of the transcript). whisper-1 is the most broadly available. */
 export const DEFAULT_TRANSCRIPTION_MODEL = 'whisper-1';

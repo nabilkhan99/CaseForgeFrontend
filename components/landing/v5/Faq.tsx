@@ -15,19 +15,19 @@ const FAQS: QA[] = [
     question: 'Will this actually help me pass?',
     answer: [
       "We're confident enough to put real money behind it. Pass all 200 stations, sit your SCA, and if you don't pass, we pay you £500 in cash. No other provider takes that risk with you.",
-      "It's also the most comprehensive SCA preparation you'll find. Most options give you one dimension in isolation: a set of lectures, a day of small-group coaching, or an AI subscription on its own. The Complete SCA Course combines all three. You get AI voice practice on 200 stations, 12 hours of lectures from a GP educator who knows what examiners are looking for, and a full-day Small-Group Coaching session with a GP tutor (9am to 6pm), where you consult full mock stations live and get each one broken down for you. All three are built from the RCGP curriculum and the three marking domains, so nothing in the real exam catches you out.",
+      "It's also the most comprehensive SCA preparation you'll find. Most options give you one dimension in isolation: a set of lectures, a day of small-group coaching, or an AI subscription on its own. The Complete SCA Course combines all three. You get AI voice practice on 200 stations, 12 hours of lectures, and a full-day Small-Group Coaching session with a GP tutor (9am to 6pm), where you consult full mock stations live and get each one broken down for you. All three are built from the RCGP curriculum and the three marking domains, so nothing in the real exam catches you out.",
     ],
   },
   {
     question: 'Can I use my study budget for this?',
     answer: [
-      'The Complete SCA Course is built as a course, not a subscription, which is the distinction most NHS England study budgets care about (they typically cap around £600, and it is priced at £599). Eligibility varies by deanery, so check your local study budget policy before you book. Most trainees pay nothing out of pocket.',
+      'The Complete SCA Course is built as a course, not a subscription, which is the distinction most NHS England study budgets care about (they typically cap around £600, and it is priced at £599). Eligibility varies by deanery. Most trainees pay nothing out of pocket.',
     ],
   },
   {
     question: 'If I fail, do I actually get the £500?',
     answer: [
-      "Yes, and it is a cash payment, not a credit. The condition is that you pass all 200 mock stations first, not just attempt them. You get unlimited tries at each one, with no cap, so passing every station is entirely in your hands. Once you've passed all 200, if you then sit your real SCA and don't pass, email us a screenshot of your result. We confirm you've passed all 200, and we pay you £500 within 5 working days.",
+      "Yes, and it is a cash payment, not a credit. The condition is that you pass all 200 mock stations first, not just attempt them. You get unlimited tries at each one, with no cap, so passing every station is entirely in your hands. Once you've passed all 200, if you then sit your real SCA and don't pass, email us a screenshot of your result. We confirm you've passed all 200 of our mock AI stations, and we pay you £500 within 5 working days.",
     ],
   },
   {
@@ -63,7 +63,7 @@ const FAQS: QA[] = [
   {
     question: 'What if my exam is soon?',
     answer: [
-      "That's exactly what this is built for. Your AI practice is unlimited and available the moment you buy, and the lectures are on demand, so you can work through all 12 hours as quickly as your exam date demands: there is no fixed schedule holding you to a slower pace. For the coaching day, simply pick the date at checkout that falls before your exam; if none of the available days work, contact us.",
+      "That's exactly what this is built for. Your AI practice is unlimited and available the moment you buy, and the lectures are on demand, so you can work through all 12 hours as quickly as your exam date demands: there is no fixed schedule holding you to a slower pace. For the coaching day, simply pick the date at checkout that falls before your exam.",
     ],
   },
   {

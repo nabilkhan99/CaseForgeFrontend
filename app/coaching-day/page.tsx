@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { ArrowLeft, ArrowRight, Users } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarClock, Users } from 'lucide-react';
 import LandingNavbar from '@/components/landing/LandingNavbar';
 import LandingFooter from '@/components/landing/LandingFooter';
 import { ACCESS_OPENS_LABEL, type CoachingDayAvailability } from '@/lib/commerce/plans';
@@ -200,6 +200,29 @@ export default function CoachingDayPage() {
                 and we&rsquo;ll let you know as soon as dates open.
               </p>
             )}
+          </div>
+
+          {/* Jan–Aug 2027: no fixed dates yet — limited-availability pre-order by arrangement. */}
+          <div className="mt-4 rounded-xl border border-dashed border-[#D8C7A8] bg-[#FCF7EE] px-4 py-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FDF6EC] px-2.5 py-1 text-[11px] font-semibold text-[#854F0B]">
+                <CalendarClock className="h-3 w-3" aria-hidden="true" /> Limited availability
+              </span>
+              <p className="text-sm font-semibold text-heading">
+                Sitting your SCA in Jan–Aug 2027?
+              </p>
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-body sm:text-sm">
+              Dates for that window aren&rsquo;t fixed yet, but you can still pre-order. Email{' '}
+              <a
+                href="mailto:hello@fourteenfisherman.com?subject=Coaching%20day%20%E2%80%94%20Jan%E2%80%93Aug%202027"
+                className="font-medium text-primary underline"
+              >
+                hello@fourteenfisherman.com
+              </a>{' '}
+              and we&rsquo;ll arrange your coaching day and set your AI practice and on-demand
+              lecture access to start on a day of your choice.
+            </p>
           </div>
 
           {error && (
