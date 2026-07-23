@@ -153,6 +153,11 @@ export function useRealtimeSession({
     const silenceFramesRef = useRef(0);
     const bufferClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const fallbackSentRef = useRef(false);
+    // --- voice debug capture (?voicedebug=1 on the session URL) ---
+    const debugEnabledRef = useRef(false);
+    const debugLogRef = useRef<Array<{ t: number; e: string; d?: unknown }>>([]);
+    const debugElRef = useRef<HTMLDivElement | null>(null);
+    const debugTickCountRef = useRef(0);
 
     const relNow = useCallback((): number | undefined => {
         return sessionStartRef.current ? Date.now() - sessionStartRef.current : undefined;
@@ -188,12 +193,63 @@ export function useRealtimeSession({
         []
     );
 
-    const sendEvent = useCallback((event: Record<string, unknown>) => {
-        const dc = dcRef.current;
-        if (dc && dc.readyState === 'open') {
-            dc.send(JSON.stringify(event));
-        }
+    /** Append to the in-memory voice debug log (no-op unless ?voicedebug=1). */
+    const logDebug = useCallback((e: string, d?: unknown) => {
+        if (!debugEnabledRef.current) return;
+        const log = debugLogRef.current;
+        log.push({ t: sessionStartRef.current ? Date.now() - sessionStartRef.current : 0, e, d });
+        if (log.length > 4000) log.splice(0, 1000);
     }, []);
+
+    /** Floating overlay with live detector numbers + a copy-log button. */
+    const ensureDebugOverlay = useCallback(() => {
+        if (!debugEnabledRef.current || debugElRef.current) return;
+        const wrap = document.createElement('div');
+        wrap.style.cssText =
+            'position:fixed;bottom:8px;left:8px;z-index:99999;background:rgba(0,0,0,0.85);' +
+            'color:#7CFC00;font:10px/1.5 monospace;padding:8px 10px;border-radius:8px;max-width:320px;pointer-events:auto;';
+        const info = document.createElement('div');
+        info.textContent = 'voice debug: waiting for session…';
+        const btn = document.createElement('button');
+        btn.textContent = 'Copy voice log';
+        btn.style.cssText =
+            'margin-top:6px;background:#7CFC00;color:#000;border:0;border-radius:4px;' +
+            'padding:3px 8px;font:10px monospace;cursor:pointer;';
+        btn.onclick = () => {
+            const payload = JSON.stringify({ ua: navigator.userAgent, log: debugLogRef.current });
+            void navigator.clipboard
+                .writeText(payload)
+                .then(() => {
+                    btn.textContent = `Copied (${debugLogRef.current.length} entries)`;
+                })
+                .catch(() => {
+                    // Clipboard blocked — show the JSON for manual copy.
+                    window.prompt('Copy the voice log:', payload);
+                });
+        };
+        wrap.appendChild(info);
+        wrap.appendChild(btn);
+        document.body.appendChild(wrap);
+        debugElRef.current = wrap;
+    }, []);
+
+    const updateDebugOverlay = useCallback((text: string) => {
+        const el = debugElRef.current?.firstElementChild;
+        if (el) el.textContent = text;
+    }, []);
+
+    const sendEvent = useCallback(
+        (event: Record<string, unknown>) => {
+            const dc = dcRef.current;
+            if (dc && dc.readyState === 'open') {
+                dc.send(JSON.stringify(event));
+                logDebug(`tx:${String(event.type)}`);
+            } else {
+                logDebug(`tx-dropped:${String(event.type)}`);
+            }
+        },
+        [logDebug]
+    );
 
     /**
      * Client-side barge-in: cancel the in-flight response (if any), sync the
@@ -232,10 +288,16 @@ export function useRealtimeSession({
             analyser.fftSize = 1024;
             ctx.createMediaStreamSource(stream).connect(analyser);
             patientAnalyserRef.current = analyser;
-        } catch {
+            logDebug('patient-analyser:attached', {
+                tracks: stream.getAudioTracks().map((t) => ({ muted: t.muted, state: t.readyState })),
+                ctxState: ctx.state,
+                ctxRate: ctx.sampleRate,
+            });
+        } catch (err) {
             detectorDisabledRef.current = true;
+            logDebug('patient-analyser:FAILED', String(err));
         }
-    }, []);
+    }, [logDebug]);
 
     /**
      * On unreliable-AEC browsers server VAD is off entirely (the echo leak
@@ -248,6 +310,7 @@ export function useRealtimeSession({
         fallbackSentRef.current = true;
         detectorDisabledRef.current = true;
         turnOpenRef.current = false;
+        logDebug('DETECTOR-DISARMED:falling back to server_vad');
         sendEvent({
             type: 'session.update',
             session: {
@@ -264,7 +327,7 @@ export function useRealtimeSession({
                 },
             },
         });
-    }, [sendEvent]);
+    }, [sendEvent, logDebug]);
 
     /**
      * Client-driven turn-taking (unreliable-AEC browsers). Every 50ms:
@@ -285,12 +348,33 @@ export function useRealtimeSession({
         const micRms = analyserRms(micAnalyser, buf);
         const now = Date.now();
 
+        // Periodic snapshot + live overlay (~1s cadence, debug mode only).
+        debugTickCountRef.current += 1;
+        if (debugEnabledRef.current && debugTickCountRef.current % 20 === 0) {
+            const snap = {
+                mic: Number(micRms.toFixed(4)),
+                pat: Number(patientRms.toFixed(4)),
+                k: Number(couplingRef.current.toFixed(4)),
+                speaking: speakingRef.current,
+                turnOpen: turnOpenRef.current,
+                dtFrames: doubleTalkFramesRef.current,
+                silFrames: silenceFramesRef.current,
+            };
+            logDebug('snap', snap);
+            updateDebugOverlay(
+                `mic ${snap.mic} | pat ${snap.pat} | k ${snap.k}\n` +
+                    `patientSpeaking ${snap.speaking} | turnOpen ${snap.turnOpen} | ` +
+                    `voiced ${snap.dtFrames} sil ${snap.silFrames}`
+            );
+        }
+
         // Safari has historically returned silence from WebAudio taps on
         // remote WebRTC streams. If the patient analyser reads nothing while
         // audio is audibly playing, the analysis is untrustworthy.
         if (speakingRef.current) {
             if (patientRms < 0.003) {
                 remoteSilentFramesRef.current += 1;
+                if (remoteSilentFramesRef.current === 1) logDebug('remote-tap-silent-frame');
                 if (remoteSilentFramesRef.current > 20) disableDetectorWithFallback();
                 return;
             }
@@ -314,6 +398,7 @@ export function useRealtimeSession({
                 // from here and committed when they pause.
                 lastInterruptAtRef.current = now;
                 doubleTalkFramesRef.current = 0;
+                logDebug('BARGE-IN', { mic: micRms, pat: patientRms, k: couplingRef.current });
                 interruptPatient();
                 sendEvent({ type: 'input_audio_buffer.clear' });
             } else if (
@@ -322,6 +407,7 @@ export function useRealtimeSession({
                 doubleTalkFramesRef.current >= DT_MIN_SPEECH_FRAMES
             ) {
                 turnOpenRef.current = true;
+                logDebug('turn-open', { mic: micRms });
             }
         } else {
             doubleTalkFramesRef.current = 0;
@@ -339,12 +425,13 @@ export function useRealtimeSession({
                     // End of the doctor's turn — hand it to the model.
                     turnOpenRef.current = false;
                     silenceFramesRef.current = 0;
+                    logDebug('turn-commit');
                     sendEvent({ type: 'input_audio_buffer.commit' });
                     sendEvent({ type: 'response.create' });
                 }
             }
         }
-    }, [interruptPatient, sendEvent, disableDetectorWithFallback]);
+    }, [interruptPatient, sendEvent, disableDetectorWithFallback, logDebug, updateDebugOverlay]);
 
     /** Arm the double-talk detector (unreliable-AEC browsers only). Called
      *  once the mic stream exists; a detector failure only ever degrades to
@@ -356,7 +443,10 @@ export function useRealtimeSession({
             const Ctor =
                 window.AudioContext ??
                 (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-            if (!Ctor) return;
+            if (!Ctor) {
+                logDebug('detector-arm:FAILED', 'no AudioContext constructor');
+                return;
+            }
             const ctx = new Ctor();
             audioCtxRef.current = ctx;
             const micAnalyser = ctx.createAnalyser();
@@ -367,13 +457,15 @@ export function useRealtimeSession({
             attachPatientAnalyser();
             detectorStartedAtRef.current = Date.now();
             detectorIntervalRef.current = setInterval(detectorTick, DT_FRAME_MS);
+            logDebug('detector-arm:ok', { ctxState: ctx.state, ctxRate: ctx.sampleRate });
             void ctx.resume().catch(() => {
                 /* connect() runs from a user gesture, resume is belt-and-braces */
             });
-        } catch {
+        } catch (err) {
             detectorDisabledRef.current = true;
+            logDebug('detector-arm:FAILED', String(err));
         }
-    }, [attachPatientAnalyser, detectorTick]);
+    }, [attachPatientAnalyser, detectorTick, logDebug]);
 
     // Tear down media/connection without persisting (used for leave + unmount).
     const teardown = useCallback(() => {
@@ -488,6 +580,15 @@ export function useRealtimeSession({
                 evt = JSON.parse(raw);
             } catch {
                 return;
+            }
+            if (debugEnabledRef.current) {
+                const t = String(evt.type ?? '');
+                if (!t.endsWith('.delta')) {
+                    if (t === 'error') logDebug('rx:error', evt.error);
+                    else if (/transcript(ion)?\.(completed|done)$/.test(t))
+                        logDebug(`rx:${t}`, String(evt.transcript ?? ''));
+                    else logDebug(`rx:${t}`);
+                }
             }
             switch (evt.type) {
                 case 'input_audio_buffer.speech_started': {
@@ -608,7 +709,7 @@ export function useRealtimeSession({
                     break;
             }
         },
-        [appendTurn, relNow, handleFunctionCall, onError]
+        [appendTurn, relNow, handleFunctionCall, onError, sendEvent, logDebug, disableDetectorWithFallback]
     );
 
     const connect = useCallback(async () => {
@@ -617,6 +718,15 @@ export function useRealtimeSession({
             setStatus('connecting');
             setError(null);
             endedRef.current = false;
+            debugEnabledRef.current =
+                typeof window !== 'undefined' && window.location.search.includes('voicedebug');
+            if (debugEnabledRef.current) {
+                ensureDebugOverlay();
+                logDebug('connect:start', {
+                    ua: navigator.userAgent,
+                    unreliableAec: unreliableEchoCancellation(navigator.userAgent),
+                });
+            }
 
             // 1. Mint ephemeral key + session config
             const res = await fetch(tokenEndpoint, {
@@ -666,6 +776,11 @@ export function useRealtimeSession({
                 }
                 el.srcObject = e.streams[0];
                 remoteStreamRef.current = e.streams[0] ?? null;
+                logDebug('rx:ontrack', {
+                    streams: e.streams.length,
+                    trackMuted: e.track.muted,
+                    trackState: e.track.readyState,
+                });
                 attachPatientAnalyser();
                 void el.play().catch(() => {
                     /* autoplay may require gesture; ignore */
@@ -757,6 +872,9 @@ export function useRealtimeSession({
         teardown,
         startDoubleTalkDetector,
         attachPatientAnalyser,
+        disableDetectorWithFallback,
+        ensureDebugOverlay,
+        logDebug,
         onSessionStarted,
         onError,
     ]);
