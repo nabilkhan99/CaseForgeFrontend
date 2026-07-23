@@ -20,20 +20,23 @@ const FAIL_RED = '#D92D20';
 
 export default function ChapterScore() {
   return (
-    <div className="flex h-full flex-col p-5 lg:p-6">
-      {/* Eyebrow */}
-      <div className="text-[10px] font-bold text-primary uppercase tracking-[0.14em] mb-1.5">
-        Session Complete
-      </div>
+    <div className="flex h-full flex-col justify-between gap-5 p-5 lg:p-6">
+      {/* Header group */}
+      <div>
+        {/* Eyebrow */}
+        <div className="text-[10px] font-bold text-primary uppercase tracking-[0.14em] mb-1.5">
+          Session Complete
+        </div>
 
-      {/* Case title — matches the brief (Jack Thompson ECG request) */}
-      <h3 className="text-[17px] font-semibold text-heading leading-[1.3] mb-5">
-        A father requests an ECG for his son
-      </h3>
+        {/* Case title — matches the brief (Jack Thompson ECG request) */}
+        <h3 className="text-[17px] font-semibold text-heading leading-[1.3]">
+          A father requests an ECG for his son
+        </h3>
+      </div>
 
       {/* Final verdict */}
       <div
-        className="rounded-xl px-4 py-3.5 mb-5"
+        className="rounded-xl px-4 py-3.5"
         style={{ background: 'rgba(180,83,9,0.04)', border: '1px solid rgba(180,83,9,0.12)' }}
       >
         <div className="flex items-baseline justify-between mb-2.5">
@@ -60,8 +63,8 @@ export default function ChapterScore() {
         </div>
       </div>
 
-      {/* Domain summary — pinned to the bottom of the card */}
-      <div className="mt-auto">
+      {/* Domain summary */}
+      <div>
         <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.12em] mb-3">
           Domain Score Summary
         </div>
