@@ -7,7 +7,7 @@ import { CROSSHATCH } from './editorial';
 export default function Hero() {
   return (
     <section
-      className="relative overflow-hidden px-5 pb-10 pt-32 text-center sm:px-8 sm:pb-16 sm:pt-40"
+      className="relative overflow-hidden px-5 pb-8 pt-24 text-center sm:px-8 sm:pb-12 sm:pt-28"
       style={CROSSHATCH}
     >
       {/* Warm glow behind the headline */}
@@ -25,7 +25,7 @@ export default function Hero() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5 }}
-          className="mb-6 sm:mb-8"
+          className="mb-4 sm:mb-5"
         >
           <span className="inline-flex items-center gap-2 rounded-full bg-[#FAEEDA] px-4 py-1.5 text-xs font-semibold text-[#854F0B] sm:text-sm">
             <span className="h-1.5 w-1.5 rounded-full bg-[#B45309]" aria-hidden="true" />
@@ -38,7 +38,7 @@ export default function Hero() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.08 }}
-          className="mb-6 font-[family-name:var(--font-display)] text-[2.9rem] font-bold leading-[1.04] tracking-[-0.03em] text-heading sm:mb-8 sm:text-7xl lg:text-[6.5rem]"
+          className="mb-5 font-[family-name:var(--font-display)] text-[2.9rem] font-bold leading-[1.04] tracking-[-0.03em] text-heading sm:mb-6 sm:text-7xl lg:text-[6.5rem]"
         >
           We&apos;re betting
           <span className="my-1.5 block sm:my-2.5">
@@ -54,7 +54,7 @@ export default function Hero() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.14 }}
-          className="mx-auto mb-8 max-w-md text-sm leading-relaxed text-body sm:mb-10 sm:max-w-2xl sm:text-lg"
+          className="mx-auto mb-6 max-w-md text-sm leading-relaxed text-body sm:mb-8 sm:max-w-2xl sm:text-lg"
         >
           Pass all 200 mock stations, fail your real SCA, and we pay you £500
           cash.

@@ -219,38 +219,77 @@ function EvidenceBlock({
   );
 }
 
+/**
+ * Determinate-feel progress bar for the marking wait. We can't know the exact
+ * finish time (marking runs server-side), so the bar eases asymptotically
+ * toward ~92% and never stalls or loops — it completes when the real report
+ * replaces this component. Gives the user continuous "it's working" feedback
+ * instead of a static skeleton, and there is no refresh instruction here.
+ */
+function MarkingProgress({ compact = false }: { compact?: boolean }) {
+  const [progress, setProgress] = useState(8);
+  useEffect(() => {
+    const id = setInterval(() => {
+      setProgress((p) => (p >= 92 ? p : p + Math.max(0.5, (92 - p) * 0.035)));
+    }, 700);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div className="mt-6" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress)} aria-label="Marking your consultation">
+      <div className="mb-2 flex items-center justify-between text-sm text-muted">
+        <span>Marking your consultation…</span>
+        <span className="tabular-nums text-stone-400">{Math.round(progress)}%</span>
+      </div>
+      <div className="h-2 w-full overflow-hidden rounded-full bg-stone-200/70">
+        <div
+          className="h-full rounded-full bg-primary transition-[width] duration-700 ease-out"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+      <p className="mt-2 text-xs text-stone-400">
+        {compact
+          ? 'This usually takes a minute or two — your plan options are below. No need to refresh; it updates on its own.'
+          : 'This usually takes a minute or two. No need to refresh — it updates on its own.'}
+      </p>
+    </div>
+  );
+}
+
 function LoadingState({ compact = false }: { compact?: boolean }) {
   // Compact (trial funnel): the pricing table renders directly below this
   // component, so the skeleton must not fill the viewport and hide it.
   if (compact) {
     return (
       <div className="bg-surface px-5 py-10">
-        <div className="mx-auto max-w-[1120px] animate-pulse">
-          <div className="mb-6 h-5 w-48 rounded-full bg-stone-200/70" />
-          <div className="mb-4 h-12 w-full max-w-[560px] rounded-xl bg-stone-200/70" />
-          <div className="h-40 rounded-[22px] bg-white/70" />
-          <p className="mt-6 text-sm text-muted">
-            Marking your consultation — this takes a couple of minutes. Your plan options are below.
-          </p>
+        <div className="mx-auto max-w-[1120px]">
+          <div className="animate-pulse">
+            <div className="mb-6 h-5 w-48 rounded-full bg-stone-200/70" />
+            <div className="mb-4 h-12 w-full max-w-[560px] rounded-xl bg-stone-200/70" />
+            <div className="h-40 rounded-[22px] bg-white/70" />
+          </div>
+          <MarkingProgress compact />
         </div>
       </div>
     );
   }
   return (
     <div className="min-h-[100dvh] bg-surface px-5 py-10">
-      <div className="mx-auto max-w-[1120px] animate-pulse">
-        <div className="mb-8 h-5 w-48 rounded-full bg-stone-200/70" />
-        <div className="mb-4 h-12 w-full max-w-[560px] rounded-xl bg-stone-200/70" />
-        <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="h-72 rounded-[22px] bg-white/70" />
-          <div className="h-72 rounded-[22px] bg-white/70" />
+      <div className="mx-auto max-w-[1120px]">
+        <div className="animate-pulse">
+          <div className="mb-8 h-5 w-48 rounded-full bg-stone-200/70" />
+          <div className="mb-4 h-12 w-full max-w-[560px] rounded-xl bg-stone-200/70" />
+          <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
+            <div className="h-72 rounded-[22px] bg-white/70" />
+            <div className="h-72 rounded-[22px] bg-white/70" />
+          </div>
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            <div className="h-28 rounded-2xl bg-white/70" />
+            <div className="h-28 rounded-2xl bg-white/70" />
+            <div className="h-28 rounded-2xl bg-white/70" />
+          </div>
         </div>
-        <div className="mt-8 grid gap-4 md:grid-cols-3">
-          <div className="h-28 rounded-2xl bg-white/70" />
-          <div className="h-28 rounded-2xl bg-white/70" />
-          <div className="h-28 rounded-2xl bg-white/70" />
-        </div>
-        <p className="mt-6 text-sm text-muted">Marking your consultation...</p>
+        <MarkingProgress />
       </div>
     </div>
   );
