@@ -166,9 +166,15 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
     }
   }
 
-  // Advocate minting + invite email are best-effort: never fail the webhook.
+  // Buyers do NOT become referrers by default (founder decision 2026-07-24):
+  // referrers are deliberate affiliates issued from the admin dashboard, not
+  // every customer. Set REFERRAL_BUYERS_BECOME_ADVOCATES=true to mint each
+  // buyer their own code (the invite email is separately gated below).
+  // Advocate minting is best-effort either way: never fail the webhook.
   try {
-    await mintAdvocateAndInvite(supabase, { email: buyerEmail, name: buyerName, origin });
+    if (process.env.REFERRAL_BUYERS_BECOME_ADVOCATES === 'true') {
+      await mintAdvocateAndInvite(supabase, { email: buyerEmail, name: buyerName, origin });
+    }
   } catch (error: unknown) {
     console.error('[stripe-webhook] advocate minting error', { sessionId: session.id, error });
   }

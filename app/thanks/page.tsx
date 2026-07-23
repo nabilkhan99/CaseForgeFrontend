@@ -126,30 +126,26 @@ export default async function ThanksPage({ searchParams }: ThanksPageProps) {
           </p>
         ) : null}
 
-        {/* ── Referral block (read-only; code is minted by the Stripe webhook) ── */}
-        <div className="mb-10 rounded-2xl border border-[#EBE4DB] bg-surface-raised px-6 py-7 text-left">
-          <h2 className="text-lg font-semibold text-heading tracking-tight">
-            Refer a mate — earn up to {rewardPounds}
-          </h2>
-          {link ? (
-            <>
-              <p className="text-muted leading-relaxed mt-1.5 mb-4">
-                Know another GP trainee prepping for the SCA? Share your personal link. When they
-                enrol, you earn up to {rewardPounds}.
-              </p>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-                <code className="flex-1 min-w-0 truncate rounded-lg border border-[#EBE4DB] bg-white px-3.5 py-2.5 font-mono text-sm text-body">
-                  {link}
-                </code>
-                <CopyLinkButton url={link} />
-              </div>
-            </>
-          ) : (
-            <p className="text-muted leading-relaxed mt-1.5">
-              Your personal referral link is on its way by email — keep an eye on your inbox.
+        {/* ── Referral block — only shown when this buyer actually has a code.
+             Buyers are not auto-enrolled as referrers by default (referrers are
+             deliberate affiliates), so most orders show no referral block. ── */}
+        {link ? (
+          <div className="mb-10 rounded-2xl border border-[#EBE4DB] bg-surface-raised px-6 py-7 text-left">
+            <h2 className="text-lg font-semibold text-heading tracking-tight">
+              Refer a mate — earn up to {rewardPounds}
+            </h2>
+            <p className="text-muted leading-relaxed mt-1.5 mb-4">
+              Know another GP trainee prepping for the SCA? Share your personal link. When they
+              enrol, you earn up to {rewardPounds}.
             </p>
-          )}
-        </div>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+              <code className="flex-1 min-w-0 truncate rounded-lg border border-[#EBE4DB] bg-white px-3.5 py-2.5 font-mono text-sm text-body">
+                {link}
+              </code>
+              <CopyLinkButton url={link} />
+            </div>
+          </div>
+        ) : null}
 
         <Link
           href="/"
