@@ -17,7 +17,7 @@ export type RewardablePlan = keyof typeof REWARD_BY_PLAN
 /**
  * Minimum spend (pence) a referred purchase must clear before it earns a reward,
  * keyed by plan. Set to 50% of each plan's list price (complete £599, self_study
- * £199). Fraud rationale: `allow_promotion_codes` lets a buyer stack a 100%-off
+ * £299). Fraud rationale: `allow_promotion_codes` lets a buyer stack a 100%-off
  * code and pay £0 while the reward is keyed only on plan — a free purchase would
  * otherwise mint a £100/£25 payout. Gating on real spend removes that vector
  * while still rewarding a genuinely (but not fully) discounted purchase.
@@ -25,7 +25,7 @@ export type RewardablePlan = keyof typeof REWARD_BY_PLAN
  */
 export const MIN_QUALIFYING_SPEND_BY_PLAN = {
   complete: 29950, // 50% of £599
-  self_study: 9950, // 50% of £199
+  self_study: 14950, // 50% of £299
 } as const
 
 /**

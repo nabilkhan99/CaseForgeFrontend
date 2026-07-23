@@ -21,7 +21,7 @@ export const PLANS: readonly Plan[] = [
   {
     key: 'self_study',
     name: 'Self-Study',
-    displayPrice: '£199',
+    displayPrice: '£299',
     priceSuffix: 'one-off',
     tagline: "3 months' access",
     cta: 'checkout',

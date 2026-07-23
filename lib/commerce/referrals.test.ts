@@ -98,8 +98,8 @@ describe('meetsMinimumSpend', () => {
   it('gates rewardable plans at their floor (boundary inclusive)', () => {
     expect(meetsMinimumSpend('complete', 29950)).toBe(true)
     expect(meetsMinimumSpend('complete', 29949)).toBe(false)
-    expect(meetsMinimumSpend('self_study', 9950)).toBe(true)
-    expect(meetsMinimumSpend('self_study', 9949)).toBe(false)
+    expect(meetsMinimumSpend('self_study', 14950)).toBe(true)
+    expect(meetsMinimumSpend('self_study', 14949)).toBe(false)
   })
 
   it('passes plans with no floor regardless of amount (not gated)', () => {
@@ -183,18 +183,18 @@ describe('decideReferral', () => {
     })
   })
 
-  it('applies the self_study floor at the boundary (9950 pending, 9949 void)', () => {
+  it('applies the self_study floor at the boundary (14950 pending, 14949 void)', () => {
     const base = {
       ownerEmail: 'owner@example.com',
       refereeEmail: 'buyer@example.com',
       plan: 'self_study',
     }
-    expect(decideReferral({ ...base, amountTotalPence: 9950 })).toEqual({
+    expect(decideReferral({ ...base, amountTotalPence: 14950 })).toEqual({
       status: 'pending',
       voidReason: null,
       rewardAmount: 2500,
     })
-    expect(decideReferral({ ...base, amountTotalPence: 9949 })).toEqual({
+    expect(decideReferral({ ...base, amountTotalPence: 14949 })).toEqual({
       status: 'void',
       voidReason: 'below_min_spend',
       rewardAmount: 2500,
