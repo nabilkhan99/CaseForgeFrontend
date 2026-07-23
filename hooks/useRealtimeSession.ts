@@ -40,9 +40,28 @@ const DT_MIN_SPEECH_FRAMES = 5;
 /** Silence frames (~900ms) that close the doctor's turn — mirrors the old
  *  server-VAD silence_duration_ms. */
 const DT_END_SILENCE_FRAMES = 18;
-/** After patient playback stops, wait this long for the echo/reverb tail
- *  before dumping the input buffer. */
-const DT_ECHO_TAIL_MS = 400;
+/**
+ * Guard window after patient audio ends (natural stop OR barge-in). The
+ * mic keeps hearing the echo tail for hundreds of ms (Safari output
+ * latency + room reverb) — session logs showed every barge-in being
+ * followed ~250ms later by a phantom turn that committed a fragment of
+ * the patient's own words ("heart going.", "of voiding."). During the
+ * window no doctor turn may open, and at its end the input buffer is
+ * flushed unconditionally.
+ */
+const DT_ECHO_TAIL_MS = 700;
+/**
+ * Frames of peak-hold on the patient tap (~400ms). The tap reads the
+ * decoded stream instantaneously, but the mic hears it ~100–250ms later
+ * (output latency + acoustics). Predicting echo from the recent PEAK
+ * instead of the instant value keeps the prediction high through
+ * intra-sentence pauses, so the lagging mic tail can't read as voice.
+ */
+const DT_PEAK_FRAMES = 8;
+/** EMA rate for the smoothed envelopes used in coupling calibration —
+ *  instantaneous ratios are meaningless under lag misalignment (observed
+ *  k swinging 0.26→3.1 within seconds). */
+const DT_ENV_EMA = 0.15;
 /** Minimum patient-tap RMS for the echo reference to count as live. Below
  *  this during playback the tap is dead (Safari muted-track quirk) — no
  *  barge-in decisions are made on it, and the tap is re-attached. */
@@ -171,6 +190,13 @@ export function useRealtimeSession({
     const doubleTalkFramesRef = useRef(0);
     const lastInterruptAtRef = useRef(0);
     const lastReattachAtRef = useRef(0);
+    /** Ring buffer of recent patient-tap RMS values for peak-hold. */
+    const patRecentRef = useRef<number[]>([]);
+    /** Smoothed envelopes for coupling calibration. */
+    const micEnvRef = useRef(0);
+    const patEnvRef = useRef(0);
+    /** When patient audio last ended (stop, clear, or barge-in). */
+    const lastPatientEndAtRef = useRef(0);
     const speakingRef = useRef(false);
     const speakingSinceRef = useRef(0);
     const activeResponseIdRef = useRef<string | null>(null);
@@ -286,6 +312,7 @@ export function useRealtimeSession({
      * interruption has to be actioned from here.
      */
     const interruptPatient = useCallback(() => {
+        lastPatientEndAtRef.current = Date.now();
         if (activeResponseIdRef.current) {
             sendEvent({ type: 'response.cancel' });
             activeResponseIdRef.current = null;
@@ -362,16 +389,43 @@ export function useRealtimeSession({
         const patientRms = patientAnalyser ? analyserRms(patientAnalyser, buf) : 0;
         const micRms = analyserRms(micAnalyser, buf);
         const now = Date.now();
-        // The echo reference is only trustworthy while it reads real signal.
-        // A dead tap (Safari muted-track quirk) means: no barge-in decisions,
-        // no coupling updates, and periodic re-attach attempts — but the
-        // mic-side turn-taking below never depends on it.
-        const refLive = patientRms >= DT_REF_LIVE_MIN;
-        if (speakingRef.current && !refLive && now - lastReattachAtRef.current > DT_REATTACH_MS) {
+
+        // Peak-hold on the tap: the mic hears playback ~100–250ms late, so
+        // all echo reasoning uses the recent PEAK, which stays high through
+        // intra-sentence pauses and for ~400ms past the end of playback.
+        const recent = patRecentRef.current;
+        recent.push(patientRms);
+        if (recent.length > DT_PEAK_FRAMES) recent.shift();
+        const patPeak = Math.max(...recent);
+
+        // Smoothed envelopes — the only sane basis for calibrating the
+        // coupling under lag misalignment.
+        micEnvRef.current = (1 - DT_ENV_EMA) * micEnvRef.current + DT_ENV_EMA * micRms;
+        patEnvRef.current = (1 - DT_ENV_EMA) * patEnvRef.current + DT_ENV_EMA * patientRms;
+
+        // The echo reference is only trustworthy while its recent peak reads
+        // real signal. A dead tap (Safari muted-track quirk) means: no
+        // barge-in decisions, no coupling updates, and periodic re-attach
+        // attempts — but mic-side turn-taking below never depends on it.
+        const refLive = patPeak >= DT_REF_LIVE_MIN;
+        if (
+            speakingRef.current &&
+            !refLive &&
+            now - speakingSinceRef.current > 500 &&
+            now - lastReattachAtRef.current > DT_REATTACH_MS
+        ) {
             lastReattachAtRef.current = now;
             logDebug('ref-dead:re-attach', { pat: patientRms });
             attachPatientAnalyser();
         }
+
+        // Echo-tail guard: after patient audio ends (stop or barge-in) the
+        // mic keeps hearing the room for a while — no doctor turn may open,
+        // and voiced frames don't accumulate.
+        const inEchoTail =
+            !speakingRef.current &&
+            lastPatientEndAtRef.current > 0 &&
+            now - lastPatientEndAtRef.current < DT_ECHO_TAIL_MS;
 
         // Periodic snapshot + live overlay (~1s cadence, debug mode only).
         debugTickCountRef.current += 1;
@@ -379,6 +433,7 @@ export function useRealtimeSession({
             const snap = {
                 mic: Number(micRms.toFixed(4)),
                 pat: Number(patientRms.toFixed(4)),
+                peak: Number(patPeak.toFixed(4)),
                 k: Number(couplingRef.current.toFixed(4)),
                 speaking: speakingRef.current,
                 turnOpen: turnOpenRef.current,
@@ -393,24 +448,30 @@ export function useRealtimeSession({
             );
         }
 
-        // Turn-start calibration: in the first moments of a patient turn the
-        // mic can only be hearing echo — learn the coupling fast, and never
-        // barge-in until the window has passed.
+        // Coupling calibration from smoothed envelopes. Fast inside the
+        // turn-start window (the mic can only be hearing echo there), slow
+        // and only on non-voiced frames otherwise.
         const inCalWindow =
             speakingRef.current && now - speakingSinceRef.current < DT_CAL_WINDOW_MS;
-        if (inCalWindow && refLive) {
-            const ratio = micRms / patientRms;
-            couplingRef.current = Math.min(
-                DT_COUPLING_MAX,
-                Math.max(0.005, (1 - DT_CAL_EMA) * couplingRef.current + DT_CAL_EMA * ratio)
-            );
-        }
+        const envRatioValid = speakingRef.current && patEnvRef.current >= DT_REF_LIVE_MIN;
 
-        const predictedEcho = speakingRef.current ? couplingRef.current * patientRms : 0;
+        // Echo prediction from the coupling and the PEAK (lag-tolerant).
+        // Predict even just after playback ends — the ring buffer decays the
+        // peak naturally over ~400ms, covering the mic's lag.
+        const predictedEcho = couplingRef.current * patPeak;
         const isVoice =
             micRms - predictedEcho > Math.max(DT_MIC_FLOOR, DT_RESIDUAL_MARGIN * predictedEcho);
 
-        if (isVoice) {
+        if (envRatioValid && (inCalWindow || !isVoice)) {
+            const ratio = micEnvRef.current / patEnvRef.current;
+            const ema = inCalWindow ? DT_CAL_EMA : DT_COUPLING_EMA;
+            couplingRef.current = Math.min(
+                DT_COUPLING_MAX,
+                Math.max(0.05, (1 - ema) * couplingRef.current + ema * ratio)
+            );
+        }
+
+        if (isVoice && !inEchoTail) {
             doubleTalkFramesRef.current += 1;
             silenceFramesRef.current = 0;
             if (
@@ -426,7 +487,12 @@ export function useRealtimeSession({
                 // from here and committed when they pause.
                 lastInterruptAtRef.current = now;
                 doubleTalkFramesRef.current = 0;
-                logDebug('BARGE-IN', { mic: micRms, pat: patientRms, k: couplingRef.current });
+                logDebug('BARGE-IN', {
+                    mic: micRms,
+                    pat: patientRms,
+                    patPeak,
+                    k: couplingRef.current,
+                });
                 interruptPatient();
                 sendEvent({ type: 'input_audio_buffer.clear' });
             } else if (
@@ -438,15 +504,8 @@ export function useRealtimeSession({
                 logDebug('turn-open', { mic: micRms });
             }
         } else {
-            doubleTalkFramesRef.current = 0;
-            if (speakingRef.current && refLive && !inCalWindow) {
-                // Mic is echo-only right now — refine the coupling estimate.
-                const ratio = micRms / patientRms;
-                couplingRef.current = Math.min(
-                    DT_COUPLING_MAX,
-                    Math.max(0.005, (1 - DT_COUPLING_EMA) * couplingRef.current + DT_COUPLING_EMA * ratio)
-                );
-            }
+            if (inEchoTail) doubleTalkFramesRef.current = 0;
+            else if (!isVoice) doubleTalkFramesRef.current = 0;
             if (turnOpenRef.current) {
                 silenceFramesRef.current += 1;
                 if (silenceFramesRef.current >= DT_END_SILENCE_FRAMES) {
@@ -521,6 +580,10 @@ export function useRealtimeSession({
         lastReattachAtRef.current = 0;
         turnOpenRef.current = false;
         silenceFramesRef.current = 0;
+        patRecentRef.current = [];
+        micEnvRef.current = 0;
+        patEnvRef.current = 0;
+        lastPatientEndAtRef.current = 0;
         if (bufferClearTimerRef.current) {
             clearTimeout(bufferClearTimerRef.current);
             bufferClearTimerRef.current = null;
@@ -702,11 +765,13 @@ export function useRealtimeSession({
                 case 'output_audio_buffer.stopped':
                 case 'output_audio_buffer.cleared':
                     speakingRef.current = false;
+                    lastPatientEndAtRef.current = Date.now();
                     setIsSpeaking(false);
                     // Client-driven turn mode: the input buffer now holds the
-                    // echo of the patient's turn. Once the reverb tail has
-                    // passed, dump it so the doctor's next turn starts clean —
-                    // unless the doctor is already mid-turn.
+                    // echo of the patient's turn, and the mic hears its tail
+                    // for a while yet. Turn opens are blocked for the tail
+                    // window (detectorTick), and at its end the buffer is
+                    // flushed so the doctor's next turn starts clean.
                     if (audioCtxRef.current) {
                         if (bufferClearTimerRef.current) clearTimeout(bufferClearTimerRef.current);
                         bufferClearTimerRef.current = setTimeout(() => {
