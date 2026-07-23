@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import LandingNavbar from '@/components/landing/LandingNavbar';
 import LandingFooter from '@/components/landing/LandingFooter';
+import ReferralWelcome from '@/components/landing/ReferralWelcome';
 import {
   Hero,
   GuaranteeCard,
@@ -30,6 +31,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-[100dvh] font-sans" style={WASH}>
       <LandingNavbar user={user} />
+      <ReferralWelcome />
       <main className="flex flex-col pb-16 sm:pb-20">
         <Hero />
         <GuaranteeCard />

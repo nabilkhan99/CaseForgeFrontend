@@ -1,10 +1,10 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { headers } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { getStripe } from '@/lib/commerce/stripe';
 import { getPlan } from '@/lib/commerce/plans';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { REWARD_BY_PLAN, normalizeEmail, referralUrl } from '@/lib/commerce/referrals';
+import { REFERRAL_DISPLAY_COOKIE, REWARD_BY_PLAN, normalizeEmail, referralUrl } from '@/lib/commerce/referrals';
 import CopyLinkButton from './CopyLinkButton';
 
 export const metadata: Metadata = {
@@ -77,6 +77,9 @@ export default async function ThanksPage({ searchParams }: ThanksPageProps) {
   const referralCode = await getReferralCode(order?.email ?? null);
   const link = referralCode ? referralUrl(await getOrigin(), referralCode) : null;
   const rewardPounds = `£${Math.round(REWARD_BY_PLAN.complete / 100)}`;
+  // Display-only: tells the referred buyer their referrer's recommendation was
+  // counted. Attribution itself happened server-side at checkout via `ff_ref`.
+  const referredBy = (await cookies()).get(REFERRAL_DISPLAY_COOKIE)?.value?.trim() || null;
 
   return (
     <main className="min-h-screen bg-surface flex items-center justify-center px-6">
@@ -116,6 +119,13 @@ export default async function ThanksPage({ searchParams }: ThanksPageProps) {
           on-demand lectures and coaching. Your 3 months’ access runs from that date, and
           we’ll email you everything you need before launch.
         </p>
+
+        {referredBy ? (
+          <p className="text-sm text-muted -mt-6 mb-10">
+            <span className="font-medium text-body">{referredBy}</span>’s recommendation was
+            counted with this order.
+          </p>
+        ) : null}
 
         {/* ── Referral block (read-only; code is minted by the Stripe webhook) ── */}
         <div className="mb-10 rounded-2xl border border-[#EBE4DB] bg-surface-raised px-6 py-7 text-left">

@@ -1,8 +1,19 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
-import { REFERRAL_COOKIE, normalizeCode } from '@/lib/commerce/referrals'
+import { REFERRAL_COOKIE, REFERRAL_DISPLAY_COOKIE, normalizeCode } from '@/lib/commerce/referrals'
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30 // 30 days
+
+/**
+ * Display-safe referrer first name: letters/hyphens/apostrophes only, first
+ * word, capped. Falls back to '' (banner then shows a generic message).
+ */
+function displayName(ownerName: string | null): string {
+  if (!ownerName) return ''
+  const first = ownerName.trim().split(/\s+/)[0] ?? ''
+  const safe = first.replace(/[^\p{L}'-]/gu, '').slice(0, 20)
+  return safe
+}
 
 interface RouteContext {
   params: Promise<{ code: string }>
@@ -30,7 +41,7 @@ export async function GET(request: Request, { params }: RouteContext) {
     const supabase = getSupabaseAdmin()
     const { data, error } = await supabase
       .from('referral_codes')
-      .select('code, active')
+      .select('code, active, owner_name')
       .eq('code', code)
       .maybeSingle()
 
@@ -42,6 +53,18 @@ export async function GET(request: Request, { params }: RouteContext) {
     if (data?.active) {
       response.cookies.set(REFERRAL_COOKIE, data.code, {
         httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: COOKIE_MAX_AGE,
+      })
+
+      // Display-only twin of the attribution cookie: readable by the client so
+      // the landing page can show "recommended by {name}". Never used for
+      // attribution (checkout re-validates ff_ref server-side), so a tampered
+      // value changes copy, nothing else.
+      response.cookies.set(REFERRAL_DISPLAY_COOKIE, displayName(data.owner_name) || 'a colleague', {
+        httpOnly: false,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
         path: '/',
