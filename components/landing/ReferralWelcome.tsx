@@ -6,37 +6,32 @@ import { REFERRAL_DISPLAY_COOKIE } from '@/lib/commerce/referrals';
 
 const DISMISS_KEY = 'ff_ref_welcome_dismissed';
 
-function readDisplayCookie(): string | null {
-  const match = document.cookie
-    .split('; ')
-    .find((c) => c.startsWith(`${REFERRAL_DISPLAY_COOKIE}=`));
-  if (!match) return null;
-  const value = decodeURIComponent(match.slice(REFERRAL_DISPLAY_COOKIE.length + 1)).trim();
-  return value || null;
+function hasReferralCookie(): boolean {
+  return document.cookie.split('; ').some((c) => c.startsWith(`${REFERRAL_DISPLAY_COOKIE}=`));
 }
 
 /**
- * Slim ribbon shown to visitors who arrived through a referral link, so they
- * know the recommendation is attached to their order. Display-only: the value
- * comes from the non-HttpOnly `ff_ref_by` cookie and is never used for
- * attribution (checkout re-validates the HttpOnly `ff_ref` server-side).
+ * Floating notice shown to visitors who arrived through a referral link, so
+ * they know the recommendation is attached to their order. Driven purely by the
+ * presence of the `ff_ref_by` flag cookie — no cookie data is rendered, and
+ * attribution runs on the HttpOnly `ff_ref` re-validated server-side.
  */
 export default function ReferralWelcome() {
-  const [name, setName] = useState<string | null>(null);
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     if (sessionStorage.getItem(DISMISS_KEY)) return;
-    setName(readDisplayCookie());
+    setVisible(hasReferralCookie());
   }, []);
 
   const dismiss = () => {
     sessionStorage.setItem(DISMISS_KEY, '1');
-    setName(null);
+    setVisible(false);
   };
 
   return (
     <AnimatePresence>
-      {name ? (
+      {visible ? (
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -49,8 +44,8 @@ export default function ReferralWelcome() {
           <div className="flex items-center justify-center gap-3 rounded-full border border-[#EBE4DB] bg-[#FFFCF8]/95 px-5 py-3 shadow-elevation-3 backdrop-blur-sm">
             <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[#B45309]" aria-hidden="true" />
             <p className="text-sm leading-snug text-[#44403C]">
-              <span className="font-semibold text-[#1C1917]">{name}</span> recommended Fourteen
-              Fisherman — their referral is attached to your order.
+              <span className="font-semibold text-[#1C1917]">You were recommended</span> Fourteen
+              Fisherman — the referral is attached to your order.
             </p>
             <button
               type="button"

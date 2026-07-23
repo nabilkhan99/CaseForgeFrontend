@@ -142,10 +142,10 @@ export function qualificationCutoff(now: Date): Date {
 export const REFERRAL_COOKIE = 'ff_ref'
 
 /**
- * Display-only companion to {@link REFERRAL_COOKIE}: holds the referrer's
- * first name for UI copy ("recommended by Sarah"). Not HttpOnly so the client
- * can read it; never trusted for attribution — checkout re-validates `ff_ref`
- * against the DB server-side.
+ * Display-only companion to {@link REFERRAL_COOKIE}: a bare flag ('1') telling
+ * the client to show the "you were recommended" notice. Carries no data and is
+ * never trusted for attribution — checkout re-validates `ff_ref` against the
+ * DB server-side.
  */
 export const REFERRAL_DISPLAY_COOKIE = 'ff_ref_by'
 
