@@ -18,9 +18,17 @@ export interface EphemeralKeyResult {
   voice: string;
 }
 
+export interface MintOptions {
+  /** See SessionConfigOptions.unreliableAec. */
+  unreliableAec?: boolean;
+}
+
+export { unreliableEchoCancellation } from './echoCancellation';
+
 export async function mintEphemeralKey(
   stationData: StationData | null,
-  voice: string = DEFAULT_VOICE
+  voice: string = DEFAULT_VOICE,
+  mintOpts: MintOptions = {}
 ): Promise<EphemeralKeyResult> {
   const endpoint = process.env.AZURE_OPENAI_REALTIME_ENDPOINT;
   const apiKey = process.env.AZURE_OPENAI_REALTIME_API_KEY;
@@ -31,7 +39,11 @@ export async function mintEphemeralKey(
   }
 
   const base = endpoint.replace(/\/+$/, '');
-  const payload = buildSessionPayload(stationData, { model: deployment, voice });
+  const payload = buildSessionPayload(stationData, {
+    model: deployment,
+    voice,
+    unreliableAec: mintOpts.unreliableAec,
+  });
 
   const res = await fetch(`${base}/openai/v1/realtime/client_secrets`, {
     method: 'POST',

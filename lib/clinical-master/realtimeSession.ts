@@ -47,6 +47,21 @@ export interface SessionConfigOptions {
   model: string;
   voice?: string;
   transcriptionModel?: string;
+  /**
+   * The connecting browser's echo cancellation can't be trusted
+   * (Safari, Firefox, anything on iOS): playback of the patient's own
+   * voice leaks back into the mic, trips server VAD, and the patient
+   * interrupts itself / answers itself. For these browsers the session
+   * is hardened server-side (community-validated combination):
+   *  - far_field noise reduction, which filters the input BEFORE VAD so
+   *    the leaked echo doesn't register as speech;
+   *  - VAD threshold 0.75 instead of 0.5;
+   *  - interrupt_response: false so residual echo can never cancel the
+   *    patient mid-sentence.
+   * Chrome-family browsers have reliable AEC and keep the defaults,
+   * including barge-in.
+   */
+  unreliableAec?: boolean;
 }
 
 /**
@@ -71,14 +86,24 @@ export function buildSessionPayload(stationData: StationData | null, opts: Sessi
           transcription: {
             model: opts.transcriptionModel ?? DEFAULT_TRANSCRIPTION_MODEL,
           },
-          // Relaxed server VAD so the trainee isn't cut off mid-sentence
-          // (mirrors the old LiveKit min/max endpointing of 0.8s/3.0s).
-          turn_detection: {
-            type: 'server_vad',
-            threshold: 0.5,
-            prefix_padding_ms: 300,
-            silence_duration_ms: 900,
-          },
+          // Reliable-AEC browsers: relaxed server VAD so the trainee isn't
+          // cut off mid-sentence (mirrors the old LiveKit endpointing).
+          // Unreliable-AEC browsers (Safari/Firefox/iOS): server VAD is
+          // DISABLED entirely — their echo leak passes every threshold and
+          // the patient ends up transcribing and answering its own voice.
+          // The client's double-talk detector owns turn-taking instead: it
+          // commits the input buffer and requests the response itself
+          // (useRealtimeSession.ts), and falls back to server VAD via
+          // session.update only if audio analysis is unavailable.
+          turn_detection: opts.unreliableAec
+            ? null
+            : {
+                type: 'server_vad',
+                threshold: 0.5,
+                prefix_padding_ms: 300,
+                silence_duration_ms: 900,
+              },
+          ...(opts.unreliableAec ? { noise_reduction: { type: 'far_field' } } : {}),
         },
         output: {
           voice: opts.voice ?? DEFAULT_VOICE,

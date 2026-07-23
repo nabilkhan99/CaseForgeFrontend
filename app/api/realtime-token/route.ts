@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { mintEphemeralKey } from '@/lib/clinical-master/realtimeToken';
+import { mintEphemeralKey, unreliableEchoCancellation } from '@/lib/clinical-master/realtimeToken';
 
 /**
  * Mint an Azure gpt-realtime ephemeral key for an authenticated consultation.
@@ -49,7 +49,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await mintEphemeralKey(station);
+    const result = await mintEphemeralKey(station, undefined, {
+      unreliableAec: unreliableEchoCancellation(req.headers.get('user-agent')),
+    });
 
     if (existing) {
       await admin.from('clinical_sessions').update({ status: 'live' }).eq('id', sessionId);
