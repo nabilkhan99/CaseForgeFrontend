@@ -262,6 +262,9 @@ export function useRealtimeSession({
             'color:#7CFC00;font:10px/1.5 monospace;padding:8px 10px;border-radius:8px;max-width:320px;pointer-events:auto;';
         const info = document.createElement('div');
         info.textContent = 'voice debug: waiting for session…';
+        const buildLine = document.createElement('div');
+        buildLine.style.cssText = 'opacity:0.7;margin-top:2px;';
+        buildLine.textContent = `build ${(process.env.NEXT_PUBLIC_COMMIT_SHA ?? 'unknown').slice(0, 7)}`;
         const btn = document.createElement('button');
         btn.textContent = 'Copy voice log';
         btn.style.cssText =
@@ -280,6 +283,7 @@ export function useRealtimeSession({
                 });
         };
         wrap.appendChild(info);
+        wrap.appendChild(buildLine);
         wrap.appendChild(btn);
         document.body.appendChild(wrap);
         debugElRef.current = wrap;
@@ -819,6 +823,7 @@ export function useRealtimeSession({
             if (debugEnabledRef.current) {
                 ensureDebugOverlay();
                 logDebug('connect:start', {
+                    build: (process.env.NEXT_PUBLIC_COMMIT_SHA ?? 'unknown').slice(0, 7),
                     ua: navigator.userAgent,
                     unreliableAec: unreliableEchoCancellation(navigator.userAgent),
                 });
