@@ -18,8 +18,14 @@ import { unreliableEchoCancellation } from '@/lib/clinical-master/echoCancellati
 const DT_FRAME_MS = 50;
 /** Consecutive loud frames (~200ms) before we call it deliberate speech. */
 const DT_SUSTAIN_FRAMES = 4;
-/** Mic RMS must exceed this multiple of the predicted echo level. */
-const DT_MARGIN = 3;
+/**
+ * Voice test is on the RESIDUAL: mic energy left after subtracting the
+ * predicted echo. Echo-only frames track the prediction (residual ≈ 0 ±
+ * envelope jitter); a real voice adds energy on top. The residual must
+ * exceed this fraction of the predicted echo (jitter guard) and the
+ * absolute floor.
+ */
+const DT_RESIDUAL_MARGIN = 0.5;
 /** Absolute mic RMS floor (~-40dBFS) so silence can never trigger. */
 const DT_MIC_FLOOR = 0.01;
 /** Minimum gap between client-side interrupts. */
@@ -43,6 +49,22 @@ const DT_ECHO_TAIL_MS = 400;
 const DT_REF_LIVE_MIN = 0.02;
 /** Minimum gap between patient-tap re-attach attempts. */
 const DT_REATTACH_MS = 1000;
+/**
+ * Calibration window at the start of each patient turn. A doctor
+ * essentially never interrupts within the first moments of the patient
+ * starting to speak, so whatever the mic hears then IS the echo — learn
+ * the mic/tap coupling aggressively from it and never barge-in during
+ * the window. This breaks the chicken-and-egg failure where an
+ * under-estimated coupling classifies echo as voice, which blocks the
+ * echo-only calibration path, which keeps the estimate wrong (observed
+ * in Safari session logs: mic echo 0.24–0.69 vs tap 0.004–0.11).
+ */
+const DT_CAL_WINDOW_MS = 600;
+/** Fast EMA used inside the calibration window. */
+const DT_CAL_EMA = 0.3;
+/** Coupling ceiling. Safari's tap under-reports playback level, so the
+ *  real mic-echo/tap ratio can far exceed 1. */
+const DT_COUPLING_MAX = 8;
 
 /** Byte time-domain RMS (0..~1). getByteTimeDomainData works on every
  *  Safari version, unlike the float variant. */
@@ -371,8 +393,22 @@ export function useRealtimeSession({
             );
         }
 
+        // Turn-start calibration: in the first moments of a patient turn the
+        // mic can only be hearing echo — learn the coupling fast, and never
+        // barge-in until the window has passed.
+        const inCalWindow =
+            speakingRef.current && now - speakingSinceRef.current < DT_CAL_WINDOW_MS;
+        if (inCalWindow && refLive) {
+            const ratio = micRms / patientRms;
+            couplingRef.current = Math.min(
+                DT_COUPLING_MAX,
+                Math.max(0.005, (1 - DT_CAL_EMA) * couplingRef.current + DT_CAL_EMA * ratio)
+            );
+        }
+
         const predictedEcho = speakingRef.current ? couplingRef.current * patientRms : 0;
-        const isVoice = micRms > Math.max(DT_MIC_FLOOR, DT_MARGIN * predictedEcho);
+        const isVoice =
+            micRms - predictedEcho > Math.max(DT_MIC_FLOOR, DT_RESIDUAL_MARGIN * predictedEcho);
 
         if (isVoice) {
             doubleTalkFramesRef.current += 1;
@@ -380,6 +416,7 @@ export function useRealtimeSession({
             if (
                 speakingRef.current &&
                 refLive &&
+                !inCalWindow &&
                 doubleTalkFramesRef.current >= DT_SUSTAIN_FRAMES &&
                 now - detectorStartedAtRef.current > DT_WARMUP_MS &&
                 now - lastInterruptAtRef.current > DT_COOLDOWN_MS
@@ -402,11 +439,11 @@ export function useRealtimeSession({
             }
         } else {
             doubleTalkFramesRef.current = 0;
-            if (speakingRef.current && refLive) {
+            if (speakingRef.current && refLive && !inCalWindow) {
                 // Mic is echo-only right now — refine the coupling estimate.
                 const ratio = micRms / patientRms;
                 couplingRef.current = Math.min(
-                    1,
+                    DT_COUPLING_MAX,
                     Math.max(0.005, (1 - DT_COUPLING_EMA) * couplingRef.current + DT_COUPLING_EMA * ratio)
                 );
             }
