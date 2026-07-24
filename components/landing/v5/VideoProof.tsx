@@ -148,7 +148,7 @@ function VideoCard({ handle, gradient, avatar, videoSrc, poster }: VideoCardData
       type="button"
       onClick={videoSrc ? togglePlay : undefined}
       aria-label={videoSrc ? 'Play testimonial video' : handle}
-      className="group/video relative block aspect-[9/14] w-full overflow-hidden rounded-3xl focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+      className="group/video relative block aspect-[9/16] w-full overflow-hidden rounded-3xl focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
       style={!videoSrc ? { background: gradient } : undefined}
     >
       {videoSrc ? (
@@ -224,11 +224,11 @@ function MobileVideoCarousel() {
   return (
     <div
       ref={scrollerRef}
-      className="-mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-[16%] pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:hidden"
+      className="-mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-[10%] pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:hidden"
       aria-label="Video testimonials carousel"
     >
       {extended.map((video, i) => (
-        <div key={`${video.handle}-${i}`} className="w-[68%] flex-shrink-0 snap-center">
+        <div key={`${video.handle}-${i}`} className="w-[80%] flex-shrink-0 snap-center">
           <VideoCard {...video} />
         </div>
       ))}
@@ -261,7 +261,7 @@ export default function VideoProof() {
       <div className="mt-12 sm:mt-14">
         <MobileVideoCarousel />
 
-        <div className="mx-auto hidden max-w-3xl grid-cols-3 gap-3 sm:grid sm:gap-6">
+        <div className="mx-auto hidden max-w-5xl grid-cols-3 gap-4 sm:grid sm:gap-6">
           {VIDEOS.map((video, i) => (
             <motion.div
               key={video.handle}
