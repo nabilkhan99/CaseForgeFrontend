@@ -7,6 +7,14 @@ module.exports = {
   ],
   theme: {
     extend: {
+      // Height-based breakpoint. Laptop viewports vary far more in height than
+      // width (a 13" browser window is ~760px tall, a 14" ~860px), so sections
+      // that must be taken in at a glance size their vertical rhythm off this
+      // rather than off the `sm:`/`lg:` width breakpoints. The threshold sits
+      // above any laptop so only external monitors get the roomier spacing.
+      screens: {
+        tall: { raw: '(min-height: 940px)' },
+      },
       colors: {
         primary: {
           DEFAULT: '#B45309',
