@@ -59,23 +59,6 @@ async function attachDomainNames<T extends { domain_id: string }>(
     }));
 }
 
-export const getPublicCases = cache(async (): Promise<PublicCase[]> => {
-    const supabase = getSupabaseAdmin();
-
-    const { data: stations, error: stationsError } = await supabase
-        .from('stations')
-        .select(CASE_SELECT_DETAIL)
-        .eq('is_active', true)
-        .order('title');
-
-    if (stationsError || !stations) {
-        console.error('Error fetching public cases:', stationsError);
-        return [];
-    }
-
-    return attachDomainNames(supabase, stations);
-});
-
 export const getPublicCasesForList = cache(async (): Promise<PublicCase[]> => {
     const supabase = getSupabaseAdmin();
 
@@ -111,15 +94,29 @@ function groupByDomain(cases: PublicCase[]): PublicCaseDomain[] {
     return [...domains.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export const getPublicCasesGroupedByDomain = cache(async (): Promise<PublicCaseDomain[]> => {
-    return groupByDomain(await getPublicCases());
-});
-
 export const getPublicCasesGroupedByDomainForList = cache(async (): Promise<PublicCaseDomain[]> => {
     return groupByDomain(await getPublicCasesForList());
 });
 
-export const getPublicCaseById = cache(async (id: string) => {
-    const cases = await getPublicCases();
-    return cases.find(caseItem => caseItem.id === id) || null;
+export const getPublicCaseById = cache(async (id: string): Promise<PublicCase | null> => {
+    const supabase = getSupabaseAdmin();
+
+    const { data: station, error } = await supabase
+        .from('stations')
+        .select(CASE_SELECT_DETAIL)
+        .eq('id', id)
+        .eq('is_active', true)
+        .maybeSingle();
+
+    if (error) {
+        console.error('Error fetching public case:', error);
+        return null;
+    }
+
+    if (!station) {
+        return null;
+    }
+
+    const [withDomain] = await attachDomainNames(supabase, [station]);
+    return withDomain;
 });

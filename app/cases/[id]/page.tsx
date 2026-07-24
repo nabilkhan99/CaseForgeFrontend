@@ -1,6 +1,8 @@
 import { notFound, permanentRedirect } from 'next/navigation';
-import { getPublicCaseById, getPublicCases } from '@/lib/cases/publicCases';
+import { getPublicCasesForList } from '@/lib/cases/publicCases';
 import { buildCaseSeoIndex } from '@/lib/seo/cases';
+
+export const revalidate = 3600;
 
 interface PageProps {
     params: Promise<{ id: string }>;
@@ -8,14 +10,11 @@ interface PageProps {
 
 export default async function LegacyCasePage({ params }: PageProps) {
     const { id } = await params;
-    const caseItem = await getPublicCaseById(id);
 
-    if (!caseItem) {
-        notFound();
-    }
-
-    const seoCases = buildCaseSeoIndex(await getPublicCases());
-    const seoCase = seoCases.find(item => item.id === caseItem.id);
+    // Redirect only needs the slug, so the light list select is enough —
+    // avoids pulling every case body just to compute a URL.
+    const seoCases = buildCaseSeoIndex(await getPublicCasesForList());
+    const seoCase = seoCases.find(item => item.id === id);
 
     if (!seoCase) {
         notFound();
