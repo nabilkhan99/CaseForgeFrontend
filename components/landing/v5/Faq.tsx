@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { ChevronDown } from 'lucide-react';
-import { Pill } from '@/components/landing/v5/editorial';
 
 interface QA {
   question: string;
@@ -85,61 +84,62 @@ export default function Faq() {
 
   return (
     <section className="px-5 py-10 sm:px-8 sm:py-16">
-      <div className="mx-auto max-w-3xl">
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
-          className="text-center"
-        >
-          <Pill>Common questions</Pill>
-        </motion.div>
+      <motion.p
+        initial={{ opacity: 0, y: 12 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.5 }}
+        className="mb-5 text-center text-xs font-medium uppercase tracking-[0.08em] text-[#854F0B] sm:mb-8 sm:text-sm"
+      >
+        Common questions
+      </motion.p>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5, delay: 0.08 }}
-          className="mt-10 divide-y divide-heading/[0.08] border-y border-heading/[0.08] sm:mt-12"
-        >
-          {FAQS.map((faq, index) => {
-            const isOpen = openIndex === index;
-            return (
-              <div key={faq.question}>
-                <button
-                  type="button"
-                  onClick={() => setOpenIndex(isOpen ? null : index)}
-                  aria-expanded={isOpen}
-                  className="flex w-full items-center justify-between gap-3 py-5 text-left text-sm font-medium text-heading sm:py-6 sm:text-base"
-                >
-                  {faq.question}
-                  <ChevronDown
-                    className={`h-4 w-4 flex-shrink-0 text-[#854F0B] transition-transform duration-150 ${
-                      isOpen ? 'rotate-180' : ''
-                    }`}
-                    aria-hidden="true"
-                  />
-                </button>
-                {isOpen && (
-                  <div className="pb-5 sm:pb-6">
-                    {faq.answer.map((paragraph, paragraphIndex) => (
-                      <p
-                        key={paragraphIndex}
-                        className={`text-sm leading-relaxed text-body sm:text-base ${
-                          paragraphIndex !== 0 ? 'mt-3 sm:mt-4' : ''
-                        }`}
-                      >
-                        {paragraph}
-                      </p>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </motion.div>
-      </div>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.5, delay: 0.08 }}
+        className="mx-auto max-w-3xl rounded-2xl border border-[#E4DDC9] bg-white px-5 sm:px-8"
+      >
+        {FAQS.map((faq, index) => {
+          const isOpen = openIndex === index;
+          return (
+            <div
+              key={faq.question}
+              className={index !== FAQS.length - 1 ? 'border-b border-[#E4DDC9]' : ''}
+            >
+              <button
+                type="button"
+                onClick={() => setOpenIndex(isOpen ? null : index)}
+                aria-expanded={isOpen}
+                className="flex w-full items-center justify-between gap-3 py-4 text-left text-sm font-medium text-heading sm:py-5 sm:text-base"
+              >
+                {faq.question}
+                <ChevronDown
+                  className={`h-4 w-4 flex-shrink-0 text-[#854F0B] transition-transform duration-150 ${
+                    isOpen ? 'rotate-180' : ''
+                  }`}
+                  aria-hidden="true"
+                />
+              </button>
+              {isOpen && (
+                <div className="pb-4 sm:pb-6">
+                  {faq.answer.map((paragraph, paragraphIndex) => (
+                    <p
+                      key={paragraphIndex}
+                      className={`text-sm leading-relaxed text-body sm:text-base ${
+                        paragraphIndex !== 0 ? 'mt-3 sm:mt-4' : ''
+                      }`}
+                    >
+                      {paragraph}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </motion.div>
     </section>
   );
 }
