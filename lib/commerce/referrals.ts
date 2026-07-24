@@ -33,10 +33,29 @@ export const MIN_QUALIFYING_SPEND_BY_PLAN = {
  * with no floor (non-rewardable — they earn nothing anyway) always pass, so the
  * gate never blocks a plan it doesn't reward.
  */
-export function meetsMinimumSpend(plan: string, amountTotalPence: number): boolean {
-  const floor = (MIN_QUALIFYING_SPEND_BY_PLAN as Record<string, number>)[plan]
+export function meetsMinimumSpend(
+  plan: string,
+  amountTotalPence: number,
+  floorOverridePence?: number | null,
+): boolean {
+  const floor =
+    typeof floorOverridePence === 'number'
+      ? floorOverridePence
+      : (MIN_QUALIFYING_SPEND_BY_PLAN as Record<string, number>)[plan]
   if (floor === undefined) return true
   return amountTotalPence >= floor
+}
+
+/**
+ * Parse `REFERRAL_MIN_SPEND_OVERRIDE_PENCE` — a test-rig escape hatch that
+ * lowers the qualifying floor for ALL plans (e.g. `1` so a £1 test purchase
+ * behaves like a real one end-to-end). Returns null for unset/invalid values,
+ * which restores the real per-plan floors. MUST be unset in production.
+ */
+export function parseMinSpendOverride(raw: string | undefined): number | null {
+  if (!raw) return null
+  const parsed = Number(raw)
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null
 }
 
 /**
@@ -169,6 +188,12 @@ export interface ReferralDecisionInput {
    * {@link rewardFor}(plan).
    */
   rewardOverridePence?: number | null
+  /**
+   * Optional qualifying-floor override (pence) applied to ALL plans — the test-rig
+   * escape hatch from {@link parseMinSpendOverride}. Null/undefined uses the real
+   * per-plan floors.
+   */
+  minSpendOverridePence?: number | null
 }
 
 export interface ReferralDecision {
@@ -194,13 +219,14 @@ export interface ReferralDecision {
  *   3. otherwise → pending
  */
 export function decideReferral(input: ReferralDecisionInput): ReferralDecision {
-  const { ownerEmail, refereeEmail, plan, amountTotalPence, rewardOverridePence } = input
+  const { ownerEmail, refereeEmail, plan, amountTotalPence, rewardOverridePence, minSpendOverridePence } =
+    input
   const rewardAmount = typeof rewardOverridePence === 'number' ? rewardOverridePence : rewardFor(plan)
 
   if (isSelfReferral(ownerEmail, refereeEmail)) {
     return { status: 'void', voidReason: 'self_referral', rewardAmount }
   }
-  if (!meetsMinimumSpend(plan, amountTotalPence)) {
+  if (!meetsMinimumSpend(plan, amountTotalPence, minSpendOverridePence)) {
     return { status: 'void', voidReason: 'below_min_spend', rewardAmount }
   }
   return { status: 'pending', voidReason: null, rewardAmount }

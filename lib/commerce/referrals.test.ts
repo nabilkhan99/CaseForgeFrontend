@@ -12,6 +12,7 @@ import {
   qualificationCutoff,
   isSelfReferral,
   meetsMinimumSpend,
+  parseMinSpendOverride,
   normalizeCode,
   normalizeEmail,
   referralUrl,
@@ -393,5 +394,49 @@ describe('referralUrl', () => {
 describe('REFERRAL_COOKIE', () => {
   it('is the ff_ref cookie', () => {
     expect(REFERRAL_COOKIE).toBe('ff_ref')
+  })
+})
+
+describe('min-spend override (test rig)', () => {
+  const base = {
+    ownerEmail: 'owner@example.com',
+    refereeEmail: 'buyer@example.com',
+    plan: 'complete',
+    amountTotalPence: 100, // £1 rig purchase
+  }
+
+  it('voids a £1 complete purchase with no override (real floor applies)', () => {
+    expect(decideReferral(base).status).toBe('void')
+    expect(decideReferral(base).voidReason).toBe('below_min_spend')
+  })
+
+  it('lets a £1 purchase qualify when the floor is overridden to 1p', () => {
+    const decision = decideReferral({ ...base, minSpendOverridePence: 1 })
+    expect(decision).toEqual({ status: 'pending', voidReason: null, rewardAmount: 10000 })
+  })
+
+  it('self-referral still beats the override', () => {
+    const decision = decideReferral({
+      ...base,
+      refereeEmail: 'owner@example.com',
+      minSpendOverridePence: 1,
+    })
+    expect(decision.voidReason).toBe('self_referral')
+  })
+
+  it('meetsMinimumSpend honours an explicit floor override', () => {
+    expect(meetsMinimumSpend('complete', 100)).toBe(false)
+    expect(meetsMinimumSpend('complete', 100, 1)).toBe(true)
+    expect(meetsMinimumSpend('complete', 0, 1)).toBe(false)
+  })
+
+  it('parseMinSpendOverride accepts valid ints and rejects the rest', () => {
+    expect(parseMinSpendOverride('1')).toBe(1)
+    expect(parseMinSpendOverride('0')).toBe(0)
+    expect(parseMinSpendOverride(undefined)).toBeNull()
+    expect(parseMinSpendOverride('')).toBeNull()
+    expect(parseMinSpendOverride('abc')).toBeNull()
+    expect(parseMinSpendOverride('-5')).toBeNull()
+    expect(parseMinSpendOverride('1.5')).toBeNull()
   })
 })

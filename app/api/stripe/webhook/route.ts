@@ -8,6 +8,7 @@ import {
   generateReferralCode,
   normalizeCode,
   normalizeEmail,
+  parseMinSpendOverride,
   referralUrl,
 } from '@/lib/commerce/referrals';
 import { sendReferralEmail } from '@/lib/email/referralEmail';
@@ -270,6 +271,10 @@ async function recordReferral(
     plan,
     amountTotalPence: amount,
     rewardOverridePence: codeRow.reward_override_pence,
+    // Test-rig only: lets a £1 rig purchase clear the qualifying floor so the
+    // full happy path (pending -> qualified -> paid) is testable. Unset in
+    // production, where the real 50%-of-list floors apply.
+    minSpendOverridePence: parseMinSpendOverride(process.env.REFERRAL_MIN_SPEND_OVERRIDE_PENCE),
   });
 
   const { error: referralError } = await supabase.from('referrals').insert({
