@@ -108,7 +108,11 @@ export default function ChapterScore({ active = true }: { active?: boolean }) {
                 transition={{ delay: active ? 0.5 + i * 0.1 : 0 }}
               >
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[12px] text-stone-600 font-medium truncate pr-2">
+                  {/* Wraps rather than truncating: `truncate` implies
+                      white-space:nowrap, which made "Clinical management
+                      (weighted)" a ~260px min-content floor and pushed the
+                      whole shared-grid card past the frame on small phones. */}
+                  <span className="min-w-0 pr-2 text-[12px] font-medium leading-tight text-stone-600">
                     {d.label}
                   </span>
                   <div className="flex items-center gap-2 flex-shrink-0">

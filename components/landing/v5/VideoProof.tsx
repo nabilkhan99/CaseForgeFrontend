@@ -224,7 +224,7 @@ function MobileVideoCarousel() {
   return (
     <div
       ref={scrollerRef}
-      className="-mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-[10%] pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:hidden"
+      className="-mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto overflow-y-hidden px-[10%] pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:hidden"
       aria-label="Video testimonials carousel"
     >
       {extended.map((video, i) => (

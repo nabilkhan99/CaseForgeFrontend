@@ -104,7 +104,7 @@ export default function ProductShowcase() {
         <div
           role="tablist"
           aria-label="Product tour steps"
-          className="mx-auto mt-7 flex w-fit max-w-full gap-1 overflow-x-auto rounded-full border border-white/15 bg-white/[0.06] p-1 sm:gap-1.5"
+          className="mx-auto mt-7 flex w-fit max-w-full gap-1 overflow-x-auto overflow-y-hidden rounded-full border border-white/15 bg-white/[0.06] p-1 sm:gap-1.5"
         >
           {STEPS.map((s, i) => (
             <button

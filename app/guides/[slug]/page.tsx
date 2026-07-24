@@ -66,7 +66,7 @@ function ArticleBlockView({ block }: { block: ArticleBlock }) {
     // table
     return (
         <figure className="not-prose">
-            <div className="overflow-x-auto rounded-xl border border-[#e6dccb]">
+            <div className="overflow-x-auto overflow-y-hidden rounded-xl border border-[#e6dccb]">
                 <table className="w-full border-collapse text-left text-[14px]">
                     <thead>
                         <tr className="bg-[#f0e9dc]">

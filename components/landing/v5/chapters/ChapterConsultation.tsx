@@ -57,11 +57,15 @@ function AudioVisualizer() {
   );
 }
 
-// Horizontal waveform — bar-style EQ
+// Horizontal waveform — bar-style EQ.
+// The bars flex rather than sitting at a rigid 3px: 56 fixed bars plus fixed
+// gaps gave this card a 333px min-content floor and, because all three tour
+// steps share one grid cell, that floor forced EVERY card wider than the
+// mobile frame and clipped them. Bars now shrink to fit and cap at 3px.
 function BarWaveform() {
   const barCount = 56;
   return (
-    <div className="flex items-center justify-center gap-[3px] h-16 w-full">
+    <div className="flex min-w-0 items-center justify-center gap-[2px] h-16 w-full sm:gap-[3px]">
       {Array.from({ length: barCount }).map((_, i) => {
         const center = barCount / 2;
         const dist = Math.abs(i - center) / center;
@@ -69,9 +73,9 @@ function BarWaveform() {
         return (
           <motion.div
             key={i}
-            className="rounded-full"
+            className="min-w-0 flex-1 rounded-full"
             style={{
-              width: '3px',
+              maxWidth: '3px',
               background: `linear-gradient(180deg, rgba(180,83,9,${0.8 - dist * 0.4}) 0%, rgba(245,158,11,${0.2 + (1 - dist) * 0.3}) 100%)`,
             }}
             animate={{
@@ -127,7 +131,7 @@ export default function ChapterConsultation({ active = true }: { active?: boolea
       </div>
 
       {/* Main voice area */}
-      <div className="flex flex-col items-center justify-center px-6 pt-1 pb-4 min-h-[140px]">
+      <div className="flex min-w-0 flex-col items-center justify-center px-4 pt-1 pb-4 min-h-[140px] sm:px-6">
         {/* Circular audio visualizer */}
         <motion.div
           className="mb-0"
@@ -165,8 +169,9 @@ export default function ChapterConsultation({ active = true }: { active?: boolea
           <BarWaveform />
         </motion.div>
 
-        {/* Status row */}
-        <div className="flex items-center justify-center gap-6 text-[11px] text-muted">
+        {/* Status row — wraps and tightens on narrow phones; at gap-6 it set a
+            266px floor that pushed the whole card past the mobile frame. */}
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-muted sm:gap-x-6">
           <div className="flex items-center gap-2">
             <motion.div
               className="w-2 h-2 rounded-full bg-red-400"

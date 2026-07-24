@@ -67,7 +67,10 @@ const TESTIMONIALS: Testimonial[] = [
 export default function Testimonials() {
   return (
     <section className="px-5 py-10 sm:px-8 sm:py-16">
-      <div className="mx-auto flex max-w-5xl snap-x snap-mandatory gap-4 overflow-x-auto pb-2 sm:grid sm:grid-cols-3 sm:gap-6 sm:overflow-visible sm:pb-0">
+      {/* overflow-y-hidden is load-bearing: setting only overflow-x makes the
+          CSS-computed overflow-y `auto`, so the carousel scrolled vertically
+          as well as horizontally on mobile. */}
+      <div className="mx-auto flex max-w-5xl snap-x snap-mandatory gap-4 overflow-x-auto overflow-y-hidden pt-1 pb-5 sm:grid sm:grid-cols-3 sm:gap-6 sm:overflow-visible sm:pt-0 sm:pb-0">
         {TESTIMONIALS.map((t, i) => (
           <motion.figure
             key={t.name}
