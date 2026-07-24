@@ -1,9 +1,11 @@
 import { CaseReviewRequest, CaseReviewResponse, ImprovementRequest, CapabilitiesResponse, CapabilitySelectionRequest, CapabilitySelectionResponse, ExperienceGroupRequest, ExperienceGroupResponse, PlaygroundCaseReviewRequest, PortfolioPromptResponse } from './types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://caseforge2025a.azurewebsites.net/api';
+// The playground was consolidated off the Render dev-api onto the same Azure
+// Functions app (portfolio-playground/prompt + /generate-review), so it shares
+// API_BASE_URL by default and cannot drift from it.
 const PLAYGROUND_API_BASE_URL =
-  process.env.NEXT_PUBLIC_PORTFOLIO_PLAYGROUND_API_BASE_URL ||
-  'https://fourteen-fisherman-portfolio-dev-api.onrender.com/api';
+  process.env.NEXT_PUBLIC_PORTFOLIO_PLAYGROUND_API_BASE_URL || API_BASE_URL;
 
 interface SectionImprovementRequest {
   section_type: string;
