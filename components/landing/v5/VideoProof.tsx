@@ -99,13 +99,6 @@ const TomAvatar = (
 
 const VIDEOS: VideoCardData[] = [
   {
-    handle: '@dr.kwame.gp',
-    gradient: 'linear-gradient(160deg,#3D5A80,#293241)',
-    avatar: KwameAvatar,
-    videoSrc: '/testimonials/testimonial-1.mp4',
-    poster: '/testimonials/testimonial-1.jpg',
-  },
-  {
     handle: '@priya.gpst3',
     gradient: 'linear-gradient(160deg,#9C6644,#6B4226)',
     avatar: PriyaAvatar,
@@ -118,6 +111,13 @@ const VIDEOS: VideoCardData[] = [
     avatar: TomAvatar,
     videoSrc: '/testimonials/testimonial-3.mp4',
     poster: '/testimonials/testimonial-3.jpg',
+  },
+  {
+    handle: '@dr.kwame.gp',
+    gradient: 'linear-gradient(160deg,#3D5A80,#293241)',
+    avatar: KwameAvatar,
+    videoSrc: '/testimonials/testimonial-1.mp4',
+    poster: '/testimonials/testimonial-1.jpg',
   },
 ];
 
