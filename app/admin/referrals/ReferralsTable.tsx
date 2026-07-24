@@ -246,6 +246,12 @@ export default function ReferralsTable() {
               )}
             </span>
             <Link
+              href="/admin"
+              className="text-primary hover:text-primary-light underline underline-offset-4"
+            >
+              ← Admin
+            </Link>
+            <Link
               href="/admin/orders"
               className="text-primary hover:text-primary-light underline underline-offset-4"
             >
