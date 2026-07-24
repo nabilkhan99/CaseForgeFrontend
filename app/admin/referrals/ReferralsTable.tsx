@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { motion } from 'framer-motion';
 import type { AdvocateStats, DashboardStats } from '@/lib/commerce/referralStats';
 
@@ -244,6 +245,12 @@ export default function ReferralsTable() {
                 '—'
               )}
             </span>
+            <Link
+              href="/admin/orders"
+              className="text-primary hover:text-primary-light underline underline-offset-4"
+            >
+              Orders →
+            </Link>
             <button
               onClick={load}
               disabled={loading}
