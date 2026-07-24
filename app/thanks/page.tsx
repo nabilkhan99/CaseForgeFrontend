@@ -115,9 +115,9 @@ export default async function ThanksPage({ searchParams }: ThanksPageProps) {
           ) : (
             <>A receipt is on its way to your inbox. </>
           )}
-          This is a pre-order: everything starts on 1 September 2026 — your AI practice,
-          on-demand lectures and coaching. Your 3 months’ access runs from that date, and
-          we’ll email you everything you need before launch.
+          This is a pre-order: your AI practice and on-demand lectures start on
+          1 September 2026, and your 3 months’ access runs from that date. Your coaching
+          day runs on the date you picked. We’ll email you everything you need before launch.
         </p>
 
         {wasReferred ? (

@@ -283,7 +283,7 @@ export default function PricingTable() {
           <p className="mb-6 flex justify-center">
             <span className="inline-flex items-center gap-2 rounded-full bg-[#FAEEDA] px-4 py-1.5 text-center text-xs font-semibold text-[#854F0B] sm:text-[13px]">
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#B45309]" aria-hidden="true" />
-              Pre-order — everything starts {ACCESS_OPENS_LABEL}
+              Pre-order — AI practice &amp; lectures start {ACCESS_OPENS_LABEL}
             </span>
           </p>
 

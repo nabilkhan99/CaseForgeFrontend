@@ -111,12 +111,11 @@ export default function CoachingDayPage() {
           </h1>
           <p className="mt-3 max-w-lg text-sm leading-relaxed text-body sm:text-base">
             One full day of live Small-Group Coaching, 9am to 6pm, remote, with a maximum class of
-            six. Your AI practice and on-demand lectures are separate — they open alongside
-            everything else, for 3 months.
+            six. It runs on the date you choose below.
           </p>
           <p className="mt-3 inline-flex max-w-lg rounded-lg bg-[#FDF6EC] px-3 py-1.5 text-[12px] font-medium leading-relaxed text-[#854F0B]">
-            This is a pre-order: everything starts {ACCESS_OPENS_LABEL} — AI practice, lectures and
-            coaching. Your 3 months run from that date.
+            This is a pre-order: your AI practice and on-demand lectures start{' '}
+            {ACCESS_OPENS_LABEL}, and your 3 months run from that date.
           </p>
 
           <div role="radiogroup" aria-label="Available coaching days" className="mt-8 flex flex-col gap-2.5">

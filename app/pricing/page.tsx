@@ -22,8 +22,8 @@ export default function PricingPage() {
             Pass all 200 mock AI SCA stations. Still fail your SCA? We pay you £500.
           </p>
           <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-body sm:text-base">
-            You&rsquo;re pre-ordering: AI practice, on-demand lectures and coaching all start
-            on {ACCESS_OPENS_LABEL}.
+            You&rsquo;re pre-ordering: AI practice and on-demand lectures start on{' '}
+            {ACCESS_OPENS_LABEL}. Your coaching day runs on the date you choose.
           </p>
         </header>
         <NhsBanner />

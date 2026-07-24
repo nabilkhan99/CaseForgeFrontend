@@ -55,7 +55,7 @@ export function buildPurchaseEmailCopy({
     greeting: `Hi ${first},`,
     lines: [
       `Thanks for pre-ordering ${planName}. Your place is confirmed.`,
-      `This is a pre-order: everything starts on ${ACCESS_OPENS_LABEL} — your AI consultation practice, the on-demand lectures, and your coaching day if you have one. Your 3 months' access runs from that date.`,
+      `This is a pre-order: your AI consultation practice and the on-demand lectures start on ${ACCESS_OPENS_LABEL}, and your 3 months' access runs from that date.`,
       `Between now and launch we'll email you everything you need — what to expect, how to get set up, and how to get the most out of the first fortnight.`,
       `Your card receipt comes separately from Stripe. If anything looks wrong, or you just want to ask something, reply to this email and a human will answer.`,
     ],
@@ -119,7 +119,7 @@ export async function sendPurchaseEmail({
     <title>${copy.subject}</title>
   </head>
   <body style="margin:0;padding:0;background-color:#F5F0EB;font-family:-apple-system,BlinkMacSystemFont,'Plus Jakarta Sans','Segoe UI',Roboto,sans-serif;color:#1C1917;-webkit-font-smoothing:antialiased;">
-    <div style="display:none;font-size:1px;color:#F5F0EB;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">Your place is confirmed — everything starts on ${ACCESS_OPENS_LABEL}.</div>
+    <div style="display:none;font-size:1px;color:#F5F0EB;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">Your place is confirmed — AI practice and lectures start on ${ACCESS_OPENS_LABEL}.</div>
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#F5F0EB;">
       <tr>
         <td align="center" style="padding:40px 16px;">
