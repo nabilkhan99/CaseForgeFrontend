@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import CaseDetailPageClient from '@/components/cases/CaseDetailPageClient';
-import { getPublicCases } from '@/lib/cases/publicCases';
+import { getPublicCaseById, getPublicCasesForList } from '@/lib/cases/publicCases';
 import { buildCaseSeoIndex, caseDescription, caseTitle } from '@/lib/seo/cases';
 import { absoluteUrl, pageMetadata, SITE_NAME, SITE_URL } from '@/lib/seo/site';
 
@@ -11,19 +11,43 @@ interface PageProps {
     params: Promise<{ slug: string }>;
 }
 
-async function getSeoCase(slug: string) {
-    const seoCases = buildCaseSeoIndex(await getPublicCases());
+// Slug lookup uses the light list select (slugs derive from title + id ordering only),
+// so unknown-slug requests never pull the large case-body columns.
+async function getSeoIndexEntry(slug: string) {
+    const seoCases = buildCaseSeoIndex(await getPublicCasesForList());
     return seoCases.find(caseItem => caseItem.slug === slug) || null;
 }
 
+async function getSeoCase(slug: string) {
+    const entry = await getSeoIndexEntry(slug);
+
+    if (!entry) {
+        return null;
+    }
+
+    const detail = await getPublicCaseById(entry.id);
+
+    if (!detail) {
+        return null;
+    }
+
+    return {
+        ...entry,
+        ...detail,
+        condition: entry.condition,
+        slug: entry.slug,
+        path: entry.path,
+    };
+}
+
 export async function generateStaticParams() {
-    const seoCases = buildCaseSeoIndex(await getPublicCases());
+    const seoCases = buildCaseSeoIndex(await getPublicCasesForList());
     return seoCases.map(caseItem => ({ slug: caseItem.slug }));
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
     const { slug } = await params;
-    const caseItem = await getSeoCase(slug);
+    const caseItem = await getSeoIndexEntry(slug);
 
     if (!caseItem) {
         return pageMetadata({
