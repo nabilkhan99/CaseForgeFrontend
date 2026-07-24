@@ -1,9 +1,11 @@
 import { CaseReviewRequest, CaseReviewResponse, ImprovementRequest, CapabilitiesResponse, CapabilitySelectionRequest, CapabilitySelectionResponse, ExperienceGroupRequest, ExperienceGroupResponse, PlaygroundCaseReviewRequest, PortfolioPromptResponse } from './types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+// Playground now shares the Azure backend (consolidated off the Render dev-api).
+// Defaults to the same relative /api that next.config rewrites to caseforge2025a;
+// override with NEXT_PUBLIC_PORTFOLIO_PLAYGROUND_API_BASE_URL only if needed.
 const PLAYGROUND_API_BASE_URL =
-  process.env.NEXT_PUBLIC_PORTFOLIO_PLAYGROUND_API_BASE_URL ||
-  'https://fourteen-fisherman-portfolio-dev-api.onrender.com/api';
+  process.env.NEXT_PUBLIC_PORTFOLIO_PLAYGROUND_API_BASE_URL || '/api';
 
 interface SectionImprovementRequest {
   section_type: string;
