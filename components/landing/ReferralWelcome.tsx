@@ -4,28 +4,53 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { REFERRAL_DISPLAY_COOKIE } from '@/lib/commerce/referrals';
 
-const DISMISS_KEY = 'ff_ref_welcome_dismissed';
+const SEEN_KEY = 'ff_ref_welcome_seen';
 
 function hasReferralCookie(): boolean {
   return document.cookie.split('; ').some((c) => c.startsWith(`${REFERRAL_DISPLAY_COOKIE}=`));
 }
 
 /**
- * Floating notice shown to visitors who arrived through a referral link, so
- * they know the recommendation is attached to their order. Driven purely by the
- * presence of the `ff_ref_by` flag cookie — no cookie data is rendered, and
- * attribution runs on the HttpOnly `ff_ref` re-validated server-side.
+ * Persistent, cross-tab "already acknowledged" flag. localStorage — NOT
+ * sessionStorage — so a dismissal sticks across tabs, windows and restarts;
+ * the trigger cookie lives 30 days, so a per-tab flag would re-nag on every new
+ * tab. Guarded because storage access can throw (private mode / disabled).
+ */
+function hasSeen(): boolean {
+  try {
+    return localStorage.getItem(SEEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function markSeen(): void {
+  try {
+    localStorage.setItem(SEEN_KEY, '1');
+  } catch {
+    /* storage unavailable — worst case the pill may show again; harmless */
+  }
+}
+
+/**
+ * One-time floating notice shown to visitors who arrived through a referral
+ * link, so they know the recommendation is attached to their order. Shows at
+ * most once per browser: it is marked seen the moment it appears. Driven purely
+ * by the presence of the `ff_ref_by` flag cookie — no cookie data is rendered,
+ * and attribution runs on the HttpOnly `ff_ref` re-validated server-side.
  */
 export default function ReferralWelcome() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (sessionStorage.getItem(DISMISS_KEY)) return;
-    setVisible(hasReferralCookie());
+    if (hasSeen()) return;
+    if (!hasReferralCookie()) return;
+    setVisible(true);
+    markSeen(); // acknowledge once — never nag again on this browser
   }, []);
 
   const dismiss = () => {
-    sessionStorage.setItem(DISMISS_KEY, '1');
+    markSeen();
     setVisible(false);
   };
 
