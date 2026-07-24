@@ -23,6 +23,11 @@ const nextConfig = {
 
     // Only proxy the Azure Functions (portfolio tool) routes — everything
     // else is a Next.js API route and should be handled locally.
+    //
+    // The portfolio-playground/* pair moved here from the Render dev-api when
+    // the playground was consolidated onto Azure. They MUST stay listed: this
+    // is an explicit allowlist, not a wildcard, so an unlisted path falls
+    // through to Next's own /api routes and 404s.
     const azureRoutes = [
       'capabilities',
       'generate-review',
@@ -30,6 +35,8 @@ const nextConfig = {
       'improve-section',
       'select-capabilities',
       'select-experience-groups',
+      'portfolio-playground/prompt',
+      'portfolio-playground/generate-review',
     ];
 
     return [
