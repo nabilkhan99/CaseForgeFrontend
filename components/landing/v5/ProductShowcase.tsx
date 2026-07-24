@@ -17,7 +17,13 @@ interface Step {
   copy: string;
   chromeLabel: string;
   chromeMeta: string;
-  Mockup: () => React.JSX.Element;
+  /**
+   * Every step is mounted at once (stacked in one grid cell), so a mockup
+   * cannot animate on mount — it would play while hidden behind another tab
+   * and be finished before the user ever selects it. Mockups receive `active`
+   * and drive their own entrance from it instead.
+   */
+  Mockup: (props: { active: boolean }) => React.JSX.Element;
 }
 
 const STEPS: readonly Step[] = [
@@ -43,9 +49,9 @@ const STEPS: readonly Step[] = [
     key: 'feedback',
     tab: 'Feedback',
     title: 'See exactly where you stand',
-    copy: 'Instant, domain-level scores on the three SCA marking criteria.',
+    copy: 'Domain-level scores on the three SCA marking criteria, and the moments that cost you marks.',
     chromeLabel: 'Feedback report',
-    chromeMeta: '+9s',
+    chromeMeta: 'Scored',
     Mockup: ChapterScore,
   },
 ] as const;
@@ -155,7 +161,7 @@ export default function ProductShowcase() {
                 meta={s.chromeMeta}
                 className="h-full border-white/10 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.55)]"
               >
-                <s.Mockup />
+                <s.Mockup active={i === active} />
               </Chrome>
             </motion.div>
           ))}

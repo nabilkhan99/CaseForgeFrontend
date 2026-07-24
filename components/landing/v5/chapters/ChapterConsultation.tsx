@@ -94,7 +94,12 @@ function BarWaveform() {
   );
 }
 
-export default function ChapterConsultation() {
+/**
+ * `active` comes from ProductShowcase — see ChapterScore for why entrance
+ * animations must be driven by it rather than by mount. (The looping pulses
+ * below are unaffected; they run continuously either way.)
+ */
+export default function ChapterConsultation({ active = true }: { active?: boolean }) {
   return (
     <div className="flex flex-col">
       {/* Patient header */}
@@ -126,8 +131,8 @@ export default function ChapterConsultation() {
         {/* Circular audio visualizer */}
         <motion.div
           className="mb-0"
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
+          initial={false}
+          animate={{ opacity: active ? 1 : 0, scale: active ? 1 : 0.8 }}
           transition={{ type: 'spring', stiffness: 80, damping: 16 }}
         >
           <AudioVisualizer />
@@ -136,9 +141,9 @@ export default function ChapterConsultation() {
         {/* Speaking indicator */}
         <motion.div
           className="text-center mb-3"
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
+          initial={false}
+          animate={{ opacity: active ? 1 : 0, y: active ? 0 : 8 }}
+          transition={{ delay: active ? 0.3 : 0 }}
         >
           <motion.div
             className="text-[12px] font-semibold text-primary uppercase tracking-[0.1em] mb-0.5"
@@ -153,9 +158,9 @@ export default function ChapterConsultation() {
         {/* Bar waveform — full width */}
         <motion.div
           className="w-full mb-3"
-          initial={{ opacity: 0, scaleY: 0.5 }}
-          animate={{ opacity: 1, scaleY: 1 }}
-          transition={{ delay: 0.4, type: 'spring', stiffness: 80, damping: 16 }}
+          initial={false}
+          animate={{ opacity: active ? 1 : 0, scaleY: active ? 1 : 0.5 }}
+          transition={{ delay: active ? 0.4 : 0, type: 'spring', stiffness: 80, damping: 16 }}
         >
           <BarWaveform />
         </motion.div>
