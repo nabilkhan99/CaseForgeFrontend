@@ -14,7 +14,16 @@ import {
   Verdict,
 } from '@/lib/clinical-master/types';
 
-const MAX_RETRIES = 30;
+/** Poll interval, ms. */
+const POLL_INTERVAL_MS = 3000;
+/**
+ * Give-up threshold. Marking normally lands well inside a minute or two, but
+ * the old budget (30 × 3s = 90s) expired BEFORE the "a minute or two" we tell
+ * the user, so an ordinary slow run fell through to the "still processing"
+ * screen and sent people into a refresh loop. 100 × 3s = 5 minutes leaves
+ * generous headroom; past that the run is genuinely stuck, not just slow.
+ */
+const MAX_RETRIES = 100;
 const DOMAIN_NAV: DomainKey[] = ['data_gathering', 'clinical_management', 'relating_to_others'];
 type ReportTab = 'overview' | DomainKey;
 
@@ -805,6 +814,16 @@ export default function FeedbackReport({ sessionId, variant = 'app', from = null
   const [timedOut, setTimedOut] = useState(false);
   const [activeTab, setActiveTab] = useState<ReportTab>('overview');
   const retryCount = useRef(0);
+  /** Bumped by "Check again" to restart polling in place — no page refresh. */
+  const [pollAttempt, setPollAttempt] = useState(0);
+
+  const checkAgain = () => {
+    retryCount.current = 0;
+    setTimedOut(false);
+    setError(false);
+    setLoading(true);
+    setPollAttempt((n) => n + 1);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -832,7 +851,7 @@ export default function FeedbackReport({ sessionId, variant = 'app', from = null
             setLoading(false);
             return;
           }
-          setTimeout(poll, 3000);
+          setTimeout(poll, POLL_INTERVAL_MS);
           return;
         }
         setError(true);
@@ -845,7 +864,7 @@ export default function FeedbackReport({ sessionId, variant = 'app', from = null
           setLoading(false);
           return;
         }
-        setTimeout(poll, 3000);
+        setTimeout(poll, POLL_INTERVAL_MS);
       }
     };
 
@@ -854,7 +873,7 @@ export default function FeedbackReport({ sessionId, variant = 'app', from = null
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [sessionId]);
+  }, [sessionId, pollAttempt]);
 
   const orderedDomains = useMemo(() => {
     if (!feedback) return [];
@@ -869,16 +888,24 @@ export default function FeedbackReport({ sessionId, variant = 'app', from = null
     return (
       <div className={`bg-surface px-6 ${isTrial ? 'py-12' : 'min-h-[100dvh] py-16'}`}>
         <div className="mx-auto max-w-md rounded-[22px] border border-black/[0.06] bg-surface-raised p-6 text-center shadow-[0_16px_42px_rgba(180,83,9,0.06)]">
-          <p className="mb-2 text-[16px] font-semibold text-heading">Feedback is still processing</p>
+          <p className="mb-2 text-[16px] font-semibold text-heading">Feedback is taking longer than usual</p>
           <p className="mb-6 text-sm leading-[1.65] text-muted">
-            {isTrial
-              ? 'The report may still finish in the background. Refresh this page in a minute.'
-              : 'The report may still finish in the background. Check again from your dashboard shortly.'}
+            It may still be finishing in the background. No need to reload the page —
+            just check again.
           </p>
+          <button
+            type="button"
+            onClick={checkAgain}
+            className="inline-flex items-center justify-center rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+          >
+            Check again
+          </button>
           {!isTrial && (
-            <Link href="/dashboard" className="text-sm font-semibold text-primary hover:underline">
-              Back to dashboard
-            </Link>
+            <div className="mt-4">
+              <Link href="/dashboard" className="text-sm font-semibold text-primary hover:underline">
+                Back to dashboard
+              </Link>
+            </div>
           )}
         </div>
       </div>
