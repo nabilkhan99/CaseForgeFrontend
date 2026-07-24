@@ -11,6 +11,8 @@ import {
   referralUrl,
 } from '@/lib/commerce/referrals';
 import { sendReferralEmail } from '@/lib/email/referralEmail';
+import { sendPurchaseEmail } from '@/lib/email/purchaseEmail';
+import { pushPreorderContactToBrevo } from '@/lib/marketing/preorderContact';
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -134,6 +136,9 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
     .single();
 
   let preorderId = inserted?.id ?? null;
+  // True only when THIS call created the row. The 23505 path below (a Stripe
+  // webhook retry) leaves it false, so the buyer is never emailed twice.
+  const isNewPreorder = Boolean(inserted?.id);
 
   if (insertError) {
     if (insertError.code !== '23505') {
@@ -177,6 +182,46 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
     }
   } catch (error: unknown) {
     console.error('[stripe-webhook] advocate minting error', { sessionId: session.id, error });
+  }
+
+  // Confirmation email + Brevo pre-order contact sync. Gated on isNewPreorder so
+  // this only runs for a genuinely NEW pre-order (the insert succeeded): a Stripe
+  // webhook retry takes the 23505 duplicate path and must never double-email the
+  // customer. Best-effort throughout: never fail the webhook.
+  if (isNewPreorder) {
+    try {
+      const coachingDayLabel = session.metadata?.coaching_day_label ?? null;
+      const [emailResult, contactResult] = await Promise.allSettled([
+        sendPurchaseEmail({ toEmail: buyerEmail, toName: buyerName, planKey: plan, coachingDayLabel }),
+        pushPreorderContactToBrevo({
+          email: buyerEmail,
+          fullName: buyerName,
+          planKey: plan,
+          coachingDayLabel,
+          amountPence: session.amount_total ?? 0,
+        }),
+      ]);
+
+      if (emailResult.status === 'rejected') {
+        console.error('[stripe-webhook] purchase confirmation email threw', {
+          sessionId: session.id,
+          reason: emailResult.reason,
+        });
+      } else if (!emailResult.value.sent) {
+        console.warn('[stripe-webhook] purchase confirmation email not sent', {
+          sessionId: session.id,
+          result: emailResult.value,
+        });
+      }
+      if (contactResult.status === 'rejected') {
+        console.error('[stripe-webhook] preorder contact sync threw', {
+          sessionId: session.id,
+          reason: contactResult.reason,
+        });
+      }
+    } catch (error: unknown) {
+      console.error('[stripe-webhook] purchase confirmation error', { sessionId: session.id, error });
+    }
   }
 
   return NextResponse.json({ received: true, recorded: !insertError, preorderId });
