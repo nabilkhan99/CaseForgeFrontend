@@ -21,6 +21,11 @@ const DESTINATIONS: readonly AdminDestination[] = [
     title: 'Referrals',
     blurb: 'Advocates and their links, conversions, what you owe, and marking payouts.',
   },
+  {
+    href: '/admin/recordings',
+    title: 'Recordings',
+    blurb: 'Listen back to real consultations — who sat what, and how it actually sounded.',
+  },
 ] as const;
 
 /**

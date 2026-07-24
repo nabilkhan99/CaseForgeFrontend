@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TranscriptItem } from '@/lib/clinical-master/types';
 import { unreliableEchoCancellation } from '@/lib/clinical-master/echoCancellation';
+import {
+    extensionForMimeType,
+    startSessionRecorder,
+    type SessionRecorder,
+} from '@/lib/clinical-master/sessionRecorder';
 
 /**
  * Double-talk barge-in for browsers with unreliable echo cancellation
@@ -84,6 +89,9 @@ const DT_CAL_EMA = 0.3;
 /** Coupling ceiling. Safari's tap under-reports playback level, so the
  *  real mic-echo/tap ratio can far exceed 1. */
 const DT_COUPLING_MAX = 8;
+
+/** Below this a "recording" is a broken stub, not audio worth storing. */
+const MIN_RECORDING_BYTES = 2048;
 
 /** Byte time-domain RMS (0..~1). getByteTimeDomainData works on every
  *  Safari version, unlike the float variant. */
@@ -211,6 +219,12 @@ export function useRealtimeSession({
     // cadence, on errors/disconnects, and via sendBeacon on pagehide — so a
     // session that dies mid-call leaves evidence (a tester's session died
     // at ~8 min and left none).
+    // --- consultation audio recording ---
+    // Mixes mic + patient into one file for playback with the feedback. Owns a
+    // separate AudioContext from the detector (see sessionRecorder.ts) and is
+    // flushed exactly once per session.
+    const recorderRef = useRef<SessionRecorder | null>(null);
+    const recordingFlushedRef = useRef(false);
     const debugEnabledRef = useRef(false);
     const debugLogRef = useRef<Array<{ t: number; e: string; d?: unknown }>>([]);
     const debugElRef = useRef<HTMLDivElement | null>(null);
@@ -299,6 +313,54 @@ export function useRealtimeSession({
             });
         },
         [sessionId]
+    );
+
+    /**
+     * Stop recording and upload the audio. Runs at most once per session.
+     *
+     * Fire-and-forget by design: stop() is requested synchronously so it
+     * happens before teardown kills the mic, then the upload continues in the
+     * background. A client-side route change to the feedback page does not
+     * abort it (the JS context survives a soft navigation) — only closing the
+     * tab does, and losing the audio there is preferable to making the user
+     * wait on an upload before seeing their marks.
+     */
+    const flushRecording = useCallback(
+        async (reason: string) => {
+            const recorder = recorderRef.current;
+            if (!recorder || recordingFlushedRef.current) return;
+            recordingFlushedRef.current = true;
+            try {
+                const blob = await recorder.stop();
+                if (!blob || blob.size < MIN_RECORDING_BYTES) {
+                    logDebug('recording:empty', { reason, bytes: blob?.size ?? 0 });
+                    return;
+                }
+                const form = new FormData();
+                form.append('sessionId', sessionId);
+                form.append(
+                    'file',
+                    blob,
+                    `${sessionId}.${extensionForMimeType(recorder.mimeType)}`
+                );
+                const res = await fetch('/api/clinical-master/save-recording', {
+                    method: 'POST',
+                    body: form,
+                });
+                logDebug('recording:upload', {
+                    reason,
+                    bytes: blob.size,
+                    ok: res.ok,
+                    status: res.status,
+                });
+            } catch (err) {
+                logDebug('recording:FAILED', String(err));
+            } finally {
+                recorder.dispose();
+                recorderRef.current = null;
+            }
+        },
+        [sessionId, logDebug]
     );
 
     /** Floating overlay with live detector numbers + a copy-log button. */
@@ -704,6 +766,9 @@ export function useRealtimeSession({
             clearTimeout(timerRef.current);
             timerRef.current = null;
         }
+        // Request the recorder stop BEFORE teardown stops the mic track, then
+        // let the upload finish in the background while the transcript saves.
+        void flushRecording('end');
         teardown();
         try {
             await fetch(saveEndpoint, {
@@ -715,7 +780,7 @@ export function useRealtimeSession({
             /* best-effort — feedback route also tolerates retries */
         }
         onConsultationEnded?.();
-    }, [saveEndpoint, sessionId, teardown, onConsultationEnded]);
+    }, [saveEndpoint, sessionId, teardown, flushRecording, onConsultationEnded]);
 
     const handleFunctionCall = useCallback(
         (name: string, callId: string, _argsJson: string) => {
@@ -926,6 +991,20 @@ export function useRealtimeSession({
             micTrackRef.current = micStream.getAudioTracks()[0] ?? null;
             startDoubleTalkDetector();
 
+            // Consultation audio. The patient side joins at ontrack/unmute.
+            // Only a gracefully ended consultation is uploaded: a dropped
+            // connection leaves the session retryable on the same id, and a
+            // stub from the failed attempt would take the single recording
+            // slot that the real consultation needs.
+            recorderRef.current?.dispose();
+            recordingFlushedRef.current = false;
+            recorderRef.current = startSessionRecorder(micStream);
+            logDebug(
+                recorderRef.current
+                    ? `recording:started ${recorderRef.current.mimeType}`
+                    : 'recording:unsupported'
+            );
+
             // 3. Peer connection
             const pc = new RTCPeerConnection();
             pcRef.current = pc;
@@ -967,8 +1046,10 @@ export function useRealtimeSession({
                 e.track.addEventListener('unmute', () => {
                     logDebug('rx:track-unmute');
                     attachPatientAnalyser();
+                    recorderRef.current?.addRemoteTrack(e.track);
                 });
                 attachPatientAnalyser();
+                recorderRef.current?.addRemoteTrack(e.track);
                 void el.play().catch(() => {
                     /* autoplay may require gesture; ignore */
                 });
@@ -1096,9 +1177,12 @@ export function useRealtimeSession({
 
     const endConsultation = useCallback(() => endRoutine(), [endRoutine]);
 
-    // Abandon: tear down without persisting or triggering feedback.
+    // Abandon: tear down without persisting or triggering feedback. The audio
+    // goes with it — an abandoned consultation has no feedback to play against.
     const disconnect = useCallback(() => {
         endedRef.current = true;
+        recorderRef.current?.dispose();
+        recorderRef.current = null;
         teardown();
     }, [teardown]);
 
@@ -1109,10 +1193,13 @@ export function useRealtimeSession({
         }
     }, []);
 
-    // Cleanup on unmount — teardown only (no save)
+    // Cleanup on unmount — teardown only (no save). An already-flushed
+    // recorder is a no-op here; an unflushed one is released, and its upload
+    // (if any) is already in flight independently of this object.
     useEffect(() => {
         return () => {
             endedRef.current = true;
+            recorderRef.current?.dispose();
             teardown();
         };
     }, [teardown]);
