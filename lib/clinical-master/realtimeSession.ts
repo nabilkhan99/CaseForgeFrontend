@@ -38,9 +38,30 @@ export function voiceForStation(
   return DEFAULT_VOICE;
 }
 
-/** Model used to transcribe the doctor's microphone audio (so we capture the
- *  user side of the transcript). whisper-1 is the most broadly available. */
-export const DEFAULT_TRANSCRIPTION_MODEL = 'whisper-1';
+/**
+ * Model used to transcribe the DOCTOR's microphone audio.
+ *
+ * Only the doctor's side goes through this. The patient's side comes back as
+ * `response.output_audio_transcript.done` — the model reporting what it just
+ * generated — so it is accurate by construction. Measured on one 112-turn
+ * session: patient turns averaged 11 words with 2 artefacts, doctor turns
+ * averaged 5 words with 14 turns of two words or fewer. Every garbled line in
+ * the transcript came from this model, not from the consultation.
+ *
+ * That matters beyond the record: gpt-realtime is speech-to-speech, so the
+ * patient answers from the AUDIO and never reads this text (the response is
+ * requested 483-1771ms BEFORE the transcript arrives, 57/57 turns in that
+ * session). But the MARKER reads only this text — so ASR errors here become
+ * unfair feedback, e.g. "any weight loss?" transcribed "Anyway, loss." then
+ * marked as a question never asked.
+ *
+ * whisper-1 dates from the original API and is the weakest option available.
+ * gpt-realtime-whisper (2026-05-06) is purpose-built for this slot; OpenAI's
+ * realtime guidance names it directly as the streaming transcription path.
+ * Deployed on the realtime resource, so the name resolves either as a raw
+ * model id on the /openai/v1 surface or as a deployment name.
+ */
+export const DEFAULT_TRANSCRIPTION_MODEL = 'gpt-realtime-whisper';
 
 /**
  * Function tools exposed to the model. Examination is intentionally NOT a tool:
