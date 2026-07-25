@@ -73,8 +73,15 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
   // simply never contributes a step and the flow closes up behind it.
   const steps = useMemo(() => buildSteps(answers), [answers]);
   const currentStep: StepId = steps[Math.min(stepIndex, steps.length - 1)];
-  const isLastStep = stepIndex >= steps.length - 1;
   const stepReady = isStepComplete(currentStep, answers);
+  /**
+   * Being at the end of the list is not the same as being finished. A branch
+   * question sits at the end only because the step it will reveal does not
+   * exist yet — pick "Booked for a resit" and a sitting question appears.
+   * Requiring the step to be answered too stops the button promising "Send my
+   * verification code" while more questions are still coming.
+   */
+  const isLastStep = stepIndex >= steps.length - 1 && stepReady;
 
   /** Changing an earlier answer can invalidate later ones — clear them. */
   function set<K extends keyof QuestionnaireAnswers>(key: K, value: QuestionnaireAnswers[K]) {
