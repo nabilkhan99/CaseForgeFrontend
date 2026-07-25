@@ -32,13 +32,13 @@ const FAQS: QA[] = [
   {
     question: 'Which plan do I actually need?',
     answer: [
-      'Most trainees choose the Complete SCA Course, which is why we recommend it: AI practice plus on-demand lectures and Small-Group Coaching. The Self-Study plan is the AI practice on its own, best if you just want stations to work through. The Intensive plan adds weekly one-to-one coaching and starts with a call rather than checkout, for trainees who want individual support throughout.',
+      'Most trainees choose the Complete SCA Course and it is the one that we recommend. It has everything you need to pass the SCA (AI practice + on-demand lectures + small-group coaching). The Self-Study plan is the AI practice on its own, best if you just want stations to work through. The Intensive plan adds weekly one-to-one coaching and starts with a call rather than checkout, for trainees who want individual support throughout.',
     ],
   },
   {
     question: 'Can I start practising straight away?',
     answer: [
-      "Not yet — this is a pre-order. Your AI practice and on-demand lectures start on 1 September 2026, and your 3 months' access runs from that date, not from the day you order. Your coaching day is separate: it runs on whichever date you pick at checkout. So ordering early costs you nothing — it locks in your place and your pick of coaching day.",
+      "Not yet — this is a pre-order. Your AI practice and on-demand lectures start on 1 September 2026, and your 3 months' access runs from that date, not from the day you order. Your coaching day will be on whichever date you pick at checkout.",
     ],
   },
   {
@@ -56,7 +56,7 @@ const FAQS: QA[] = [
   {
     question: "What happens if I can't make my coaching day?",
     answer: [
-      "The lectures are on demand, so there is nothing to miss there. The coaching day runs live and isn't recorded, so tell us as early as you can if your date no longer works. We'll do our best to move you onto another coaching day where a place is free, but places are capped at six per class, so we can't promise it.",
+      "The coaching day runs live and isn't recorded, so tell us as early as you can if your date no longer works. We'll do our best to move you onto another coaching day where a place is free, but places are capped at six per class, so we can't promise it.",
     ],
   },
   {
@@ -74,7 +74,7 @@ const FAQS: QA[] = [
   {
     question: 'What if I change my mind?',
     answer: [
-      'All of our plans are non-refundable. Please make sure the coaching day you choose works for you before you complete checkout, and if you are unsure, ask us first and we will help you choose.',
+      'Our plans include immediate digital access and, in some cases, live coaching. Once digital access begins, you may lose your right to cancel that part of the plan. If services have already begun, we may deduct a proportionate amount for those already provided. After any applicable cancellation period, payments are non-refundable unless required by law. This does not affect your statutory rights.',
     ],
   },
 ];
