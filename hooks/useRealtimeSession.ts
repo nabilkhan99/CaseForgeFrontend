@@ -342,23 +342,75 @@ export function useRealtimeSession({
                     logDebug('recording:empty', { reason, bytes: blob?.size ?? 0 });
                     return;
                 }
-                const form = new FormData();
-                form.append('sessionId', sessionId);
-                form.append(
-                    'file',
-                    blob,
-                    `${sessionId}.${extensionForMimeType(recorder.mimeType)}`
-                );
-                const res = await fetch('/api/clinical-master/save-recording', {
-                    method: 'POST',
-                    body: form,
-                });
-                logDebug('recording:upload', {
-                    reason,
-                    bytes: blob.size,
-                    ok: res.ok,
-                    status: res.status,
-                });
+                const extension = extensionForMimeType(recorder.mimeType);
+
+                // Straight to Supabase Storage. Routing the blob through the
+                // serverless function capped it at Vercel's ~4.5MB body limit,
+                // so full-length consultations 413'd and were lost: an 11-minute
+                // session produced 10.3MB and never reached storage, while every
+                // short test upload succeeded and hid the bug.
+                let uploaded = false;
+                try {
+                    const signRes = await fetch('/api/clinical-master/recording-upload-url', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sessionId, extension }),
+                    });
+                    const signed = signRes.ok ? await signRes.json() : null;
+
+                    if (signed?.status === 'signed' && signed.signedUrl) {
+                        const putRes = await fetch(signed.signedUrl, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': recorder.mimeType },
+                            body: blob,
+                        });
+                        if (putRes.ok) {
+                            const doneRes = await fetch(
+                                '/api/clinical-master/recording-upload-url',
+                                {
+                                    method: 'PUT',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ sessionId, path: signed.path }),
+                                }
+                            );
+                            uploaded = doneRes.ok;
+                            logDebug('recording:upload', {
+                                reason,
+                                bytes: blob.size,
+                                via: 'signed-url',
+                                ok: uploaded,
+                                status: doneRes.status,
+                            });
+                        } else {
+                            logDebug('recording:signed-put-failed', { status: putRes.status });
+                        }
+                    } else if (signed?.status === 'exists') {
+                        uploaded = true;
+                        logDebug('recording:upload', { reason, via: 'signed-url', ok: true, status: 200 });
+                    }
+                } catch (err) {
+                    logDebug('recording:signed-url-error', String(err));
+                }
+
+                // Fallback: the original multipart route. Works for anything
+                // under the body limit, so a short consultation still lands even
+                // if signing or the direct PUT fails.
+                if (!uploaded) {
+                    const form = new FormData();
+                    form.append('sessionId', sessionId);
+                    form.append('file', blob, `${sessionId}.${extension}`);
+                    const res = await fetch('/api/clinical-master/save-recording', {
+                        method: 'POST',
+                        body: form,
+                    });
+                    logDebug('recording:upload', {
+                        reason,
+                        bytes: blob.size,
+                        via: 'multipart-fallback',
+                        ok: res.ok,
+                        status: res.status,
+                    });
+                }
             } catch (err) {
                 logDebug('recording:FAILED', String(err));
             } finally {
