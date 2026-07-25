@@ -49,12 +49,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     }
 
-    // Resend throttle, per session.
-    const { data: existingLead } = await supabase
-      .from('trial_leads')
-      .select('verification_last_sent_at')
-      .eq('session_id', sessionId)
-      .maybeSingle();
+    // trial_leads carries TWO unique keys: session_id, and a unique index on
+    // lower(email). A returning visitor arrives with a fresh session but a
+    // known email, so upserting on session_id alone tried to INSERT and tripped
+    // the email index — a 500 that dead-ended someone who had just spent 12
+    // minutes on a consultation. One lead per person is the intent, so the
+    // existing row is found and moved to the new session instead.
+    const [{ data: leadBySession }, { data: leadByEmail }] = await Promise.all([
+      supabase
+        .from('trial_leads')
+        .select('id, verification_last_sent_at')
+        .eq('session_id', sessionId)
+        .maybeSingle(),
+      supabase
+        .from('trial_leads')
+        .select('id, session_id, verification_last_sent_at')
+        .eq('email', normalizedEmail)
+        .maybeSingle(),
+    ]);
+
+    // Throttle against whichever row this send will actually write.
+    const existingLead = leadByEmail ?? leadBySession;
 
     if (existingLead?.verification_last_sent_at) {
       const elapsedMs = Date.now() - new Date(existingLead.verification_last_sent_at).getTime();
@@ -70,30 +85,44 @@ export async function POST(req: NextRequest) {
     const code = generateVerificationCode();
     const now = new Date();
 
-    const { error: upsertError } = await supabase.from('trial_leads').upsert(
-      {
-        session_id: sessionId,
-        station_id: session.station_id ?? null,
-        email: normalizedEmail,
-        first_name: answers.firstName,
-        training_stage: answers.trainingStage,
-        training_start_month: answers.trainingStartMonth || null,
-        training_start_year: answers.trainingStartYear || null,
-        akt_status: answers.aktStatus || null,
-        akt_sitting: answers.aktSitting || null,
-        sca_status: answers.scaStatus || null,
-        sca_sitting: answers.scaSitting || null,
-        not_in_training_role: answers.notInTrainingRole || null,
-        expected_start_month: answers.expectedStartMonth || null,
-        expected_start_year: answers.expectedStartYear || null,
-        verification_code_hash: hashVerificationCode(code, normalizedEmail),
-        verification_expires_at: new Date(now.getTime() + CODE_TTL_MS).toISOString(),
-        verification_attempts: 0,
-        verification_last_sent_at: now.toISOString(),
-        email_verified_at: null,
-      },
-      { onConflict: 'session_id' },
-    );
+    const leadRow = {
+      session_id: sessionId,
+      station_id: session.station_id ?? null,
+      email: normalizedEmail,
+      first_name: answers.firstName,
+      training_stage: answers.trainingStage,
+      training_start_month: answers.trainingStartMonth || null,
+      training_start_year: answers.trainingStartYear || null,
+      akt_status: answers.aktStatus || null,
+      akt_sitting: answers.aktSitting || null,
+      sca_status: answers.scaStatus || null,
+      sca_sitting: answers.scaSitting || null,
+      not_in_training_role: answers.notInTrainingRole || null,
+      expected_start_month: answers.expectedStartMonth || null,
+      expected_start_year: answers.expectedStartYear || null,
+      verification_code_hash: hashVerificationCode(code, normalizedEmail),
+      verification_expires_at: new Date(now.getTime() + CODE_TTL_MS).toISOString(),
+      verification_attempts: 0,
+      verification_last_sent_at: now.toISOString(),
+      email_verified_at: null,
+    };
+
+    let upsertError = null;
+    if (leadByEmail && leadByEmail.session_id !== sessionId) {
+      // Known email on a new session: free this session's slot if a different
+      // address already claimed it, then move the person's row across.
+      if (leadBySession && leadBySession.id !== leadByEmail.id) {
+        await supabase.from('trial_leads').delete().eq('id', leadBySession.id);
+      }
+      ({ error: upsertError } = await supabase
+        .from('trial_leads')
+        .update(leadRow)
+        .eq('id', leadByEmail.id));
+    } else {
+      ({ error: upsertError } = await supabase
+        .from('trial_leads')
+        .upsert(leadRow, { onConflict: 'session_id' }));
+    }
 
     if (upsertError) {
       console.error('[send-code] lead upsert failed', upsertError);
