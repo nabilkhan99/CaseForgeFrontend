@@ -7,7 +7,19 @@ interface PushTrialLeadArgs {
   stationTitle: string | null
   score: string | null
   trainingStage?: string | null
+  /**
+   * Human label for the SCA sitting the lead named. Still written to the
+   * long-standing SCA_SIT_DATE attribute so existing Brevo segments and
+   * automations keep working after the questionnaire replaced the old
+   * coarse "when are you sitting?" field.
+   */
   scaSitDate?: string | null
+  aktStatus?: string | null
+  aktSitting?: string | null
+  scaStatus?: string | null
+  scaSitting?: string | null
+  gpTrainingStart?: string | null
+  notInTrainingRole?: string | null
 }
 
 /**
@@ -22,6 +34,12 @@ export async function pushTrialLeadToBrevo({
   score,
   trainingStage,
   scaSitDate,
+  aktStatus,
+  aktSitting,
+  scaStatus,
+  scaSitting,
+  gpTrainingStart,
+  notInTrainingRole,
 }: PushTrialLeadArgs): Promise<void> {
   const brevoKey = process.env.BREVO_API_KEY
   if (!brevoKey) {
@@ -44,6 +62,12 @@ export async function pushTrialLeadToBrevo({
         TRIAL_DATE: new Date().toISOString().slice(0, 10),
         TRAINING_STAGE: trainingStage ?? '',
         SCA_SIT_DATE: scaSitDate ?? '',
+        AKT_STATUS: aktStatus ?? '',
+        AKT_SITTING: aktSitting ?? '',
+        SCA_STATUS: scaStatus ?? '',
+        SCA_SITTING: scaSitting ?? '',
+        GP_TRAINING_START: gpTrainingStart ?? '',
+        NOT_IN_TRAINING_ROLE: notInTrainingRole ?? '',
       },
     })
   } catch (error: unknown) {

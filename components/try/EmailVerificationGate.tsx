@@ -1,15 +1,31 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight, Check } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import { suggestEmailFix } from '@/lib/trial/emailTypo';
-import { SCA_SIT_DATES, TRAINING_STAGES } from '@/lib/trial/leadFields';
+import {
+  EXAM_STATUSES,
+  EXPECTED_START_YEARS,
+  MONTHS,
+  NOT_IN_TRAINING_ROLES,
+  TRAINING_STAGES,
+  TRAINING_START_YEARS,
+  followUpFor,
+  followUpLabel,
+  type LeadFieldOption,
+} from '@/lib/trial/leadFields';
+import {
+  buildSteps,
+  EMPTY_ANSWERS,
+  isStepComplete,
+  type QuestionnaireAnswers,
+  type StepId,
+} from '@/lib/trial/questionnaire';
 
 const FIELD_CLASSES =
   'w-full rounded-xl border border-stone-200 bg-white px-4 py-3 text-[14px] text-heading outline-none transition-colors focus:border-primary';
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CODE_LENGTH = 6;
 
 type GateStep = 'details' | 'code' | 'verified';
@@ -40,10 +56,8 @@ function CompletePill() {
 export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVerificationGateProps) {
   const [step, setStep] = useState<GateStep>('details');
 
-  const [email, setEmail] = useState('');
-  const [firstName, setFirstName] = useState('');
-  const [trainingStage, setTrainingStage] = useState('');
-  const [scaSitDate, setScaSitDate] = useState('');
+  const [answers, setAnswers] = useState<QuestionnaireAnswers>(EMPTY_ANSWERS);
+  const [stepIndex, setStepIndex] = useState(0);
 
   const [code, setCode] = useState('');
   const [cooldown, setCooldown] = useState(0);
@@ -51,9 +65,44 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
   const [error, setError] = useState<string | null>(null);
 
   const codeInputRef = useRef<HTMLInputElement>(null);
+
+  const email = answers.email;
   const emailSuggestion = suggestEmailFix(email);
-  const detailsComplete =
-    EMAIL_RE.test(email.trim()) && firstName.trim().length > 0 && !!trainingStage && !!scaSitDate;
+
+  // Steps are recomputed from the answers, so a status with no follow-up
+  // simply never contributes a step and the flow closes up behind it.
+  const steps = useMemo(() => buildSteps(answers), [answers]);
+  const currentStep: StepId = steps[Math.min(stepIndex, steps.length - 1)];
+  const isLastStep = stepIndex >= steps.length - 1;
+  const stepReady = isStepComplete(currentStep, answers);
+
+  /** Changing an earlier answer can invalidate later ones — clear them. */
+  function set<K extends keyof QuestionnaireAnswers>(key: K, value: QuestionnaireAnswers[K]) {
+    setError(null);
+    setAnswers((prev) => {
+      const next = { ...prev, [key]: value };
+      if (key === 'trainingStage' && value !== prev.trainingStage) {
+        return {
+          ...next,
+          trainingStartMonth: '',
+          trainingStartYear: '',
+          aktStatus: '',
+          aktSitting: '',
+          scaStatus: '',
+          scaSitting: '',
+          notInTrainingRole: '',
+          expectedStartMonth: '',
+          expectedStartYear: '',
+        };
+      }
+      if (key === 'aktStatus' && value !== prev.aktStatus) return { ...next, aktSitting: '' };
+      if (key === 'scaStatus' && value !== prev.scaStatus) return { ...next, scaSitting: '' };
+      if (key === 'notInTrainingRole' && value !== prev.notInTrainingRole) {
+        return { ...next, expectedStartMonth: '', expectedStartYear: '' };
+      }
+      return next;
+    });
+  }
 
   // Resend countdown.
   useEffect(() => {
@@ -74,13 +123,7 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
       const res = await fetch('/api/try/send-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId,
-          email: email.trim(),
-          firstName: firstName.trim(),
-          trainingStage,
-          scaSitDate,
-        }),
+        body: JSON.stringify({ sessionId, ...answers, email: answers.email.trim() }),
       });
       const data = (await res.json()) as {
         ok?: boolean;
@@ -146,6 +189,125 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
   const card =
     'rounded-[22px] border border-black/[0.06] bg-surface-raised p-7 shadow-[0_16px_42px_rgba(180,83,9,0.06)] sm:p-9';
 
+  /** Radio list — used for every single-choice question. */
+  function ChoiceList({
+    name,
+    options,
+    value,
+    onChange,
+  }: {
+    name: string;
+    options: readonly LeadFieldOption[];
+    value: string;
+    onChange: (v: string) => void;
+  }) {
+    return (
+      <div role="radiogroup" aria-label={name} className="flex flex-col gap-2">
+        {options.map((option) => {
+          const selected = value === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => onChange(option.value)}
+              className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left text-[14px] transition-colors ${
+                selected
+                  ? 'border-primary bg-[#FDF6EC] font-medium text-heading'
+                  : 'border-stone-200 bg-white text-body hover:border-stone-300'
+              }`}
+            >
+              <span
+                aria-hidden="true"
+                className={`flex h-4 w-4 flex-none items-center justify-center rounded-full border-2 ${
+                  selected ? 'border-primary' : 'border-stone-300'
+                }`}
+              >
+                {selected && <span className="h-2 w-2 rounded-full bg-primary" />}
+              </span>
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  /** Month + year pair, used by both date questions. */
+  function MonthYear({
+    idPrefix,
+    monthValue,
+    yearValue,
+    years,
+    onMonth,
+    onYear,
+  }: {
+    idPrefix: string;
+    monthValue: string;
+    yearValue: string;
+    years: readonly LeadFieldOption[];
+    onMonth: (v: string) => void;
+    onYear: (v: string) => void;
+  }) {
+    return (
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label htmlFor={`${idPrefix}-month`} className="mb-1.5 block text-[13px] font-medium text-heading">
+            Month
+          </label>
+          <select
+            id={`${idPrefix}-month`}
+            value={monthValue}
+            onChange={(e) => onMonth(e.target.value)}
+            className={`${FIELD_CLASSES} ${monthValue ? '' : 'text-stone-400'}`}
+          >
+            <option value="" disabled>
+              Select…
+            </option>
+            {MONTHS.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor={`${idPrefix}-year`} className="mb-1.5 block text-[13px] font-medium text-heading">
+            Year
+          </label>
+          <select
+            id={`${idPrefix}-year`}
+            value={yearValue}
+            onChange={(e) => onYear(e.target.value)}
+            className={`${FIELD_CLASSES} ${yearValue ? '' : 'text-stone-400'}`}
+          >
+            <option value="" disabled>
+              Select…
+            </option>
+            {years.map((y) => (
+              <option key={y.value} value={y.value}>
+                {y.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+    );
+  }
+
+  const QUESTION_TITLES: Record<StepId, string> = {
+    identity: 'Enter your details to see your feedback',
+    stage: 'Where are you currently in relation to GP training?',
+    trainingStart: 'When did you start GP training?',
+    aktStatus: 'Where are you with the AKT?',
+    aktSitting: followUpLabel('akt', answers.aktStatus),
+    scaStatus: 'Where are you with the SCA?',
+    scaSitting: followUpLabel('sca', answers.scaStatus),
+    role: 'Which best describes you?',
+    expectedStart: 'When are you due to start GP training?',
+  };
+
   return (
     <div className="min-h-[100dvh] flex items-center justify-center px-6 py-16">
       <motion.div
@@ -155,116 +317,170 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
         transition={{ type: 'spring', stiffness: 60, damping: 20 }}
       >
         {step === 'details' && (
-          <div className={`${card} text-center`}>
-            <CompletePill />
-            <h1 className="mb-2 text-[26px] font-bold tracking-[-0.02em] text-heading">
-              Enter your details to see your feedback
+          <div className={card}>
+            <div className="text-center">
+              <CompletePill />
+            </div>
+
+            {/* Progress — the total moves as branches open and close, which is
+                honest: a passed-exam answer genuinely shortens the flow. */}
+            <div className="mb-5 flex items-center gap-2" aria-hidden="true">
+              {steps.map((s, i) => (
+                <span
+                  key={s}
+                  className={`h-1 flex-1 rounded-full transition-colors ${
+                    i <= stepIndex ? 'bg-primary' : 'bg-stone-200'
+                  }`}
+                />
+              ))}
+            </div>
+
+            <h1 className="mb-2 text-center text-[22px] font-bold leading-snug tracking-[-0.02em] text-heading sm:text-[24px]">
+              {QUESTION_TITLES[currentStep]}
             </h1>
-            <p className="mb-7 text-[14px] leading-relaxed text-muted">
-              We&apos;ll send a 6-digit code to verify your email, then your report opens straight
-              away.
-            </p>
+            {currentStep === 'identity' && (
+              <p className="mb-6 text-center text-[14px] leading-relaxed text-muted">
+                We&apos;ll send a 6-digit code to verify your email, then your report opens
+                straight away.
+              </p>
+            )}
 
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                if (detailsComplete) void requestCode();
+                if (!stepReady || submitting) return;
+                if (isLastStep) void requestCode();
+                else setStepIndex((i) => i + 1);
               }}
-              className="space-y-4 text-left"
+              className={`${currentStep === 'identity' ? '' : 'mt-6'} space-y-4 text-left`}
             >
-              <div>
-                <label htmlFor="trial-email" className="mb-1.5 block text-[13px] font-medium text-heading">
-                  Email
-                </label>
-                <input
-                  id="trial-email"
-                  type="email"
-                  required
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="doctor@example.com"
-                  className={`${FIELD_CLASSES} placeholder:text-stone-400 ${
-                    emailSuggestion ? '!border-[#D9A67C]' : ''
-                  }`}
+              {currentStep === 'identity' && (
+                <>
+                  <div>
+                    <label htmlFor="trial-email" className="mb-1.5 block text-[13px] font-medium text-heading">
+                      Email
+                    </label>
+                    <input
+                      id="trial-email"
+                      type="email"
+                      required
+                      autoComplete="email"
+                      value={answers.email}
+                      onChange={(e) => set('email', e.target.value)}
+                      placeholder="doctor@example.com"
+                      className={`${FIELD_CLASSES} placeholder:text-stone-400 ${
+                        emailSuggestion ? '!border-[#D9A67C]' : ''
+                      }`}
+                    />
+                    {emailSuggestion && (
+                      <p className="mt-1.5 flex items-center gap-1.5 text-[12.5px] text-[#A65B2A]">
+                        <span aria-hidden="true">⚠</span>
+                        Did you mean{' '}
+                        <button
+                          type="button"
+                          onClick={() => set('email', emailSuggestion)}
+                          className="font-semibold underline underline-offset-2"
+                        >
+                          {emailSuggestion}
+                        </button>
+                        ?
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label htmlFor="trial-first-name" className="mb-1.5 block text-[13px] font-medium text-heading">
+                      First name
+                    </label>
+                    <input
+                      id="trial-first-name"
+                      type="text"
+                      required
+                      autoComplete="given-name"
+                      maxLength={60}
+                      value={answers.firstName}
+                      onChange={(e) => set('firstName', e.target.value)}
+                      placeholder="Sarah"
+                      className={`${FIELD_CLASSES} placeholder:text-stone-400`}
+                    />
+                  </div>
+                </>
+              )}
+
+              {currentStep === 'stage' && (
+                <ChoiceList
+                  name="Training stage"
+                  options={TRAINING_STAGES}
+                  value={answers.trainingStage}
+                  onChange={(v) => set('trainingStage', v)}
                 />
-                {emailSuggestion && (
-                  <p className="mt-1.5 flex items-center gap-1.5 text-[12.5px] text-[#A65B2A]">
-                    <span aria-hidden="true">⚠</span>
-                    Did you mean{' '}
-                    <button
-                      type="button"
-                      onClick={() => setEmail(emailSuggestion)}
-                      className="font-semibold underline underline-offset-2"
-                    >
-                      {emailSuggestion}
-                    </button>
-                    ?
-                  </p>
-                )}
-              </div>
+              )}
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-3">
-                <div>
-                  <label htmlFor="trial-first-name" className="mb-1.5 block text-[13px] font-medium text-heading">
-                    First name
-                  </label>
-                  <input
-                    id="trial-first-name"
-                    type="text"
-                    required
-                    autoComplete="given-name"
-                    maxLength={60}
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    placeholder="Sarah"
-                    className={`${FIELD_CLASSES} placeholder:text-stone-400`}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="trial-stage" className="mb-1.5 block text-[13px] font-medium text-heading">
-                    Training stage
-                  </label>
-                  <select
-                    id="trial-stage"
-                    required
-                    value={trainingStage}
-                    onChange={(e) => setTrainingStage(e.target.value)}
-                    className={`${FIELD_CLASSES} ${trainingStage ? '' : 'text-stone-400'}`}
-                  >
-                    <option value="" disabled>
-                      Select…
-                    </option>
-                    {TRAINING_STAGES.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+              {currentStep === 'trainingStart' && (
+                <MonthYear
+                  idPrefix="trial-training-start"
+                  monthValue={answers.trainingStartMonth}
+                  yearValue={answers.trainingStartYear}
+                  years={TRAINING_START_YEARS}
+                  onMonth={(v) => set('trainingStartMonth', v)}
+                  onYear={(v) => set('trainingStartYear', v)}
+                />
+              )}
 
-              <div>
-                <label htmlFor="trial-sit-date" className="mb-1.5 block text-[13px] font-medium text-heading">
-                  When are you planning on sitting the SCA?
-                </label>
-                <select
-                  id="trial-sit-date"
-                  required
-                  value={scaSitDate}
-                  onChange={(e) => setScaSitDate(e.target.value)}
-                  className={`${FIELD_CLASSES} ${scaSitDate ? '' : 'text-stone-400'}`}
-                >
-                  <option value="" disabled>
-                    Select…
-                  </option>
-                  {SCA_SIT_DATES.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {currentStep === 'aktStatus' && (
+                <ChoiceList
+                  name="AKT status"
+                  options={EXAM_STATUSES}
+                  value={answers.aktStatus}
+                  onChange={(v) => set('aktStatus', v)}
+                />
+              )}
+
+              {currentStep === 'aktSitting' && (
+                <ChoiceList
+                  name="AKT sitting"
+                  options={followUpFor('akt', answers.aktStatus)?.options ?? []}
+                  value={answers.aktSitting}
+                  onChange={(v) => set('aktSitting', v)}
+                />
+              )}
+
+              {currentStep === 'scaStatus' && (
+                <ChoiceList
+                  name="SCA status"
+                  options={EXAM_STATUSES}
+                  value={answers.scaStatus}
+                  onChange={(v) => set('scaStatus', v)}
+                />
+              )}
+
+              {currentStep === 'scaSitting' && (
+                <ChoiceList
+                  name="SCA sitting"
+                  options={followUpFor('sca', answers.scaStatus)?.options ?? []}
+                  value={answers.scaSitting}
+                  onChange={(v) => set('scaSitting', v)}
+                />
+              )}
+
+              {currentStep === 'role' && (
+                <ChoiceList
+                  name="Which best describes you"
+                  options={NOT_IN_TRAINING_ROLES}
+                  value={answers.notInTrainingRole}
+                  onChange={(v) => set('notInTrainingRole', v)}
+                />
+              )}
+
+              {currentStep === 'expectedStart' && (
+                <MonthYear
+                  idPrefix="trial-expected-start"
+                  monthValue={answers.expectedStartMonth}
+                  yearValue={answers.expectedStartYear}
+                  years={EXPECTED_START_YEARS}
+                  onMonth={(v) => set('expectedStartMonth', v)}
+                  onYear={(v) => set('expectedStartYear', v)}
+                />
+              )}
 
               {error && (
                 <div className="rounded-lg border border-danger/20 bg-danger/10 p-3">
@@ -272,20 +488,41 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
                 </div>
               )}
 
-              <button
-                type="submit"
-                disabled={!detailsComplete || submitting}
-                className="cta-button w-full px-6 py-4 text-base disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {submitting ? 'Sending…' : 'Send my verification code'}
-                {!submitting && <ArrowRight className="h-4 w-4" />}
-              </button>
+              <div className="flex items-center gap-3 pt-1">
+                {stepIndex > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setError(null);
+                      setStepIndex((i) => Math.max(0, i - 1));
+                    }}
+                    className="flex flex-none items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-4 py-4 text-[14px] font-medium text-heading"
+                  >
+                    <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                    Back
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  disabled={!stepReady || submitting}
+                  className="cta-button w-full px-6 py-4 text-base disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {submitting
+                    ? 'Sending…'
+                    : isLastStep
+                      ? 'Send my verification code'
+                      : 'Continue'}
+                  {!submitting && <ArrowRight className="h-4 w-4" />}
+                </button>
+              </div>
             </form>
 
-            <p className="mt-4 text-[11px] leading-relaxed text-muted">
-              By continuing you agree to receive your feedback report and SCA preparation emails
-              from Fourteen Fisherman. Unsubscribe anytime.
-            </p>
+            {isLastStep && (
+              <p className="mt-4 text-[11px] leading-relaxed text-muted">
+                By continuing you agree to receive your feedback report and SCA preparation emails
+                from Fourteen Fisherman. Unsubscribe anytime.
+              </p>
+            )}
           </div>
         )}
 

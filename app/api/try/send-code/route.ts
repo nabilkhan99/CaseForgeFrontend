@@ -1,16 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { sendVerificationEmail } from '@/lib/email/verificationEmail';
-import { SCA_SIT_DATES, TRAINING_STAGES, findOption } from '@/lib/trial/leadFields';
+import { validateAnswers } from '@/lib/trial/questionnaire';
 import {
   CODE_TTL_MS,
   RESEND_COOLDOWN_SECONDS,
   generateVerificationCode,
   hashVerificationCode,
 } from '@/lib/trial/verification';
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const MAX_NAME_LENGTH = 60;
 
 /**
  * State 1 of the trial feedback gate: records the lead's details against
@@ -20,33 +17,20 @@ const MAX_NAME_LENGTH = 60;
  */
 export async function POST(req: NextRequest) {
   try {
-    const { sessionId, email, firstName, trainingStage, scaSitDate } = (await req.json()) as {
-      sessionId?: string;
-      email?: string;
-      firstName?: string;
-      trainingStage?: string;
-      scaSitDate?: string;
-    };
+    const body = (await req.json()) as Record<string, unknown> & { sessionId?: string };
+    const sessionId = typeof body.sessionId === 'string' ? body.sessionId : '';
+    if (!sessionId) {
+      return NextResponse.json({ error: 'A valid session is required' }, { status: 400 });
+    }
 
-    const normalizedEmail = email?.trim().toLowerCase() ?? '';
-    if (!sessionId || !EMAIL_RE.test(normalizedEmail)) {
-      return NextResponse.json({ error: 'A valid email is required' }, { status: 400 });
+    // Same validator the form uses, so the allowlists cannot drift and a
+    // hand-rolled POST cannot write values outside the published options.
+    const parsed = validateAnswers(body);
+    if (!parsed.ok) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
-    const name = firstName?.trim() ?? '';
-    if (!name || name.length > MAX_NAME_LENGTH) {
-      return NextResponse.json({ error: 'Please enter your first name' }, { status: 400 });
-    }
-    const stage = findOption(TRAINING_STAGES, trainingStage);
-    if (!stage) {
-      return NextResponse.json({ error: 'Please select your stage of training' }, { status: 400 });
-    }
-    const sitDate = findOption(SCA_SIT_DATES, scaSitDate);
-    if (!sitDate) {
-      return NextResponse.json(
-        { error: 'Please select when you plan to sit the SCA' },
-        { status: 400 },
-      );
-    }
+    const answers = parsed.value;
+    const normalizedEmail = answers.email;
 
     const supabase = getSupabaseAdmin();
 
@@ -91,9 +75,17 @@ export async function POST(req: NextRequest) {
         session_id: sessionId,
         station_id: session.station_id ?? null,
         email: normalizedEmail,
-        first_name: name,
-        training_stage: stage.value,
-        sca_sit_date: sitDate.value,
+        first_name: answers.firstName,
+        training_stage: answers.trainingStage,
+        training_start_month: answers.trainingStartMonth || null,
+        training_start_year: answers.trainingStartYear || null,
+        akt_status: answers.aktStatus || null,
+        akt_sitting: answers.aktSitting || null,
+        sca_status: answers.scaStatus || null,
+        sca_sitting: answers.scaSitting || null,
+        not_in_training_role: answers.notInTrainingRole || null,
+        expected_start_month: answers.expectedStartMonth || null,
+        expected_start_year: answers.expectedStartYear || null,
         verification_code_hash: hashVerificationCode(code, normalizedEmail),
         verification_expires_at: new Date(now.getTime() + CODE_TTL_MS).toISOString(),
         verification_attempts: 0,
@@ -110,7 +102,7 @@ export async function POST(req: NextRequest) {
 
     const emailResult = await sendVerificationEmail({
       toEmail: normalizedEmail,
-      firstName: name,
+      firstName: answers.firstName,
       code,
     });
     if (!emailResult.sent) {

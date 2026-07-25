@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { pushTrialLeadToBrevo } from '@/lib/marketing/trialLead';
-import { SCA_SIT_DATES, TRAINING_STAGES, findOption } from '@/lib/trial/leadFields';
+import {
+  AKT_TARGETS,
+  EXAM_STATUSES,
+  MONTHS,
+  NOT_IN_TRAINING_ROLES,
+  SCA_TARGETS,
+  TRAINING_STAGES,
+  findOption,
+} from '@/lib/trial/leadFields';
 import {
   CODE_LENGTH,
   MAX_VERIFY_ATTEMPTS,
@@ -30,7 +38,7 @@ export async function POST(req: NextRequest) {
     const { data: lead, error: leadError } = await supabase
       .from('trial_leads')
       .select(
-        'id, email, first_name, training_stage, sca_sit_date, station_id, verification_code_hash, verification_expires_at, verification_attempts, email_verified_at',
+        'id, email, first_name, training_stage, sca_sit_date, training_start_month, training_start_year, akt_status, akt_sitting, sca_status, sca_sitting, not_in_training_role, station_id, verification_code_hash, verification_expires_at, verification_attempts, email_verified_at',
       )
       .eq('session_id', sessionId)
       .maybeSingle();
@@ -102,13 +110,31 @@ export async function POST(req: NextRequest) {
         .maybeSingle();
       stationTitle = station?.title ?? null;
     }
+    // AKT_TARGETS / SCA_TARGETS are supersets of the booked lists, so one
+    // lookup resolves both the "aiming for" and "booked onto" answers.
+    const scaSittingLabel = findOption(SCA_TARGETS, lead.sca_sitting)?.label ?? null;
+    const startMonth = findOption(MONTHS, lead.training_start_month)?.label ?? null;
+    const gpStartLabel =
+      startMonth && lead.training_start_year
+        ? `${startMonth} ${lead.training_start_year}`
+        : null;
+
     await pushTrialLeadToBrevo({
       email: lead.email,
       firstName: lead.first_name,
       stationTitle,
       score: null,
       trainingStage: findOption(TRAINING_STAGES, lead.training_stage)?.label ?? lead.training_stage,
-      scaSitDate: findOption(SCA_SIT_DATES, lead.sca_sit_date)?.label ?? lead.sca_sit_date,
+      // SCA_SIT_DATE stays populated (now from the questionnaire's sitting
+      // answer) so existing Brevo segments keep working.
+      scaSitDate: scaSittingLabel ?? lead.sca_sit_date,
+      aktStatus: findOption(EXAM_STATUSES, lead.akt_status)?.label ?? null,
+      aktSitting: findOption(AKT_TARGETS, lead.akt_sitting)?.label ?? null,
+      scaStatus: findOption(EXAM_STATUSES, lead.sca_status)?.label ?? null,
+      scaSitting: scaSittingLabel,
+      gpTrainingStart: gpStartLabel,
+      notInTrainingRole:
+        findOption(NOT_IN_TRAINING_ROLES, lead.not_in_training_role)?.label ?? null,
     });
 
     return NextResponse.json({ ok: true });
