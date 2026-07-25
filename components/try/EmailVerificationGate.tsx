@@ -130,7 +130,6 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
         error?: string;
         resendCooldown?: number;
         retryAfter?: number;
-        emailAlreadyUsed?: boolean;
       };
       if (!res.ok || !data.ok) {
         if (res.status === 429 && data.retryAfter) {
@@ -140,10 +139,6 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
           setStep('code');
         } else {
           setError(data.error ?? 'Something went wrong — please try again.');
-          // The address is the problem, and it was answered several steps
-          // back. Return to it with the answers intact so a 12-minute
-          // consultation isn't lost behind a dead end.
-          if (data.emailAlreadyUsed) setStepIndex(0);
         }
         return;
       }

@@ -63,29 +63,18 @@ export async function POST(req: NextRequest) {
         .maybeSingle(),
       supabase
         .from('trial_leads')
-        .select('id, session_id, verification_last_sent_at, email_verified_at')
+        .select('id, session_id, verification_last_sent_at')
         .eq('email', normalizedEmail)
         .maybeSingle(),
     ]);
 
-    // The free station is one per person, and the email is how a person is
-    // identified across browsers. An address that already completed the flow
-    // on another session is turned away here — with a message that says so,
-    // rather than the generic failure it used to produce.
-    if (
-      leadByEmail &&
-      leadByEmail.session_id !== sessionId &&
-      leadByEmail.email_verified_at
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "You've already used your free mock station with this email. Enter a different email address to see this report.",
-          emailAlreadyUsed: true,
-        },
-        { status: 409 },
-      );
-    }
+    // A repeat email is NOT refused here. By this point the consultation has
+    // already happened, so refusing only withholds a report the person has
+    // earned — it prevents nothing. The one-free-station limit belongs before
+    // the 12 minutes are spent, and can only be enforced per-browser anyway
+    // (create-session cannot know who they are: the email is collected after
+    // the consultation, not before it). So the lead row is reused and moved to
+    // this session; the marketing dedupe of one row per address still holds.
 
     // Throttle against whichever row this send will actually write.
     const existingLead = leadByEmail ?? leadBySession;
