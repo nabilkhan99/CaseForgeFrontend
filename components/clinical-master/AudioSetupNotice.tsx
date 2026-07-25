@@ -6,9 +6,10 @@ import { motion } from 'framer-motion';
 /**
  * Pre-consultation audio guidance shown above the "Begin Consultation" CTA.
  *
- * Also carries the recording notice. This is the last screen before the mic
- * opens, so it is where the user has to be told the consultation is recorded —
- * stated plainly, before they consent by starting.
+ * This screen used to carry a recording notice too, but it promised playback
+ * that no longer exists (the report's player was removed). Capture itself
+ * continues for internal review, and is disclosed in the privacy policy
+ * rather than here.
  *
  * Always recommends headphones (they remove the speaker→mic echo path that
  * makes the server VAD cut the patient off mid-sentence). On Firefox it also
@@ -60,22 +61,6 @@ export default function AudioSetupNotice() {
         </svg>
         Headphones recommended — they stop the patient&apos;s voice being picked
         up by your mic.
-      </p>
-      <p className="flex items-center justify-center gap-1.5 text-center text-[12px] text-muted">
-        <svg
-          className="w-3.5 h-3.5 shrink-0"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <circle cx="12" cy="12" r="9" />
-          <circle cx="12" cy="12" r="3.5" fill="currentColor" stroke="none" />
-        </svg>
-        This consultation is recorded so you can play it back with your feedback.
       </p>
     </div>
   );
