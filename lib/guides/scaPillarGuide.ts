@@ -55,6 +55,13 @@ export const pillarSections: PillarSection[] = [
                 href: '/guides/what-is-the-mrcgp-sca',
                 subtitle: 'Format, cost and eligibility',
             },
+            // DEV-HANDOFF §9: the pillar's cost/funding section points at the
+            // study-budget hub rather than carrying its own funding detail.
+            {
+                label: 'GP trainee study budget',
+                href: '/study-budget/',
+                subtitle: 'What your deanery funds, and how to claim it',
+            },
         ],
     },
     {

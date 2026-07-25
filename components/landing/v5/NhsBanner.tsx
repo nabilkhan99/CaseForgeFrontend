@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Check } from 'lucide-react';
 
@@ -19,7 +20,16 @@ export default function NhsBanner() {
         />
         <p className="text-xs leading-relaxed text-[#27500A] sm:text-base">
           Eligible for the NHS England study budget. Most trainees pay nothing
-          out of pocket. Check your local deanery policy.
+          out of pocket.{' '}
+          {/* DEV-HANDOFF §9: keep the "check your deanery" reassurance on-site
+              at the point of purchase instead of sending buyers to a PDF. */}
+          <Link
+            href="/study-budget/"
+            className="font-semibold underline underline-offset-2 hover:text-[#1C1917]"
+          >
+            Check your deanery&rsquo;s policy
+          </Link>
+          .
         </p>
       </motion.div>
     </section>

@@ -6,6 +6,7 @@ import LandingNavbar from '@/components/landing/LandingNavbar';
 import StudyBudgetTracker from '@/components/study-budget/StudyBudgetTracker';
 import type { StudyBudgetArticle } from '@/lib/study-budget/content';
 import { STUDY_BUDGET_HUB } from '@/lib/study-budget/content';
+import { neighbourLinks, SUPPORT_LINKS } from '@/lib/study-budget/related';
 
 /**
  * Shared page body for every /study-budget/ page.
@@ -123,6 +124,13 @@ export default function StudyBudgetArticleView({
 
           {children}
 
+          {/* DEV-HANDOFF §2/§7: the widget sits inside "How to claim" (the last
+              H2 on every deanery page) and BEFORE the soft pricing CTA.
+              Spokes pre-select with the email pane open; the hub shows the
+              dropdown prompt; support pages mount nothing. */}
+          {deaneryId ? <StudyBudgetTracker defaultDeanery={deaneryId} emailOpen /> : null}
+          {isHub ? <StudyBudgetTracker /> : null}
+
           {article.cta ? (
             <aside className="mt-12 rounded-2xl border border-[#e0d4bd] bg-[#fbf6ec] p-6 sm:p-7">
               <div className="study-budget-prose">
@@ -149,11 +157,6 @@ export default function StudyBudgetArticleView({
           ) : null}
         </article>
       </main>
-
-      {/* Spokes pre-select with the email pane open; the hub opens on the
-          dropdown prompt. Support pages pass no deaneryId and mount nothing. */}
-      {deaneryId ? <StudyBudgetTracker defaultDeanery={deaneryId} emailOpen /> : null}
-      {isHub ? <StudyBudgetTracker /> : null}
 
       {article.faq.length > 0 ? (
         <section className="px-5 pb-14 sm:px-8">
@@ -190,6 +193,52 @@ export default function StudyBudgetArticleView({
                 </div>
               ))}
             </dl>
+          </div>
+        </section>
+      ) : null}
+
+      {/* DEV-HANDOFF §9: each spoke points at the hub, 2-3 neighbouring
+          deaneries, and the support pages. Kept light — this is acquisition,
+          not a funnel. */}
+      {deaneryId ? (
+        <section className="px-5 pb-14 sm:px-8">
+          <div className="mx-auto max-w-[760px]">
+            <h2 className="[font-family:var(--font-serif)] text-[26px] font-semibold tracking-tight text-heading md:text-[32px]">
+              Training somewhere else?
+            </h2>
+            <ul className="mt-5 flex flex-wrap gap-2">
+              {neighbourLinks(deaneryId).map((link) => (
+                <li key={link.href}>
+                  <Link
+                    href={link.href}
+                    className="inline-block rounded-full border border-[#e2d8c8] bg-white/70 px-4 py-2 text-[14px] font-medium text-heading transition-colors hover:border-primary/40 hover:bg-white"
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+              <li>
+                <Link
+                  href={STUDY_BUDGET_HUB.slug}
+                  className="inline-block rounded-full border border-[#e2d8c8] bg-white/70 px-4 py-2 text-[14px] font-medium text-heading transition-colors hover:border-primary/40 hover:bg-white"
+                >
+                  All deaneries
+                </Link>
+              </li>
+            </ul>
+
+            <ul className="mt-6 space-y-2">
+              {SUPPORT_LINKS.map((link) => (
+                <li key={link.href}>
+                  <Link
+                    href={link.href}
+                    className="text-[16px] font-medium text-primary underline underline-offset-2 hover:text-heading"
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
       ) : null}
