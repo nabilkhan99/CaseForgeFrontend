@@ -517,10 +517,12 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
               </div>
             </form>
 
+            {/* Consent covers what is actually sent: the verification code and
+                marketing email. The report itself is never emailed. */}
             {isLastStep && (
               <p className="mt-4 text-[11px] leading-relaxed text-muted">
-                By continuing you agree to receive your feedback report and SCA preparation emails
-                from Fourteen Fisherman. Unsubscribe anytime.
+                By continuing you agree to receive SCA preparation emails from Fourteen
+                Fisherman. Unsubscribe anytime.
               </p>
             )}
           </div>
@@ -632,9 +634,11 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
             <h1 className="mb-2 text-[26px] font-bold tracking-[-0.02em] text-heading">
               Email verified
             </h1>
+            {/* No copy of the report is emailed — the only message that goes
+                out is the verification code — so this must not promise one. */}
             <p className="mb-6 text-[14px] leading-relaxed text-muted">
-              Your report is ready — a copy of your practice insights will go to{' '}
-              <b className="font-semibold text-heading">{email.trim().toLowerCase()}</b>.
+              Your report is ready. Open it below for your scores against the three
+              SCA marking domains, and the moments that cost you marks.
             </p>
             <button
               type="button"
