@@ -26,17 +26,40 @@ export default function TryFeedbackPage() {
   const [unlocked, setUnlocked] = useState(false);
   const [checkingGate, setCheckingGate] = useState(true);
 
-  // Returning visitors who already verified their email skip the gate.
+  // Whether this session is verified is a fact the server holds, not the
+  // browser. Checking localStorage alone meant a session verified on a laptop
+  // demanded the whole questionnaire again on a phone. localStorage stays as
+  // an instant path so the usual case never waits on a request.
   useEffect(() => {
+    let cancelled = false;
+
     try {
       if (window.localStorage.getItem(TRIAL_EMAIL_KEY)) {
         setUnlocked(true);
+        setCheckingGate(false);
+        return;
       }
     } catch {
-      // Storage unavailable — show the gate.
+      // Storage unavailable — fall through to the server check.
     }
-    setCheckingGate(false);
-  }, []);
+
+    fetch(`/api/try/gate-status?sessionId=${encodeURIComponent(sessionId)}`)
+      .then((res) => (res.ok ? res.json() : { verified: false }))
+      .then((data: { verified?: boolean }) => {
+        if (cancelled) return;
+        if (data.verified) setUnlocked(true);
+      })
+      .catch(() => {
+        // Network failure — show the gate rather than the report.
+      })
+      .finally(() => {
+        if (!cancelled) setCheckingGate(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
 
   function handleUnlock(email: string) {
     try {

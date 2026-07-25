@@ -63,10 +63,29 @@ export async function POST(req: NextRequest) {
         .maybeSingle(),
       supabase
         .from('trial_leads')
-        .select('id, session_id, verification_last_sent_at')
+        .select('id, session_id, verification_last_sent_at, email_verified_at')
         .eq('email', normalizedEmail)
         .maybeSingle(),
     ]);
+
+    // The free station is one per person, and the email is how a person is
+    // identified across browsers. An address that already completed the flow
+    // on another session is turned away here — with a message that says so,
+    // rather than the generic failure it used to produce.
+    if (
+      leadByEmail &&
+      leadByEmail.session_id !== sessionId &&
+      leadByEmail.email_verified_at
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "You've already used your free mock station with this email. Enter a different email address to see this report.",
+          emailAlreadyUsed: true,
+        },
+        { status: 409 },
+      );
+    }
 
     // Throttle against whichever row this send will actually write.
     const existingLead = leadByEmail ?? leadBySession;
@@ -109,8 +128,10 @@ export async function POST(req: NextRequest) {
 
     let upsertError = null;
     if (leadByEmail && leadByEmail.session_id !== sessionId) {
-      // Known email on a new session: free this session's slot if a different
-      // address already claimed it, then move the person's row across.
+      // Only unverified rows reach here — a verified one was turned away above.
+      // This is an abandoned attempt (details entered, code never confirmed),
+      // so it is moved to the current session rather than left to block the
+      // person behind the unique email index.
       if (leadBySession && leadBySession.id !== leadByEmail.id) {
         await supabase.from('trial_leads').delete().eq('id', leadBySession.id);
       }
