@@ -48,8 +48,18 @@ function displayTitle(title: string): string {
   return match[1].charAt(0).toUpperCase() + match[1].slice(1);
 }
 
-export default function StudyBudgetChecker() {
-  const [deaneryId, setDeaneryId] = useState(PLACEHOLDER_ID);
+interface StudyBudgetCheckerProps {
+  /**
+   * Pre-selected deanery, used when the checker is mounted inside a
+   * /study-budget/<deanery>/ page so the reader lands on their own verdict
+   * and drafted email. Omitted on the landing page and the hub, which open
+   * on the "select your deanery" prompt.
+   */
+  defaultDeaneryId?: string;
+}
+
+export default function StudyBudgetChecker({ defaultDeaneryId }: StudyBudgetCheckerProps = {}) {
+  const [deaneryId, setDeaneryId] = useState(defaultDeaneryId ?? PLACEHOLDER_ID);
   const [hasResat, setHasResat] = useState(false);
 
   const deanery = getDeanery(deaneryId);

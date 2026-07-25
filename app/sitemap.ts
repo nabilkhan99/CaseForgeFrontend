@@ -5,6 +5,7 @@ import { guidePath } from '@/lib/guides/articleTypes';
 import { GUIDE_INDEX_PATH } from '@/lib/guides/scaPillarGuide';
 import { buildCaseSeoIndex } from '@/lib/seo/cases';
 import { absoluteUrl } from '@/lib/seo/site';
+import { STUDY_BUDGET_ARTICLES, STUDY_BUDGET_HUB } from '@/lib/study-budget/content';
 
 export const revalidate = 3600;
 
@@ -42,6 +43,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
             lastModified: now,
             changeFrequency: 'monthly' as const,
             priority: 0.7,
+        })),
+        // Study-budget cluster: hub carries more weight than its spokes.
+        ...STUDY_BUDGET_ARTICLES.map(article => ({
+            url: absoluteUrl(article.slug),
+            lastModified: now,
+            changeFrequency: 'monthly' as const,
+            priority: article.slug === STUDY_BUDGET_HUB.slug ? 0.85 : 0.7,
         })),
         {
             url: absoluteUrl('/gp-portfolio-tool'),

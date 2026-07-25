@@ -84,6 +84,13 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
           >
             SCA Guide
           </Link>
+          {/* Hub in the main nav for crawl/authority weight (build package §7). */}
+          <Link
+            href="/study-budget/"
+            className="text-[13px] text-body hover:text-heading transition-colors duration-150"
+          >
+            Study Budget
+          </Link>
           <Link
             href="/gp-portfolio-tool"
             className="text-[13px] text-body hover:text-heading transition-colors duration-150 flex items-baseline gap-2"
@@ -172,6 +179,13 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
               }`}
             >
               SCA Guide
+            </Link>
+            <Link
+              href="/study-budget/"
+              onClick={() => setMobileOpen(false)}
+              className="min-h-[44px] flex items-center px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
+            >
+              Study Budget
             </Link>
             <Link
               href="/gp-portfolio-tool"
