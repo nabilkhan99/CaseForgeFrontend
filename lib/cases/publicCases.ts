@@ -27,23 +27,21 @@ export interface PublicCaseDomain {
     cases: PublicCase[];
 }
 
-const CASE_SELECT =
+// Full case body, incl. the large text fields — detail page only.
+const CASE_SELECT_DETAIL =
     'id, title, patient_name, patient_age, difficulty, consultation_type, reading_duration_seconds, consultation_duration_seconds, candidate_instructions, station_script, data_gathering, clinical_management, relating_to_others, clinical_learning_points, domain_id';
 
-export const getPublicCases = cache(async (): Promise<PublicCase[]> => {
-    const supabase = getSupabaseAdmin();
+// Card/SEO-index fields only. The list page and buildCaseSeoIndex never read
+// the big blobs (the slug comes from `title` alone — the extra fields in
+// inferCondition's Pick are vestigial), so pulling them was ~2.7MB of Supabase
+// egress per call, once for each of the 79 statically generated case pages.
+const CASE_SELECT_LIST =
+    'id, title, patient_name, patient_age, consultation_type, consultation_duration_seconds, domain_id';
 
-    const { data: stations, error: stationsError } = await supabase
-        .from('stations')
-        .select(CASE_SELECT)
-        .eq('is_active', true)
-        .order('title');
-
-    if (stationsError || !stations) {
-        console.error('Error fetching public cases:', stationsError);
-        return [];
-    }
-
+async function attachDomainNames<T extends { domain_id: string }>(
+    supabase: ReturnType<typeof getSupabaseAdmin>,
+    stations: T[]
+): Promise<(T & { domain_name: string })[]> {
     const domainIds = [...new Set(stations.map(station => station.domain_id).filter(Boolean))];
     const { data: domains, error: domainsError } = await supabase
         .from('domains')
@@ -62,10 +60,27 @@ export const getPublicCases = cache(async (): Promise<PublicCase[]> => {
         ...station,
         domain_name: domainMap.get(station.domain_id) || 'Unknown',
     }));
+}
+
+export const getPublicCasesForList = cache(async (): Promise<PublicCase[]> => {
+    const supabase = getSupabaseAdmin();
+
+    const { data: stations, error: stationsError } = await supabase
+        .from('stations')
+        .select(CASE_SELECT_LIST)
+        .eq('is_active', true)
+        .order('title');
+
+    if (stationsError || !stations) {
+        console.error('Error fetching public cases:', stationsError);
+        return [];
+    }
+
+    return attachDomainNames(supabase, stations) as Promise<PublicCase[]>;
 });
 
-export const getPublicCasesGroupedByDomain = cache(async (): Promise<PublicCaseDomain[]> => {
-    const cases = await getPublicCases();
+export const getPublicCasesGroupedByDomainForList = cache(async (): Promise<PublicCaseDomain[]> => {
+    const cases = await getPublicCasesForList();
     const domains = new Map<string, PublicCaseDomain>();
 
     for (const caseItem of cases) {
@@ -83,7 +98,25 @@ export const getPublicCasesGroupedByDomain = cache(async (): Promise<PublicCaseD
     return [...domains.values()].sort((a, b) => a.name.localeCompare(b.name));
 });
 
-export const getPublicCaseById = cache(async (id: string) => {
-    const cases = await getPublicCases();
-    return cases.find(caseItem => caseItem.id === id) || null;
+export const getPublicCaseById = cache(async (id: string): Promise<PublicCase | null> => {
+    const supabase = getSupabaseAdmin();
+
+    const { data: station, error } = await supabase
+        .from('stations')
+        .select(CASE_SELECT_DETAIL)
+        .eq('id', id)
+        .eq('is_active', true)
+        .maybeSingle();
+
+    if (error) {
+        console.error('Error fetching public case:', error);
+        return null;
+    }
+
+    if (!station) {
+        return null;
+    }
+
+    const [withDomain] = await attachDomainNames(supabase, [station]);
+    return withDomain as PublicCase;
 });
