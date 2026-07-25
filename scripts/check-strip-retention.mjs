@@ -78,9 +78,34 @@ if (headache) {
   }
 }
 
+// --- assessment-leak gate ------------------------------------------------
+// The patient must never see how the candidate is scored. 35 of 79 scripts
+// carry inline mark-scheme notes; the original catch-all paren strip hid them
+// by accident, so preserving clinical parentheticals made them visible.
+const LEAK_RE =
+  /\b(critically fails?|candidate (?:critically )?(?:fails?|passes|scores?)|mark(?:ing)? scheme|examiner (?:expects|awards|wants|is looking|will mark))\b/i;
+
+const leaked = [];
+for (const s of data) {
+  const raw = s.station_script || '';
+  if (!raw) continue;
+  if (LEAK_RE.test(stripStageDirections(raw))) leaked.push(s.title.slice(0, 52));
+}
+
+const rawLeaks = data.filter((s) => LEAK_RE.test(s.station_script || '')).length;
+console.log(`\nassessment notes in raw scripts : ${rawLeaks}/${data.length}`);
+console.log(`still visible after stripping   : ${leaked.length}`);
+for (const t of leaked.slice(0, 8)) console.log(`  LEAK: ${t}`);
+
 const pctNew = (100 * newTotal) / rawTotal;
+let failed = false;
 if (pctNew < 90) {
   console.error(`\nFAIL: retention ${pctNew.toFixed(1)}% is below the 90% floor.`);
-  process.exit(1);
+  failed = true;
 }
-console.log(`\nPASS: retention ${pctNew.toFixed(1)}%`);
+if (leaked.length > 0) {
+  console.error(`\nFAIL: ${leaked.length} station(s) leak assessment language to the patient.`);
+  failed = true;
+}
+if (failed) process.exit(1);
+console.log(`\nPASS: retention ${pctNew.toFixed(1)}%, 0 assessment leaks`);

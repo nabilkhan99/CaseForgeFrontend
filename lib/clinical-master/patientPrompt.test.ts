@@ -92,6 +92,40 @@ describe('stripStageDirections', () => {
     }
   });
 
+  // The patient must never learn how the candidate is being scored. Scripts
+  // carry inline mark-scheme notes; the original catch-all paren strip hid them
+  // by accident, so preserving clinical parentheticals made them visible.
+  describe('assessment language never reaches the patient', () => {
+    const leaks = [
+      '- Reaction: "Will these kill the pain?" (Note: Candidate critically fails for worsening a Medication Overuse Headache and feeding opiate dependence).',
+      'You feel better. (Candidate fails if they do not safety net.)',
+      '(Note: this is on the mark scheme as a red flag)',
+      'He agrees. (The examiner expects a follow-up here.)',
+      '(Candidate passes this domain if they quantify the medication.)',
+    ];
+
+    for (const src of leaks) {
+      it(`strips: ${src.slice(0, 46)}…`, () => {
+        const out = stripStageDirections(src);
+        expect(out).not.toMatch(
+          /critically fails|candidate (?:fails|passes)|mark scheme|examiner (?:expects|awards)/i
+        );
+      });
+    }
+
+    it('keeps the patient dialogue around a stripped note', () => {
+      const out = stripStageDirections(
+        '- Reaction: "Will these kill the pain?" (Note: Candidate critically fails for this).'
+      );
+      expect(out).toContain('Will these kill the pain?');
+    });
+
+    it('does not strip ordinary clinical wording that merely contains "pass"', () => {
+      const out = stripStageDirections('It comes and goes — the pain passes after an hour.');
+      expect(out).toContain('the pain passes after an hour');
+    });
+  });
+
   it('leaves plain text untouched', () => {
     const plain = 'No, nothing like that. Arms and legs feel completely normal.';
     expect(stripStageDirections(plain)).toBe(plain);

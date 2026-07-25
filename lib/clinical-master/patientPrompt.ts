@@ -54,13 +54,38 @@ const ACTOR_NOTE_OPENERS = [
   'gestures', 'gesturing', 'rubs', 'rubbing', 'clutches', 'clutching',
   'leans', 'leaning', 'smiles', 'smiling', 'frowns', 'frowning', 'quietly',
   'softly', 'hesitates', 'hesitating', 'actor guidance', 'note to actor',
-  'actor note', 'note:', 'aside',
+  'actor note', 'aside',
 ];
 
+// `note:` deliberately handled separately. As a plain opener it could never
+// match: the list is joined and followed by \b, and a colon is a non-word
+// character, so \b then demands a word character where "(Note: Candidate..."
+// has a space. That silently let assessment notes through.
 const ACTOR_NOTE_RE = new RegExp(
-  `\\((?:${ACTOR_NOTE_OPENERS.join('|')})\\b[^)\\n]{0,120}\\)\\s*`,
+  `\\((?:(?:${ACTOR_NOTE_OPENERS.join('|')})\\b|note\\s*:)[^)\\n]{0,200}\\)\\s*`,
   'gi'
 );
+
+/**
+ * Assessment language must NEVER reach the patient — it tells the actor how the
+ * candidate is being scored, which is the one thing that can invalidate the
+ * station. Some scripts carry mark-scheme notes inline, e.g.
+ *   (Note: Candidate critically fails for worsening a Medication Overuse Headache)
+ * The old catch-all paren strip hid these by accident; once parentheses were
+ * preserved for clinical detail, they became visible to the model. Stripped
+ * explicitly on content, whatever the wrapper looks like.
+ */
+// Anchored on the opening parenthesis. An earlier version made it optional so
+// it could also catch unwrapped notes — but with no left anchor the match ran
+// backwards into the patient's own dialogue and deleted the line it was
+// attached to. Every leak observed in the real scripts is parenthesised, so
+// requiring "(" is both sufficient and safe.
+// NB "examiner" alone is NOT a marker of assessment leakage — real cases
+// legitimately reference an "Aeromedical Examiner" (CAA pilot medicals) and the
+// NHS "Medical Examiner" system (death review). Both are clinical facts the
+// patient should know. Only an examiner *doing the marking* counts.
+const ASSESSMENT_LEAK_RE =
+  /\(\s*[^)\n]{0,100}?\b(?:critically fails?|candidate (?:critically )?(?:fails?|passes|scores?)|mark scheme|marking scheme|examiner (?:expects|awards|wants|is looking|will mark)|clear fail|clear pass|awards? (?:a )?(?:pass|fail))\b[^)\n]{0,200}\)\s*/gi;
 
 export function stripStageDirections(text: string): string {
   if (!text) return text;
@@ -79,11 +104,18 @@ export function stripStageDirections(text: string): string {
   out = out.replace(/\*([^*\n]+)\*/g, '$1');
   out = out.replace(/\*/g, ''); // sweep unmatched strays
 
+  // Assessment language first — before the emphasis unwrap has finished
+  // reshaping the line, and regardless of how it is wrapped.
+  out = out.replace(ASSESSMENT_LEAK_RE, ' ');
+
   // Parentheses: only actor notes, never clinical parentheticals.
   out = out.replace(ACTOR_NOTE_RE, '');
 
   out = out.replace(/^"(.*)"$/gm, '$1');
   out = out.replace(/[ \t]{2,}/g, ' ');
+  // Tidy punctuation orphaned by a removed note, e.g. '..." .' -> '..."'
+  out = out.replace(/[ \t]+([.,;:])/g, '$1');
+  out = out.replace(/(["'”’])\s*\.\s*$/gm, '$1');
   out = out.replace(/\n{3,}/g, '\n\n');
   return out.trim();
 }
