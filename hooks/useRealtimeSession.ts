@@ -33,6 +33,12 @@ const DT_SUSTAIN_FRAMES = 4;
 const DT_RESIDUAL_MARGIN = 0.5;
 /** Absolute mic RMS floor (~-40dBFS) so silence can never trigger. */
 const DT_MIC_FLOOR = 0.01;
+/**
+ * Below this mean-token probability, a stock one-word transcription is treated
+ * as a Whisper-on-silence artefact rather than something the doctor said.
+ * Only applied to a small known phrase set — see the transcription handler.
+ */
+const ASR_ARTIFACT_CONFIDENCE = 0.5;
 /** Minimum gap between client-side interrupts. */
 const DT_COOLDOWN_MS = 1500;
 /** Calibration warm-up after connect — no interrupts while the coupling
@@ -842,12 +848,42 @@ export function useRealtimeSession({
                 case 'conversation.item.input_audio_transcription.completed': {
                     const id = String(evt.item_id ?? '');
                     const vad = (id && vadRef.current[id]) || {};
+                    const said = String(evt.transcript ?? '').trim();
+                    const conf = meanProbFromLogprobs(evt.logprobs);
+
+                    // Whisper invents a stock phrase when handed near-silence,
+                    // and the marking engine grades THIS transcript — so a
+                    // phantom "Bye." stands in for the doctor's real question
+                    // and they lose the mark for it. Observed on 24 Jul: "Bye!"
+                    // where photophobia was asked about, "Anyway, loss." for
+                    // "any weight loss?", "Any nice words?" for "night sweats?".
+                    //
+                    // Deliberately NOT dropping on text alone — "bye", "thanks"
+                    // and "thank you" are exactly what a doctor says closing a
+                    // consultation, and "okay" is a normal backchannel. Only drop
+                    // when it is a known stock phrase AND the ASR itself was
+                    // unsure. Punctuation-only output is always noise.
+                    if (/^[\s.,!?—-]+$/.test(said)) {
+                        logDebug('asr-drop:punctuation-only');
+                        if (id) delete vadRef.current[id];
+                        break;
+                    }
+                    if (
+                        /^(bye|thanks|thank you|you)[.!?]*$/i.test(said) &&
+                        typeof conf === 'number' &&
+                        conf < ASR_ARTIFACT_CONFIDENCE
+                    ) {
+                        logDebug('asr-drop:stock-phrase', { said, conf: Number(conf.toFixed(2)) });
+                        if (id) delete vadRef.current[id];
+                        break;
+                    }
+
                     appendTurn({
                         speaker: 'candidate',
-                        text: String(evt.transcript ?? ''),
+                        text: said,
                         start_ms: vad.start_ms ?? relNow(),
                         end_ms: vad.end_ms,
-                        asr_confidence: meanProbFromLogprobs(evt.logprobs),
+                        asr_confidence: conf,
                     });
                     if (id) delete vadRef.current[id];
                     break;

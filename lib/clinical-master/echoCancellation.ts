@@ -9,9 +9,11 @@
  *
  * Defences keyed off this predicate:
  *  - server (realtimeToken.ts): session minted with far_field noise
- *    reduction, VAD threshold 0.75 and interrupt_response: false, so
- *    leaked echo is filtered before VAD and can never cancel the
- *    patient mid-sentence;
+ *    reduction and turn_detection: null — server VAD is off entirely on
+ *    this path, so leaked echo is filtered before it can be mistaken for
+ *    speech and cannot cancel the patient mid-sentence. (This previously
+ *    read "VAD threshold 0.75 and interrupt_response: false"; that stopped
+ *    being what the code does when server VAD was switched off.);
  *  - client (useRealtimeSession.ts): a double-talk detector compares
  *    mic energy against the playing patient audio and interrupts the
  *    patient client-side when the doctor genuinely talks over it —

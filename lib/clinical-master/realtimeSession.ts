@@ -74,14 +74,21 @@ export interface SessionConfigOptions {
    * (Safari, Firefox, anything on iOS): playback of the patient's own
    * voice leaks back into the mic, trips server VAD, and the patient
    * interrupts itself / answers itself. For these browsers the session
-   * is hardened server-side (community-validated combination):
+   * is hardened server-side:
    *  - far_field noise reduction, which filters the input BEFORE VAD so
    *    the leaked echo doesn't register as speech;
-   *  - VAD threshold 0.75 instead of 0.5;
-   *  - interrupt_response: false so residual echo can never cancel the
-   *    patient mid-sentence.
-   * Chrome-family browsers have reliable AEC and keep the defaults,
-   * including barge-in.
+   *  - turn_detection: null — server VAD is switched OFF entirely, and the
+   *    client-side double-talk detector in useRealtimeSession.ts owns turns
+   *    instead (see DT_* constants there for the real thresholds).
+   * Chrome-family browsers have reliable AEC and keep the defaults —
+   * server_vad at threshold 0.5 with 900ms silence, and barge-in.
+   *
+   * NB this comment used to describe "VAD threshold 0.75 and
+   * interrupt_response: false", which the code has not done since server VAD
+   * was turned off for these browsers. That combination now only exists in the
+   * no-WebAudio fallback further down useRealtimeSession.ts. Correcting it
+   * because the stale version sends you looking for tuning knobs that are not
+   * in play on this path.
    */
   unreliableAec?: boolean;
 }
