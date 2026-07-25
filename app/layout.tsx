@@ -40,7 +40,7 @@ export const metadata: Metadata = {
     default: 'Fourteen Fisherman — The Complete SCA Course',
     template: '%s | Fourteen Fisherman',
   },
-  description: 'AI practice on 200 stations, 12 hours of on-demand lectures and a full-day Small-Group Coaching session. Fail your SCA after passing all 200 stations, and we pay you £500.',
+  description: 'AI practice on 200 stations, 10 hours of on-demand lectures and a full-day Small-Group Coaching session. Fail your SCA after passing all 200 stations, and we pay you £500.',
   keywords: 'SCA exam, RCGP, GP training, medical simulation, clinical assessment, AI patient, consultation practice',
   icons: {
     icon: [
@@ -58,7 +58,7 @@ export const metadata: Metadata = {
     siteName: 'Fourteen Fisherman',
     url: 'https://www.fourteenfisherman.com/',
     title: 'Fourteen Fisherman — The Complete SCA Course',
-    description: 'AI practice on 200 stations, 12 hours of on-demand lectures and a full-day Small-Group Coaching session. Fail your SCA after passing all 200 stations, and we pay you £500.',
+    description: 'AI practice on 200 stations, 10 hours of on-demand lectures and a full-day Small-Group Coaching session. Fail your SCA after passing all 200 stations, and we pay you £500.',
     images: [
       {
         url: '/opengraph-image.png',
@@ -71,7 +71,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Fourteen Fisherman — The Complete SCA Course',
-    description: 'AI practice on 200 stations, 12 hours of on-demand lectures and a full-day Small-Group Coaching session. Fail your SCA after passing all 200 stations, and we pay you £500.',
+    description: 'AI practice on 200 stations, 10 hours of on-demand lectures and a full-day Small-Group Coaching session. Fail your SCA after passing all 200 stations, and we pay you £500.',
     images: ['/twitter-image.png'],
   },
   alternates: {

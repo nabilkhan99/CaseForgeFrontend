@@ -23,9 +23,9 @@ interface Stat {
 
 const STATS: Stat[] = [
   {
-    headline: '20% of GP trainees',
+    headline: '25% of GP trainees',
     subline: 'already use our portfolio tool',
-    count: { to: 20, suffix: '%', after: ' of GP trainees' },
+    count: { to: 25, suffix: '%', after: ' of GP trainees' },
   },
   {
     headline: '200 stations',

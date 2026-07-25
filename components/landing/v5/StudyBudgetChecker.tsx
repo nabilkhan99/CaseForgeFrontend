@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Copy, Check, ChevronDown } from 'lucide-react';
+import { Copy, Check, ChevronDown, FileText } from 'lucide-react';
 import {
   DEANERIES,
   VERDICT_THEMES,
@@ -315,18 +315,30 @@ function EmailLetter({ deanery, hasResat }: EmailLetterProps) {
         <h3 className="text-sm font-semibold text-heading sm:text-base">
           Your pre-approval email, ready to send
         </h3>
-        <button
-          type="button"
-          onClick={handleCopy}
-          className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#854F0B] underline decoration-[#d9cdb3] underline-offset-4 transition-colors hover:text-heading sm:text-sm"
-        >
-          {copied ? (
-            <Check className="h-4 w-4" aria-hidden="true" />
-          ) : (
-            <Copy className="h-4 w-4" aria-hidden="true" />
-          )}
-          {copied ? 'Copied' : 'Copy email'}
-        </button>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#854F0B] underline decoration-[#d9cdb3] underline-offset-4 transition-colors hover:text-heading sm:text-sm"
+          >
+            {copied ? (
+              <Check className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <Copy className="h-4 w-4" aria-hidden="true" />
+            )}
+            {copied ? 'Copied' : 'Copy email'}
+          </button>
+          {/* The drafted email cites this URL, so approvers need it reachable. */}
+          <a
+            href="/course-spec"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#854F0B] underline decoration-[#d9cdb3] underline-offset-4 transition-colors hover:text-heading sm:text-sm"
+          >
+            <FileText className="h-4 w-4" aria-hidden="true" />
+            Course specification
+          </a>
+        </div>
       </div>
 
       <motion.div

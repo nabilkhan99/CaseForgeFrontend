@@ -29,7 +29,7 @@ export default function Hero() {
         >
           <span className="inline-flex items-center gap-2 rounded-full bg-[#FAEEDA] px-4 py-1.5 text-xs font-semibold text-[#854F0B] sm:text-sm">
             <span className="h-1.5 w-1.5 rounded-full bg-[#B45309]" aria-hidden="true" />
-            The £500 SCA guarantee
+            For GP Trainees preparing for the SCA
           </span>
         </motion.p>
 
@@ -56,8 +56,8 @@ export default function Hero() {
           transition={{ duration: 0.5, delay: 0.14 }}
           className="mx-auto mb-6 max-w-md text-sm leading-relaxed text-body sm:mb-8 sm:max-w-2xl sm:text-lg"
         >
-          Pass all 200 mock stations, fail your real SCA, and we pay you £500
-          cash.
+          Pass all 200 of our mock stations but fail your real SCA? We&rsquo;ll
+          pay you £500 cash.
         </motion.p>
 
         <motion.div

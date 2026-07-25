@@ -60,7 +60,7 @@ export function buildPurchaseEmailCopy({
       `Your card receipt comes separately from Stripe. If anything looks wrong, or you just want to ask something, reply to this email and a human will answer.`,
     ],
     coachingLine: coachingDay
-      ? `Your coaching day: ${coachingDay} — 9am to 6pm, maximum class of 6. We'll confirm the location and joining details nearer the time.`
+      ? `Your coaching day: ${coachingDay} — 9am to 5pm, maximum class of 6. We'll confirm the location and joining details nearer the time.`
       : null,
   }
 }

@@ -27,14 +27,14 @@ const FEATURE_ROWS: readonly FeatureRow[] = [
   },
   {
     label: 'On-demand Lectures',
-    cells: [{ text: '', cross: true }, { text: '12 hours', sub: '£599 value' }, { text: '12 hours' }],
+    cells: [{ text: '', cross: true }, { text: '10 hours', sub: '£599 value' }, { text: '10 hours' }],
   },
   {
     label: 'Small-Group Coaching',
     cells: [
       { text: '', cross: true },
-      { text: 'One full day, 9am to 6pm', sub: 'Max class of 6 · £599 value' },
-      { text: 'One full day, 9am to 6pm' },
+      { text: 'One full day, 9am to 5pm', sub: 'Max class of 6 · £599 value' },
+      { text: 'One full day, 9am to 5pm' },
     ],
   },
   {

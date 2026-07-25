@@ -110,7 +110,7 @@ export default function CoachingDayPage() {
             Choose your coaching day
           </h1>
           <p className="mt-3 max-w-lg text-sm leading-relaxed text-body sm:text-base">
-            One full day of live Small-Group Coaching, 9am to 6pm, remote, with a maximum class of
+            One full day of live Small-Group Coaching, 9am to 5pm, remote, with a maximum class of
             six. It runs on the date you choose below.
           </p>
           <p className="mt-3 inline-flex max-w-lg rounded-lg bg-[#FDF6EC] px-3 py-1.5 text-[12px] font-medium leading-relaxed text-[#854F0B]">
@@ -169,7 +169,7 @@ export default function CoachingDayPage() {
                       <p className={`text-sm font-semibold ${disabled ? 'text-stone-500' : 'text-heading'}`}>
                         {day.label}
                       </p>
-                      <p className="mt-0.5 text-xs text-body">9am to 6pm · Remote · Live</p>
+                      <p className="mt-0.5 text-xs text-body">9am to 5pm · Remote · Live</p>
                       {countdown && (
                         <p className="mt-0.5 text-xs font-semibold text-[#B42318]">{countdown}</p>
                       )}

@@ -165,20 +165,19 @@ const COACHING_ROWS: FeatureRow[] = [
 
 type TimetableStyle = 'teaching' | 'standard' | 'muted';
 
-// Teaching titles are placeholders pending the GP educator's sign-off; the
-// 3 x 30 min teaching / 12 x 30 min mock / 3 x 30 min break structure is fixed.
+// The 8-hour coaching day: 09:00 start, 17:00 finish.
 const TIMETABLE: { time: string; item: string; style: TimetableStyle }[] = [
-  { time: '09:00', item: 'Teaching: how the SCA is marked', style: 'teaching' },
-  { time: '09:30', item: 'Mock stations 1 to 4', style: 'standard' },
-  { time: '11:30', item: 'Break', style: 'muted' },
-  { time: '12:00', item: 'Mock stations 5 and 6', style: 'standard' },
-  { time: '13:00', item: 'Lunch', style: 'muted' },
-  { time: '13:30', item: 'Teaching: the 12-minute consultation', style: 'teaching' },
-  { time: '14:00', item: 'Mock stations 7 to 9', style: 'standard' },
-  { time: '15:30', item: 'Break', style: 'muted' },
-  { time: '16:00', item: 'Mock stations 10 to 12', style: 'standard' },
-  { time: '17:30', item: 'Teaching: where candidates lose marks', style: 'teaching' },
-  { time: '18:00', item: 'Finish', style: 'standard' },
+  { time: '09:00', item: 'Teaching: planning the consultation from the case brief', style: 'teaching' },
+  { time: '09:15', item: 'Mock stations 1 to 4', style: 'standard' },
+  { time: '11:15', item: 'Break', style: 'muted' },
+  { time: '11:30', item: 'Mock stations 5 and 6', style: 'standard' },
+  { time: '12:30', item: 'Lunch', style: 'muted' },
+  { time: '13:00', item: 'Teaching: the 6-minute transition to management', style: 'teaching' },
+  { time: '13:15', item: 'Mock stations 7 to 9', style: 'standard' },
+  { time: '14:45', item: 'Break', style: 'muted' },
+  { time: '15:00', item: 'Mock stations 10 to 12', style: 'standard' },
+  { time: '16:30', item: 'Teaching: delivering a complete management plan', style: 'teaching' },
+  { time: '17:00', item: 'Finish', style: 'standard' },
 ];
 
 const TEAL = '#0F6E56';
@@ -273,7 +272,7 @@ export default function CompleteCourse() {
             <Accent>Plus one live coaching day, on a date you choose.</Accent>
           </h2>
           <p className="mx-auto mt-7 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-[15px] font-medium text-heading sm:text-lg">
-            {['Unlimited AI Practice', '12 Hours of On-Demand Lectures', '9-Hour Coaching Day'].map(
+            {['Unlimited AI Practice', '10 Hours of On-Demand Lectures', '8-Hour Coaching Day'].map(
               (chip, index) => (
                 <span key={chip} className="contents">
                   {index > 0 && (
@@ -327,7 +326,7 @@ export default function CompleteCourse() {
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xl font-semibold text-heading">Small-Group Coaching</p>
               <span className="self-start rounded-full bg-[#FAEEDA] px-3 py-1 text-[12px] font-medium text-[#854F0B]">
-                One full day · 9am to 6pm · Remote
+                One full day · 9am to 5pm · Remote
               </span>
             </div>
 

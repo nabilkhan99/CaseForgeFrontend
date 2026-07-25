@@ -367,7 +367,7 @@ export function buildEmailBody(
     'I am an ST3 on the [scheme name] programme preparing for the SCA. Before booking, I would like to confirm eligibility for study budget reimbursement for the following as my SCA preparation course claim' +
     gpCode +
     ':\n\n' +
-    'Complete SCA Course, £599 one-off. A structured course with 3 months of access: 12 hours of on-demand lectures, a full-day small-group coaching session (9am to 6pm, max class size 6), and consultation practice across 200 stations built from the RCGP curriculum, mapped to the three SCA marking domains. Full course specification: fourteenfisherman.com/course-spec\n\n' +
+    'Complete SCA Course, £599 one-off. A structured course with 3 months of access: 10 hours of on-demand lectures, a full-day small-group coaching session (9am to 5pm, max class size 6), and consultation practice across 200 stations built from the RCGP curriculum, mapped to the three SCA marking domains. Full course specification: fourteenfisherman.com/course-spec\n\n' +
     extra +
     'I have discussed this with my Educational Supervisor and added SCA preparation to my PDP. Could you confirm whether this would be approved, or let me know what else you need?\n\n' +
     'Many thanks,\n[Your name], GPST3, [Scheme]'

@@ -73,7 +73,7 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
             href="/sca-cases"
             className="text-[13px] text-body hover:text-heading transition-colors duration-150"
           >
-            Free SCA Cases
+            SCA Cases
           </Link>
           <Link
             href={SCA_PILLAR_PATH}
@@ -161,7 +161,7 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
               onClick={() => setMobileOpen(false)}
               className="min-h-[44px] flex items-center px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
             >
-              Free SCA Cases
+              SCA Cases
             </Link>
             <Link
               href={SCA_PILLAR_PATH}
