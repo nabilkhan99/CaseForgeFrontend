@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import Link from 'next/link';
 import PrimaryButton from '@/components/ui/PrimaryButton';
-import RecordingPlayer from '@/components/clinical-master/RecordingPlayer';
 import {
   ConsultationFeedback,
   DomainFeedback,
@@ -962,8 +961,6 @@ export default function FeedbackReport({ sessionId, variant = 'app', from = null
         </motion.header>
 
         <VerdictPanel feedback={feedback} />
-
-        <RecordingPlayer sessionId={sessionId} />
 
         {feedback.confidence && feedback.confidence.transcript_quality !== 'high' && (
           <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-[1.6] text-amber-800">
