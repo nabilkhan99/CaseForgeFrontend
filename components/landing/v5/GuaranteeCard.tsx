@@ -49,10 +49,12 @@ const ICON_COLOURS = ['#B45309', '#4A6B1F', '#5B7A9B', '#B45309'];
 
 // The whole section is meant to be taken in at a glance, so its desktop rhythm
 // is sized to fit a 13" laptop viewport (~760px tall) and only opens back up on
-// genuinely tall screens via the `tall:` (min-height) variant.
+// genuinely tall screens via the `tall:` (min-height) variant. The height is
+// taken out of the vertical gaps and the heading — the steps and the £500 card
+// keep their full size.
 export default function GuaranteeCard() {
   return (
-    <section className="px-5 py-12 sm:px-8 sm:py-10 sm:tall:py-16">
+    <section className="px-5 py-12 sm:px-8 sm:py-8 sm:tall:py-16">
       <div className="mx-auto max-w-6xl">
         {/* Heading */}
         <motion.div
@@ -63,7 +65,9 @@ export default function GuaranteeCard() {
           className="text-center"
         >
           <Pill>How the guarantee works</Pill>
-          <h2 className="mx-auto mt-6 max-w-3xl text-3xl font-bold leading-[1.1] tracking-[-0.02em] text-heading sm:mt-4 sm:text-[2.75rem] sm:tall:mt-6 sm:tall:text-5xl">
+          {/* max-w-4xl at sm keeps this on a single line, which is where most
+              of the reclaimed vertical space comes from. */}
+          <h2 className="mx-auto mt-6 max-w-3xl text-3xl font-bold leading-[1.1] tracking-[-0.02em] text-heading sm:max-w-4xl sm:text-[2.75rem] sm:tall:max-w-3xl sm:tall:text-5xl">
             Our SCA Guarantee. <Accent>Real skin in the game.</Accent>
           </h2>
           {/* hand-drawn underline accent */}
@@ -83,7 +87,7 @@ export default function GuaranteeCard() {
         </motion.div>
 
         {/* Steps */}
-        <div className="mt-12 flex flex-col items-stretch gap-10 sm:mt-10 sm:flex-row sm:items-start sm:gap-2 sm:tall:mt-16">
+        <div className="mt-12 flex flex-col items-stretch gap-10 sm:mt-8 sm:flex-row sm:items-start sm:gap-2 sm:tall:mt-16">
           {STEPS.map((step, i) => (
             <Fragment key={i}>
               <motion.div
@@ -94,12 +98,12 @@ export default function GuaranteeCard() {
                 className="flex flex-1 flex-col items-center px-2 text-center"
               >
                 <div
-                  className="flex h-20 w-20 items-center justify-center rounded-full sm:h-16 sm:w-16 sm:tall:h-20 sm:tall:w-20"
+                  className="flex h-20 w-20 items-center justify-center rounded-full"
                   style={{ backgroundColor: step.ringBg, color: ICON_COLOURS[i] }}
                 >
                   {step.icon}
                 </div>
-                <div className="mt-5 flex items-center justify-center gap-2 sm:mt-4 sm:tall:mt-5">
+                <div className="mt-5 flex items-center justify-center gap-2">
                   <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[#B45309] text-xs font-semibold text-white">
                     {i + 1}
                   </span>
@@ -113,7 +117,7 @@ export default function GuaranteeCard() {
               </motion.div>
               {i < STEPS.length - 1 && (
                 <ChevronRight
-                  className="mt-8 hidden h-6 w-6 flex-shrink-0 self-start text-stone-300 sm:mt-6 sm:block sm:tall:mt-8"
+                  className="mt-8 hidden h-6 w-6 flex-shrink-0 self-start text-stone-300 sm:block"
                   aria-hidden="true"
                 />
               )}
@@ -127,7 +131,7 @@ export default function GuaranteeCard() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5 }}
-          className="relative mt-14 overflow-hidden rounded-3xl border border-heading/[0.08] bg-white/60 px-6 py-10 shadow-elevation-1 sm:mt-10 sm:px-12 sm:py-8 sm:tall:mt-16 sm:tall:py-12"
+          className="relative mt-14 overflow-hidden rounded-3xl border border-heading/[0.08] bg-white/60 px-6 py-10 shadow-elevation-1 sm:mt-8 sm:px-12 sm:py-12 sm:tall:mt-16"
         >
           {/* faint wave texture */}
           <svg
@@ -177,7 +181,7 @@ const SEAL_POINTS =
 function GuaranteeSeal() {
   return (
     <svg
-      className="h-28 w-28 flex-shrink-0 sm:tall:h-36 sm:tall:w-36"
+      className="h-28 w-28 flex-shrink-0 sm:h-36 sm:w-36"
       viewBox="0 0 160 160"
       aria-label="£500 guarantee seal"
     >
