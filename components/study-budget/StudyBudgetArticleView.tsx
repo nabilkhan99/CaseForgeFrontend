@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import LandingFooter from '@/components/landing/LandingFooter';
 import LandingNavbar from '@/components/landing/LandingNavbar';
-import StudyBudgetChecker from '@/components/landing/v5/StudyBudgetChecker';
+import StudyBudgetTracker from '@/components/study-budget/StudyBudgetTracker';
 import type { StudyBudgetArticle } from '@/lib/study-budget/content';
 import { STUDY_BUDGET_HUB } from '@/lib/study-budget/content';
 
@@ -150,8 +150,10 @@ export default function StudyBudgetArticleView({
         </article>
       </main>
 
-      {deaneryId ? <StudyBudgetChecker defaultDeaneryId={deaneryId} /> : null}
-      {isHub ? <StudyBudgetChecker /> : null}
+      {/* Spokes pre-select with the email pane open; the hub opens on the
+          dropdown prompt. Support pages pass no deaneryId and mount nothing. */}
+      {deaneryId ? <StudyBudgetTracker defaultDeanery={deaneryId} emailOpen /> : null}
+      {isHub ? <StudyBudgetTracker /> : null}
 
       {article.faq.length > 0 ? (
         <section className="px-5 pb-14 sm:px-8">

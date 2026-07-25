@@ -1,0 +1,207 @@
+{
+  "_meta": {
+    "purpose": "Data source for the Study Budget Tracker widget. One object per deanery. The widget renders: brief + approval verdict + pre-drafted approval email. On the hub page the widget shows the deanery dropdown (defaultDeanery=null). On each deanery article the widget is pre-selected (defaultDeanery=<slug>) with emailOpen=true.",
+    "verdictEnum": "likely_approved | conditional | after_fail_only | check_local",
+    "lastReviewed": "2026-07",
+    "reviewCadenceMonths": 6,
+    "sourceLinksOutstanding": "13 deanery pages sourced. South West detailed funding position unconfirmed (regional links partly down); article treats a commercial SCA course as a possibility needing approval, not a certainty. East of England cites the live FAQ URL (2020 PDF bundled). North East cites a second bundled doc."
+  },
+  "deaneries": [
+    {
+      "slug": "london",
+      "name": "London",
+      "verdict": "likely_approved",
+      "cap": "£600 per SCA course (code GP0001)",
+      "approvalLikelihood": "Likely approved: one SCA preparation course up to £600, with ES agreement.",
+      "brief": "London funds one SCA preparation course up to £600 under code GP0001, with your Educational Supervisor's agreement. Online packages qualify. Question bank claims use up the same single course. Exam fees are not covered by the budget.",
+      "sourceDoc": "General Practice approved study leave list (Sept 2025) + NHS England London & South East GP exam preparation FAQ",
+      "sourceUrl": "/study-budget/sources/london-approved-study-leave-list-sept-2025.pdf",
+      "email": {
+        "subject": "SCA preparation course, study budget approval (GP0001)",
+        "body": "Hi [ES name],\n\nI'd like to put an SCA preparation course on my PDP ahead of my sitting in [month]. The course is [course name] at £[amount], which sits within the £600 GP0001 exam-preparation allowance.\n\nCould we discuss it at our next review so I can get prospective approval before booking? I'll add the PDP entry beforehand and send the course details across.\n\nThanks,\n[your name]"
+      }
+    },
+    {
+      "slug": "kss",
+      "name": "Kent, Surrey and Sussex",
+      "verdict": "likely_approved",
+      "cap": "£600 per SCA course (code GP0001)",
+      "approvalLikelihood": "Likely approved: one SCA course per sitting, up to £600.",
+      "brief": "KSS funds one SCA preparation course per sitting up to £600 under code GP0001, an external supporting activity needing supervisor sign off. Free internal AKT revision (GP0017) is available separately. Exam fees are not covered.",
+      "sourceDoc": "KSS General Practice Approved List, revised March 2026",
+      "sourceUrl": "/study-budget/sources/kss-gp-approved-list-march-2026.pdf",
+      "email": {
+        "subject": "SCA preparation course, study budget approval (GP0001)",
+        "body": "Hi [ES name],\n\nI'd like to book an SCA preparation course ahead of my sitting in [month]. The course is [course name] at £[amount], within the £600 GP0001 per-sitting allowance.\n\nPlease could we agree it at our next review and add it to my PDP so I can get prospective approval before booking?\n\nThanks,\n[your name]"
+      }
+    },
+    {
+      "slug": "east-of-england",
+      "name": "East of England",
+      "verdict": "conditional",
+      "cap": "No fixed allocation; TPD sign off for exam courses",
+      "approvalLikelihood": "Conditional: one SCA course per programme, TPD sign off, regional free courses come first, expensive commercial packages generally declined.",
+      "brief": "East of England has no fixed personal allocation. Exam preparation courses are aspirational activities needing TPD sign off and a PDP entry. Book the free regional SCA day first. Expensive commercial packages are generally not reimbursed except in exceptional circumstances.",
+      "sourceDoc": "NHSE East of England GP Study Leave FAQs (live) + TPD guidance Oct 2020 (bundled secondary)",
+      "sourceUrl": "https://heeoe.hee.nhs.uk/general_practice/gp-study-leave",
+      "email": {
+        "subject": "SCA preparation course, aspirational activity approval",
+        "body": "Hi [TPD name],\n\nAhead of my SCA sitting in [month] I'd like to apply for an SCA preparation course as an aspirational activity. I've checked the regional course offer; [I couldn't attend the funded regional day because ... / no suitable date was available].\n\nThe course is [course name] at £[amount], structured as a course rather than a subscription. I'll complete Part B of the application and add the PDP entry. Could you sign it off before I book?\n\nThanks,\n[your name]"
+      }
+    },
+    {
+      "slug": "thames-valley",
+      "name": "Thames Valley",
+      "verdict": "likely_approved",
+      "cap": "No cash cap; one SCA course in ST3",
+      "approvalLikelihood": "Likely approved: SCA course in ST3 is a green curriculum requirement, ideally RCGP accredited. Regional courses come first.",
+      "brief": "Under the joint Thames Valley and Wessex policy an SCA course in ST3 is automatically fundable, one per resident doctor, ideally RCGP accredited. Book the regional course first. A subscription bundled inside a course fee is acceptable; a standalone subscription is not.",
+      "sourceDoc": "Study leave for GP resident doctors, Thames Valley and Wessex GP School, March 2026",
+      "sourceUrl": "/study-budget/sources/thames-valley-wessex-study-leave-march-2026.pdf",
+      "email": {
+        "subject": "SCA course (ST3) study leave approval",
+        "body": "Hi [ES name],\n\nI'd like to book my ST3 SCA course ahead of my sitting in [month]. I've checked the regional TV and Wessex offer; [I couldn't attend / no suitable date].\n\nThe course is [course name] at £[amount], structured as a course. Could we add it to my PDP and get approval through the South East process before I book?\n\nThanks,\n[your name]"
+      }
+    },
+    {
+      "slug": "wessex",
+      "name": "Wessex",
+      "verdict": "likely_approved",
+      "cap": "No cash cap; one SCA course in ST3",
+      "approvalLikelihood": "Likely approved: SCA course in ST3 is a green curriculum requirement, ideally RCGP accredited. Regional courses come first.",
+      "brief": "Wessex shares the Thames Valley and Wessex GP School policy. An SCA course in ST3 is automatically fundable, one per resident doctor, ideally RCGP accredited. Regional courses come first; expensive commercial packages are generally excluded.",
+      "sourceDoc": "Study leave for GP resident doctors, Thames Valley and Wessex GP School, March 2026",
+      "sourceUrl": "/study-budget/sources/thames-valley-wessex-study-leave-march-2026.pdf",
+      "email": {
+        "subject": "SCA course (ST3) study leave approval",
+        "body": "Hi [ES name],\n\nI'd like to book my ST3 SCA course ahead of my sitting in [month]. I've checked the regional TV and Wessex offer; [I couldn't attend / no suitable date].\n\nThe course is [course name] at £[amount], structured as a course. Could we add it to my PDP and get approval through the South East process before I book?\n\nThanks,\n[your name]"
+      }
+    },
+    {
+      "slug": "east-midlands",
+      "name": "East Midlands",
+      "verdict": "likely_approved",
+      "cap": "No per-course cap (extra approval above £1,000 total)",
+      "approvalLikelihood": "Likely approved: SCA courses are mandatory curriculum activity, ES sign off, guidance of two over training, no cap below £1,000.",
+      "brief": "Under the Midlands GP Schools guidance, SCA courses are Category I mandatory activity needing only ES approval, with guidance of two courses over training and RCGP-accredited preferred. No per-course cap; only claims over £1,000 total need extra TPD sign off. Online courses treated the same as in-person.",
+      "sourceDoc": "Midlands GP Schools Study Leave Guidance, current version May 2026",
+      "sourceUrl": "/study-budget/sources/midlands-gp-schools-study-leave-guidance-may-2026.pdf",
+      "email": {
+        "subject": "SCA course, study leave approval (Category I)",
+        "body": "Hi [ES name],\n\nI'd like to add an SCA preparation course to my PDP ahead of my sitting in [month]. The course is [course name] at £[amount], structured as a course and well under the £1,000 threshold.\n\nAs a Category I curriculum activity it needs your ES sign off. Could we agree it at our next review so I can apply on Accent at least 6 weeks before?\n\nThanks,\n[your name]"
+      }
+    },
+    {
+      "slug": "west-midlands",
+      "name": "West Midlands",
+      "verdict": "likely_approved",
+      "cap": "No per-course cap (extra approval above £1,000 total)",
+      "approvalLikelihood": "Likely approved: SCA courses are mandatory curriculum activity, ES sign off, guidance of two over training, no cap below £1,000.",
+      "brief": "West Midlands shares the Midlands GP Schools guidance. SCA courses are Category I mandatory activity needing only ES approval, guidance of two over training, RCGP-accredited preferred, no per-course cap below the £1,000 extra-approval threshold. Fourteen Fish packages are named as fundable.",
+      "sourceDoc": "Midlands GP Schools Study Leave Guidance, current version May 2026",
+      "sourceUrl": "/study-budget/sources/midlands-gp-schools-study-leave-guidance-may-2026.pdf",
+      "email": {
+        "subject": "SCA course, study leave approval (Category I)",
+        "body": "Hi [ES name],\n\nI'd like to add an SCA preparation course to my PDP ahead of my sitting in [month]. The course is [course name] at £[amount], structured as a course and well under the £1,000 threshold.\n\nAs a Category I curriculum activity it needs your ES sign off. Could we agree it at our next review so I can apply on Accent at least 6 weeks before?\n\nThanks,\n[your name]"
+      }
+    },
+    {
+      "slug": "north-west",
+      "name": "North West",
+      "verdict": "conditional",
+      "cap": "£500 per SCA course (accredited and non-accredited)",
+      "approvalLikelihood": "Conditional: one SCA course up to £500. RCGP-accredited courses are auto-approved; non-accredited need TPD and study-leave-team sign off before booking. Courses over £500 are not fully funded.",
+      "brief": "North West funds one SCA course up to £500. RCGP-provided or accredited courses are automatically approved; non-accredited courses are considered case by case, held to the same £500 line, and need TPD and study-leave-team sign off before booking. Fourteen Fish packages are funded separately. A £599 course sits £99 above the cap.",
+      "sourceDoc": "NW School Study Leave Guidelines, March 2026",
+      "sourceUrl": "/study-budget/sources/north-west-study-leave-guidelines-march-2026.pdf",
+      "email": {
+        "subject": "SCA course, study leave approval (up to £500)",
+        "body": "Hi [TPD name],\n\nAhead of my SCA sitting in [month] I'd like to book an SCA course. The course is [course name] at £[amount]. [If RCGP accredited: it is RCGP accredited, so should fall under automatic approval. / If not: I understand non-accredited courses need discussion with you and the study leave team first, and are limited to £500.]\n\nCould we agree it before I book so the claim isn't rejected? I'll apply on Accent at least 6 weeks ahead.\n\nThanks,\n[your name]"
+      }
+    },
+    {
+      "slug": "yorkshire-humber",
+      "name": "Yorkshire and Humber",
+      "verdict": "likely_approved",
+      "cap": "No stated cash cap; named approved list",
+      "approvalLikelihood": "Likely approved: SCA courses are green (auto-approved on ALM), one per exam attempt, from a named list.",
+      "brief": "Yorkshire and Humber auto-approves SCA courses on ALM, one per exam attempt, from a named list (RCGP SCA course, SCA assured course, complete SCA course). Funding is provided if no free or pre-funded course is available. Confirm reimbursement permission before booking; 8 weeks' notice.",
+      "sourceDoc": "Study leave for GP Registrars, Yorkshire and Humber, February 2025",
+      "sourceUrl": "/study-budget/sources/yorkshire-humber-study-leave-feb-2025.pdf",
+      "email": {
+        "subject": "SCA course, study leave approval (green course)",
+        "body": "Hi [ES name],\n\nAhead of my SCA sitting in [month] I'd like to book an SCA course. The course is [course name] at £[amount], a complete SCA course of the type on the approved green list. I've checked there's no free or pre-funded regional equivalent for my need.\n\nCould you confirm reimbursement permission so I can apply on ALM at least 8 weeks before booking?\n\nThanks,\n[your name]"
+      }
+    },
+    {
+      "slug": "north-east",
+      "name": "North East",
+      "verdict": "conditional",
+      "cap": "Full funding if RCGP accredited; else 50% self-funded",
+      "approvalLikelihood": "Conditional: one RCGP-provided or accredited SCA course or package is auto-approved with full funding. Non-accredited courses are discretionary with 50% self-funding expected.",
+      "brief": "North East auto-approves one RCGP-provided or accredited SCA course or educational package per trainee, with full funding. Non-accredited courses fall into the discretionary route where you pay 50% yourself. Subscriptions are not funded. Applications over £500 need extra sign off. Never pay before approval or the claim is auto-rejected.",
+      "sourceDoc": "NHSE Education NE Automatic Approved Course List, effective 05.09.2025 + NHSE NE Study Leave Policy v11, Aug 2025",
+      "sourceUrl": "/study-budget/sources/north-east-approved-course-list-sept-2025.pdf",
+      "email": {
+        "subject": "SCA course, study leave approval (automatic approved list)",
+        "body": "Hi [ES name],\n\nAhead of my SCA sitting in [month] I'd like to book an SCA course. The course is [course name] at £[amount]. [If accredited: it is RCGP accredited / an SCA educational package, so should fall under the automatic approved list.]\n\nI'll apply on ALM and won't pay until it's fully approved. Could we agree it at our next review?\n\nThanks,\n[your name]"
+      }
+    },
+    {
+      "slug": "south-west",
+      "name": "South West (Severn and Peninsula)",
+      "verdict": "check_local",
+      "cap": "Detailed funding guidance being finalised",
+      "approvalLikelihood": "Check locally: detailed SCA funding rules are being finalised. Standard England norm likely (one course, regional-first). Get prospective approval before booking.",
+      "brief": "The South West is finalising its detailed study leave funding guidance, so the exact SCA cap is not yet published regionally. Principles are standard: curriculum-relevant, regional teaching first, not everything funded. Confirm the current position with your TPD and get prospective approval before booking.",
+      "sourceDoc": "South West GP Study Leave Guidance (funding detail pending)",
+      "sourceUrl": "PENDING - no published source document yet",
+      "email": {
+        "subject": "SCA course, study leave approval",
+        "body": "Hi [TPD name],\n\nAhead of my SCA sitting in [month] I'd like to book an SCA course. The course is [course name] at £[amount], structured as a course.\n\nAs the detailed funding guidance is still being finalised, could you confirm the current position and give prospective approval before I book?\n\nThanks,\n[your name]"
+      }
+    },
+    {
+      "slug": "scotland",
+      "name": "Scotland",
+      "verdict": "conditional",
+      "cap": "£600 nominal per ST year (course fees, not subscriptions)",
+      "approvalLikelihood": "Conditional: a nominal £600 per ST year, TPD-judged on curriculum relevance and value. A course using most of the £600 may be part-funded only. No exam fee funding.",
+      "brief": "Scotland (NES) gives a nominal £600 per part of training, not automatic, requested with good reason via TURAS and approved by your TPD. Individual course fees are funded; annual subscriptions to a set of courses are not. Courses using most of your £600 may be part-funded. Exam fees are never funded.",
+      "sourceDoc": "NES GP registrar study leave FAQs, July 2025",
+      "sourceUrl": "/study-budget/sources/scotland-nes-gp-registrar-study-leave-faqs-july-2025.pdf",
+      "email": {
+        "subject": "SCA course, study leave and funding request",
+        "body": "Hi [TPD name],\n\nAhead of my SCA sitting in [month] I'd like to request funding for an SCA course from my nominal budget. The course is [course name] at £[amount], relevant to the RCGP curriculum and structured as a course rather than a subscription.\n\nCould you approve it with funding via TURAS? I'll apply at least 6 weeks ahead and claim against receipts.\n\nThanks,\n[your name]"
+      }
+    },
+    {
+      "slug": "wales",
+      "name": "Wales",
+      "verdict": "likely_approved",
+      "cap": "£600 per year, rollover to £1,200 max",
+      "approvalLikelihood": "Likely approved: £600 per training year, rolling over once to £1,200 max. Curriculum-supplementing courses and even GP CPD subscriptions are acceptable.",
+      "brief": "Wales (HEIW) gives £600 per training year, with unused budget rolling over once to a £1,200 maximum for trainees staying in a Welsh programme. Curriculum-supplementing courses qualify, and Wales unusually lists GP CPD subscriptions as acceptable use. Exam fees, portfolio fees, books and equipment are excluded.",
+      "sourceDoc": "HEIW GP Trainee Study Leave Policy, V4, March 2024",
+      "sourceUrl": "/study-budget/sources/wales-heiw-gp-study-leave-policy-v4-march-2024.pdf",
+      "email": {
+        "subject": "SCA course, study leave approval",
+        "body": "Hi [ES name],\n\nAhead of my SCA sitting in [month] I'd like to book an SCA course from my study budget. The course is [course name] at £[amount], a course that supplements the GP curriculum.\n\nCould we agree it so I can apply on Codi at least 6 weeks before? I'll claim reimbursement via SEL e-expenses afterwards.\n\nThanks,\n[your name]"
+      }
+    },
+    {
+      "slug": "northern-ireland",
+      "name": "Northern Ireland",
+      "verdict": "after_fail_only",
+      "cap": "£750 per course via SUCCESS (after a failed attempt only)",
+      "approvalLikelihood": "After a failed attempt only: NIMDTA does not routinely fund SCA courses for a first sitting. After an unsuccessful attempt, SUCCESS funds one approved SCA course up to £750.",
+      "brief": "Northern Ireland (NIMDTA) does not routinely fund SCA courses for a first attempt, as protected self-directed learning time is the intended preparation. After an unsuccessful attempt, the SUCCESS programme funds one approved SCA course up to £750 (within a £1,250 per-year cap) plus up to 3 days study leave. Exam fees are never funded.",
+      "sourceDoc": "NIMDTA GP Specialty Training Study Leave guidance, October 2025",
+      "sourceUrl": "/study-budget/sources/northern-ireland-study-leave-policy-oct-2025.pdf",
+      "email": {
+        "subject": "SCA course, SUCCESS programme funding request",
+        "body": "Hi [Programme Director name],\n\nFollowing my unsuccessful SCA attempt, I'd like to apply for an SCA course through the SUCCESS programme. The course is [course name] at £[amount], from an approved provider, within the £750 SUCCESS limit.\n\nCould you confirm my eligibility and approve it so I can apply through the usual process at least 4 weeks before?\n\nThanks,\n[your name]"
+      }
+    }
+  ]
+}
