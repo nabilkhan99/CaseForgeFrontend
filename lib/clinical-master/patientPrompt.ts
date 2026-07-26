@@ -87,6 +87,28 @@ const ACTOR_NOTE_RE = new RegExp(
 const ASSESSMENT_LEAK_RE =
   /\(\s*[^)\n]{0,100}?\b(?:critically fails?|candidate (?:critically )?(?:fails?|passes|scores?)|mark scheme|marking scheme|examiner (?:expects|awards|wants|is looking|will mark)|clear fail|clear pass|awards? (?:a )?(?:pass|fail))\b[^)\n]{0,200}\)\s*/gi;
 
+/**
+ * Case-design notes: the second leak class, found from Ishaq's mock station.
+ * Not mark-scheme language, so ASSESSMENT_LEAK_RE let them through — these
+ * explain to the reader WHY a line is in the script, or what it tests:
+ *   (Rules out raised ICP / space-occupying lesion)
+ *   (Testing the doctor's ability to explain clinical reasoning)
+ * Verified surviving the strip before this was added, in 12 of 79 scripts.
+ *
+ * Harmful because they hand the model the clinical significance of its own
+ * lines. A patient told that a set of negatives "rules out raised ICP" has been
+ * told those negatives belong together — which is exactly the behaviour we are
+ * trying to stop, where an open question gets the whole red-flag screen back.
+ *
+ * Keywords chosen for precision, not coverage. A layperson never says
+ * "candidate", "rules out", "red flag" or "differentiates" inside a bracket, so
+ * these cannot eat real dialogue; ordinary clinical parentheticals like
+ * "(on both sides)" are untouched. Prepositional phrases a patient MIGHT use
+ * are deliberately absent, and "examiner" stays out for the reason above.
+ */
+const CASE_DESIGN_NOTE_RE =
+  /\(\s*[^)\n]{0,100}?\b(?:candidate|rules? out|ruling out|points? (?:to|towards)|differentiat\w+|testing (?:the|whether)|tests (?:the|whether)|red flag|key clue|core clue|diagnostic clue|doctor's ability)\b[^)\n]{0,200}\)\s*/gi;
+
 export function stripStageDirections(text: string): string {
   if (!text) return text;
   let out = text;
@@ -107,6 +129,7 @@ export function stripStageDirections(text: string): string {
   // Assessment language first — before the emphasis unwrap has finished
   // reshaping the line, and regardless of how it is wrapped.
   out = out.replace(ASSESSMENT_LEAK_RE, ' ');
+  out = out.replace(CASE_DESIGN_NOTE_RE, ' ');
 
   // Parentheses: only actor notes, never clinical parentheticals.
   out = out.replace(ACTOR_NOTE_RE, '');

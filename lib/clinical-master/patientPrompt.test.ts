@@ -126,6 +126,54 @@ describe('stripStageDirections', () => {
     });
   });
 
+  // The second leak class, found from Ishaq's mock station: notes explaining
+  // why a line is in the script rather than how the candidate is scored. These
+  // are not mark-scheme language, so the assessment pattern let them through —
+  // verified surviving in 12 of 79 scripts before CASE_DESIGN_NOTE_RE existed.
+  describe('case-design notes never reach the patient', () => {
+    const notes = [
+      '- "No, I haven\'t been sick. No changes to my vision." (Rules out raised ICP / space-occupying lesion).',
+      '- Reaction: "How can you be so sure?" (Testing the doctor\'s ability to explain clinical reasoning).',
+      '- "It\'s there when I wake up." (Points towards medication overuse.)',
+      '- "I take them every day." (This is the core clue.)',
+      '- "My neck is stiff." (Differentiates tension headache from meningitis.)',
+      '- "No fever." (Red flag screen.)',
+      '- "I want a scan." (Candidate should explore ICE here.)',
+    ];
+
+    for (const src of notes) {
+      it(`strips: ${src.slice(0, 44)}…`, () => {
+        const out = stripStageDirections(src);
+        expect(out).not.toMatch(
+          /rules? out|points? towards|core clue|differentiates|red flag|candidate|doctor's ability|testing the/i
+        );
+      });
+    }
+
+    it('keeps the dialogue attached to a stripped design note', () => {
+      const out = stripStageDirections(
+        '- "No, I haven\'t been sick." (Rules out raised ICP / space-occupying lesion).'
+      );
+      expect(out).toContain("No, I haven't been sick.");
+    });
+
+    // The whole point of preserving parentheses was clinical detail. A note
+      // pattern that ate these would undo the fix it was added alongside.
+    it.each([
+      '- "It hurts here (on both sides)."',
+      '- "I take two co-codamol (paracetamol and codeine) twice a day."',
+      '- "The rash is on my shin (the front of my lower leg)."',
+      '- "I saw the practice nurse (not the GP) last month."',
+    ])('keeps the clinical parenthetical in %j', (src) => {
+      expect(stripStageDirections(src)).toContain('(');
+    });
+
+    it('does not strip a patient describing a red-flag symptom in dialogue', () => {
+      const src = '- "I did have one episode where I couldn\'t see out of my left eye."';
+      expect(stripStageDirections(src)).toContain("couldn't see out of my left eye");
+    });
+  });
+
   it('leaves plain text untouched', () => {
     const plain = 'No, nothing like that. Arms and legs feel completely normal.';
     expect(stripStageDirections(plain)).toBe(plain);
