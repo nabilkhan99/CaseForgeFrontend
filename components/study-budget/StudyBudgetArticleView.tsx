@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import LandingFooter from '@/components/landing/LandingFooter';
 import LandingNavbar from '@/components/landing/LandingNavbar';
-import StudyBudgetTracker from '@/components/study-budget/StudyBudgetTracker';
+import StudyBudgetChecker from '@/components/landing/v5/StudyBudgetChecker';
 import type { StudyBudgetArticle } from '@/lib/study-budget/content';
 import { STUDY_BUDGET_HUB } from '@/lib/study-budget/content';
 import { neighbourLinks, SUPPORT_LINKS } from '@/lib/study-budget/related';
@@ -128,8 +128,11 @@ export default function StudyBudgetArticleView({
               H2 on every deanery page) and BEFORE the soft pricing CTA.
               Spokes pre-select with the email pane open; the hub shows the
               dropdown prompt; support pages mount nothing. */}
-          {deaneryId ? <StudyBudgetTracker defaultDeanery={deaneryId} emailOpen /> : null}
-          {isHub ? <StudyBudgetTracker /> : null}
+          {/* The same checker the homepage uses, per instruction. It carries its
+              own deanery dropdown and its own dataset, so it does not pre-select
+              this page's deanery and its verdict can differ from the article on
+              five deaneries — a known, accepted divergence. */}
+          {deaneryId || isHub ? <StudyBudgetChecker /> : null}
 
           {article.cta ? (
             <aside className="mt-12 rounded-2xl border border-[#e0d4bd] bg-[#fbf6ec] p-6 sm:p-7">
