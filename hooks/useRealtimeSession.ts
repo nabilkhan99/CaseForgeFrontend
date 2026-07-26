@@ -98,6 +98,29 @@ const DT_CAL_EMA = 0.3;
 const DT_COUPLING_MAX = 8;
 
 /**
+ * Commit watchdog. Closing a turn normally needs DT_END_SILENCE_FRAMES
+ * CONSECUTIVE silent frames, and room noise resets that counter — measured room
+ * noise averaged 0.0134 against a DT_MIC_FLOOR of 0.01, so quiet rooms are
+ * intermittently "voiced". A logged session opened a turn at mic 0.0156 and its
+ * silence run went 4 → 1 → 3 → 6, reset by spikes every time; it never reached
+ * 18, so nothing was ever committed and the patient never spoke again for the
+ * rest of the consultation.
+ *
+ * A flat time cap would be wrong: a doctor explaining a management plan speaks
+ * continuously for far longer than a few seconds, and cutting in on them would
+ * trade one bug for another. The freeze has a signature a real turn does not —
+ * lots of elapsed time, very little voice in it. Within a genuinely spoken turn
+ * density is near 1 (a 900ms gap closes the turn anyway); the frozen turn was
+ * mostly silence punctuated by blips.
+ */
+const TURN_WATCHDOG_MS = 5000;
+/** Voiced frames / elapsed frames below which an open turn is a stuck one. */
+const TURN_VOICED_DENSITY_MIN = 0.35;
+/** Hard ceiling: longer than any single uninterrupted doctor utterance, so no
+ *  turn can stay open forever whatever the density says. */
+const TURN_MAX_MS = 30000;
+
+/**
  * How long to wait for a committed turn's transcription before replying anyway.
  * `input_audio_buffer.commit` does NOT create a response (per the Realtime API
  * reference), so the two are sent separately and the reply is gated on what the
@@ -243,6 +266,10 @@ export function useRealtimeSession({
     /** A doctor turn is currently being captured (client-driven turn mode). */
     const turnOpenRef = useRef(false);
     const silenceFramesRef = useRef(0);
+    /** When the open turn opened, and how many of its frames held voice — the
+     *  commit watchdog's only inputs. */
+    const turnOpenedAtRef = useRef(0);
+    const turnVoicedFramesRef = useRef(0);
     const bufferClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     /**
      * Committed doctor turns still waiting on a transcript before we decide
@@ -716,6 +743,12 @@ export function useRealtimeSession({
                 turnOpen: turnOpenRef.current,
                 dtFrames: doubleTalkFramesRef.current,
                 silFrames: silenceFramesRef.current,
+                // How long the open turn has been open, and how much of it held
+                // voice — the watchdog's inputs, so a freeze is diagnosable from
+                // the log rather than inferred.
+                openMs: turnOpenRef.current ? now - turnOpenedAtRef.current : 0,
+                turnVoiced: turnVoicedFramesRef.current,
+                pending: pendingCommitsRef.current,
             };
             logDebug('snap', snap);
             updateDebugOverlay(
@@ -751,6 +784,7 @@ export function useRealtimeSession({
         if (isVoice && !inEchoTail) {
             doubleTalkFramesRef.current += 1;
             silenceFramesRef.current = 0;
+            if (turnOpenRef.current) turnVoicedFramesRef.current += 1;
             if (
                 speakingRef.current &&
                 refLive &&
@@ -778,6 +812,8 @@ export function useRealtimeSession({
                 doubleTalkFramesRef.current >= DT_MIN_SPEECH_FRAMES
             ) {
                 turnOpenRef.current = true;
+                turnOpenedAtRef.current = now;
+                turnVoicedFramesRef.current = doubleTalkFramesRef.current;
                 logDebug('turn-open', { mic: micRms });
             }
         } else {
@@ -797,6 +833,29 @@ export function useRealtimeSession({
                     sendEvent({ type: 'input_audio_buffer.commit' });
                     armRespondDecision();
                 }
+            }
+        }
+
+        // Commit watchdog — the escape from a turn that can never close on its
+        // own (see TURN_WATCHDOG_MS). Runs after the normal path, which has
+        // already cleared turnOpenRef if it committed this tick, so the two can
+        // never both fire. The forced commit goes through the same reply gate,
+        // so a turn that was only room noise transcribes to nothing and the
+        // patient stays quiet — the session is unstuck either way.
+        if (turnOpenRef.current) {
+            const openFor = now - turnOpenedAtRef.current;
+            const density = turnVoicedFramesRef.current / Math.max(1, openFor / DT_FRAME_MS);
+            const stuck = openFor >= TURN_WATCHDOG_MS && density < TURN_VOICED_DENSITY_MIN;
+            if (stuck || openFor >= TURN_MAX_MS) {
+                turnOpenRef.current = false;
+                silenceFramesRef.current = 0;
+                logDebug('turn-commit:watchdog', {
+                    openFor,
+                    density: Number(density.toFixed(2)),
+                    reason: stuck ? 'silent-turn' : 'max-length',
+                });
+                sendEvent({ type: 'input_audio_buffer.commit' });
+                armRespondDecision();
             }
         }
     }, [
@@ -889,6 +948,8 @@ export function useRealtimeSession({
         lastReattachAtRef.current = 0;
         turnOpenRef.current = false;
         silenceFramesRef.current = 0;
+        turnOpenedAtRef.current = 0;
+        turnVoicedFramesRef.current = 0;
         patRecentRef.current = [];
         micEnvRef.current = 0;
         patEnvRef.current = 0;
@@ -1109,6 +1170,7 @@ export function useRealtimeSession({
                     // doctor turn so echo can never ride into a later commit.
                     turnOpenRef.current = false;
                     silenceFramesRef.current = 0;
+                    turnVoicedFramesRef.current = 0;
                     doubleTalkFramesRef.current = 0;
                     // The patient is answering, so any turn still waiting on a
                     // reply decision has been answered — drop it rather than
