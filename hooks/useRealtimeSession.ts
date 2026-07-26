@@ -174,6 +174,50 @@ function asMs(value: unknown): number | undefined {
     return typeof value === 'number' ? value : undefined;
 }
 
+/**
+ * A synchronization source older than this has no bearing on what the mic is
+ * hearing now. getSynchronizationSources() reports the most recent packet per
+ * SSRC and keeps entries for ~10s, so without this check a level from before a
+ * silence gap would be read as current — over-predicting echo and swallowing
+ * the doctor's next words.
+ */
+const REF_SOURCE_MAX_AGE_MS = 150;
+
+/**
+ * Patient playback level from the RTP receiver, 0..1, or undefined if this
+ * browser/sender does not provide it.
+ *
+ * This replaces a WebAudio tap on the remote track as the echo reference. That
+ * tap was created as `ctx.createMediaStreamSource(new MediaStream([track]))
+ * .connect(analyser)` — both the stream and the source node were anonymous
+ * temporaries, only the AnalyserNode was held in a ref, and the graph never
+ * reached a destination, so the whole thing was garbage-collectable. Logs show
+ * what that cost: ~20 `ref-dead:re-attach` per two minutes and a coupling
+ * estimate drifting to 2.53, a ratio that is not physically possible (DT_COUPLING_MAX
+ * exists only to absorb it). Every barge-in and turn-open decision downstream
+ * was running on that.
+ *
+ * audioLevel comes from the RFC 6464 header extension, is linear (1.0 = 0 dBov)
+ * and so is on the same footing as the analyser's RMS — and the coupling is
+ * calibrated adaptively anyway, so a constant scale difference is absorbed.
+ * There is nothing here to collect, nothing to re-attach, and no AudioContext.
+ */
+function receiverAudioLevel(receiver: RTCRtpReceiver | null): number | undefined {
+    if (!receiver || typeof receiver.getSynchronizationSources !== 'function') return undefined;
+    let sources: RTCRtpSynchronizationSource[];
+    try {
+        sources = receiver.getSynchronizationSources();
+    } catch {
+        return undefined;
+    }
+    const source = sources[0];
+    if (!source || typeof source.audioLevel !== 'number') return undefined;
+    // Stale entries mean RTP has stopped; treat that as silence, not as the
+    // last level seen.
+    if (performance.now() - source.timestamp > REF_SOURCE_MAX_AGE_MS) return 0;
+    return source.audioLevel;
+}
+
 interface UseRealtimeSessionProps {
     sessionId: string;
     stationId?: string;
@@ -242,8 +286,17 @@ export function useRealtimeSession({
     const audioCtxRef = useRef<AudioContext | null>(null);
     const micAnalyserRef = useRef<AnalyserNode | null>(null);
     const patientAnalyserRef = useRef<AnalyserNode | null>(null);
+    /** Held ONLY so the tap's graph is not garbage-collected — see
+     *  receiverAudioLevel for what happened when they were temporaries. */
+    const patientTapStreamRef = useRef<MediaStream | null>(null);
+    const patientTapSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
     const analyserBufRef = useRef<Uint8Array | null>(null);
     const remoteStreamRef = useRef<MediaStream | null>(null);
+    /** Receiver for the patient's audio — the primary echo reference. */
+    const audioReceiverRef = useRef<RTCRtpReceiver | null>(null);
+    /** Whether the receiver actually reports audioLevel on this browser; falls
+     *  back to the WebAudio tap when it does not. Logged once. */
+    const receiverRefUsableRef = useRef<boolean | null>(null);
     const detectorIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const detectorStartedAtRef = useRef(0);
     /** Echo-coupling estimate: micRms ≈ coupling × patientRms. Starts high
@@ -590,11 +643,25 @@ export function useRealtimeSession({
                     /* already disconnected */
                 }
             }
+            if (patientTapSourceRef.current) {
+                try {
+                    patientTapSourceRef.current.disconnect();
+                } catch {
+                    /* already disconnected */
+                }
+            }
             const analyser = ctx.createAnalyser();
             analyser.fftSize = 1024;
             // A fresh MediaStream wrapping the live track — more reliable on
-            // WebKit than the ontrack-provided stream object.
-            ctx.createMediaStreamSource(new MediaStream([track])).connect(analyser);
+            // WebKit than the ontrack-provided stream object. Both the stream
+            // and the source node are held in refs: as anonymous temporaries in
+            // a graph with no destination they were collectable, which is what
+            // killed this tap ~20 times per two minutes.
+            const tapStream = new MediaStream([track]);
+            const source = ctx.createMediaStreamSource(tapStream);
+            source.connect(analyser);
+            patientTapStreamRef.current = tapStream;
+            patientTapSourceRef.current = source;
             patientAnalyserRef.current = analyser;
             logDebug('patient-analyser:attached', {
                 muted: track.muted,
@@ -688,8 +755,21 @@ export function useRealtimeSession({
         const micAnalyser = micAnalyserRef.current;
         const buf = analyserBufRef.current;
         if (!micAnalyser || !buf) return;
+        // Echo reference: the receiver's own audio level where the browser
+        // reports it, the WebAudio tap where it does not. The receiver has
+        // nothing to garbage-collect, so it cannot go dead mid-session.
+        const receiverLevel = receiverAudioLevel(audioReceiverRef.current);
+        const usingReceiver = receiverLevel !== undefined;
+        if (receiverRefUsableRef.current === null && speakingRef.current) {
+            receiverRefUsableRef.current = usingReceiver;
+            logDebug('echo-ref', { source: usingReceiver ? 'receiver' : 'webaudio-tap' });
+        }
         const patientAnalyser = patientAnalyserRef.current;
-        const patientRms = patientAnalyser ? analyserRms(patientAnalyser, buf) : 0;
+        const patientRms = usingReceiver
+            ? receiverLevel
+            : patientAnalyser
+              ? analyserRms(patientAnalyser, buf)
+              : 0;
         const micRms = analyserRms(micAnalyser, buf);
         const now = Date.now();
 
@@ -712,6 +792,7 @@ export function useRealtimeSession({
         // attempts — but mic-side turn-taking below never depends on it.
         const refLive = patPeak >= DT_REF_LIVE_MIN;
         if (
+            !usingReceiver &&
             speakingRef.current &&
             !refLive &&
             now - speakingSinceRef.current > 500 &&
@@ -739,6 +820,7 @@ export function useRealtimeSession({
                 pat: Number(patientRms.toFixed(4)),
                 peak: Number(patPeak.toFixed(4)),
                 k: Number(couplingRef.current.toFixed(4)),
+                ref: usingReceiver ? 'rx' : 'tap',
                 speaking: speakingRef.current,
                 turnOpen: turnOpenRef.current,
                 dtFrames: doubleTalkFramesRef.current,
@@ -941,7 +1023,11 @@ export function useRealtimeSession({
         }
         micAnalyserRef.current = null;
         patientAnalyserRef.current = null;
+        patientTapSourceRef.current = null;
+        patientTapStreamRef.current = null;
         remoteStreamRef.current = null;
+        audioReceiverRef.current = null;
+        receiverRefUsableRef.current = null;
         speakingRef.current = false;
         activeResponseIdRef.current = null;
         lastAssistantItemRef.current = null;
@@ -1323,6 +1409,9 @@ export function useRealtimeSession({
                 }
                 el.srcObject = e.streams[0];
                 remoteStreamRef.current = e.streams[0] ?? new MediaStream([e.track]);
+                // Primary echo reference — read straight off the receiver, no
+                // audio graph to keep alive (see patientReferenceLevel).
+                audioReceiverRef.current = e.receiver ?? null;
                 logDebug('rx:ontrack', {
                     streams: e.streams.length,
                     trackMuted: e.track.muted,
