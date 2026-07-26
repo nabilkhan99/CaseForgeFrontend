@@ -6,7 +6,6 @@ import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
-import ScoreBadge from '@/components/ui/ScoreBadge';
 import DomainTag from '@/components/ui/DomainTag';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import SecondaryButton from '@/components/ui/SecondaryButton';
@@ -15,18 +14,7 @@ import {
   getSessionHistory,
   type SessionHistoryItem,
 } from '@/lib/supabase/queries/dashboard';
-
-function formatRelativeDate(dateStr: string): string {
-  if (!dateStr) return '';
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7) return `${diffDays}d ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
-  return `${Math.floor(diffDays / 30)}mo ago`;
-}
+import { formatRelativeDate } from '@/lib/utils';
 
 export default function HistoryPage() {
   const supabase = createClient();
@@ -110,7 +98,7 @@ export default function HistoryPage() {
     <div>
       <PageHeader
         title="Session History"
-        subtitle={totalCount > 0 ? `${totalCount} completed session${totalCount !== 1 ? 's' : ''}` : undefined}
+        subtitle={totalCount > 0 ? `${totalCount} completed session${totalCount !== 1 ? 's' : ''} · scored out of 10.5` : undefined}
       />
 
       {sessions.length === 0 ? (
@@ -149,15 +137,25 @@ export default function HistoryPage() {
                     </div>
                   </div>
 
-                  {/* Pass/Refer label + score — flex-shrink-0 so they never get clipped */}
+                  {/* Verdict band + weighted score — flex-shrink-0 so they never get clipped */}
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <span
-                      className="text-[11px] font-semibold uppercase"
-                      style={{ color: session.passed ? '#16A34A' : '#DC2626' }}
-                    >
-                      {session.passed ? 'Pass' : 'Refer'}
-                    </span>
-                    <ScoreBadge score={session.overallScore} />
+                    {session.scored ? (
+                      <>
+                        <span
+                          className="text-[11px] font-semibold uppercase"
+                          style={{ color: session.passed ? '#16A34A' : '#DC2626' }}
+                        >
+                          {session.verdict}
+                        </span>
+                        <span className="text-[12px] font-mono text-muted">
+                          {session.weightedScore.toFixed(1)}/{session.maxScore.toFixed(1)}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-[11px] font-medium text-muted">
+                        {session.marking ? 'Marking…' : 'No feedback available'}
+                      </span>
+                    )}
                   </div>
                 </Link>
               </motion.div>

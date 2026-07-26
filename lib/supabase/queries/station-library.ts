@@ -66,18 +66,26 @@ export async function getDomains(userId?: string): Promise<Domain[]> {
         countByDomain[s.domain_id] = (countByDomain[s.domain_id] || 0) + 1;
     });
 
-    // Get user's completed sessions per domain if logged in
+    // Get user's completed sessions per domain if logged in. Count distinct
+    // stations, not sessions — repeat attempts at the same case must not push
+    // completion above the number of stations in the domain.
     const completedByDomain: Record<string, number> = {};
     if (userId) {
         const { data: sessions } = await supabase
             .from('clinical_sessions')
-            .select('stations!inner(domain_id)')
+            .select('station_id, stations!inner(domain_id)')
             .eq('user_id', userId)
             .eq('status', 'completed');
 
+        const stationsByDomain: Record<string, Set<string>> = {};
         sessions?.forEach((s) => {
             const domainId = (s.stations as unknown as { domain_id: string }).domain_id;
-            completedByDomain[domainId] = (completedByDomain[domainId] || 0) + 1;
+            if (!s.station_id) return;
+            if (!stationsByDomain[domainId]) stationsByDomain[domainId] = new Set();
+            stationsByDomain[domainId].add(s.station_id);
+        });
+        Object.entries(stationsByDomain).forEach(([domainId, stationIds]) => {
+            completedByDomain[domainId] = stationIds.size;
         });
     }
 
@@ -214,7 +222,6 @@ export async function getAllStations(): Promise<Station[]> {
     }
 
     if (!stations || stations.length === 0) {
-        console.log('No stations found');
         return [];
     }
 

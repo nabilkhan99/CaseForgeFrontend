@@ -1,71 +1,129 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { after, NextRequest, NextResponse } from 'next/server';
+import { createClient as createServerClient } from '@/lib/supabase/server';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import type { ConsultationFeedback } from '@/lib/clinical-master/types';
 
-// ── Supabase admin client (server-side only) ──
+/**
+ * Feedback orchestrator + poller for the SCA marking engine.
+ *
+ * If results exist in session_results (new spec schema), return them. Otherwise
+ * schedule the Azure Functions marking endpoint (mark-consultation) and return
+ * "generating" so the page keeps polling. The Gemini Supabase Edge Function has
+ * been retired; marking now runs on Azure (GPT-5.x), guarded by a shared secret.
+ */
 
-function getSupabaseAdmin() {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    return createClient(url, key, {
-        auth: { autoRefreshToken: false, persistSession: false },
-    });
+export const maxDuration = 60;
+
+const inFlightMarkingSessions = new Set<string>();
+
+interface SessionResultRow {
+    verdict: string;
+    weighted_score: number | string | null;
+    max_score: number | string | null;
+    one_line_summary: string | null;
+    tier3_override_applied: boolean | null;
+    domains: unknown;
+    timing: unknown;
+    focus_areas: unknown;
+    capability_links: string[] | null;
+    confidence: unknown;
 }
 
-// ── API Route Handler (thin trigger + result checker) ──
+function toFeedback(
+    sessionId: string,
+    row: SessionResultRow,
+    stationId: string | undefined,
+    stationTitle: string | undefined
+): ConsultationFeedback {
+    return {
+        session_id: sessionId,
+        overall: {
+            verdict: (row.verdict as ConsultationFeedback['overall']['verdict']) ?? 'Fail',
+            weighted_score: Number(row.weighted_score ?? 0),
+            max_score: Number(row.max_score ?? 10.5),
+            one_line_summary: row.one_line_summary ?? '',
+            tier3_override_applied: Boolean(row.tier3_override_applied),
+        },
+        domains: (row.domains as ConsultationFeedback['domains']) ?? [],
+        timing: (row.timing as ConsultationFeedback['timing']) ?? null,
+        focus_areas: (row.focus_areas as ConsultationFeedback['focus_areas']) ?? [],
+        capability_links: row.capability_links ?? [],
+        confidence: (row.confidence as ConsultationFeedback['confidence']) ?? {
+            transcript_quality: 'high',
+            notes: '',
+        },
+        station_id: stationId,
+        station_title: stationTitle ?? 'Station Feedback',
+    };
+}
 
 export async function POST(request: NextRequest) {
     try {
-        const { sessionId } = await request.json();
+        const { sessionId, trigger = true } = await request.json();
         if (!sessionId) {
             return NextResponse.json({ error: 'sessionId required' }, { status: 400 });
         }
 
+        // Verify the caller owns this session (or it's a guest session).
+        const authSupabase = await createServerClient();
+        const {
+            data: { user },
+        } = await authSupabase.auth.getUser();
+
         const supabase = getSupabaseAdmin();
 
-        // 1. Check if feedback already exists → return immediately
-        const { data: existingResults } = await supabase
+        if (user) {
+            const { data: owned } = await supabase
+                .from('clinical_sessions')
+                .select('id')
+                .eq('id', sessionId)
+                .eq('user_id', user.id)
+                .maybeSingle();
+
+            if (!owned) {
+                const { data: guest } = await supabase
+                    .from('clinical_sessions')
+                    .select('id')
+                    .eq('id', sessionId)
+                    .is('user_id', null)
+                    .maybeSingle();
+                if (!guest) {
+                    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+                }
+            }
+        }
+
+        // 1. Results already exist -> return them in the spec shape.
+        //    select('*') + cast: the generated types still describe the legacy
+        //    columns until the 0001 migration + type regen land at go-live.
+        const { data: existingResultsRaw } = await supabase
             .from('session_results')
             .select('*')
             .eq('session_id', sessionId)
             .maybeSingle();
+        const existingResults = existingResultsRaw as unknown as SessionResultRow | null;
 
         if (existingResults) {
             const { data: session } = await supabase
                 .from('clinical_sessions')
-                .select('overall_score, station_id, stations(title)')
+                .select('station_id, transcript, stations(title)')
                 .eq('id', sessionId)
                 .single();
 
+            const stationTitle = (session?.stations as { title?: string } | null)?.title;
             return NextResponse.json({
                 status: 'ready',
-                feedback: {
-                    data_gathering: {
-                        domain: 'Data Gathering',
-                        score: existingResults.data_gathering_score || 0,
-                        strengths: existingResults.data_gathering_feedback?.strengths || [],
-                        improvements: existingResults.data_gathering_feedback?.improvements || [],
-                    },
-                    clinical_management: {
-                        domain: 'Clinical Management',
-                        score: existingResults.clinical_management_score || 0,
-                        strengths: existingResults.clinical_management_feedback?.strengths || [],
-                        improvements: existingResults.clinical_management_feedback?.improvements || [],
-                    },
-                    interpersonal_skills: {
-                        domain: 'Interpersonal Skills',
-                        score: existingResults.interpersonal_skills_score || 0,
-                        strengths: existingResults.interpersonal_skills_feedback?.strengths || [],
-                        improvements: existingResults.interpersonal_skills_feedback?.improvements || [],
-                    },
-                    overall_summary: existingResults.overall_summary || '',
-                    key_learning_points: existingResults.key_learning_points || [],
-                    overall_score: session?.overall_score || 0,
-                    station_title: (session?.stations as { title?: string } | null)?.title || 'Station Feedback',
-                },
+                feedback: toFeedback(
+                    sessionId,
+                    existingResults as SessionResultRow,
+                    session?.station_id as string | undefined,
+                    stationTitle
+                ),
+                transcript: Array.isArray(session?.transcript) ? session.transcript : [],
             });
         }
 
-        // 2. Verify session exists and has a transcript
+        // 2. Need a transcript before we can mark.
         const { data: session, error: sessionError } = await supabase
             .from('clinical_sessions')
             .select('id, transcript, status')
@@ -75,33 +133,71 @@ export async function POST(request: NextRequest) {
         if (sessionError || !session) {
             return NextResponse.json({ error: 'Session not found' }, { status: 404 });
         }
-
-        if (!session.transcript || (Array.isArray(session.transcript) && session.transcript.length === 0)) {
-            return NextResponse.json({ error: 'No transcript available yet' }, { status: 404 });
+        if (
+            !session.transcript ||
+            (Array.isArray(session.transcript) && session.transcript.length === 0)
+        ) {
+            // A session past the live stage with no transcript will never produce
+            // feedback (mic failure / abandoned call) — tell the page to stop polling.
+            const terminal = session.status !== 'reading' && session.status !== 'live';
+            return NextResponse.json({
+                status: terminal ? 'no_transcript' : 'generating',
+                triggerQueued: false,
+            });
         }
 
-        // 3. Trigger Supabase Edge Function (fire-and-forget)
-        //    The Edge Function has 150s timeout — plenty for Gemini.
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+        // 3. Trigger the Azure marking endpoint once; later polls pass trigger=false.
+        const markingUrl = process.env.MARKING_API_URL;
+        const markingSecret = process.env.MARKING_SHARED_SECRET;
+        if (!markingUrl || !markingSecret) {
+            return NextResponse.json(
+                { error: 'Marking endpoint not configured' },
+                { status: 500 }
+            );
+        }
 
-        fetch(`${supabaseUrl}/functions/v1/generate-feedback`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${serviceKey}`,
-            },
-            body: JSON.stringify({ sessionId }),
-        }).catch((err) => {
-            console.error('Failed to trigger edge function:', err);
+        if (trigger && !inFlightMarkingSessions.has(sessionId)) {
+            const endpoint = `${markingUrl.replace(/\/+$/, '')}/api/mark-consultation`;
+            inFlightMarkingSessions.add(sessionId);
+            after(async () => {
+                try {
+                    const res = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-marking-secret': markingSecret,
+                        },
+                        body: JSON.stringify({ sessionId }),
+                    });
+
+                    if (!res.ok) {
+                        const body = await res.text().catch(() => '');
+                        console.error('Marking endpoint returned an error', {
+                            sessionId,
+                            status: res.status,
+                            body: body.slice(0, 500),
+                        });
+                    }
+                } catch (err) {
+                    console.error('Failed to trigger marking endpoint:', err);
+                } finally {
+                    inFlightMarkingSessions.delete(sessionId);
+                }
+            });
+        }
+
+        return NextResponse.json({
+            status: 'generating',
+            triggerQueued: trigger,
+            alreadyInFlight: inFlightMarkingSessions.has(sessionId),
         });
-
-        // 4. Return immediately — frontend will poll for results
-        return NextResponse.json({ status: 'generating' });
     } catch (error) {
         console.error('Feedback route error:', error);
         return NextResponse.json(
-            { error: 'Failed to process request', details: error instanceof Error ? error.message : String(error) },
+            {
+                error: 'Failed to process request',
+                details: error instanceof Error ? error.message : String(error),
+            },
             { status: 500 }
         );
     }

@@ -7,6 +7,14 @@ module.exports = {
   ],
   theme: {
     extend: {
+      // Height-based breakpoint. Laptop viewports vary far more in height than
+      // width (a 13" browser window is ~760px tall, a 14" ~860px), so sections
+      // that must be taken in at a glance size their vertical rhythm off this
+      // rather than off the `sm:`/`lg:` width breakpoints. The threshold sits
+      // above any laptop so only external monitors get the roomier spacing.
+      screens: {
+        tall: { raw: '(min-height: 940px)' },
+      },
       colors: {
         primary: {
           DEFAULT: '#B45309',
@@ -15,7 +23,9 @@ module.exports = {
         },
         heading: '#1C1917',
         body: '#44403C',
-        muted: '#A8A29E',
+        // stone-500: the old stone-400 (#A8A29E) fails WCAG AA (2.41:1) for the
+        // small labels this token is used on against the cream surfaces.
+        muted: '#78716C',
         surface: {
           DEFAULT: '#FAFAF7',
           raised: '#FFFCF8',

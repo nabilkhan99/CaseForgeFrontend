@@ -1,20 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-function getSupabaseAdmin() {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
-}
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 export async function POST(req: NextRequest) {
-  const { sessionId, stationId } = await req.json();
+  const { sessionId, stationId, knownEmail } = await req.json();
 
   if (!sessionId || !stationId) {
     return NextResponse.json({ error: 'sessionId and stationId are required' }, { status: 400 });
   }
 
   const supabase = getSupabaseAdmin();
+
+  // One free station per person: if this browser has already been through the
+  // email gate, refuse a second run for that email. (First runs are anonymous,
+  // so this is honest-user enforcement, not a hard wall.)
+  if (typeof knownEmail === 'string' && knownEmail.trim()) {
+    const { data: existingLead } = await supabase
+      .from('trial_leads')
+      .select('id')
+      .ilike('email', knownEmail.trim())
+      .maybeSingle();
+
+    if (existingLead) {
+      return NextResponse.json(
+        {
+          error: 'You have already used your free mock station',
+          code: 'free_station_used',
+        },
+        { status: 409 },
+      );
+    }
+  }
 
   // Verify station is a free trial station
   const { data: station } = await supabase

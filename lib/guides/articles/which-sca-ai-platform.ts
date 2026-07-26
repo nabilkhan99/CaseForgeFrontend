@@ -76,8 +76,8 @@ export const whichScaAiPlatform: GuideArticle = {
                             '**Voice AI consultation practice built on our free RCGP curriculum case library, with domain mapped feedback**',
                             '**Voice**',
                             '**200 cases (unlimited practice, not limited by station credits)**',
-                            '**£199 for 3 month access; £599 bundle with AI practice, small group coaching and live lectures (eligible for the NHSE study budget)**',
-                            '**The only SCA programme that combines AI practice, small group coaching and live lectures, and the only one with a pass guarantee.**',
+                            '**£299 for 3 month access; £599 bundle with AI practice, small group coaching and on-demand lectures (eligible for the NHSE study budget)**',
+                            '**The only SCA programme that combines AI practice, small group coaching and on-demand lectures, and the only one with a pass guarantee.**',
                         ],
                         [
                             'SCA Revision (SCARevision.ai)',

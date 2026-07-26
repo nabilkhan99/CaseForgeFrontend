@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import Container from '@/components/ui/Container';
 import PrimaryButton from '@/components/ui/PrimaryButton';
-import ScoreBadge from '@/components/ui/ScoreBadge';
+import SecondaryButton from '@/components/ui/SecondaryButton';
 import DomainTag from '@/components/ui/DomainTag';
 import {
   getUserStats,
@@ -15,12 +15,22 @@ import {
   getLastStation,
   getSessionHistory,
 } from '@/lib/supabase/queries/dashboard';
+import { getRandomStation } from '@/lib/supabase/queries/station-library';
+import type { Station } from '@/lib/supabase/queries/station-library';
 import type {
   UserStats,
   PerformanceMetrics,
   LastStation,
-} from '@/lib/dashboard/mock-data';
+} from '@/lib/dashboard/types';
 import type { SessionHistoryItem } from '@/lib/supabase/queries/dashboard';
+import { formatRelativeDate } from '@/lib/utils';
+
+interface SubscriptionInfo {
+  plan: string;
+  status: string;
+  expires_at: string;
+  days_remaining: number;
+}
 
 const defaultStats: UserStats = {
   currentStreak: 0,
@@ -35,19 +45,6 @@ const defaultMetrics: PerformanceMetrics = {
   interpersonalSkills: 0,
 };
 
-function formatRelativeDate(dateStr: string): string {
-  if (!dateStr) return '';
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7) return `${diffDays}d ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
-  return `${Math.floor(diffDays / 30)}mo ago`;
-}
-
 const DOMAIN_LABELS: Record<string, string> = {
   dataGathering: 'Data Gathering',
   clinicalManagement: 'Clinical Management',
@@ -61,6 +58,8 @@ export default function DashboardPage() {
   const [metrics, setMetrics] = useState<PerformanceMetrics>(defaultMetrics);
   const [lastStation, setLastStation] = useState<LastStation | null>(null);
   const [recentSessions, setRecentSessions] = useState<SessionHistoryItem[]>([]);
+  const [randomStation, setRandomStation] = useState<Station | null>(null);
+  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -77,17 +76,21 @@ export default function DashboardPage() {
       }
 
       try {
-        const [statsData, metricsData, lastStationData, recentData] = await Promise.all([
+        const [statsData, metricsData, lastStationData, recentData, randomStationData, subRes] = await Promise.all([
           getUserStats(user.id),
           getPerformanceMetrics(user.id),
           getLastStation(user.id),
           getSessionHistory(user.id, 3, 0),
+          getRandomStation(),
+          fetch('/api/subscription').then((r) => r.json()),
         ]);
 
         setStats(statsData);
         setMetrics(metricsData);
         setLastStation(lastStationData);
         setRecentSessions(recentData);
+        setRandomStation(randomStationData);
+        if (subRes.subscription) setSubscription(subRes.subscription);
       } catch (error) {
         if (error instanceof Error) {
           // Silently handle dashboard data errors
@@ -136,7 +139,7 @@ export default function DashboardPage() {
         </h1>
         <p className="text-[14px] text-muted mt-1">
           {stats.completedStations > 0
-            ? `You've completed ${stats.completedStations} session${stats.completedStations !== 1 ? 's' : ''}${stats.currentStreak > 0 ? ` \u00B7 ${stats.currentStreak}-day streak` : ''}`
+            ? `You've completed ${stats.completedStations} session${stats.completedStations !== 1 ? 's' : ''}${stats.currentStreak >= 2 ? ` \u00B7 ${stats.currentStreak}-day streak` : ''}`
             : 'Start your first consultation to begin tracking progress'}
         </p>
         {stats.examCountdownDays > 0 && (
@@ -148,6 +151,38 @@ export default function DashboardPage() {
           </span>
         )}
       </div>
+
+      {/* Subscription banners */}
+      {!loading && !subscription && (
+        <motion.div
+          className="mb-6 px-4 py-3 rounded-xl flex items-center justify-between gap-3"
+          style={{ background: 'rgba(180,83,9,0.04)', border: '1px solid rgba(180,83,9,0.08)' }}
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <p className="text-[13px] text-heading">
+            You&apos;re on the free tier &mdash;{' '}
+            <Link href="/pricing" className="text-primary font-semibold hover:underline">
+              upgrade to start practicing
+            </Link>
+          </p>
+        </motion.div>
+      )}
+      {subscription && subscription.days_remaining <= 7 && subscription.days_remaining > 0 && (
+        <motion.div
+          className="mb-6 px-4 py-3 rounded-xl flex items-center justify-between gap-3"
+          style={{ background: 'rgba(180,83,9,0.06)', border: '1px solid rgba(180,83,9,0.12)' }}
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <p className="text-[13px] text-heading">
+            Your plan expires in {subscription.days_remaining} day{subscription.days_remaining !== 1 ? 's' : ''} &mdash;{' '}
+            <Link href="/pricing" className="text-primary font-semibold hover:underline">
+              renew to keep access
+            </Link>
+          </p>
+        </motion.div>
+      )}
 
       {/* Getting started onboarding for new users */}
       {stats.completedStations === 0 && (
@@ -177,33 +212,44 @@ export default function DashboardPage() {
 
       {/* Quick start */}
       <div className="mb-8">
-        {lastStation ? (
-          <Container>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-1.5">
-                  Resume Session
+        <Link href="/dashboard/library">
+          <PrimaryButton size="lg" fullWidth>
+            Start a New Session
+          </PrimaryButton>
+        </Link>
+        {randomStation && (
+          <div className="text-center mt-2">
+            <Link
+              href={`/clinical-master/station/${randomStation.id}`}
+              className="text-[13px] text-primary hover:underline"
+            >
+              or pick a random case &rarr;
+            </Link>
+          </div>
+        )}
+        {lastStation && (
+          <div className="mt-4">
+            <Container>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-1.5">
+                    Unfinished Case
+                  </div>
+                  <div className="text-[15px] font-semibold text-heading truncate">{lastStation.title}</div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <DomainTag name={lastStation.domain} size="sm" />
+                    <span className="text-[12px] text-muted">{lastStation.patientName}</span>
+                    <span className="text-[11px] text-muted">
+                      Restarts from the beginning ({Math.floor(lastStation.timeRemaining / 60)} min)
+                    </span>
+                  </div>
                 </div>
-                <div className="text-[15px] font-semibold text-heading truncate">{lastStation.title}</div>
-                <div className="flex items-center gap-2 mt-1">
-                  <DomainTag name={lastStation.domain} size="sm" />
-                  <span className="text-[12px] text-muted">{lastStation.patientName}</span>
-                  <span className="text-[11px] font-mono text-primary font-semibold">
-                    {Math.floor(lastStation.timeRemaining / 60)}m
-                  </span>
-                </div>
+                <Link href={`/clinical-master/session/${lastStation.sessionId}?stationId=${lastStation.id}`} className="sm:w-auto">
+                  <SecondaryButton size="sm" fullWidth>Restart case</SecondaryButton>
+                </Link>
               </div>
-              <Link href={`/clinical-master/session/${lastStation.sessionId}?stationId=${lastStation.id}`} className="sm:w-auto">
-                <PrimaryButton size="sm" fullWidth>Continue</PrimaryButton>
-              </Link>
-            </div>
-          </Container>
-        ) : (
-          <Link href="/dashboard/library">
-            <PrimaryButton size="lg" fullWidth>
-              Start a New Session
-            </PrimaryButton>
-          </Link>
+            </Container>
+          </div>
         )}
       </div>
 
@@ -212,8 +258,11 @@ export default function DashboardPage() {
         <div
           className="mb-8"
         >
-          <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-3">
-            Recent Sessions
+          <div className="flex items-baseline justify-between mb-3">
+            <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em]">
+              Recent Sessions
+            </div>
+            <span className="text-[11px] text-muted">Scored out of 10.5, the SCA weighted total</span>
           </div>
           <div className="divide-y divide-black/[0.06]">
             {recentSessions.map((session, i) => (
@@ -234,7 +283,25 @@ export default function DashboardPage() {
                       <span className="text-[11px] text-muted">{formatRelativeDate(session.completedAt)}</span>
                     </div>
                   </div>
-                  <ScoreBadge score={session.overallScore} showLabel />
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {session.scored ? (
+                      <>
+                        <span
+                          className="text-[11px] font-semibold uppercase"
+                          style={{ color: session.passed ? '#16A34A' : '#DC2626' }}
+                        >
+                          {session.verdict}
+                        </span>
+                        <span className="text-[12px] font-mono text-muted">
+                          {session.weightedScore.toFixed(1)}/{session.maxScore.toFixed(1)}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-[11px] font-medium text-muted">
+                        {session.marking ? 'Marking…' : 'No feedback available'}
+                      </span>
+                    )}
+                  </div>
                 </Link>
               </motion.div>
             ))}

@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Complete SCA Course — Course Specification | Fourteen Fisherman</title>
+<meta name="description" content="Full course specification for the Complete SCA Course (£599, one-off): full-day small-group coaching, on-demand lectures and 200 consultation practice stations. Provided for study budget approval.">
+<!-- This page is reached by direct link only. Keep it out of search results and site navigation. -->
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#B45309">
+<link rel="canonical" href="https://www.fourteenfisherman.com/course-spec">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400..700;1,8..60,400..700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#fbf7f0;
+    --bg-card:#ffffff;
+    --bg-tint:#f6efe2;
+    --line:#e7dcc9;
+    --line-soft:#efe6d6;
+    --text:#2b2013;
+    --text-mute:#5c4f3d;
+    --text-dim:#8a7b65;
+    --amber:#b45309;
+    --amber-deep:#92400e;
+    --serif:'Source Serif 4', Georgia, serif;
+    --sans:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  @media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto;} }
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    font-size:16px;
+    line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--amber);text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  a:focus-visible, button:focus-visible{outline:2px solid var(--amber);outline-offset:3px;border-radius:2px;}
+
+  .wrap{max-width:860px;margin:0 auto;padding:0 24px;}
+
+  /* Header */
+  header{
+    border-bottom:1px solid var(--line-soft);
+    padding:20px 0;
+    background:var(--bg);
+  }
+  header .wrap{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;}
+  .wordmark{
+    font-family:var(--serif);
+    font-size:1.15rem;
+    letter-spacing:.02em;
+    color:var(--text);
+  }
+  .wordmark .fish{color:var(--amber);}
+  .doc-tag{
+    font-size:.72rem;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+  }
+
+  /* Title block */
+  .title-block{padding:64px 0 40px;}
+  .pill{
+    display:inline-block;
+    font-size:.7rem;
+    font-weight:600;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    color:var(--amber-deep);
+    border:1px solid var(--amber);
+    border-radius:999px;
+    padding:5px 14px;
+    margin-bottom:22px;
+    background:#fff;
+  }
+  h1{
+    font-family:var(--serif);
+    font-weight:600;
+    font-size:clamp(2rem, 5vw, 3rem);
+    line-height:1.15;
+    letter-spacing:-.01em;
+    margin-bottom:14px;
+  }
+  .subtitle{
+    color:var(--text-mute);
+    font-size:1.05rem;
+    max-width:62ch;
+  }
+  .purpose{
+    margin-top:26px;
+    border-left:3px solid var(--amber);
+    padding:14px 20px;
+    background:var(--bg-tint);
+    border-radius:0 8px 8px 0;
+    color:var(--text-mute);
+    font-size:.95rem;
+    max-width:70ch;
+  }
+  .purpose strong{color:var(--text);font-weight:600;}
+
+  /* Sections */
+  section{padding:36px 0;border-top:1px solid var(--line-soft);}
+  h2{
+    font-family:var(--serif);
+    font-weight:600;
+    font-size:1.5rem;
+    margin-bottom:18px;
+    letter-spacing:-.005em;
+  }
+  h3{
+    font-size:1.02rem;
+    font-weight:600;
+    margin-bottom:8px;
+    color:var(--text);
+  }
+  p{color:var(--text-mute);max-width:72ch;}
+  section p + p{margin-top:12px;}
+
+  /* At a glance */
+  .glance{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));
+    gap:1px;
+    background:var(--line);
+    border:1px solid var(--line);
+    border-radius:12px;
+    overflow:hidden;
+  }
+  .glance div{
+    background:var(--bg-card);
+    padding:16px 20px;
+  }
+  .glance dt{
+    font-size:.7rem;
+    font-weight:600;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    margin-bottom:4px;
+  }
+  .glance dd{
+    color:var(--text);
+    font-size:.98rem;
+  }
+  .glance dd .note{color:var(--text-dim);font-size:.85rem;}
+
+  /* Component cards */
+  .component{
+    background:var(--bg-card);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:26px 28px;
+    margin-bottom:16px;
+  }
+  .component-head{
+    display:flex;
+    align-items:baseline;
+    gap:14px;
+    margin-bottom:10px;
+    flex-wrap:wrap;
+  }
+  .component-head h3{
+    font-family:var(--serif);
+    font-size:1.25rem;
+    font-weight:600;
+    margin:0;
+  }
+  .component-meta{
+    font-size:.78rem;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--amber-deep);
+    font-weight:600;
+  }
+  .component ul{margin-top:10px;}
+
+  ul.spec{
+    list-style:none;
+  }
+  ul.spec li{
+    color:var(--text-mute);
+    padding-left:22px;
+    position:relative;
+    margin-bottom:8px;
+    max-width:72ch;
+  }
+  ul.spec li::before{
+    content:"";
+    position:absolute;
+    left:2px;
+    top:.62em;
+    width:6px;
+    height:6px;
+    border-radius:50%;
+    background:var(--amber);
+  }
+  ul.spec li strong{color:var(--text);font-weight:600;}
+
+  /* Domain grid */
+  .domains{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
+    gap:14px;
+    margin-top:18px;
+  }
+  .domain{
+    background:var(--bg-card);
+    border:1px solid var(--line);
+    border-top:3px solid var(--amber);
+    border-radius:12px;
+    padding:20px 22px;
+  }
+  .domain h3{font-family:var(--serif);font-size:1.05rem;}
+  .domain p{font-size:.92rem;}
+
+  /* Footer */
+  footer{
+    border-top:1px solid var(--line-soft);
+    padding:32px 0 48px;
+    color:var(--text-dim);
+    font-size:.85rem;
+  }
+  footer p{color:var(--text-dim);max-width:none;}
+  footer .wordmark{font-size:1rem;margin-bottom:10px;display:block;}
+
+  .fineprint{
+    font-size:.85rem;
+    color:var(--text-dim);
+    margin-top:14px;
+  }
+
+  /* Print: clean document for attaching to approval paperwork */
+  @media print{
+    :root{
+      --bg:#ffffff;
+      --bg-card:#ffffff;
+      --bg-tint:#f7f3ec;
+      --line:#cfc6b5;
+      --line-soft:#e0d8c8;
+    }
+    body{font-size:12px;}
+    .title-block{padding:24px 0 16px;}
+    section{padding:16px 0;}
+    .component, .domain, .glance div{break-inside:avoid;}
+    a{color:var(--text);text-decoration:none;}
+    a[href^="mailto"]::after, a[href^="https"]::after{content:" (" attr(href) ")";font-size:.85em;color:var(--text-dim);}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <span class="wordmark">Fourteen <span class="fish">Fisherman</span></span>
+    <span class="doc-tag">Course specification · fourteenfisherman.com/course-spec</span>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+
+    <div class="title-block">
+      <span class="pill">Course Specification</span>
+      <h1>Complete SCA Course</h1>
+      <p class="subtitle">A structured preparation course for the MRCGP Simulated Consultation Assessment (SCA), for GP registrars.</p>
+      <div class="purpose">
+        <strong>For Educational Supervisors, Training Programme Directors and Associate/Patch Deans.</strong>
+        This page sets out the full specification of the Complete SCA Course to support study budget pre-approval requests made under the SCA preparation course category (claim code GP0001). It is provided by direct link for verification purposes and can be printed or saved as a PDF for approval paperwork.
+      </div>
+    </div>
+
+    <section aria-labelledby="glance">
+      <h2 id="glance">At a glance</h2>
+      <dl class="glance">
+        <div>
+          <dt>Course title</dt>
+          <dd>Complete SCA Course</dd>
+        </div>
+        <div>
+          <dt>Provider</dt>
+          <dd>Fourteen Fisherman<br><span class="note">fourteenfisherman.com</span></dd>
+        </div>
+        <div>
+          <dt>Fee</dt>
+          <dd>£599 one-off<br><span class="note">No subscription or recurring charges</span></dd>
+        </div>
+        <div>
+          <dt>Access period</dt>
+          <dd>3 months from enrolment</dd>
+        </div>
+        <div>
+          <dt>Format</dt>
+          <dd>Blended: one full-day live small-group coaching session, on-demand lectures, and online consultation practice stations</dd>
+        </div>
+        <div>
+          <dt>Coaching class size</dt>
+          <dd>Maximum 6 trainees per class</dd>
+        </div>
+        <div>
+          <dt>Intended audience</dt>
+          <dd>UK GP registrars preparing for the MRCGP SCA</dd>
+        </div>
+        <div>
+          <dt>Curriculum basis</dt>
+          <dd>Built from the RCGP curriculum and mapped to the three SCA marking domains</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section aria-labelledby="components">
+      <h2 id="components">What the course includes</h2>
+
+      <div class="component">
+        <div class="component-head">
+          <h3>1. Full-day small-group coaching</h3>
+          <span class="component-meta">9am–5pm · max class size 6 · led by a GP educator</span>
+        </div>
+        <p>A full teaching day delivered live in small groups of no more than six trainees, led by a GP educator. The day is built around complete 12-minute mock stations, role-played live, with every trainee consulting under exam conditions.</p>
+        <ul class="spec">
+          <li>Each trainee consults full mock stations while peers observe, replicating the exam's timing and pressure.</li>
+          <li>After each station, the GP educator breaks down the consultation against the three SCA marking domains: how it would have been marked, what scored, what didn't, and exactly what to change.</li>
+          <li>Coaching stations are written specifically for live delivery and are distinct from the online practice stations, prioritising the scenarios where live debrief adds most value: emotionally intense consultations, ethical and professional dilemmas, and high-stakes clinical judgement calls.</li>
+          <li>Observing peers' stations and debriefs is a designed part of the day — trainees learn from twelve full station breakdowns, not only their own.</li>
+        </ul>
+      </div>
+
+      <div class="component">
+        <div class="component-head">
+          <h3>2. On-demand lecture series</h3>
+          <span class="component-meta">10 hours · watch anytime during access period</span>
+        </div>
+        <p>A structured video lecture series covering the full arc of SCA preparation, designed to be watched in order. Every claim about the exam is grounded in the RCGP's published material, and all clinical content follows current NICE and RCGP guidance.</p>
+        <ul class="spec">
+          <li><strong>Exam orientation</strong> — the SCA format, the 12-case structure, remote delivery, how the three marking domains are scored and standard-set, and how to plan a three-month run-up.</li>
+          <li><strong>The 12-minute consultation method</strong> — a single consultation structure built for the exam's clock: checkpoint-based time management, targeted history-taking, genuine exploration of ideas, concerns and expectations, shared decision-making, and effective safety-netting.</li>
+          <li><strong>Marking domain deep-dives</strong> — one lecture per domain (data gathering, technical and assessment skills; clinical management skills; relating to others), each built around contrasted examples of weaker and stronger performance.</li>
+          <li><strong>Why candidates fail</strong> — the recurring failure patterns identified in the RCGP's published feedback, and how to identify and correct them before sitting.</li>
+          <li><strong>Difficult consultations</strong> — breaking bad news and managing emotion; negotiating, declining requests and handling anger; third-party consultations, safeguarding and telephone technique.</li>
+          <li><strong>Case-type playbooks</strong> — how the core method adapts across undifferentiated presentations, acute problems, long-term condition reviews, mental health, children and young people, older adults, prescribing and admin, and professional dilemmas.</li>
+          <li><strong>Clinical revision</strong> — safe, guideline-based management plans for the commonest presentations across the RCGP clinical experience groups.</li>
+          <li><strong>Final-month preparation</strong> — consolidating practice, exam-day logistics and readiness.</li>
+        </ul>
+      </div>
+
+      <div class="component">
+        <div class="component-head">
+          <h3>3. Consultation practice — 200 stations</h3>
+          <span class="component-meta">unlimited use during access period</span>
+        </div>
+        <p>A library of 200 timed practice stations built from the RCGP curriculum, for the repeated, timed consultation practice that the taught elements alone cannot provide.</p>
+        <ul class="spec">
+          <li>Stations span the RCGP clinical experience groups and the case types that appear in the exam, including telephone and video consultations, third-party consultations, results-giving and request negotiations.</li>
+          <li>Every station runs to the exam's 12-minute format, with a candidate brief presented as it would be in the exam.</li>
+          <li>Consultations are practised aloud in real time against a responsive simulated patient and assessed against a marking scheme mapped to the three SCA marking domains, with clinical management weighted in line with the exam's emphasis.</li>
+          <li>Feedback after each station identifies domain-level strengths and weaknesses, so practice is targeted rather than repetitive.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section aria-labelledby="mapping">
+      <h2 id="mapping">Mapping to the SCA marking domains</h2>
+      <p>All three components of the course — live coaching, lectures and practice stations — are structured around the three domains on which the RCGP marks every SCA case:</p>
+      <div class="domains">
+        <div class="domain">
+          <h3>Data gathering, technical &amp; assessment skills</h3>
+          <p>Targeted history-taking, appropriate use of the candidate brief, and reaching a justified working diagnosis within the case's time limit.</p>
+        </div>
+        <div class="domain">
+          <h3>Clinical management skills</h3>
+          <p>Safe, guideline-based management plans, handling complexity and uncertainty, shared decision-making and safety-netting.</p>
+        </div>
+        <div class="domain">
+          <h3>Relating to others</h3>
+          <p>Rapport, genuine empathy, plain-language explanation of diagnosis and plan, and working with the patient rather than at them.</p>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="outcomes">
+      <h2 id="outcomes">Learning outcomes</h2>
+      <p>By the end of the course, the trainee will be able to:</p>
+      <ul class="spec" style="margin-top:14px;">
+        <li>Structure and complete a full consultation within the SCA's 12-minute format, using checkpoint-based time management.</li>
+        <li>Gather data in a targeted way appropriate to remote consulting, and reach and communicate a justified working diagnosis.</li>
+        <li>Construct safe, current, guideline-based management plans, including for complex and uncertain presentations, with genuine shared decision-making and effective safety-netting.</li>
+        <li>Explain diagnoses, management plans, risks and medications in plain patient language.</li>
+        <li>Manage the exam's hardest consultation types: breaking bad news, responding to distress and anger, declining inappropriate requests, consulting with third parties, safeguarding conversations, and audio-only telephone consultations.</li>
+        <li>Self-assess consultations against the three SCA marking domains and target further practice at identified weaknesses.</li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="rationale">
+      <h2 id="rationale">Educational rationale</h2>
+      <p>The SCA is a consultation performance exam rather than a knowledge exam, and preparation therefore needs three things in combination: expert observation and feedback on the trainee's actual consulting, an accurate understanding of the exam and its marking, and a high volume of timed consultation repetition. The course is designed so that each component supplies one of these — the coaching day the first, the lecture series the second, and the practice stations the third.</p>
+    </section>
+
+    <section aria-labelledby="fees">
+      <h2 id="fees">Fee, access and enrolment</h2>
+      <ul class="spec">
+        <li><strong>Fee:</strong> £599, payable once. There is no subscription, no auto-renewal and no additional charge for any component listed above.</li>
+        <li><strong>Access:</strong> 3 months from the date of enrolment, covering the full lecture series and unlimited use of all 200 practice stations. The small-group coaching day is scheduled within the access period.</li>
+        <li><strong>Receipts:</strong> An itemised receipt suitable for study budget reimbursement is issued on payment.</li>
+      </ul>
+      <p class="fineprint">Trainees are advised to obtain written pre-approval from their deanery or Patch before booking, as reimbursement policies vary between regions.</p>
+    </section>
+
+    <section aria-labelledby="verify">
+      <h2 id="verify">Verification and contact</h2>
+      <p>Approvers who need confirmation of any detail on this page — course content, dates, fees or a trainee's enrolment — can contact us at <a href="mailto:hello@fourteenfisherman.com">hello@fourteenfisherman.com</a> and we will respond directly.</p>
+    </section>
+
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span class="wordmark">Fourteen <span class="fish">Fisherman</span></span>
+    <p>This specification is provided for study budget approval purposes and reflects the course as delivered at the date of access. It is reachable by direct link and does not form part of the main site navigation.</p>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,6 +1,6 @@
 /**
  * Dashboard data queries for Supabase
- * 
+ *
  * Functions to fetch real user data from the database:
  * - User stats (streak, completed stations, exam countdown)
  * - Performance metrics (domain scores)
@@ -14,7 +14,24 @@ import type {
     PerformanceMetrics,
     BlueprintDomain,
     LastStation,
-} from '@/lib/dashboard/mock-data';
+} from '@/lib/dashboard/types';
+
+// New SCA schema (Build Package Section 12): domains carry CP/P/F/CF grades and
+// the session carries a verdict + weighted score out of 10.5. For the dashboard
+// analytics we map a grade to an approximate percentage so the existing widgets
+// keep working from the new data.
+const GRADE_PCT: Record<string, number> = { CP: 100, P: 67, F: 33, CF: 0 };
+const PASSING_VERDICTS = ['Pass', 'Bare Pass'];
+const MAX_WEIGHTED = 10.5;
+
+interface DomainGrade {
+    domain?: string;
+    grade?: string;
+}
+
+function gradesFromResult(domains: unknown): DomainGrade[] {
+    return Array.isArray(domains) ? (domains as DomainGrade[]) : [];
+}
 
 /**
  * Fetch user stats: streak, completed stations count, exam countdown
@@ -84,7 +101,7 @@ export async function getPerformanceMetrics(userId: string): Promise<Performance
 
     const { data: results } = await supabase
         .from('session_results')
-        .select('data_gathering_score, clinical_management_score, interpersonal_skills_score')
+        .select('domains, weighted_score')
         .in('session_id', sessionIds);
 
     if (!results || results.length === 0) {
@@ -95,16 +112,31 @@ export async function getPerformanceMetrics(userId: string): Promise<Performance
         };
     }
 
-    // Calculate averages
-    const avg = (arr: (number | null)[]) => {
-        const valid = arr.filter((n): n is number => n !== null);
-        return valid.length > 0 ? Math.round(valid.reduce((a, b) => a + b, 0) / valid.length) : 0;
+    const buckets: Record<string, number[]> = {
+        data_gathering: [],
+        clinical_management: [],
+        relating_to_others: [],
     };
+    for (const r of results) {
+        const row = r as { domains?: unknown; weighted_score?: number | string | null };
+        // Skip legacy artefact results (0.0 overall = the engine marking an empty
+        // pre-engine transcript) — counting their CF grades as 0 drags every
+        // average down for sessions that were never genuinely consulted.
+        if (Number(row.weighted_score ?? 0) <= 0) continue;
+        for (const d of gradesFromResult(row.domains)) {
+            if (d.domain && d.grade && d.domain in buckets && d.grade in GRADE_PCT) {
+                buckets[d.domain].push(GRADE_PCT[d.grade]);
+            }
+        }
+    }
+
+    const avg = (arr: number[]) =>
+        arr.length > 0 ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0;
 
     return {
-        dataGathering: avg(results.map(r => r.data_gathering_score)),
-        clinicalManagement: avg(results.map(r => r.clinical_management_score)),
-        interpersonalSkills: avg(results.map(r => r.interpersonal_skills_score)),
+        dataGathering: avg(buckets.data_gathering),
+        clinicalManagement: avg(buckets.clinical_management),
+        interpersonalSkills: avg(buckets.relating_to_others),
     };
 }
 
@@ -144,25 +176,30 @@ export async function getBlueprintDomains(userId: string): Promise<BlueprintDoma
         .eq('user_id', userId)
         .eq('status', 'completed');
 
-    // Compute per-domain: completed count + average score
-    const domainStats: Record<string, { completed: number; totalScore: number }> = {};
+    // Compute per-domain: completed count + average score. Sessions without a
+    // score (legacy, pre-marking-engine) count as completed but are excluded
+    // from the average so they don't read as 0-mark attempts.
+    const domainStats: Record<string, { completed: number; scored: number; totalScore: number }> = {};
     completedSessions?.forEach(s => {
         const station = s.stations as unknown as { domain_id: string } | null;
         const domainId = station?.domain_id;
         if (!domainId) return;
         if (!domainStats[domainId]) {
-            domainStats[domainId] = { completed: 0, totalScore: 0 };
+            domainStats[domainId] = { completed: 0, scored: 0, totalScore: 0 };
         }
         domainStats[domainId].completed += 1;
-        domainStats[domainId].totalScore += s.overall_score ?? 0;
+        if (typeof s.overall_score === 'number' && s.overall_score > 0) {
+            domainStats[domainId].scored += 1;
+            domainStats[domainId].totalScore += s.overall_score;
+        }
     });
 
     return domains.map((domain, index) => {
-        const stats = domainStats[domain.id] || { completed: 0, totalScore: 0 };
+        const stats = domainStats[domain.id] || { completed: 0, scored: 0, totalScore: 0 };
         const total = countByDomain[domain.id] || 0;
-        const percentage = stats.completed > 0
-            ? Math.round(stats.totalScore / stats.completed)
-            : 0;
+        // clinical_sessions.overall_score is now the weighted score (0 to 10.5).
+        const avgWeighted = stats.scored > 0 ? stats.totalScore / stats.scored : 0;
+        const percentage = Math.round((avgWeighted / MAX_WEIGHTED) * 100);
 
         return {
             id: index + 1,
@@ -180,7 +217,7 @@ export async function getBlueprintDomains(userId: string): Promise<BlueprintDoma
 export async function getLastStation(userId: string): Promise<LastStation | null> {
     const supabase = createClient();
 
-    // Get most recent session that's not completed
+    // Get most recent session that's not completed, abandoned, or processing
     const { data: session } = await supabase
         .from('clinical_sessions')
         .select(`
@@ -198,6 +235,7 @@ export async function getLastStation(userId: string): Promise<LastStation | null
         .eq('user_id', userId)
         .neq('status', 'completed')
         .neq('status', 'abandoned')
+        .neq('status', 'processing')
         .order('started_at', { ascending: false })
         .limit(1)
         .single();
@@ -237,11 +275,14 @@ export interface SessionHistoryItem {
     stationTitle: string;
     domainName: string;
     completedAt: string;
-    overallScore: number;
+    verdict: string | null;
+    weightedScore: number;
+    maxScore: number;
     passed: boolean;
-    dataGatheringScore: number;
-    clinicalManagementScore: number;
-    interpersonalSkillsScore: number;
+    /** True when a marking result exists. False = legacy/unmarked session: show neutral copy, never a score or FAIL. */
+    scored: boolean;
+    /** True while a recent session is still being marked (results may still arrive). */
+    marking: boolean;
 }
 
 export async function getSessionHistory(
@@ -255,6 +296,7 @@ export async function getSessionHistory(
         .from('clinical_sessions')
         .select(`
             id,
+            status,
             completed_at,
             stations (
                 id,
@@ -262,15 +304,13 @@ export async function getSessionHistory(
                 domains (name)
             ),
             session_results (
-                overall_score,
-                passed,
-                data_gathering_score,
-                clinical_management_score,
-                interpersonal_skills_score
+                verdict,
+                weighted_score,
+                max_score
             )
         `)
         .eq('user_id', userId)
-        .eq('status', 'completed')
+        .in('status', ['completed', 'processing'])
         .order('completed_at', { ascending: false })
         .range(offset, offset + limit - 1);
 
@@ -285,12 +325,21 @@ export async function getSessionHistory(
 
         // session_results is a single object (not an array) due to unique constraint on session_id
         const result = session.session_results as unknown as {
-            overall_score: number;
-            passed: boolean;
-            data_gathering_score: number;
-            clinical_management_score: number;
-            interpersonal_skills_score: number;
+            verdict: string | null;
+            weighted_score: number | null;
+            max_score: number | null;
         } | null;
+
+        // A verdict with a 0.0 weighted score is a legacy artefact (the engine
+        // marking an empty pre-engine transcript), not a real consultation mark —
+        // render those neutrally rather than as a red FAIL row.
+        const scored = Boolean(result?.verdict) && Number(result?.weighted_score ?? 0) > 0;
+        // A 'processing' session from the last hour may still get results; anything
+        // older without a verdict is a legacy/unmarked session that never will.
+        const ageMs = session.completed_at
+            ? Date.now() - new Date(session.completed_at).getTime()
+            : Number.POSITIVE_INFINITY;
+        const marking = !scored && session.status === 'processing' && ageMs < 60 * 60 * 1000;
 
         return {
             id: session.id,
@@ -298,11 +347,12 @@ export async function getSessionHistory(
             stationTitle: station?.title || 'Unknown Station',
             domainName: station?.domains?.name || 'General Practice',
             completedAt: session.completed_at || '',
-            overallScore: result?.overall_score ?? 0,
-            passed: result?.passed ?? false,
-            dataGatheringScore: result?.data_gathering_score ?? 0,
-            clinicalManagementScore: result?.clinical_management_score ?? 0,
-            interpersonalSkillsScore: result?.interpersonal_skills_score ?? 0,
+            verdict: result?.verdict ?? null,
+            weightedScore: Number(result?.weighted_score ?? 0),
+            maxScore: Number(result?.max_score ?? MAX_WEIGHTED),
+            passed: result?.verdict ? PASSING_VERDICTS.includes(result.verdict) : false,
+            scored,
+            marking,
         };
     });
 }

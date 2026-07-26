@@ -8,6 +8,7 @@ import { CaseForm } from '@/components/CaseForm';
 import { ReviewDisplay } from '@/components/ReviewDisplay';
 import type { CaseReviewResponse } from '@/lib/types';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import PortfolioGuaranteeBanner from '@/components/portfolio/PortfolioGuaranteeBanner';
 import { analytics } from '@/lib/analytics';
 import { FeedbackWidget } from '@/components/FeedbackWidget';
 
@@ -58,19 +59,10 @@ export default function PortfolioToolClient() {
   };
 
   const isAuthenticated = authChecked && user !== null;
-  const pageIntro = (
-    <div className="space-y-2">
-      <h1 className="text-2xl md:text-3xl font-bold text-heading tracking-[-0.02em]">
-        Free GP Portfolio Tool — AI Clinical Case Review Generator
-      </h1>
-      <p className="text-sm md:text-base text-text-secondary">
-        Generate a structured clinical case review for your RCGP ePortfolio — free, no sign-up required.
-      </p>
-    </div>
-  );
 
   const content = (
     <ErrorBoundary>
+
       <section className="card">
         {!review ? (
           <CaseForm onReviewGenerated={handleReviewGenerated} />
@@ -91,12 +83,19 @@ export default function PortfolioToolClient() {
     return (
       <div className="min-h-[100dvh] bg-surface font-sans">
         <AppNavbar />
-        <main className="pt-24 pb-16 px-6">
-          <div className="max-w-[900px] mx-auto space-y-8">
-            {pageIntro}
-            {content}
+        <div className="pt-20">
+          {/* Contained, not full-bleed: the banner is a card that lines up with
+              the navbar above it, as in the design. The bar it replaced was
+              edge-to-edge, which is why it sat outside this container. */}
+          <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+            <PortfolioGuaranteeBanner />
           </div>
-        </main>
+          <main className="pt-8 pb-16 px-6">
+            <div className="max-w-[900px] mx-auto space-y-8">
+              {content}
+            </div>
+          </main>
+        </div>
       </div>
     );
   }
@@ -104,9 +103,13 @@ export default function PortfolioToolClient() {
   return (
     <div className="min-h-[100dvh] bg-surface">
       <LandingNavbar user={user} />
-      <div className="pt-24 max-w-7xl mx-auto space-y-8 px-4 sm:px-6 lg:px-8">
-        {pageIntro}
-        {content}
+      <div className="pt-20">
+        <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+          <PortfolioGuaranteeBanner />
+        </div>
+        <div className="pt-8 max-w-7xl mx-auto space-y-8 px-4 sm:px-6 lg:px-8">
+          {content}
+        </div>
       </div>
     </div>
   );

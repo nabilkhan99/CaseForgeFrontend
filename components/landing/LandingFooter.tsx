@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 interface LandingFooterProps {
   note?: string;
 }
@@ -12,16 +14,24 @@ export default function LandingFooter({ note }: LandingFooterProps) {
             Built for GP trainees. © {new Date().getFullYear()}
           </div>
         </div>
-        <a
-          href="mailto:hello@fourteenfisherman.com"
-          className="flex items-center gap-1.5 text-[13px] text-stone-500 hover:text-heading transition-colors"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="2" y="4" width="20" height="16" rx="2" />
-            <path d="M22 4L12 13L2 4" />
-          </svg>
-          hello@fourteenfisherman.com
-        </a>
+        <div className="flex flex-col items-center gap-2 sm:items-end">
+          <a
+            href="mailto:hello@fourteenfisherman.com"
+            className="flex items-center gap-1.5 text-[13px] text-stone-500 hover:text-heading transition-colors"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="4" width="20" height="16" rx="2" />
+              <path d="M22 4L12 13L2 4" />
+            </svg>
+            hello@fourteenfisherman.com
+          </a>
+          <Link
+            href="/terms"
+            className="text-[13px] text-stone-500 transition-colors hover:text-heading"
+          >
+            Terms, Privacy &amp; Cookies
+          </Link>
+        </div>
       </div>
       {note && (
         <div className="max-w-[1200px] mx-auto mt-4 text-center sm:text-left text-[12px] text-muted">

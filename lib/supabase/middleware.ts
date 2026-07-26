@@ -1,6 +1,12 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+/** Carries a valid sign-up invite through the registration flow. */
+const SIGNUP_INVITE_COOKIE = 'ff_signup_invite';
+
+/** One hour — long enough to register, short enough not to linger. */
+const SIGNUP_INVITE_MAX_AGE = 60 * 60;
+
 export async function updateSession(request: NextRequest) {
     let supabaseResponse = NextResponse.next({
         request,
@@ -34,15 +40,37 @@ export async function updateSession(request: NextRequest) {
         data: { user },
     } = await supabase.auth.getUser();
 
-    // Waitlist gate — redirect /try and /auth/sign-up to the landing-page hero form
-    const isWaitlistedRoute =
-        request.nextUrl.pathname.startsWith('/try') ||
-        request.nextUrl.pathname === '/auth/sign-up';
+    // Preorder state: no self-serve account creation yet. The free-station
+    // funnel (/try) is open, but sign-up stays gated until product launch —
+    // with one deliberate exception: an invite code. Hitting
+    // `/auth/sign-up?invite=<SIGNUP_INVITE_CODE>` opens registration for that
+    // visitor (a short-lived cookie carries them through the flow, so a reload
+    // or a bounce to sign-in and back doesn't lock them out again). Lets us give
+    // teammates and early testers accounts without opening public registration.
+    // Fails closed: with SIGNUP_INVITE_CODE unset, sign-up stays shut for everyone.
+    if (request.nextUrl.pathname === '/auth/sign-up') {
+        const inviteCode = process.env.SIGNUP_INVITE_CODE;
+        const provided = request.nextUrl.searchParams.get('invite');
+        const cookied = request.cookies.get(SIGNUP_INVITE_COOKIE)?.value;
+        const invited = Boolean(inviteCode) && (provided === inviteCode || cookied === inviteCode);
 
-    if (isWaitlistedRoute) {
-        const url = request.nextUrl.clone();
-        url.pathname = '/';
-        return NextResponse.redirect(url);
+        if (!invited) {
+            const url = request.nextUrl.clone();
+            url.pathname = '/';
+            return NextResponse.redirect(url);
+        }
+
+        // Arrived with a valid code in the URL — remember it briefly so the rest
+        // of the sign-up flow works without the query string.
+        if (provided === inviteCode && cookied !== inviteCode) {
+            supabaseResponse.cookies.set(SIGNUP_INVITE_COOKIE, inviteCode!, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                path: '/',
+                maxAge: SIGNUP_INVITE_MAX_AGE,
+            });
+        }
     }
 
     // Protected routes - redirect to sign-in if not authenticated
@@ -57,11 +85,54 @@ export async function updateSession(request: NextRequest) {
         return NextResponse.redirect(url);
     }
 
+    // Subscription-gated routes: starting/practising cases requires an active
+    // plan, but completed feedback must remain visible after a free trial or
+    // after a plan expires.
+    const isFeedbackRoute = request.nextUrl.pathname.startsWith('/clinical-master/feedback');
+    const requiresSubscription =
+        request.nextUrl.pathname.startsWith('/clinical-master') && !isFeedbackRoute;
+    if (requiresSubscription && user) {
+        try {
+            const { data: subscription } = await supabase
+                .from('subscriptions')
+                .select('id')
+                .eq('user_id', user.id)
+                .eq('status', 'active')
+                .gt('expires_at', new Date().toISOString())
+                .limit(1)
+                .single();
+
+            if (!subscription) {
+                const url = request.nextUrl.clone();
+                url.pathname = '/pricing';
+                url.searchParams.set('upgrade', 'true');
+                return NextResponse.redirect(url);
+            }
+        } catch {
+            // Fail open — don't block paid users on transient DB errors
+        }
+    }
+
     // If user is authenticated and trying to access auth pages, redirect to dashboard
     const isAuthRoute = request.nextUrl.pathname.startsWith('/auth');
     if (isAuthRoute && user) {
         const url = request.nextUrl.clone();
         url.pathname = '/dashboard';
+        return NextResponse.redirect(url);
+    }
+
+    // Signed-in users should never go through the anonymous free-trial funnel
+    // (it has a sign-up gate and is meant for unauthenticated prospects). Send
+    // them to the full authenticated experience instead. /try/feedback is
+    // excluded: it converts a completed anonymous trial into an account and then
+    // redirects to the real feedback page.
+    const isTrialFunnel =
+        request.nextUrl.pathname.startsWith('/try') &&
+        !request.nextUrl.pathname.startsWith('/try/feedback');
+    if (isTrialFunnel && user) {
+        const url = request.nextUrl.clone();
+        url.pathname = '/dashboard';
+        url.search = '';
         return NextResponse.redirect(url);
     }
 

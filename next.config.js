@@ -1,6 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  env: {
+    // Baked at build time so ?voicedebug=1 logs can prove which commit is
+    // actually deployed (stale preview builds cost us two debug rounds).
+    NEXT_PUBLIC_COMMIT_SHA: process.env.VERCEL_GIT_COMMIT_SHA ?? 'local',
+  },
   images: {
     remotePatterns: [
       {
@@ -18,6 +23,11 @@ const nextConfig = {
 
     // Only proxy the Azure Functions (portfolio tool) routes — everything
     // else is a Next.js API route and should be handled locally.
+    //
+    // The portfolio-playground/* pair moved here from the Render dev-api when
+    // the playground was consolidated onto Azure. They MUST stay listed: this
+    // is an explicit allowlist, not a wildcard, so an unlisted path falls
+    // through to Next's own /api routes and 404s.
     const azureRoutes = [
       'capabilities',
       'generate-review',
@@ -25,12 +35,24 @@ const nextConfig = {
       'improve-section',
       'select-capabilities',
       'select-experience-groups',
+      'portfolio-playground/prompt',
+      'portfolio-playground/generate-review',
     ];
 
-    return azureRoutes.map(route => ({
-      source: `/api/${route}`,
-      destination: `${backendUrl}/api/${route}`,
-    }));
+    return [
+      // Approver-facing course specification. The study budget checker's
+      // pre-approval emails link to fourteenfisherman.com/course-spec
+      // verbatim, so this URL must stay stable. Served as a static
+      // document from public/course-spec.html.
+      {
+        source: '/course-spec',
+        destination: '/course-spec.html',
+      },
+      ...azureRoutes.map(route => ({
+        source: `/api/${route}`,
+        destination: `${backendUrl}/api/${route}`,
+      })),
+    ];
   },
 }
 

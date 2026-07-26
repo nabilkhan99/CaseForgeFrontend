@@ -166,7 +166,7 @@ export const bestScaRevisionResources: GuideArticle = {
                     rows: [
                         [
                             '**Fourteen Fisherman — Complete Bundle**',
-                            '**AI practice plus small group teaching plus lectures: 3 × 3 hours of small group teaching, 3 × 4 hour lectures, and unlimited AI practice**',
+                            '**Unlimited AI Practice + On-Demand Lectures + Small Group Coaching Day**',
                             '**£599 (eligible for the NHSE study budget)**',
                             '**The only option that combines all three, and the only one with a pass guarantee**',
                         ],

@@ -4,8 +4,9 @@ import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion'
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SCA_PILLAR_PATH } from '@/lib/guides/scaPillarGuide';
+import { getTrialState } from '@/lib/trial/storage';
 
 interface LandingNavbarProps {
   user: { id: string } | null;
@@ -14,6 +15,18 @@ interface LandingNavbarProps {
 
 export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [trialCta, setTrialCta] = useState<{ label: string; href: string }>({
+    label: 'Try Free Mock Station',
+    href: '/try',
+  });
+
+  // Once the free station is used, the CTA deep-links back to their report.
+  useEffect(() => {
+    const trial = getTrialState();
+    if (trial.used && trial.feedbackUrl) {
+      setTrialCta({ label: 'See your feedback', href: trial.feedbackUrl });
+    }
+  }, []);
   const pathname = usePathname();
   const { scrollYProgress } = useScroll();
   const guidesActive = pathname?.startsWith('/guides');
@@ -60,7 +73,7 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
             href="/sca-cases"
             className="text-[13px] text-body hover:text-heading transition-colors duration-150"
           >
-            Free SCA Cases
+            SCA Cases
           </Link>
           <Link
             href={SCA_PILLAR_PATH}
@@ -70,6 +83,13 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
             }`}
           >
             SCA Guide
+          </Link>
+          {/* Hub in the main nav for crawl/authority weight (build package §7). */}
+          <Link
+            href="/study-budget/"
+            className="text-[13px] text-body hover:text-heading transition-colors duration-150"
+          >
+            Study Budget
           </Link>
           <Link
             href="/gp-portfolio-tool"
@@ -94,13 +114,13 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
                   </motion.div>
                 </Link>
               ) : (
-                <Link href="/#join">
+                <Link href={trialCta.href}>
                   <motion.div
                     className="primary-button text-[13px] !py-2 !px-5 !rounded-full"
                     whileHover={{ y: -2 }}
                     whileTap={{ scale: 0.98 }}
                   >
-                    Join waitlist
+                    {trialCta.label}
                   </motion.div>
                 </Link>
               )}
@@ -148,7 +168,7 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
               onClick={() => setMobileOpen(false)}
               className="min-h-[44px] flex items-center px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
             >
-              Free SCA Cases
+              SCA Cases
             </Link>
             <Link
               href={SCA_PILLAR_PATH}
@@ -159,6 +179,13 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
               }`}
             >
               SCA Guide
+            </Link>
+            <Link
+              href="/study-budget/"
+              onClick={() => setMobileOpen(false)}
+              className="min-h-[44px] flex items-center px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
+            >
+              Study Budget
             </Link>
             <Link
               href="/gp-portfolio-tool"
@@ -178,9 +205,9 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
                     <div className="primary-button text-[14px] w-full justify-center">Dashboard</div>
                   </Link>
                 ) : (
-                  <Link href="/#join" onClick={() => setMobileOpen(false)}>
+                  <Link href={trialCta.href} onClick={() => setMobileOpen(false)}>
                     <div className="primary-button text-[14px] w-full justify-center mt-1">
-                      Join waitlist
+                      {trialCta.label}
                     </div>
                   </Link>
                 )}

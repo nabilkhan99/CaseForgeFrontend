@@ -1,6 +1,11 @@
-import { CaseReviewRequest, CaseReviewResponse, ImprovementRequest, CapabilitiesResponse, CapabilitySelectionRequest, CapabilitySelectionResponse, ExperienceGroupRequest, ExperienceGroupResponse } from './types';
+import { CaseReviewRequest, CaseReviewResponse, ImprovementRequest, CapabilitiesResponse, CapabilitySelectionRequest, CapabilitySelectionResponse, ExperienceGroupRequest, ExperienceGroupResponse, PlaygroundCaseReviewRequest, PortfolioPromptResponse } from './types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+// Playground now shares the Azure backend (consolidated off the Render dev-api).
+// Defaults to the same relative /api that next.config rewrites to caseforge2025a;
+// override with NEXT_PUBLIC_PORTFOLIO_PLAYGROUND_API_BASE_URL only if needed.
+const PLAYGROUND_API_BASE_URL =
+  process.env.NEXT_PUBLIC_PORTFOLIO_PLAYGROUND_API_BASE_URL || '/api';
 
 interface SectionImprovementRequest {
   section_type: string;
@@ -40,6 +45,74 @@ export const api = {
 
     if (!response.ok) {
       throw new Error('Failed to generate review');
+    }
+
+    return response.json();
+  },
+
+  async getPortfolioPlaygroundPrompt(): Promise<PortfolioPromptResponse> {
+    const response = await fetch(`${PLAYGROUND_API_BASE_URL}/portfolio-playground/prompt`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      mode: 'cors',
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch portfolio prompt');
+    }
+
+    return response.json();
+  },
+
+  async getPlaygroundCapabilities(): Promise<CapabilitiesResponse> {
+    const response = await fetch(`${PLAYGROUND_API_BASE_URL}/capabilities`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      mode: 'cors',
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch playground capabilities');
+    }
+
+    return response.json();
+  },
+
+  async generatePlaygroundReview(request: PlaygroundCaseReviewRequest): Promise<CaseReviewResponse> {
+    const response = await fetch(`${PLAYGROUND_API_BASE_URL}/portfolio-playground/generate-review`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to generate playground review');
+    }
+
+    return response.json();
+  },
+
+  async selectPlaygroundExperienceGroups(request: ExperienceGroupRequest): Promise<ExperienceGroupResponse> {
+    const response = await fetch(`${PLAYGROUND_API_BASE_URL}/select-experience-groups`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to select playground experience groups');
     }
 
     return response.json();

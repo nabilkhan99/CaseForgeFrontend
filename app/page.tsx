@@ -3,12 +3,22 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import LandingNavbar from '@/components/landing/LandingNavbar';
-import LandingHero from '@/components/landing/LandingHero';
-import ProductJourney from '@/components/landing/ProductJourney';
-
-import BottomFeatures from '@/components/landing/BottomFeatures';
-import FinalCTA from '@/components/landing/FinalCTA';
 import LandingFooter from '@/components/landing/LandingFooter';
+import ReferralWelcome from '@/components/landing/ReferralWelcome';
+import {
+  Hero,
+  GuaranteeCard,
+  TrustBar,
+  ProductShowcase,
+  VideoProof,
+  CompleteCourse,
+  Testimonials,
+  StudyBudgetChecker,
+  Faq,
+} from '@/components/landing/v5';
+import PricingTable from '@/components/landing/v5/PricingTable';
+import FinalCta from '@/components/landing/v5/FinalCta';
+import { WASH } from '@/components/landing/v5/editorial';
 
 export default function LandingPage() {
   const [user, setUser] = useState<{ id: string } | null>(null);
@@ -19,13 +29,22 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div className="min-h-[100dvh] bg-[#f3ebdb] font-sans">
+    <div className="min-h-[100dvh] font-sans" style={WASH}>
       <LandingNavbar user={user} />
-      <LandingHero />
-      <ProductJourney />
-
-      <BottomFeatures />
-      <FinalCTA />
+      <ReferralWelcome />
+      <main className="flex flex-col pb-16 sm:pb-20">
+        <Hero />
+        <GuaranteeCard />
+        <TrustBar />
+        <VideoProof />
+        <CompleteCourse />
+        <ProductShowcase />
+        <Testimonials />
+        <StudyBudgetChecker />
+        <PricingTable />
+        <Faq />
+        <FinalCta />
+      </main>
       <LandingFooter />
     </div>
   );
