@@ -73,6 +73,10 @@ export default function Hero() {
             className="inline-flex items-center gap-2 rounded-full bg-[#B45309] px-8 py-4 text-base font-semibold text-white shadow-[0_4px_16px_rgba(180,83,9,0.4),inset_0_1px_0_rgba(255,255,255,0.18)] sm:px-10 sm:py-[1.15rem] sm:text-lg"
           >
             Try Free Mock Station
+            {/* Sets expectations on the one thing users touch before buying. */}
+            <span className="rounded-md bg-white/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-white/95 sm:text-[11px]">
+              Beta
+            </span>
             <ArrowRight className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true" />
           </motion.a>
           <p className="mt-4 text-xs text-[#78716C] sm:text-sm">
