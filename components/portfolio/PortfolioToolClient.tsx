@@ -84,7 +84,12 @@ export default function PortfolioToolClient() {
       <div className="min-h-[100dvh] bg-surface font-sans">
         <AppNavbar />
         <div className="pt-20">
-          <PortfolioGuaranteeBanner />
+          {/* Contained, not full-bleed: the banner is a card that lines up with
+              the navbar above it, as in the design. The bar it replaced was
+              edge-to-edge, which is why it sat outside this container. */}
+          <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+            <PortfolioGuaranteeBanner />
+          </div>
           <main className="pt-8 pb-16 px-6">
             <div className="max-w-[900px] mx-auto space-y-8">
               {content}
@@ -99,7 +104,9 @@ export default function PortfolioToolClient() {
     <div className="min-h-[100dvh] bg-surface">
       <LandingNavbar user={user} />
       <div className="pt-20">
-        <PortfolioGuaranteeBanner />
+        <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+          <PortfolioGuaranteeBanner />
+        </div>
         <div className="pt-8 max-w-7xl mx-auto space-y-8 px-4 sm:px-6 lg:px-8">
           {content}
         </div>
