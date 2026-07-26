@@ -54,7 +54,7 @@ export const STUDY_BUDGET_ARTICLES: StudyBudgetArticle[] = [
         "a": "Usually not. Most policies fund courses and exclude standalone subscriptions. Wales is a notable exception, listing GP CPD subscriptions as acceptable use."
       }
     ],
-    "cta": "If you are weighing up SCA courses that fit inside these budgets: our Complete programme (£599) combines unlimited AI consultation practice across 200 stations built from the RCGP curriculum with live teaching and small-group coaching, structured as a course. [See pricing.](https://www.fourteenfisherman.com/)",
+    "cta": "If you are weighing up SCA courses that fit inside these budgets: our Complete programme (£599) combines unlimited AI consultation practice across 200 stations built from the RCGP curriculum with on-demand lectures and small-group coaching, structured as a course. [See pricing.](https://www.fourteenfisherman.com/)",
     "sources": []
   },
   {
@@ -78,7 +78,7 @@ export const STUDY_BUDGET_ARTICLES: StudyBudgetArticle[] = [
         "a": "Yes. London funds online preparation packages and names FourteenFish as an example; the £600 cap is the operative constraint, not the delivery format."
       }
     ],
-    "cta": "If you are looking at SCA courses inside the £600 London budget: our Complete programme (£599) combines unlimited AI consultation practice across 200 stations built from the RCGP curriculum with live teaching and small-group coaching, structured as a course and priced to sit within the GP0001 cap. [See pricing.](https://www.fourteenfisherman.com/)",
+    "cta": "If you are looking at SCA courses inside the £600 London budget: our Complete programme (£599) combines unlimited AI consultation practice across 200 stations built from the RCGP curriculum with on-demand lectures and small-group coaching, structured as a course and priced to sit within the GP0001 cap. [See pricing.](https://www.fourteenfisherman.com/)",
     "sources": [
       {
         "label": "General Practice approved study leave list (Sept 2025)",
@@ -111,7 +111,7 @@ export const STUDY_BUDGET_ARTICLES: StudyBudgetArticle[] = [
         "a": "The list does not restrict delivery format; the constraints are the £600 cap, the one-per-sitting rule, and prior approval."
       }
     ],
-    "cta": "If you are looking at SCA courses inside the £600 KSS budget: our Complete programme (£599) combines unlimited AI consultation practice across 200 stations built from the RCGP curriculum with live teaching and small-group coaching, structured as a course and priced to sit within the cap. [See pricing.](https://www.fourteenfisherman.com/)",
+    "cta": "If you are looking at SCA courses inside the £600 KSS budget: our Complete programme (£599) combines unlimited AI consultation practice across 200 stations built from the RCGP curriculum with on-demand lectures and small-group coaching, structured as a course and priced to sit within the cap. [See pricing.](https://www.fourteenfisherman.com/)",
     "sources": [
       {
         "label": "KSS General Practice approved list (March 2026)",
@@ -140,7 +140,7 @@ export const STUDY_BUDGET_ARTICLES: StudyBudgetArticle[] = [
         "a": "One SCA preparation course or resource claim across your whole training programme. Additional courses only in exceptional circumstances, discussed with your TPD."
       }
     ],
-    "cta": "If you are looking at SCA courses to put to your TPD: our Complete programme (£599) combines unlimited AI consultation practice across 200 stations built from the RCGP curriculum with live teaching and small-group coaching, structured as a course, priced under the £600 ES-approval threshold that EoE uses to grade requests. [See pricing.](https://www.fourteenfisherman.com/)",
+    "cta": "If you are looking at SCA courses to put to your TPD: our Complete programme (£599) combines unlimited AI consultation practice across 200 stations built from the RCGP curriculum with on-demand lectures and small-group coaching, structured as a course, priced under the £600 ES-approval threshold that EoE uses to grade requests. [See pricing.](https://www.fourteenfisherman.com/)",
     "sources": [
       {
         "label": "NHSE East of England GP study leave FAQs",
@@ -173,7 +173,7 @@ export const STUDY_BUDGET_ARTICLES: StudyBudgetArticle[] = [
         "a": "Not on its own. A yearly access package bundled within a course fee is explicitly acceptable."
       }
     ],
-    "cta": "If you are comparing SCA courses to put through the Thames Valley process: our Complete programme (£599) combines unlimited AI consultation practice across 200 stations built from the RCGP curriculum with live teaching and small-group coaching, structured and priced as a course rather than a commercial mega-package. [See pricing.](https://www.fourteenfisherman.com/)",
+    "cta": "If you are comparing SCA courses to put through the Thames Valley process: our Complete programme (£599) combines unlimited AI consultation practice across 200 stations built from the RCGP curriculum with on-demand lectures and small-group coaching, structured and priced as a course rather than a commercial mega-package. [See pricing.](https://www.fourteenfisherman.com/)",
     "sources": [
       {
         "label": "Thames Valley & Wessex GP School study leave policy (March 2026)",
@@ -202,7 +202,7 @@ export const STUDY_BUDGET_ARTICLES: StudyBudgetArticle[] = [
         "a": "You risk funding it yourself. Approval first, booking second."
       }
     ],
-    "cta": "If you are shortlisting SCA courses for the Wessex process: our Complete programme (£599) combines unlimited AI consultation practice across 200 stations built from the RCGP curriculum with live teaching and small-group coaching, structured and priced as a course. [See pricing.](https://www.fourteenfisherman.com/)",
+    "cta": "If you are shortlisting SCA courses for the Wessex process: our Complete programme (£599) combines unlimited AI consultation practice across 200 stations built from the RCGP curriculum with on-demand lectures and small-group coaching, structured and priced as a course. [See pricing.](https://www.fourteenfisherman.com/)",
     "sources": [
       {
         "label": "Thames Valley & Wessex GP School study leave policy (March 2026)",
@@ -231,7 +231,7 @@ export const STUDY_BUDGET_ARTICLES: StudyBudgetArticle[] = [
         "a": "Yes. The policy states online and virtual learning is considered on the same basis as in-person courses."
       }
     ],
-    "cta": "If you are choosing an SCA course to put on your PDP: our Complete programme (£599) combines unlimited AI consultation practice across 200 stations built from the RCGP curriculum with live teaching and small-group coaching, structured as a course and sitting well under the £1,000 threshold that would trigger extra approval. [See pricing.](https://www.fourteenfisherman.com/)",
+    "cta": "If you are choosing an SCA course to put on your PDP: our Complete programme (£599) combines unlimited AI consultation practice across 200 stations built from the RCGP curriculum with on-demand lectures and small-group coaching, structured as a course and sitting well under the £1,000 threshold that would trigger extra approval. [See pricing.](https://www.fourteenfisherman.com/)",
     "sources": [
       {
         "label": "Midlands GP Schools study leave guidance (May 2026)",
@@ -260,7 +260,7 @@ export const STUDY_BUDGET_ARTICLES: StudyBudgetArticle[] = [
         "a": "The policy lists Fourteen Fish SCA and AKT packages in its fundable green category."
       }
     ],
-    "cta": "If you are choosing an SCA course to put on your PDP: our Complete programme (£599) combines unlimited AI consultation practice across 200 stations built from the RCGP curriculum with live teaching and small-group coaching, structured as a course and priced well within the £1,000 extra-approval threshold. [See pricing.](https://www.fourteenfisherman.com/)",
+    "cta": "If you are choosing an SCA course to put on your PDP: our Complete programme (£599) combines unlimited AI consultation practice across 200 stations built from the RCGP curriculum with on-demand lectures and small-group coaching, structured as a course and priced well within the £1,000 extra-approval threshold. [See pricing.](https://www.fourteenfisherman.com/)",
     "sources": [
       {
         "label": "Midlands GP Schools study leave guidance (May 2026)",
@@ -289,7 +289,7 @@ export const STUDY_BUDGET_ARTICLES: StudyBudgetArticle[] = [
         "a": "Yes, as a distinct line including annual renewal, and unusually the associated subscription is funded."
       }
     ],
-    "cta": "A note on the £500 cap: our Complete programme is £599, which sits £99 above the North West non-accredited ceiling. If you are training in the North West, factor that in when planning your claim, and check whether accreditation status has changed since this page was last reviewed. Our Complete programme combines unlimited AI consultation practice across 200 stations built from the RCGP curriculum with live teaching and small-group coaching, structured as a course. [See pricing.](https://www.fourteenfisherman.com/)",
+    "cta": "A note on the £500 cap: our Complete programme is £599, which sits £99 above the North West non-accredited ceiling. If you are training in the North West, factor that in when planning your claim, and check whether accreditation status has changed since this page was last reviewed. Our Complete programme combines unlimited AI consultation practice across 200 stations built from the RCGP curriculum with on-demand lectures and small-group coaching, structured as a course. [See pricing.](https://www.fourteenfisherman.com/)",
     "sources": [
       {
         "label": "North West School study leave guidelines (March 2026)",
@@ -318,7 +318,7 @@ export const STUDY_BUDGET_ARTICLES: StudyBudgetArticle[] = [
         "a": "At least 8 weeks before booking, and confirm reimbursement permission first."
       }
     ],
-    "cta": "If you are choosing an SCA course for the Yorkshire and Humber green route: our Complete programme (£599) combines unlimited AI consultation practice across 200 stations built from the RCGP curriculum with live teaching and small-group coaching, structured as a complete SCA course. [See pricing.](https://www.fourteenfisherman.com/)",
+    "cta": "If you are choosing an SCA course for the Yorkshire and Humber green route: our Complete programme (£599) combines unlimited AI consultation practice across 200 stations built from the RCGP curriculum with on-demand lectures and small-group coaching, structured as a complete SCA course. [See pricing.](https://www.fourteenfisherman.com/)",
     "sources": [
       {
         "label": "Yorkshire & Humber GP study leave (Feb 2025)",
@@ -347,7 +347,7 @@ export const STUDY_BUDGET_ARTICLES: StudyBudgetArticle[] = [
         "a": "No. The North East cannot support annual subscriptions to any learning organisation; fund a course or package instead."
       }
     ],
-    "cta": "If you are choosing an SCA course for the North East automatic route: our Complete programme (£599) is a structured SCA course combining unlimited AI consultation practice across 200 stations built from the RCGP curriculum with live teaching and small-group coaching. Note the £500 additional-approver trigger applies to any claim above that figure, and RCGP accreditation status is what routes a course into automatic full funding here, so check current status before claiming. [See pricing.](https://www.fourteenfisherman.com/)",
+    "cta": "If you are choosing an SCA course for the North East automatic route: our Complete programme (£599) is a structured SCA course combining unlimited AI consultation practice across 200 stations built from the RCGP curriculum with on-demand lectures and small-group coaching. Note the £500 additional-approver trigger applies to any claim above that figure, and RCGP accreditation status is what routes a course into automatic full funding here, so check current status before claiming. [See pricing.](https://www.fourteenfisherman.com/)",
     "sources": [
       {
         "label": "NHSE Education NE automatic approved course list (Sept 2025)",
@@ -380,7 +380,7 @@ export const STUDY_BUDGET_ARTICLES: StudyBudgetArticle[] = [
         "a": "Retrospective study leave requests are not authorised, so you risk funding it yourself. Apply on Accent at least 6 weeks ahead, before paying, and confirm the funding position first."
       }
     ],
-    "cta": "If you are choosing an SCA course to put to your South West TPD as a curriculum requirement: our Complete programme (£599) is a structured SCA course combining unlimited AI consultation practice across 200 stations built from the RCGP curriculum with live teaching and small-group coaching. [See pricing.](https://www.fourteenfisherman.com/)",
+    "cta": "If you are choosing an SCA course to put to your South West TPD as a curriculum requirement: our Complete programme (£599) is a structured SCA course combining unlimited AI consultation practice across 200 stations built from the RCGP curriculum with on-demand lectures and small-group coaching. [See pricing.](https://www.fourteenfisherman.com/)",
     "sources": [
       {
         "label": "Bristol GP Training Scheme study & professional leave guidance (HESW framework)",
@@ -409,7 +409,7 @@ export const STUDY_BUDGET_ARTICLES: StudyBudgetArticle[] = [
         "a": "No. NES funds individual course fees but not annual subscriptions to a set of courses."
       }
     ],
-    "cta": "If you are choosing an SCA course to put to your Scottish TPD: our Complete programme (£599) is a structured SCA course combining unlimited AI consultation practice across 200 stations built from the RCGP curriculum with live teaching and small-group coaching. It sits within the £600 nominal budget, though note NES scrutinises courses that use most of a year's budget, so discuss value with your TPD. [See pricing.](https://www.fourteenfisherman.com/)",
+    "cta": "If you are choosing an SCA course to put to your Scottish TPD: our Complete programme (£599) is a structured SCA course combining unlimited AI consultation practice across 200 stations built from the RCGP curriculum with on-demand lectures and small-group coaching. It sits within the £600 nominal budget, though note NES scrutinises courses that use most of a year's budget, so discuss value with your TPD. [See pricing.](https://www.fourteenfisherman.com/)",
     "sources": [
       {
         "label": "NES GP registrar study leave FAQs (July 2025)",
@@ -438,7 +438,7 @@ export const STUDY_BUDGET_ARTICLES: StudyBudgetArticle[] = [
         "a": "Only where you carried unused budget from the previous year; the base allocation is £600 per year."
       }
     ],
-    "cta": "If you are choosing an SCA course for your HEIW budget: our Complete programme (£599) is a structured SCA course combining unlimited AI consultation practice across 200 stations built from the RCGP curriculum with live teaching and small-group coaching, sitting within a single £600 training-year allocation. [See pricing.](https://www.fourteenfisherman.com/)",
+    "cta": "If you are choosing an SCA course for your HEIW budget: our Complete programme (£599) is a structured SCA course combining unlimited AI consultation practice across 200 stations built from the RCGP curriculum with on-demand lectures and small-group coaching, sitting within a single £600 training-year allocation. [See pricing.](https://www.fourteenfisherman.com/)",
     "sources": [
       {
         "label": "HEIW GP trainee study leave policy V4 (March 2024)",
@@ -467,7 +467,7 @@ export const STUDY_BUDGET_ARTICLES: StudyBudgetArticle[] = [
         "a": "Yes, but expect to fund it yourself; NIMDTA's position is that protected self-directed learning time is the intended preparation."
       }
     ],
-    "cta": "If you are self-funding SCA preparation for a first attempt in Northern Ireland, or using SUCCESS funding after a resit: our Complete programme (£599) is a structured SCA course combining unlimited AI consultation practice across 200 stations built from the RCGP curriculum with live teaching and small-group coaching, priced within the £750 SUCCESS per-course limit. Our Self-Study tier (£199) is a lower-cost option if you are funding a first attempt yourself. [See pricing.](https://www.fourteenfisherman.com/)",
+    "cta": "If you are self-funding SCA preparation for a first attempt in Northern Ireland, or using SUCCESS funding after a resit: our Complete programme (£599) is a structured SCA course combining unlimited AI consultation practice across 200 stations built from the RCGP curriculum with on-demand lectures and small-group coaching, priced within the £750 SUCCESS per-course limit. Our Self-Study tier (£199) is a lower-cost option if you are funding a first attempt yourself. [See pricing.](https://www.fourteenfisherman.com/)",
     "sources": [
       {
         "label": "NIMDTA GP specialty training study leave guidance (Oct 2025)",
@@ -500,7 +500,7 @@ export const STUDY_BUDGET_ARTICLES: StudyBudgetArticle[] = [
         "a": "Through your employing trust, not your deanery. Processes are still settling, so check with your medical staffing team."
       }
     ],
-    "cta": "This page covers the exam fee. For the preparation side, your study budget can fund one SCA course: see your [deanery guide](/study-budget/). Our Complete programme (£599) is a structured SCA course built to sit inside that budget, combining unlimited AI consultation practice across 200 stations built from the RCGP curriculum with live teaching and small-group coaching. [See pricing.](https://www.fourteenfisherman.com/)",
+    "cta": "This page covers the exam fee. For the preparation side, your study budget can fund one SCA course: see your [deanery guide](/study-budget/). Our Complete programme (£599) is a structured SCA course built to sit inside that budget, combining unlimited AI consultation practice across 200 stations built from the RCGP curriculum with on-demand lectures and small-group coaching. [See pricing.](https://www.fourteenfisherman.com/)",
     "sources": []
   },
   {
@@ -524,7 +524,7 @@ export const STUDY_BUDGET_ARTICLES: StudyBudgetArticle[] = [
         "a": "A receipt or proof of payment: several deaneries specifically will not accept a completion certificate in its place."
       }
     ],
-    "cta": "Once you know your deanery's rules (see your [deanery guide](/study-budget/)), our Complete programme (£599) is a structured SCA course designed to sit inside the study budget, combining unlimited AI consultation practice across 200 stations built from the RCGP curriculum with live teaching and small-group coaching. [See pricing.](https://www.fourteenfisherman.com/)",
+    "cta": "Once you know your deanery's rules (see your [deanery guide](/study-budget/)), our Complete programme (£599) is a structured SCA course designed to sit inside the study budget, combining unlimited AI consultation practice across 200 stations built from the RCGP curriculum with on-demand lectures and small-group coaching. [See pricing.](https://www.fourteenfisherman.com/)",
     "sources": []
   },
   {
@@ -552,7 +552,7 @@ export const STUDY_BUDGET_ARTICLES: StudyBudgetArticle[] = [
         "a": "London and KSS use it explicitly. Other deaneries fund the same activity under their own codes; ask your study leave team."
       }
     ],
-    "cta": "An SCA course claimed under GP0001 has a £600 ceiling on the London and KSS lists. Our Complete programme (£599) is a structured SCA course built to sit inside that cap, combining unlimited AI consultation practice across 200 stations built from the RCGP curriculum with live teaching and small-group coaching. [See pricing.](https://www.fourteenfisherman.com/)",
+    "cta": "An SCA course claimed under GP0001 has a £600 ceiling on the London and KSS lists. Our Complete programme (£599) is a structured SCA course built to sit inside that cap, combining unlimited AI consultation practice across 200 stations built from the RCGP curriculum with on-demand lectures and small-group coaching. [See pricing.](https://www.fourteenfisherman.com/)",
     "sources": [
       {
         "label": "General Practice approved study leave list (Sept 2025)",

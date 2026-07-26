@@ -40,48 +40,58 @@ export const AIMING_STATUSES = ['not_started', 'preparing_first', 'preparing_res
 /** Statuses that ask "which sitting are you booked for?" */
 export const BOOKED_STATUSES = ['booked_first', 'booked_resit'] as const
 
-/** AKT sittings offered when the candidate is already booked. */
+/**
+ * AKT sittings a candidate can be booked for.
+ *
+ * Checked against the RCGP exam-dates page on 2026-07-26. Only ONE AKT sitting
+ * is currently published — 26 October 2026; the July 2026 sitting has already
+ * been sat. RCGP has published no 2027 dates. The 2027 entries below follow the
+ * college's stated "four sittings, in January, April, July and October each
+ * year" cadence and exist because booking opens up to 12 months ahead, so a
+ * candidate can already hold a 2027 place. Replace them with exact dates once
+ * RCGP publishes them.
+ */
 export const AKT_SITTINGS: readonly LeadFieldOption[] = [
+  { value: 'oct_2026', label: 'October 2026' },
   { value: 'jan_2027', label: 'January 2027' },
   { value: 'apr_2027', label: 'April 2027' },
   { value: 'jul_2027', label: 'July 2027' },
   { value: 'oct_2027', label: 'October 2027' },
-  { value: 'jan_2028', label: 'January 2028' },
-  { value: 'apr_2028', label: 'April 2028' },
-  { value: 'jul_2028', label: 'July 2028' },
-  { value: 'oct_2028', label: 'October 2028' },
-  { value: 'jan_2029', label: 'January 2029' },
 ] as const
 
-/** AKT targets — the booked list plus the two open-ended answers. */
+/** AKT targets — the booked list plus the open-ended answers. */
 export const AKT_TARGETS: readonly LeadFieldOption[] = [
   ...AKT_SITTINGS,
-  { value: 'later_2029', label: '2029 or later' },
+  { value: 'later_2028', label: '2028 or later' },
   { value: 'not_sure', label: "I'm not sure yet" },
 ] as const
 
-/** SCA sittings offered when the candidate is already booked. */
+/**
+ * SCA sittings a candidate can be booked for.
+ *
+ * Checked against the RCGP exam-dates page on 2026-07-26. These are the exact
+ * published windows; the June 2026 sitting has already been sat, and RCGP has
+ * published nothing for 2027. Unlike the AKT there is no stated month pattern
+ * to project from (2026 ran June, September, October, November), so anything
+ * beyond November 2026 is offered as a period rather than invented as a date —
+ * see SCA_TARGETS.
+ */
 export const SCA_SITTINGS: readonly LeadFieldOption[] = [
-  { value: 'sep_2027', label: 'September 2027' },
-  { value: 'nov_2027', label: 'November 2027' },
-  { value: 'jan_2028', label: 'January 2028' },
-  { value: 'mar_2028', label: 'March 2028' },
-  { value: 'may_2028', label: 'May 2028' },
-  { value: 'jul_2028', label: 'July 2028' },
-  { value: 'sep_2028', label: 'September 2028' },
-  { value: 'nov_2028', label: 'November 2028' },
-  { value: 'jan_2029', label: 'January 2029' },
-  { value: 'mar_2029', label: 'March 2029' },
-  { value: 'may_2029', label: 'May 2029' },
-  { value: 'jul_2029', label: 'July 2029' },
-  { value: 'sep_2029', label: 'September 2029' },
-  { value: 'nov_2029', label: 'November 2029' },
+  { value: 'sep_2026', label: 'September 2026' },
+  { value: 'oct_2026', label: 'October 2026' },
+  { value: 'nov_2026', label: 'November 2026' },
 ] as const
 
-/** SCA targets — the booked list plus the two open-ended answers. */
+/**
+ * SCA targets — the published sittings, then periods, because RCGP has not
+ * published 2027 dates and the month pattern is not fixed enough to guess.
+ */
 export const SCA_TARGETS: readonly LeadFieldOption[] = [
   ...SCA_SITTINGS,
-  { value: 'later_2029', label: '2029 or later' },
+  { value: 'early_2027', label: 'Early 2027 (January to April)' },
+  { value: 'mid_2027', label: 'Mid 2027 (May to August)' },
+  { value: 'late_2027', label: 'Late 2027 (September to December)' },
+  { value: 'later_2028', label: '2028 or later' },
   { value: 'not_sure', label: "I'm not sure yet" },
 ] as const
 
