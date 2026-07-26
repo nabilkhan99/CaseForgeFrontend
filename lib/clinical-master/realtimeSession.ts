@@ -64,6 +64,22 @@ export function voiceForStation(
 export const DEFAULT_TRANSCRIPTION_MODEL = 'gpt-realtime-whisper';
 
 /**
+ * Pin transcription to English.
+ *
+ * Left unset, Whisper detects the language per segment — and on breath, room
+ * noise or a half-second of silence it will confidently return a phrase in a
+ * language nobody spoke. Observed in one 3-minute session on 26 Jul: a doctor
+ * turn transcribed as "هواي" (Arabic) and another as "ürün" (Turkish). The
+ * second one was answered, and the patient replied with meta-commentary because
+ * there was no question to answer.
+ *
+ * This is an English-language exam, so there is nothing to lose by pinning it,
+ * and the language hint also improves accuracy on the accented English the SCA
+ * is full of — the decoder stops spending probability mass on other languages.
+ */
+export const TRANSCRIPTION_LANGUAGE = 'en';
+
+/**
  * Function tools exposed to the model. Examination is intentionally NOT a tool:
  * per Build Package Section 1.1 (audio only, no live visual examination) and
  * Voice Actor Prompt 1 rule 8, the patient handles any examination request
@@ -135,6 +151,7 @@ export function buildSessionPayload(stationData: StationData | null, opts: Sessi
         input: {
           transcription: {
             model: opts.transcriptionModel ?? DEFAULT_TRANSCRIPTION_MODEL,
+            language: TRANSCRIPTION_LANGUAGE,
           },
           // Reliable-AEC browsers: relaxed server VAD so the trainee isn't
           // cut off mid-sentence (mirrors the old LiveKit endpointing).

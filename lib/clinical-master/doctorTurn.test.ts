@@ -101,6 +101,32 @@ describe('isIncompleteDoctorTurn — real questions must be answered', () => {
     });
 });
 
+// Whisper with no language pinned returns confident phrases in languages nobody
+// spoke, from breath or near-silence. From the 26 Jul session: "هواي" was
+// withheld (non-ASCII tokenises away) but "ürün" was ANSWERED, because it left
+// the tokens "r n" — and the patient then produced meta-commentary because there
+// was no question in it. Transcription is pinned to English now; this is the
+// second line of defence.
+describe('isIncompleteDoctorTurn — foreign-script ASR hallucinations', () => {
+    it.each([
+        'هواي',
+        'ürün',
+        'мне',
+        '你好',
+        'ñ',
+        'ü ö',
+    ])('withholds %j', (said) => {
+        expect(isIncompleteDoctorTurn(said)).toBe(true);
+    });
+
+    it('still answers a real question containing an accented word', () => {
+        // Names and loanwords carry accents; the rule keys on having any 2+
+        // letter token, so these must survive.
+        expect(isIncompleteDoctorTurn('Have you seen Dr Kraüs about this')).toBe(false);
+        expect(isIncompleteDoctorTurn('Is it like a migraine or more of a façade')).toBe(false);
+    });
+});
+
 describe('isIncompleteDoctorTurn — degenerate input', () => {
     it.each(['', '   ', '...', '?', '—'])('withholds %j', (said) => {
         expect(isIncompleteDoctorTurn(said)).toBe(true);

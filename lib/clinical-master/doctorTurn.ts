@@ -103,6 +103,14 @@ export function isIncompleteDoctorTurn(text: string): boolean {
     const tokens = tokenise(text ?? '');
     if (tokens.length === 0) return true;
 
+    // No pronounceable English word in it. Whisper hallucinates foreign-script
+    // phrases from breath and near-silence — "هواي", "ürün" — and after the
+    // non-ASCII characters are dropped what survives is letter debris ("r n").
+    // Transcription is now pinned to English (see realtimeSession.ts), so this
+    // is the second line of defence rather than the first. No English question
+    // consists only of single letters, so nothing real is caught here.
+    if (!tokens.some((t) => t.length >= 2)) return true;
+
     const joined = tokens.join(' ');
     if (THINKING_PHRASES.includes(joined)) return true;
 
