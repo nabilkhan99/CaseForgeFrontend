@@ -185,6 +185,31 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
     console.error('[stripe-webhook] advocate minting error', { sessionId: session.id, error });
   }
 
+  // Stripe only emails a card receipt when the PaymentIntent carries a
+  // receipt_email. Checkout collects the address on Stripe's own page, so it
+  // cannot be set when the session is created — it is set here, once the
+  // address is known. Without this no receipt is sent, while our confirmation
+  // email tells the buyer "your card receipt comes separately from Stripe".
+  // Gated on isNewPreorder so a webhook retry cannot trigger a second receipt.
+  if (isNewPreorder) {
+    const paymentIntentId =
+      typeof session.payment_intent === 'string'
+        ? session.payment_intent
+        : (session.payment_intent?.id ?? null);
+    if (paymentIntentId) {
+      try {
+        await getStripe().paymentIntents.update(paymentIntentId, { receipt_email: buyerEmail });
+      } catch (error: unknown) {
+        // Best-effort: a missing receipt must never fail the webhook, or the
+        // pre-order would be re-processed on Stripe's retry.
+        console.error('[stripe-webhook] receipt_email update failed (non-fatal)', {
+          sessionId: session.id,
+          error,
+        });
+      }
+    }
+  }
+
   // Confirmation email + Brevo pre-order contact sync. Gated on isNewPreorder so
   // this only runs for a genuinely NEW pre-order (the insert succeeded): a Stripe
   // webhook retry takes the 23505 duplicate path and must never double-email the
