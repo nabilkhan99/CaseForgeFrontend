@@ -169,6 +169,17 @@ export function buildSessionPayload(stationData: StationData | null, opts: Sessi
                 threshold: 0.5,
                 prefix_padding_ms: 300,
                 silence_duration_ms: 900,
+                // The server still detects turns and commits the buffer, but it
+                // does NOT get to decide that a reply is due. 900ms of quiet
+                // cannot tell "I have finished my question" from "I am thinking
+                // mid-sentence", and on this path the patient was answering
+                // fillers and cutting in on half-finished questions — reported
+                // as "when I would start a question it would interrupt and then
+                // pause". The client now gates the reply on the transcript, the
+                // same way it already does on the Safari path
+                // (useRealtimeSession.ts → doctorTurn.ts), so both paths get the
+                // same protection instead of only one.
+                create_response: false,
               },
           ...(opts.unreliableAec ? { noise_reduction: { type: 'far_field' } } : {}),
         },

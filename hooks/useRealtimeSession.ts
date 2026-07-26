@@ -166,6 +166,9 @@ const MIC_DEAD_FRAMES = 40;
 /** Minimum gap between mic-tap rebuild attempts. */
 const MIC_REARM_MS = 1000;
 
+/** How often the transcript is checkpointed mid-consultation. */
+const TRANSCRIPT_SAVE_MS = 20000;
+
 /** Below this a "recording" is a broken stub, not audio worth storing. */
 const MIN_RECORDING_BYTES = 2048;
 
@@ -345,6 +348,9 @@ export function useRealtimeSession({
     const activeResponseIdRef = useRef<string | null>(null);
     const lastAssistantItemRef = useRef<string | null>(null);
     /** A doctor turn is currently being captured (client-driven turn mode). */
+    /** Doctor speech per the SERVER's VAD (reliable-AEC path). turnOpenRef is the
+     *  client detector's equivalent; exactly one of the two is ever in use. */
+    const doctorSpeakingRef = useRef(false);
     const turnOpenRef = useRef(false);
     const silenceFramesRef = useRef(0);
     /** When the open turn opened, and how many of its frames held voice — the
@@ -379,6 +385,10 @@ export function useRealtimeSession({
     const debugElRef = useRef<HTMLDivElement | null>(null);
     const debugTickCountRef = useRef(0);
     const lastSentIndexRef = useRef(0);
+    /** Turn count at the last transcript checkpoint, so interim saves are skipped
+     *  when nothing new has been said. */
+    const lastSavedTurnCountRef = useRef(0);
+    const transcriptSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const voiceLogTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const pagehideHandlerRef = useRef<(() => void) | null>(null);
 
@@ -429,6 +439,45 @@ export function useRealtimeSession({
     /** Upload the unsent slice of the event ring. sendBeacon on pagehide
      *  (survives tab close); fetch keepalive everywhere else. Fire-and-forget:
      *  the recorder must never affect the session it observes. */
+    /**
+     * Checkpoint the transcript mid-consultation.
+     *
+     * It used to be written exactly once, at the very end. Three sessions on
+     * 26 Jul were abandoned before that moment and lost everything — the patient
+     * had spoken 6, 8 and 14 times, all three left stuck at status 'live' with an
+     * empty transcript and no recording. About 5% of sessions. Nothing about the
+     * consultation survived, so there was nothing to mark and nothing to review.
+     *
+     * Same lesson as the recording upload: do not stake a whole consultation on
+     * one request at the end. `final: false` writes the transcript without
+     * advancing the status, so marking is not triggered early.
+     */
+    const persistTranscript = useCallback(
+        (final: boolean, useBeacon = false) => {
+            const transcript = transcriptRef.current;
+            if (!final && transcript.length === 0) return;
+            if (!final && transcript.length === lastSavedTurnCountRef.current) return;
+            lastSavedTurnCountRef.current = transcript.length;
+            const payload = JSON.stringify({ sessionId, transcript, final });
+            if (useBeacon && typeof navigator.sendBeacon === 'function') {
+                navigator.sendBeacon(
+                    saveEndpoint,
+                    new Blob([payload], { type: 'application/json' })
+                );
+                return;
+            }
+            void fetch(saveEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: payload,
+                keepalive: true,
+            }).catch(() => {
+                /* interim saves are best-effort; the final one retries */
+            });
+        },
+        [sessionId, saveEndpoint]
+    );
+
     const flushVoiceLog = useCallback(
         (reason: string, useBeacon = false) => {
             const events = debugLogRef.current.slice(lastSentIndexRef.current);
@@ -760,6 +809,9 @@ export function useRealtimeSession({
      * know what was in it, with a fail-open timer so a missing transcript can
      * never leave the patient mute.
      */
+    /** Set below, so the fallback timer can re-arm itself without a cycle. */
+    const armRespondDecisionRef = useRef<(() => void) | null>(null);
+
     const armRespondDecision = useCallback(() => {
         clearRespondTimers();
         pendingCommitsRef.current += 1;
@@ -773,8 +825,11 @@ export function useRealtimeSession({
             // when this fires (a slow transcript on a long explanation), stay
             // out of the way — they are still talking, so another commit is
             // coming and it will re-arm this.
-            if (turnOpenRef.current) {
+            if (turnOpenRef.current || doctorSpeakingRef.current) {
+                // Still mid-utterance. Do not give up — re-arm, or a doctor who
+                // keeps talking through every deadline is never answered at all.
                 logDebug('respond:fallback-deferred');
+                armRespondDecisionRef.current?.();
                 return;
             }
             pendingCommitsRef.current = 0;
@@ -782,6 +837,7 @@ export function useRealtimeSession({
             sendEvent({ type: 'response.create' });
         }, RESPOND_FALLBACK_MS);
     }, [clearRespondTimers, logDebug, sendEvent]);
+    armRespondDecisionRef.current = armRespondDecision;
 
     /**
      * A committed turn's transcript arrived — reply to a finished thought, stay
@@ -810,7 +866,7 @@ export function useRealtimeSession({
             //
             // Nothing is lost: the item stays in the conversation and the
             // model sees it when their next turn commits.
-            if (turnOpenRef.current) {
+            if (turnOpenRef.current || doctorSpeakingRef.current) {
                 logDebug('respond:withheld', { said, reason: 'doctor-resumed' });
                 clearRespondTimers();
                 return;
@@ -819,6 +875,14 @@ export function useRealtimeSession({
             if (!dropped && !isIncompleteDoctorTurn(said)) {
                 pendingCommitsRef.current = 0;
                 clearRespondTimers();
+                // If a response is already in flight the server produced one on
+                // its own — i.e. create_response:false was not honoured. Adding
+                // ours would give the patient two voices at once, which is the
+                // exact bug we spent today tracing. Skip and log loudly.
+                if (activeResponseIdRef.current) {
+                    logDebug('respond:already-active', { said });
+                    return;
+                }
                 sendEvent({ type: 'response.create' });
                 return;
             }
@@ -1141,6 +1205,10 @@ export function useRealtimeSession({
             clearInterval(voiceLogTimerRef.current);
             voiceLogTimerRef.current = null;
         }
+        if (transcriptSaveTimerRef.current) {
+            clearInterval(transcriptSaveTimerRef.current);
+            transcriptSaveTimerRef.current = null;
+        }
         if (pagehideHandlerRef.current) {
             window.removeEventListener('pagehide', pagehideHandlerRef.current);
             pagehideHandlerRef.current = null;
@@ -1176,6 +1244,7 @@ export function useRealtimeSession({
         lastAssistantItemRef.current = null;
         lastReattachAtRef.current = 0;
         turnOpenRef.current = false;
+        doctorSpeakingRef.current = false;
         silenceFramesRef.current = 0;
         turnOpenedAtRef.current = 0;
         turnVoicedFramesRef.current = 0;
@@ -1239,7 +1308,11 @@ export function useRealtimeSession({
             await fetch(saveEndpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sessionId, transcript: transcriptRef.current }),
+                body: JSON.stringify({
+                    sessionId,
+                    transcript: transcriptRef.current,
+                    final: true,
+                }),
             });
         } catch {
             /* best-effort — feedback route also tolerates retries */
@@ -1285,6 +1358,7 @@ export function useRealtimeSession({
             }
             switch (evt.type) {
                 case 'input_audio_buffer.speech_started': {
+                    doctorSpeakingRef.current = true;
                     const id = String(evt.item_id ?? '');
                     if (id) {
                         vadRef.current[id] = {
@@ -1295,6 +1369,10 @@ export function useRealtimeSession({
                     break;
                 }
                 case 'input_audio_buffer.speech_stopped': {
+                    doctorSpeakingRef.current = false;
+                    // Reliable-AEC path: the server has committed the buffer but
+                    // create_response is false, so the reply is ours to decide.
+                    armRespondDecision();
                     const id = String(evt.item_id ?? '');
                     if (id) {
                         vadRef.current[id] = {
@@ -1470,6 +1548,7 @@ export function useRealtimeSession({
             flushVoiceLog,
             resolveRespondDecision,
             clearRespondTimers,
+            armRespondDecision,
         ]
     );
 
@@ -1619,7 +1698,16 @@ export function useRealtimeSession({
                 // Flight recorder: periodic upload + tab-close beacon.
                 if (voiceLogTimerRef.current) clearInterval(voiceLogTimerRef.current);
                 voiceLogTimerRef.current = setInterval(() => flushVoiceLog('periodic'), 60000);
-                const onPagehide = () => flushVoiceLog('pagehide', true);
+                transcriptSaveTimerRef.current = setInterval(
+                    () => persistTranscript(false),
+                    TRANSCRIPT_SAVE_MS
+                );
+                // A closed tab is the case that lost three consultations, so the
+                // transcript rides the same beacon as the flight recorder.
+                const onPagehide = () => {
+                    persistTranscript(false, true);
+                    flushVoiceLog('pagehide', true);
+                };
                 window.addEventListener('pagehide', onPagehide);
                 pagehideHandlerRef.current = onPagehide;
                 onSessionStarted?.();
@@ -1682,6 +1770,7 @@ export function useRealtimeSession({
         tokenEndpoint,
         sessionId,
         stationId,
+        persistTranscript,
         handleServerEvent,
         sendEvent,
         endRoutine,
