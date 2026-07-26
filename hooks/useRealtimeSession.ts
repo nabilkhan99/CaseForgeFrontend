@@ -116,9 +116,22 @@ const DT_COUPLING_MAX = 8;
 const TURN_WATCHDOG_MS = 5000;
 /** Voiced frames / elapsed frames below which an open turn is a stuck one. */
 const TURN_VOICED_DENSITY_MIN = 0.35;
-/** Hard ceiling: longer than any single uninterrupted doctor utterance, so no
- *  turn can stay open forever whatever the density says. */
-const TURN_MAX_MS = 30000;
+/**
+ * Hard ceiling, as a pure backstop against a turn that hangs open forever.
+ *
+ * This was 30s and that was WRONG — it fired three times in a 12-minute review
+ * session, every time on `max-length` and never on `silent-turn`, chopping a
+ * doctor mid-explanation at 0.77 voiced density. "Longer than any single
+ * uninterrupted doctor utterance" was my assumption and it does not survive
+ * contact with the management phase, where explaining a diagnosis and a plan
+ * runs well past half a minute without a 900ms gap.
+ *
+ * The freeze this whole watchdog exists for is caught by the density arm, which
+ * needs only 5s. So the ceiling can be far out of the way of real speech: two
+ * minutes of continuous talking with no pause long enough to close a turn is not
+ * a consultation, it is a stuck detector.
+ */
+const TURN_MAX_MS = 120000;
 
 /**
  * How long to wait for a committed turn's transcription before replying anyway.
@@ -134,15 +147,24 @@ const TURN_MAX_MS = 30000;
  * answered — the old behaviour, not a new failure.
  */
 const RESPOND_FALLBACK_MS = 1500;
+
 /**
- * After a turn is withheld, how long to leave the floor to the doctor. A
- * withheld turn normally resolves itself: the doctor asks their actual question,
- * that turn commits, and the model answers with the filler as harmless context.
- * This only fires if they went quiet and stayed quiet, where the patient saying
- * something beats a session that looks dead. Long on purpose — rule 12 of the
- * patient prompt says to let a thinking doctor think.
+ * Frames of a hard-zero mic reading before the tap is presumed dead and rebuilt.
+ *
+ * A live microphone in a silent room does not read 0 — measured floors sit around
+ * 0.005. Exactly 0.0000 means the analyser is no longer being fed. Observed in a
+ * 12-minute review session: Safari's AudioContext went `interrupted` at 623s,
+ * returned to `running` at 627s, and the mic read a flat 0 for the remaining 97
+ * seconds. No mic means no turns open, nothing commits, and the patient never
+ * speaks again — the reviewer reported it as "it stopped responding", and
+ * correctly guessed it had "stopped processing my speech".
+ *
+ * 2s of dead air is long enough not to trip on a buffer hiccup and short enough
+ * that a recovery is barely noticeable.
  */
-const RESPOND_STALL_MS = 12000;
+const MIC_DEAD_FRAMES = 40;
+/** Minimum gap between mic-tap rebuild attempts. */
+const MIC_REARM_MS = 1000;
 
 /** Below this a "recording" is a broken stub, not audio worth storing. */
 const MIN_RECORDING_BYTES = 2048;
@@ -285,6 +307,12 @@ export function useRealtimeSession({
     // --- double-talk barge-in state (unreliable-AEC browsers only) ---
     const audioCtxRef = useRef<AudioContext | null>(null);
     const micAnalyserRef = useRef<AnalyserNode | null>(null);
+    /** Held so the mic tap's source node cannot be garbage-collected — the same
+     *  hazard that killed the patient tap, and it was here too. */
+    const micTapSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+    /** Consecutive hard-zero mic frames, and the last rebuild attempt. */
+    const micDeadFramesRef = useRef(0);
+    const lastMicRearmAtRef = useRef(0);
     const patientAnalyserRef = useRef<AnalyserNode | null>(null);
     /** Held ONLY so the tap's graph is not garbage-collected — see
      *  receiverAudioLevel for what happened when they were temporaries. */
@@ -334,7 +362,6 @@ export function useRealtimeSession({
      */
     const pendingCommitsRef = useRef(0);
     const respondFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const respondStallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     // --- voice flight recorder ---
     // The event ring ALWAYS records; ?voicedebug=1 only adds the on-page
     // overlay. The ring uploads to /api/clinical-master/voice-log on a 60s
@@ -618,6 +645,53 @@ export function useRealtimeSession({
         setIsSpeaking(false);
     }, [sendEvent]);
 
+    /**
+     * Build (or rebuild) the mic tap. Idempotent and safe to call at any time.
+     *
+     * Rebuilding is the recovery path for a dead microphone: Safari's
+     * AudioContext can go `interrupted` (OS audio interruption, device switch,
+     * a call arriving) and, even once it returns to `running`, the graph feeding
+     * this analyser stays dead — the mic then reads a flat 0.0000 and every
+     * turn-taking decision downstream silently stops happening.
+     *
+     * The source node is kept in a ref. It was previously an anonymous
+     * temporary, exactly like the patient tap that provably got collected, so it
+     * could have been dying on its own too.
+     */
+    const attachMicAnalyser = useCallback((): boolean => {
+        const ctx = audioCtxRef.current;
+        const stream = micStreamRef.current;
+        if (!ctx || !stream) return false;
+        const track = stream.getAudioTracks()[0];
+        try {
+            if (micTapSourceRef.current) {
+                try {
+                    micTapSourceRef.current.disconnect();
+                } catch {
+                    /* already disconnected */
+                }
+            }
+            const analyser = ctx.createAnalyser();
+            analyser.fftSize = 1024;
+            const source = ctx.createMediaStreamSource(stream);
+            source.connect(analyser);
+            micTapSourceRef.current = source;
+            micAnalyserRef.current = analyser;
+            analyserBufRef.current = new Uint8Array(analyser.fftSize);
+            micDeadFramesRef.current = 0;
+            logDebug('mic-analyser:attached', {
+                trackState: track?.readyState ?? 'none',
+                trackMuted: track?.muted ?? null,
+                trackEnabled: track?.enabled ?? null,
+                ctxState: ctx.state,
+            });
+            return true;
+        } catch (err) {
+            logDebug('mic-analyser:FAILED', String(err));
+            return false;
+        }
+    }, [logDebug]);
+
     /** Tap the patient's remote stream for level analysis. Analysis only —
      *  never connected to the destination, so playback is untouched. */
     const attachPatientAnalyser = useCallback(() => {
@@ -679,10 +753,6 @@ export function useRealtimeSession({
             clearTimeout(respondFallbackTimerRef.current);
             respondFallbackTimerRef.current = null;
         }
-        if (respondStallTimerRef.current) {
-            clearTimeout(respondStallTimerRef.current);
-            respondStallTimerRef.current = null;
-        }
     }, []);
 
     /**
@@ -699,6 +769,14 @@ export function useRealtimeSession({
         respondFallbackTimerRef.current = setTimeout(() => {
             respondFallbackTimerRef.current = null;
             if (pendingCommitsRef.current === 0 || endedRef.current) return;
+            // Fail open, but never over the doctor. If they are mid-utterance
+            // when this fires (a slow transcript on a long explanation), stay
+            // out of the way — they are still talking, so another commit is
+            // coming and it will re-arm this.
+            if (turnOpenRef.current) {
+                logDebug('respond:fallback-deferred');
+                return;
+            }
             pendingCommitsRef.current = 0;
             logDebug('respond:no-transcript');
             sendEvent({ type: 'response.create' });
@@ -721,6 +799,23 @@ export function useRealtimeSession({
             if (pendingCommitsRef.current === 0) return;
             pendingCommitsRef.current -= 1;
 
+            // THE DOCTOR HAS STARTED TALKING AGAIN. Whatever was in that turn,
+            // they are plainly not finished, so answering now talks over them.
+            // This is a fact the code already holds and was ignoring: in one
+            // review session the reply went out 353ms after a new turn opened,
+            // and three more times a mid-sentence fragment ("It could well
+            // take", "So for the next couple of weeks, what we'd do for you")
+            // was answered while the doctor kept speaking. Reported as "when I
+            // would start a question it would interrupt and then pause".
+            //
+            // Nothing is lost: the item stays in the conversation and the
+            // model sees it when their next turn commits.
+            if (turnOpenRef.current) {
+                logDebug('respond:withheld', { said, reason: 'doctor-resumed' });
+                clearRespondTimers();
+                return;
+            }
+
             if (!dropped && !isIncompleteDoctorTurn(said)) {
                 pendingCommitsRef.current = 0;
                 clearRespondTimers();
@@ -729,15 +824,12 @@ export function useRealtimeSession({
             }
             logDebug('respond:withheld', { said, dropped });
             if (pendingCommitsRef.current > 0) return;
-
+            // No stall guard. Its one and only firing produced "Mm. I'm still
+            // here. Take your time…" — a character break — plus a 29-second
+            // hole, and the doctor's next real turn would have been answered
+            // normally anyway. Silence is in character; a forced utterance is
+            // not. Every path out of here now waits for the doctor.
             clearRespondTimers();
-            respondStallTimerRef.current = setTimeout(() => {
-                respondStallTimerRef.current = null;
-                if (endedRef.current || turnOpenRef.current || speakingRef.current) return;
-                if (pendingCommitsRef.current > 0) return;
-                logDebug('respond:stall-guard');
-                sendEvent({ type: 'response.create' });
-            }, RESPOND_STALL_MS);
         },
         [clearRespondTimers, logDebug, sendEvent]
     );
@@ -772,6 +864,35 @@ export function useRealtimeSession({
               : 0;
         const micRms = analyserRms(micAnalyser, buf);
         const now = Date.now();
+
+        // Dead-mic watchdog. A live mic never reads exactly 0 (real floors are
+        // ~0.005), so a sustained hard zero means the graph is no longer fed and
+        // every decision below has silently stopped working. Rebuild the tap.
+        if (micRms === 0) {
+            micDeadFramesRef.current += 1;
+            if (
+                micDeadFramesRef.current >= MIC_DEAD_FRAMES &&
+                now - lastMicRearmAtRef.current > MIC_REARM_MS
+            ) {
+                lastMicRearmAtRef.current = now;
+                const track = micStreamRef.current?.getAudioTracks()[0];
+                logDebug('mic-dead:rebuild', {
+                    frames: micDeadFramesRef.current,
+                    trackState: track?.readyState ?? 'none',
+                    trackMuted: track?.muted ?? null,
+                    ctxState: audioCtxRef.current?.state ?? 'none',
+                });
+                if (audioCtxRef.current?.state !== 'running') {
+                    void audioCtxRef.current?.resume().catch(() => {
+                        /* may need a gesture; the log says so */
+                    });
+                }
+                attachMicAnalyser();
+                return; // next tick reads the new analyser
+            }
+        } else {
+            micDeadFramesRef.current = 0;
+        }
 
         // Peak-hold on the tap: the mic hears playback ~100–250ms late, so
         // all echo reasoning uses the recent PEAK, which stays high through
@@ -946,6 +1067,7 @@ export function useRealtimeSession({
         logDebug,
         updateDebugOverlay,
         attachPatientAnalyser,
+        attachMicAnalyser,
         armRespondDecision,
     ]);
 
@@ -965,23 +1087,41 @@ export function useRealtimeSession({
             }
             const ctx = new Ctor();
             audioCtxRef.current = ctx;
-            // Safari can suspend a running AudioContext mid-session (device
-            // switch, OS interruption). A suspended context freezes the
-            // detector — mic reads silence, turn-taking dies, the patient
-            // "goes quiet". Log it and fight back.
+            // Safari can suspend OR interrupt a running AudioContext mid-session
+            // (device switch, OS audio interruption, an incoming call). Resuming
+            // is not enough: the graph feeding the analysers stays dead, the mic
+            // reads a flat 0, turn-taking stops, and the patient goes silent for
+            // the rest of the consultation. So on every return to `running`,
+            // rebuild both taps.
+            //
+            // `interrupted` is a WebKit-only state and is absent from the DOM
+            // typings, hence the widened comparison.
             ctx.onstatechange = () => {
-                logDebug(`audioctx:${ctx.state}`);
-                if (ctx.state === 'suspended' && !endedRef.current) {
+                const state = String(ctx.state);
+                logDebug(`audioctx:${state}`);
+                if (endedRef.current) return;
+                if (state === 'suspended' || state === 'interrupted') {
                     void ctx.resume().catch(() => {
                         /* resume may need a user gesture; the log tells us */
                     });
+                } else if (state === 'running') {
+                    attachMicAnalyser();
+                    attachPatientAnalyser();
                 }
             };
-            const micAnalyser = ctx.createAnalyser();
-            micAnalyser.fftSize = 1024;
-            ctx.createMediaStreamSource(micStreamRef.current).connect(micAnalyser);
-            micAnalyserRef.current = micAnalyser;
-            analyserBufRef.current = new Uint8Array(micAnalyser.fftSize);
+            if (!attachMicAnalyser()) {
+                logDebug('detector-arm:FAILED', 'mic analyser would not attach');
+                return;
+            }
+            // An OS interruption usually mutes the mic track rather than ending
+            // it; the unmute is the earliest reliable moment to rebuild.
+            const micTrack = micStreamRef.current.getAudioTracks()[0];
+            micTrack?.addEventListener('mute', () => logDebug('mic-track:mute'));
+            micTrack?.addEventListener('unmute', () => {
+                logDebug('mic-track:unmute');
+                attachMicAnalyser();
+            });
+            micTrack?.addEventListener('ended', () => logDebug('mic-track:ended'));
             attachPatientAnalyser();
             detectorStartedAtRef.current = Date.now();
             detectorIntervalRef.current = setInterval(detectorTick, DT_FRAME_MS);
@@ -992,7 +1132,7 @@ export function useRealtimeSession({
         } catch (err) {
             logDebug('detector-arm:FAILED', String(err));
         }
-    }, [attachPatientAnalyser, detectorTick, logDebug]);
+    }, [attachPatientAnalyser, attachMicAnalyser, detectorTick, logDebug]);
 
     // Tear down media/connection without persisting (used for leave + unmount).
     const teardown = useCallback(() => {
@@ -1022,6 +1162,9 @@ export function useRealtimeSession({
             detectorIntervalRef.current = null;
         }
         micAnalyserRef.current = null;
+        micTapSourceRef.current = null;
+        micDeadFramesRef.current = 0;
+        lastMicRearmAtRef.current = 0;
         patientAnalyserRef.current = null;
         patientTapSourceRef.current = null;
         patientTapStreamRef.current = null;
