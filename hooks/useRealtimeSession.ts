@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TranscriptItem } from '@/lib/clinical-master/types';
 import { unreliableEchoCancellation } from '@/lib/clinical-master/echoCancellation';
+import { isIncompleteDoctorTurn } from '@/lib/clinical-master/doctorTurn';
 import {
     extensionForMimeType,
     startSessionRecorder,
@@ -95,6 +96,30 @@ const DT_CAL_EMA = 0.3;
 /** Coupling ceiling. Safari's tap under-reports playback level, so the
  *  real mic-echo/tap ratio can far exceed 1. */
 const DT_COUPLING_MAX = 8;
+
+/**
+ * How long to wait for a committed turn's transcription before replying anyway.
+ * `input_audio_buffer.commit` does NOT create a response (per the Realtime API
+ * reference), so the two are sent separately and the reply is gated on what the
+ * doctor actually said — see doctorTurn.ts. The transcription is a side-channel
+ * that can be slow, fail, or never arrive, so this fails OPEN: a missing
+ * transcript behaves exactly as before this change.
+ *
+ * Measured in the 25 Jul session: transcriptions landed 483–1771ms after the
+ * commit, 56/56 times. 1500ms answers most turns on the transcript and the rest
+ * on the timer, and the cost of the timer path is only that a filler gets
+ * answered — the old behaviour, not a new failure.
+ */
+const RESPOND_FALLBACK_MS = 1500;
+/**
+ * After a turn is withheld, how long to leave the floor to the doctor. A
+ * withheld turn normally resolves itself: the doctor asks their actual question,
+ * that turn commits, and the model answers with the filler as harmless context.
+ * This only fires if they went quiet and stayed quiet, where the patient saying
+ * something beats a session that looks dead. Long on purpose — rule 12 of the
+ * patient prompt says to let a thinking doctor think.
+ */
+const RESPOND_STALL_MS = 12000;
 
 /** Below this a "recording" is a broken stub, not audio worth storing. */
 const MIN_RECORDING_BYTES = 2048;
@@ -219,6 +244,17 @@ export function useRealtimeSession({
     const turnOpenRef = useRef(false);
     const silenceFramesRef = useRef(0);
     const bufferClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    /**
+     * Committed doctor turns still waiting on a transcript before we decide
+     * whether they earn a patient response. A COUNT, not a flag: commits are
+     * only ~1.15s apart (250ms speech + 900ms silence) while transcripts land
+     * 483–1771ms later, so "okay" and the real question that follows it can
+     * both be in flight at once. Transcripts arrive in item order, so each one
+     * resolves one pending commit.
+     */
+    const pendingCommitsRef = useRef(0);
+    const respondFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const respondStallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     // --- voice flight recorder ---
     // The event ring ALWAYS records; ?voicedebug=1 only adds the on-page
     // overlay. The ring uploads to /api/clinical-master/voice-log on a 60s
@@ -544,6 +580,74 @@ export function useRealtimeSession({
         }
     }, [logDebug]);
 
+    const clearRespondTimers = useCallback(() => {
+        if (respondFallbackTimerRef.current) {
+            clearTimeout(respondFallbackTimerRef.current);
+            respondFallbackTimerRef.current = null;
+        }
+        if (respondStallTimerRef.current) {
+            clearTimeout(respondStallTimerRef.current);
+            respondStallTimerRef.current = null;
+        }
+    }, []);
+
+    /**
+     * A doctor turn has just been committed. Hold the response request until we
+     * know what was in it, with a fail-open timer so a missing transcript can
+     * never leave the patient mute.
+     */
+    const armRespondDecision = useCallback(() => {
+        clearRespondTimers();
+        pendingCommitsRef.current += 1;
+        // Fail open on the most recent commit: whatever else is in flight, the
+        // patient replies within RESPOND_FALLBACK_MS of the doctor's last words
+        // if no transcript ever explains them.
+        respondFallbackTimerRef.current = setTimeout(() => {
+            respondFallbackTimerRef.current = null;
+            if (pendingCommitsRef.current === 0 || endedRef.current) return;
+            pendingCommitsRef.current = 0;
+            logDebug('respond:no-transcript');
+            sendEvent({ type: 'response.create' });
+        }, RESPOND_FALLBACK_MS);
+    }, [clearRespondTimers, logDebug, sendEvent]);
+
+    /**
+     * A committed turn's transcript arrived — reply to a finished thought, stay
+     * quiet through a half-finished one. `dropped` covers the turns the ASR
+     * filter already refused to put in the transcript: if it was not real
+     * enough to grade, it is not real enough to answer.
+     *
+     * With several commits in flight, one complete thought anywhere in them
+     * earns the reply, and the patient answers the lot together. The stall
+     * guard is only armed once nothing is left pending, so a filler followed
+     * quickly by a real question never waits on it.
+     */
+    const resolveRespondDecision = useCallback(
+        (said: string, dropped: boolean) => {
+            if (pendingCommitsRef.current === 0) return;
+            pendingCommitsRef.current -= 1;
+
+            if (!dropped && !isIncompleteDoctorTurn(said)) {
+                pendingCommitsRef.current = 0;
+                clearRespondTimers();
+                sendEvent({ type: 'response.create' });
+                return;
+            }
+            logDebug('respond:withheld', { said, dropped });
+            if (pendingCommitsRef.current > 0) return;
+
+            clearRespondTimers();
+            respondStallTimerRef.current = setTimeout(() => {
+                respondStallTimerRef.current = null;
+                if (endedRef.current || turnOpenRef.current || speakingRef.current) return;
+                if (pendingCommitsRef.current > 0) return;
+                logDebug('respond:stall-guard');
+                sendEvent({ type: 'response.create' });
+            }, RESPOND_STALL_MS);
+        },
+        [clearRespondTimers, logDebug, sendEvent]
+    );
+
     /**
      * Client-driven turn-taking (unreliable-AEC browsers). Every 50ms:
      * decide whether the mic holds a real voice (energy well above the
@@ -682,16 +786,27 @@ export function useRealtimeSession({
             if (turnOpenRef.current) {
                 silenceFramesRef.current += 1;
                 if (silenceFramesRef.current >= DT_END_SILENCE_FRAMES) {
-                    // End of the doctor's turn — hand it to the model.
+                    // End of the doctor's turn — hand the audio to the model,
+                    // but not yet the instruction to reply. 900ms of quiet
+                    // cannot tell "I'm done" from "I'm thinking", and commit
+                    // does not itself create a response, so the reply waits for
+                    // the transcript (armRespondDecision → doctorTurn.ts).
                     turnOpenRef.current = false;
                     silenceFramesRef.current = 0;
                     logDebug('turn-commit');
                     sendEvent({ type: 'input_audio_buffer.commit' });
-                    sendEvent({ type: 'response.create' });
+                    armRespondDecision();
                 }
             }
         }
-    }, [interruptPatient, sendEvent, logDebug, updateDebugOverlay, attachPatientAnalyser]);
+    }, [
+        interruptPatient,
+        sendEvent,
+        logDebug,
+        updateDebugOverlay,
+        attachPatientAnalyser,
+        armRespondDecision,
+    ]);
 
     /** Arm the double-talk detector (unreliable-AEC browsers only). Called
      *  once the mic stream exists; a detector failure only ever degrades to
@@ -782,6 +897,8 @@ export function useRealtimeSession({
             clearTimeout(bufferClearTimerRef.current);
             bufferClearTimerRef.current = null;
         }
+        pendingCommitsRef.current = 0;
+        clearRespondTimers();
         if (audioCtxRef.current) {
             void audioCtxRef.current.close().catch(() => {
                 /* already closed */
@@ -811,7 +928,7 @@ export function useRealtimeSession({
         }
         setIsSpeaking(false);
         setStatus('disconnected');
-    }, [flushVoiceLog]);
+    }, [flushVoiceLog, clearRespondTimers]);
 
     // Graceful end: silence the patient immediately, then persist the
     // transcript and notify. Teardown must come FIRST — the save round-trip
@@ -915,29 +1032,35 @@ export function useRealtimeSession({
                     // consultation, and "okay" is a normal backchannel. Only drop
                     // when it is a known stock phrase AND the ASR itself was
                     // unsure. Punctuation-only output is always noise.
+                    let dropReason: string | null = null;
                     if (/^[\s.,!?—-]+$/.test(said)) {
-                        logDebug('asr-drop:punctuation-only');
-                        if (id) delete vadRef.current[id];
-                        break;
-                    }
-                    if (
+                        dropReason = 'punctuation-only';
+                    } else if (
                         /^(bye|thanks|thank you|you)[.!?]*$/i.test(said) &&
                         typeof conf === 'number' &&
                         conf < ASR_ARTIFACT_CONFIDENCE
                     ) {
-                        logDebug('asr-drop:stock-phrase', { said, conf: Number(conf.toFixed(2)) });
-                        if (id) delete vadRef.current[id];
-                        break;
+                        dropReason = 'stock-phrase';
                     }
 
-                    appendTurn({
-                        speaker: 'candidate',
-                        text: said,
-                        start_ms: vad.start_ms ?? relNow(),
-                        end_ms: vad.end_ms,
-                        asr_confidence: conf,
-                    });
+                    if (dropReason) {
+                        logDebug(`asr-drop:${dropReason}`, {
+                            said,
+                            conf: typeof conf === 'number' ? Number(conf.toFixed(2)) : null,
+                        });
+                    } else {
+                        appendTurn({
+                            speaker: 'candidate',
+                            text: said,
+                            start_ms: vad.start_ms ?? relNow(),
+                            end_ms: vad.end_ms,
+                            asr_confidence: conf,
+                        });
+                    }
                     if (id) delete vadRef.current[id];
+                    // Now that we know what was said, decide whether the turn
+                    // this transcript belongs to earns a reply.
+                    resolveRespondDecision(said, Boolean(dropReason));
                     break;
                 }
                 // GA emits response.output_audio_transcript.done; older builds use response.audio_transcript.done.
@@ -987,6 +1110,11 @@ export function useRealtimeSession({
                     turnOpenRef.current = false;
                     silenceFramesRef.current = 0;
                     doubleTalkFramesRef.current = 0;
+                    // The patient is answering, so any turn still waiting on a
+                    // reply decision has been answered — drop it rather than
+                    // letting a stale timer fire a second response.
+                    pendingCommitsRef.current = 0;
+                    clearRespondTimers();
                     setIsSpeaking(true);
                     break;
                 case 'output_audio_buffer.stopped':
@@ -1041,7 +1169,17 @@ export function useRealtimeSession({
                     break;
             }
         },
-        [appendTurn, relNow, handleFunctionCall, onError, sendEvent, logDebug, flushVoiceLog]
+        [
+            appendTurn,
+            relNow,
+            handleFunctionCall,
+            onError,
+            sendEvent,
+            logDebug,
+            flushVoiceLog,
+            resolveRespondDecision,
+            clearRespondTimers,
+        ]
     );
 
     const connect = useCallback(async () => {
