@@ -1,11 +1,8 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { cookies, headers } from 'next/headers';
+
 import { getStripe } from '@/lib/commerce/stripe';
 import { getPlan } from '@/lib/commerce/plans';
-import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { REFERRAL_DISPLAY_COOKIE, REWARD_BY_PLAN, normalizeEmail, referralUrl } from '@/lib/commerce/referrals';
-import CopyLinkButton from './CopyLinkButton';
 
 export const metadata: Metadata = {
   title: 'You’re in — Fourteen Fisherman',
@@ -39,47 +36,9 @@ async function getOrderSummary(sessionId: string | undefined): Promise<OrderSumm
   }
 }
 
-/**
- * Read-only lookup of the buyer's advocate code (minted by the Stripe webhook).
- * Returns null if the webhook hasn't run yet — the page tolerates the race.
- */
-async function getReferralCode(email: string | null): Promise<string | null> {
-  if (!email) return null;
-  try {
-    const supabase = getSupabaseAdmin();
-    const { data, error } = await supabase
-      .from('referral_codes')
-      .select('code')
-      .eq('owner_email', normalizeEmail(email))
-      .eq('active', true)
-      .maybeSingle();
-    if (error) {
-      console.error('[thanks] referral code lookup failed', error);
-      return null;
-    }
-    return data?.code ?? null;
-  } catch (error: unknown) {
-    console.error('[thanks] referral code lookup error', error);
-    return null;
-  }
-}
-
-async function getOrigin(): Promise<string> {
-  const h = await headers();
-  const host = h.get('host') ?? 'www.fourteenfisherman.com';
-  const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
-  return `${proto}://${host}`;
-}
-
 export default async function ThanksPage({ searchParams }: ThanksPageProps) {
   const { session_id } = await searchParams;
   const order = await getOrderSummary(session_id);
-  const referralCode = await getReferralCode(order?.email ?? null);
-  const link = referralCode ? referralUrl(await getOrigin(), referralCode) : null;
-  const rewardPounds = `£${Math.round(REWARD_BY_PLAN.complete / 100)}`;
-  // Display-only flag: tells the referred buyer the recommendation was
-  // counted. Attribution itself happened server-side at checkout via `ff_ref`.
-  const wasReferred = Boolean((await cookies()).get(REFERRAL_DISPLAY_COOKIE)?.value);
 
   return (
     <main className="min-h-screen bg-surface flex items-center justify-center px-6">
@@ -119,33 +78,6 @@ export default async function ThanksPage({ searchParams }: ThanksPageProps) {
           1 September 2026, and your 3 months’ access runs from that date. Your coaching
           day runs on the date you picked. We’ll email you everything you need before launch.
         </p>
-
-        {wasReferred ? (
-          <p className="text-sm text-muted -mt-6 mb-10">
-            The recommendation that brought you here was counted with this order.
-          </p>
-        ) : null}
-
-        {/* ── Referral block — only shown when this buyer actually has a code.
-             Buyers are not auto-enrolled as referrers by default (referrers are
-             deliberate affiliates), so most orders show no referral block. ── */}
-        {link ? (
-          <div className="mb-10 rounded-2xl border border-[#EBE4DB] bg-surface-raised px-6 py-7 text-left">
-            <h2 className="text-lg font-semibold text-heading tracking-tight">
-              Refer a mate — earn up to {rewardPounds}
-            </h2>
-            <p className="text-muted leading-relaxed mt-1.5 mb-4">
-              Know another GP trainee prepping for the SCA? Share your personal link. When they
-              enrol, you earn up to {rewardPounds}.
-            </p>
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-              <code className="flex-1 min-w-0 truncate rounded-lg border border-[#EBE4DB] bg-white px-3.5 py-2.5 font-mono text-sm text-body">
-                {link}
-              </code>
-              <CopyLinkButton url={link} />
-            </div>
-          </div>
-        ) : null}
 
         <Link
           href="/"
