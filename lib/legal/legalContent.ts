@@ -10,8 +10,6 @@ export const LEGAL_MARKDOWN = `# Legal
 
 This page contains our terms and conditions, privacy policy and cookie policy.
 
-Fourteen Fisherman is operated by Phenolabs Limited, a company registered in England and Wales (company number 17022434). References to "we", "us" and "our" mean Phenolabs Limited. References to "the platform" mean fourteenfisherman.com and all services provided through it.
-
 Contact: hello@fourteenfisherman.com
 
 ---
@@ -141,6 +139,8 @@ Contact: hello@fourteenfisherman.com
 13.3 If any part of these terms is found unenforceable, the rest remains in force.
 
 13.4 These terms are governed by the law of England and Wales, and the courts of England and Wales have jurisdiction. If you live in Scotland or Northern Ireland you may also bring proceedings in your local courts.
+
+Fourteen Fisherman is operated by Phenolabs Limited, a company registered in England and Wales (company number 17022434). References to "we", "us" and "our" mean Phenolabs Limited. References to "the platform" mean fourteenfisherman.com and all services provided through it.
 
 ---
 

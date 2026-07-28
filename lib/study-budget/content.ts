@@ -467,7 +467,7 @@ export const STUDY_BUDGET_ARTICLES: StudyBudgetArticle[] = [
         "a": "Yes, but expect to fund it yourself; NIMDTA's position is that protected self-directed learning time is the intended preparation."
       }
     ],
-    "cta": "If you are self-funding SCA preparation for a first attempt in Northern Ireland, or using SUCCESS funding after a resit: our Complete programme (£599) is a structured SCA course combining unlimited AI consultation practice across 200 stations built from the RCGP curriculum with on-demand lectures and small-group coaching, priced within the £750 SUCCESS per-course limit. Our Self-Study tier (£199) is a lower-cost option if you are funding a first attempt yourself. [See pricing.](https://www.fourteenfisherman.com/)",
+    "cta": "If you are self-funding SCA preparation for a first attempt in Northern Ireland, or using SUCCESS funding after a resit: our Complete programme (£599) is a structured SCA course combining unlimited AI consultation practice across 200 stations built from the RCGP curriculum with on-demand lectures and small-group coaching, priced within the £750 SUCCESS per-course limit. Our Self-Study tier (£299) is a lower-cost option if you are funding a first attempt yourself. [See pricing.](https://www.fourteenfisherman.com/)",
     "sources": [
       {
         "label": "NIMDTA GP specialty training study leave guidance (Oct 2025)",
