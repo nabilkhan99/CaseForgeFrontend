@@ -61,10 +61,10 @@ export const metadata: Metadata = {
     description: 'AI practice on 200 stations, 10 hours of on-demand lectures and a full-day Small-Group Coaching session. Fail your SCA after passing all 200 stations, and we pay you £500.',
     images: [
       {
-        url: '/opengraph-image.png',
+        url: 'https://www.fourteenfisherman.com/og/sca-default.jpg',
         width: 1200,
-        height: 630,
-        alt: 'Fourteen Fisherman Clinical Master for SCA prep',
+        height: 1200,
+        alt: 'Fourteen Fisherman — everything you need to pass the SCA',
       },
     ],
   },
@@ -72,7 +72,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Fourteen Fisherman — The Complete SCA Course',
     description: 'AI practice on 200 stations, 10 hours of on-demand lectures and a full-day Small-Group Coaching session. Fail your SCA after passing all 200 stations, and we pay you £500.',
-    images: ['/twitter-image.png'],
+    images: ['https://www.fourteenfisherman.com/og/sca-default.jpg'],
   },
   alternates: {
     canonical: 'https://www.fourteenfisherman.com/',

@@ -11,6 +11,12 @@ export const metadata: Metadata = pageMetadata({
     description:
         '79 free SCA practice cases built directly from RCGP curriculum topic stations. Candidate brief, patient script, marking scheme and learning points. Free for GP registrar exam prep.',
     path: '/sca-cases',
+    image: {
+        url: '/og/sca-cases.png',
+        width: 1200,
+        height: 1200,
+        alt: '79 free SCA stations',
+    },
 });
 
 export default async function ScaCasesPage() {
