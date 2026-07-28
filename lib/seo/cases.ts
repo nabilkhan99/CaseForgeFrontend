@@ -79,12 +79,28 @@ export function inferCondition(station: Pick<PublicCase, 'title' | 'clinical_lea
     return titleCase(candidate);
 }
 
+// Hand-set overrides for cases whose auto-derived condition/slug is too
+// generic to stand as a URL or H1, keyed by station id. An overridden slug
+// change MUST come with a permanent redirect from the old slug in
+// next.config.js so the previously indexed URL keeps working.
+const CASE_SEO_OVERRIDES: Record<string, { condition?: string; slug?: string }> = {
+    // "Remote Triage of the Acute Headache - examination expected": the parser
+    // keeps only the text after the dash, yielding the meaningless slug
+    // "examination-expected" (redirected in next.config.js).
+    'ac653a32-5a4e-40e3-bbfc-09eab9fddd21': {
+        condition: 'Remote Triage of an Acute Headache (Examination Expected)',
+        slug: 'remote-triage-acute-headache',
+    },
+};
+
 export function buildCaseSeoIndex<T extends PublicCase>(cases: T[]) {
     const seen = new Map<string, number>();
 
     return cases.map(caseItem => {
-        const condition = inferCondition(caseItem);
-        const baseSlug = slugify(condition) || slugify(caseItem.title) || caseItem.id;
+        const override = CASE_SEO_OVERRIDES[caseItem.id];
+        const condition = override?.condition ?? inferCondition(caseItem);
+        const baseSlug =
+            override?.slug ?? (slugify(condition) || slugify(caseItem.title) || caseItem.id);
         const count = seen.get(baseSlug) || 0;
         seen.set(baseSlug, count + 1);
         const slug = count === 0 ? baseSlug : `${baseSlug}-${caseItem.id.slice(0, 8)}`;

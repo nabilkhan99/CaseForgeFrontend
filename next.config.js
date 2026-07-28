@@ -16,6 +16,17 @@ const nextConfig = {
     unoptimized: true,
     domains: ['case-forge-frontend-n5fd.vercel.app','www.fourteenfisherman.com'],
   },
+  async redirects() {
+    return [
+      // Renamed case slug (was auto-derived as the meaninglessly generic
+      // "examination-expected" — see CASE_SEO_OVERRIDES in lib/seo/cases.ts).
+      {
+        source: '/sca-cases/examination-expected',
+        destination: '/sca-cases/remote-triage-acute-headache',
+        permanent: true,
+      },
+    ];
+  },
   async rewrites() {
     const backendUrl = process.env.NODE_ENV === 'development'
       ? 'http://localhost:8000'
