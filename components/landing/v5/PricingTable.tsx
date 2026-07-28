@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { ArrowRight, Info } from 'lucide-react';
 import { ACCESS_OPENS_LABEL, BOOK_A_CALL_URL } from '@/lib/commerce/plans';
 import { Pill } from './editorial';
+import PaymentMethodsRow from './PaymentMethodsRow';
 
 interface FeatureCell {
   text: string;
@@ -383,6 +384,8 @@ export default function PricingTable() {
           {selfStudy.error && (
             <p className="mt-3 text-center text-sm font-medium text-danger">{selfStudy.error}</p>
           )}
+
+          <PaymentMethodsRow />
         </motion.div>
       </div>
     </section>
