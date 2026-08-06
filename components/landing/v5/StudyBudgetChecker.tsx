@@ -48,7 +48,12 @@ function displayTitle(title: string): string {
   return match[1].charAt(0).toUpperCase() + match[1].slice(1);
 }
 
-export default function StudyBudgetChecker() {
+export default function StudyBudgetChecker({
+  surface = 'landing',
+}: {
+  /** Where the checker is embedded — 'landing' on /, 'study-budget' on the hub/spoke pages. */
+  surface?: string;
+}) {
   const [deaneryId, setDeaneryId] = useState(PLACEHOLDER_ID);
   const [hasResat, setHasResat] = useState(false);
 
@@ -62,6 +67,7 @@ export default function StudyBudgetChecker() {
     trackEvent('study_budget_deanery_selected', {
       deanery: id,
       verdict: selected?.verdict ?? 'unknown',
+      surface,
     });
   };
 
@@ -157,11 +163,13 @@ export default function StudyBudgetChecker() {
               <Verdict
                 deanery={deanery}
                 hasResat={hasResat}
+                surface={surface}
                 onResitChange={(value) => {
                   setHasResat(value);
                   trackEvent('study_budget_resit_toggled', {
                     deanery: deanery.id,
                     has_resat: value,
+                    surface,
                   });
                 }}
               />
@@ -173,7 +181,11 @@ export default function StudyBudgetChecker() {
                     Policy checked July 2026 against the most current document
                     at the time. Approval always sits with your ES and TPD.
                   </p>
-                  <EmailLetter deanery={deanery} hasResat={hasResat} />
+                  <EmailLetter
+                    deanery={deanery}
+                    hasResat={hasResat}
+                    surface={surface}
+                  />
                 </>
               )}
             </motion.div>
@@ -187,10 +199,11 @@ export default function StudyBudgetChecker() {
 interface VerdictProps {
   deanery: DeaneryPolicy;
   hasResat: boolean;
+  surface: string;
   onResitChange: (value: boolean) => void;
 }
 
-function Verdict({ deanery, hasResat, onResitChange }: VerdictProps) {
+function Verdict({ deanery, hasResat, surface, onResitChange }: VerdictProps) {
   const showResit = Boolean(deanery.resit) && hasResat;
   const verdict = showResit ? deanery.resit!.verdict : deanery.verdict;
   const theme = VERDICT_THEMES[verdict];
@@ -271,6 +284,13 @@ function Verdict({ deanery, hasResat, onResitChange }: VerdictProps) {
             href={deanery.policyUrl}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() =>
+              trackEvent('study_budget_policy_link_clicked', {
+                deanery: deanery.id,
+                verdict,
+                surface,
+              })
+            }
             className="underline decoration-[#d9cdb3] underline-offset-2 transition-colors hover:text-heading"
             style={{ color: theme.accent }}
           >
@@ -285,9 +305,10 @@ function Verdict({ deanery, hasResat, onResitChange }: VerdictProps) {
 interface EmailLetterProps {
   deanery: DeaneryPolicy;
   hasResat: boolean;
+  surface: string;
 }
 
-function EmailLetter({ deanery, hasResat }: EmailLetterProps) {
+function EmailLetter({ deanery, hasResat, surface }: EmailLetterProps) {
   const [copied, setCopied] = useState(false);
 
   const emailBody = useMemo(
@@ -302,7 +323,10 @@ function EmailLetter({ deanery, hasResat }: EmailLetterProps) {
       await navigator.clipboard.writeText(emailBody);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-      trackEvent('study_budget_email_copied', { deanery: deanery.id });
+      trackEvent('study_budget_email_copied', {
+        deanery: deanery.id,
+        surface,
+      });
     } catch {
       // Clipboard unavailable (permissions / non-secure context) — the
       // letter text below stays selectable for manual copying.
@@ -333,6 +357,12 @@ function EmailLetter({ deanery, hasResat }: EmailLetterProps) {
             href="/course-spec"
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() =>
+              trackEvent('study_budget_course_spec_clicked', {
+                deanery: deanery.id,
+                surface,
+              })
+            }
             className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#854F0B] underline decoration-[#d9cdb3] underline-offset-4 transition-colors hover:text-heading sm:text-sm"
           >
             <FileText className="h-4 w-4" aria-hidden="true" />

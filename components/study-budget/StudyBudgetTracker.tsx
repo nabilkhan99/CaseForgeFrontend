@@ -7,6 +7,7 @@ import {
   TRACKER_DEANERIES,
   VERDICT_THEME,
 } from '@/lib/study-budget/tracker';
+import { trackEvent } from '@/lib/analytics';
 
 /**
  * Study Budget Tracker (build package §4).
@@ -41,6 +42,10 @@ export default function StudyBudgetTracker({
       await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      trackEvent('study_budget_email_copied', {
+        deanery: deanery.slug,
+        surface: 'tracker',
+      });
     } catch {
       /* clipboard blocked — the text is on screen and selectable anyway */
     }
@@ -66,6 +71,13 @@ export default function StudyBudgetTracker({
             setSlug(e.target.value);
             setShowEmail(Boolean(e.target.value));
             setCopied(false);
+            if (e.target.value) {
+              trackEvent('study_budget_deanery_selected', {
+                deanery: e.target.value,
+                verdict: getTrackerDeanery(e.target.value)?.verdict ?? 'unknown',
+                surface: 'tracker',
+              });
+            }
           }}
           className="mt-2 w-full rounded-xl border border-[#d9cdb3] bg-white px-4 py-3 text-[15px] text-heading focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25"
         >
@@ -104,7 +116,14 @@ export default function StudyBudgetTracker({
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <button
                   type="button"
-                  onClick={() => setShowEmail((v) => !v)}
+                  onClick={() => {
+                    setShowEmail((v) => !v);
+                    trackEvent('study_budget_email_toggled', {
+                      deanery: deanery.slug,
+                      shown: !showEmail,
+                      surface: 'tracker',
+                    });
+                  }}
                   aria-expanded={showEmail}
                   className="text-[13px] font-semibold text-[#854F0B] underline decoration-[#d9cdb3] underline-offset-4 hover:text-heading sm:text-sm"
                 >
@@ -142,6 +161,13 @@ export default function StudyBudgetTracker({
               Source:{' '}
               <a
                 href={deanery.sourceUrl}
+                onClick={() =>
+                  trackEvent('study_budget_policy_link_clicked', {
+                    deanery: deanery.slug,
+                    verdict: deanery.verdict,
+                    surface: 'tracker',
+                  })
+                }
                 className="underline underline-offset-2 hover:text-heading"
                 {...(/^https?:\/\//.test(deanery.sourceUrl)
                   ? { target: '_blank', rel: 'noopener noreferrer' }

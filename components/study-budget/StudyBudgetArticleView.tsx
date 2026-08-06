@@ -132,7 +132,9 @@ export default function StudyBudgetArticleView({
               own deanery dropdown and its own dataset, so it does not pre-select
               this page's deanery and its verdict can differ from the article on
               five deaneries — a known, accepted divergence. */}
-          {deaneryId || isHub ? <StudyBudgetChecker /> : null}
+          {deaneryId || isHub ? (
+            <StudyBudgetChecker surface="study-budget" />
+          ) : null}
 
           {article.cta ? (
             <aside className="mt-12 rounded-2xl border border-[#e0d4bd] bg-[#fbf6ec] p-6 sm:p-7">
