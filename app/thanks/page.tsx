@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 
 import { getStripe } from '@/lib/commerce/stripe';
 import { getPlan } from '@/lib/commerce/plans';
+import PurchaseTracker from '@/components/common/PurchaseTracker';
 
 export const metadata: Metadata = {
   title: 'You’re in — Fourteen Fisherman',
@@ -14,6 +15,7 @@ interface ThanksPageProps {
 }
 
 interface OrderSummary {
+  planKey: string;
   planName: string;
   coachingDayLabel: string | null;
   email: string | null;
@@ -26,6 +28,7 @@ async function getOrderSummary(sessionId: string | undefined): Promise<OrderSumm
     if (session.payment_status !== 'paid') return null;
     const plan = getPlan(session.metadata?.plan ?? '');
     return {
+      planKey: session.metadata?.plan ?? 'unknown',
       planName: plan?.name ?? 'your plan',
       coachingDayLabel: session.metadata?.coaching_day_label ?? null,
       email: session.customer_details?.email ?? null,
@@ -42,6 +45,13 @@ export default async function ThanksPage({ searchParams }: ThanksPageProps) {
 
   return (
     <main className="min-h-screen bg-surface flex items-center justify-center px-6">
+      {order && session_id && (
+        <PurchaseTracker
+          sessionId={session_id}
+          plan={order.planKey}
+          coachingDay={order.coachingDayLabel}
+        />
+      )}
       <div className="max-w-xl w-full text-center py-24">
         <div className="mx-auto mb-8 flex h-16 w-16 items-center justify-center rounded-full bg-[#EAF3DE]">
           <svg viewBox="0 0 24 24" className="h-8 w-8 text-[#3B6D11]" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

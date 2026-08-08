@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowRight, Info } from 'lucide-react';
 import { ACCESS_OPENS_LABEL, BOOK_A_CALL_URL } from '@/lib/commerce/plans';
+import { trackEvent } from '@/lib/analytics';
 import { Pill } from './editorial';
 import PaymentMethodsRow from './PaymentMethodsRow';
 
@@ -68,6 +69,8 @@ function useSelfStudyCheckout() {
         setSubmitting(false);
         return;
       }
+      // Awaited so the capture flushes before we leave for Stripe.
+      await trackEvent('checkout_started', { plan: 'self_study' });
       window.location.assign(data.url);
     } catch {
       setError('Something went wrong — please try again.');
@@ -113,7 +116,10 @@ function PlanCta({ selfStudy, variant }: CtaButtonsProps) {
     return (
       <button
         type="button"
-        onClick={selfStudy.start}
+        onClick={() => {
+          trackEvent('checkout_clicked', { plan: 'self_study' });
+          selfStudy.start();
+        }}
         disabled={selfStudy.submitting}
         className="w-full rounded-full border border-heading/15 bg-white px-2 py-3 text-[13px] font-semibold text-heading transition-colors hover:bg-surface-warm disabled:opacity-60 sm:py-2.5 sm:text-sm"
       >
@@ -125,6 +131,7 @@ function PlanCta({ selfStudy, variant }: CtaButtonsProps) {
     return (
       <Link
         href="/coaching-day"
+        onClick={() => trackEvent('checkout_clicked', { plan: 'complete' })}
         className="cta-button w-full gap-1.5 !rounded-full px-2 py-3.5 text-[13px] sm:py-3 sm:text-sm"
       >
         Choose your coaching day <ArrowRight className="h-3.5 w-3.5" />
@@ -136,6 +143,7 @@ function PlanCta({ selfStudy, variant }: CtaButtonsProps) {
       href={BOOK_A_CALL_URL}
       target="_blank"
       rel="noopener noreferrer"
+      onClick={() => trackEvent('checkout_clicked', { plan: 'intensive' })}
       className="block w-full rounded-full border border-heading/15 bg-white px-2 py-3 text-center text-[13px] font-semibold text-heading transition-colors hover:bg-surface-warm sm:py-2.5 sm:text-sm"
     >
       Book a call
@@ -276,6 +284,7 @@ export default function PricingTable() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-80px' }}
           transition={{ duration: 0.55, ease: 'easeOut' }}
+          onViewportEnter={() => trackEvent('pricing_viewed', {})}
         >
           <p className="mb-3 flex justify-center">
             <Pill>Choose your prep</Pill>

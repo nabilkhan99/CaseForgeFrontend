@@ -7,6 +7,7 @@ import { ArrowLeft, ArrowRight, CalendarClock, Users } from 'lucide-react';
 import LandingNavbar from '@/components/landing/LandingNavbar';
 import LandingFooter from '@/components/landing/LandingFooter';
 import { ACCESS_OPENS_LABEL, type CoachingDayAvailability } from '@/lib/commerce/plans';
+import { trackEvent } from '@/lib/analytics';
 
 const COUNTDOWN_WINDOW_MS = 72 * 60 * 60 * 1000;
 
@@ -80,6 +81,8 @@ export default function CoachingDayPage() {
         setSubmitting(false);
         return;
       }
+      // Awaited so the capture flushes before we leave for Stripe.
+      await trackEvent('checkout_started', { plan: 'complete', coaching_day: selected });
       window.location.assign(data.url);
     } catch {
       setError('Something went wrong — please try again.');

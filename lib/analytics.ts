@@ -27,6 +27,16 @@ export const initAnalytics = () => {
   }
 };
 
+/**
+ * Capture a $pageview for client-side route changes. PostHog only captures
+ * the initial full page load on its own, so App Router navigations are
+ * invisible without this — AnalyticsWrapper calls it on every pathname change.
+ */
+export const capturePageview = () => {
+  if (typeof window === 'undefined' || !isInitialized) return;
+  posthog.capture('$pageview');
+};
+
 export const trackEvent = async (eventName: string, properties?: Record<string, string | number | boolean | string[]>) => {
   if (typeof window === 'undefined') return;
 
