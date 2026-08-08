@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
+import { trackEvent } from '@/lib/analytics';
 import { suggestEmailFix } from '@/lib/trial/emailTypo';
 import {
   EXAM_STATUSES,
@@ -111,6 +112,12 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
     });
   }
 
+  // The gate is the biggest drop-off point in the trial funnel — every stage
+  // is tracked so the abandon step (questionnaire vs code entry) is visible.
+  useEffect(() => {
+    trackEvent('trial_gate_shown', { session: sessionId });
+  }, [sessionId]);
+
   // Resend countdown.
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -152,6 +159,10 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
       setCooldown(data.resendCooldown ?? 60);
       setCode('');
       setStep('code');
+      trackEvent('trial_gate_code_requested', {
+        session: sessionId,
+        email: answers.email.trim().toLowerCase(),
+      });
     } catch {
       setError('Something went wrong — please try again.');
     } finally {
@@ -174,9 +185,11 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
         setError(data.error ?? 'Something went wrong — please try again.');
         setCode('');
         codeInputRef.current?.focus();
+        trackEvent('trial_gate_code_failed', { session: sessionId });
         return;
       }
       setStep('verified');
+      trackEvent('trial_gate_code_verified', { session: sessionId });
     } catch {
       setError('Something went wrong — please try again.');
     } finally {
@@ -356,6 +369,10 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!stepReady || submitting) return;
+                trackEvent('trial_gate_step_completed', {
+                  session: sessionId,
+                  step: currentStep,
+                });
                 if (isLastStep) void requestCode();
                 else setStepIndex((i) => i + 1);
               }}
@@ -649,7 +666,10 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
             </p>
             <button
               type="button"
-              onClick={() => onUnlock(email.trim().toLowerCase())}
+              onClick={() => {
+                trackEvent('trial_gate_unlocked', { session: sessionId });
+                onUnlock(email.trim().toLowerCase());
+              }}
               className="cta-button w-full px-6 py-4 text-base"
             >
               Show my feedback

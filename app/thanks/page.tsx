@@ -47,7 +47,7 @@ export default async function ThanksPage({ searchParams }: ThanksPageProps) {
     <main className="min-h-screen bg-surface flex items-center justify-center px-6">
       {order && session_id && (
         <PurchaseTracker
-          sessionId={session_id}
+          stripeSessionId={session_id}
           plan={order.planKey}
           coachingDay={order.coachingDayLabel}
         />

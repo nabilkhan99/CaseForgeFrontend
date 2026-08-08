@@ -4,32 +4,30 @@ import { useEffect } from 'react';
 import { trackEvent } from '@/lib/analytics';
 
 interface PurchaseTrackerProps {
-  sessionId: string;
+  stripeSessionId: string;
   plan: string;
   coachingDay: string | null;
 }
 
 /**
- * Fires the `purchase` event once per Stripe session when the /thanks page
- * confirms a paid order. The sessionStorage guard stops refreshes of the
- * thanks page from double-counting the sale.
+ * Fires the purchase event once per Stripe session on the /thanks page.
+ * The sessionStorage guard stops refreshes double-counting a sale.
  */
-export default function PurchaseTracker({ sessionId, plan, coachingDay }: PurchaseTrackerProps) {
+export default function PurchaseTracker({ stripeSessionId, plan, coachingDay }: PurchaseTrackerProps) {
   useEffect(() => {
-    const guardKey = `ff_purchase_${sessionId}`;
+    const key = `ff_purchase_${stripeSessionId}`;
     try {
-      if (sessionStorage.getItem(guardKey)) return;
-      sessionStorage.setItem(guardKey, '1');
+      if (window.sessionStorage.getItem(key)) return;
+      window.sessionStorage.setItem(key, '1');
     } catch {
-      // sessionStorage unavailable (private mode) — still capture, accepting
-      // a possible duplicate on refresh over losing the event entirely.
+      // Storage unavailable — still record the event; worst case a refresh double-counts.
     }
     trackEvent('purchase', {
       plan,
       coaching_day: coachingDay ?? '',
-      stripe_session: sessionId,
+      stripe_session: stripeSessionId,
     });
-  }, [sessionId, plan, coachingDay]);
+  }, [stripeSessionId, plan, coachingDay]);
 
   return null;
 }
