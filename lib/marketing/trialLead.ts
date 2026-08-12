@@ -4,6 +4,7 @@ import { BrevoClient } from '@getbrevo/brevo'
 interface PushTrialLeadArgs {
   email: string
   firstName?: string | null
+  phone?: string | null
   stationTitle: string | null
   score: string | null
   trainingStage?: string | null
@@ -30,6 +31,7 @@ interface PushTrialLeadArgs {
 export async function pushTrialLeadToBrevo({
   email,
   firstName,
+  phone,
   stationTitle,
   score,
   trainingStage,
@@ -57,6 +59,10 @@ export async function pushTrialLeadToBrevo({
       ...(Number.isFinite(listId) && listId > 0 ? { listIds: [listId] } : {}),
       attributes: {
         FIRSTNAME: firstName ?? '',
+        // Text attribute, NOT Brevo's built-in SMS attribute — SMS rejects
+        // anything that isn't strict international format and the whole
+        // contact upsert would fail with it.
+        PHONE: phone ?? '',
         TRIAL_STATION: stationTitle ?? '',
         TRIAL_SCORE: score ?? '',
         TRIAL_DATE: new Date().toISOString().slice(0, 10),

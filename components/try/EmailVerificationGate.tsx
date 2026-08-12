@@ -427,6 +427,22 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
                       className={`${FIELD_CLASSES} placeholder:text-stone-400`}
                     />
                   </div>
+                  <div>
+                    <label htmlFor="trial-phone" className="mb-1.5 block text-[13px] font-medium text-heading">
+                      Phone number
+                    </label>
+                    <input
+                      id="trial-phone"
+                      type="tel"
+                      required
+                      autoComplete="tel"
+                      maxLength={20}
+                      value={answers.phone}
+                      onChange={(e) => set('phone', e.target.value)}
+                      placeholder="07123 456789"
+                      className={`${FIELD_CLASSES} placeholder:text-stone-400`}
+                    />
+                  </div>
                 </>
               )}
 

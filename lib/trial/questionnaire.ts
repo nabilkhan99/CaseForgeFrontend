@@ -15,6 +15,7 @@ import {
 export interface QuestionnaireAnswers {
   email: string
   firstName: string
+  phone: string
   trainingStage: string
   trainingStartMonth: string
   trainingStartYear: string
@@ -30,6 +31,7 @@ export interface QuestionnaireAnswers {
 export const EMPTY_ANSWERS: QuestionnaireAnswers = {
   email: '',
   firstName: '',
+  phone: '',
   trainingStage: '',
   trainingStartMonth: '',
   trainingStartYear: '',
@@ -85,11 +87,29 @@ export function buildSteps(answers: QuestionnaireAnswers): StepId[] {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+// Digits with an optional leading +, after formatting characters are removed.
+// 9–15 digits spans everything from short international numbers to full E.164;
+// a UK mobile (07…) is 11.
+const PHONE_RE = /^\+?\d{9,15}$/
+
+/** Strip the characters people naturally type into phone numbers. */
+export function normalizePhone(raw: string): string {
+  return raw.replace(/[\s\-().]/g, '')
+}
+
+export function isValidPhone(raw: string): boolean {
+  return PHONE_RE.test(normalizePhone(raw))
+}
+
 /** Whether the current step has everything it needs to advance. */
 export function isStepComplete(step: StepId, a: QuestionnaireAnswers): boolean {
   switch (step) {
     case 'identity':
-      return EMAIL_RE.test(a.email.trim()) && a.firstName.trim().length > 0
+      return (
+        EMAIL_RE.test(a.email.trim()) &&
+        a.firstName.trim().length > 0 &&
+        isValidPhone(a.phone.trim())
+      )
     case 'stage':
       return !!a.trainingStage
     case 'trainingStart':
@@ -127,6 +147,9 @@ export function validateAnswers(
   const firstName = str(input.firstName).slice(0, 60)
   if (!firstName) return { ok: false, error: 'First name is required' }
 
+  const phone = normalizePhone(str(input.phone))
+  if (!PHONE_RE.test(phone)) return { ok: false, error: 'A valid phone number is required' }
+
   const stage = findOption(TRAINING_STAGES, str(input.trainingStage))
   if (!stage) return { ok: false, error: 'Training stage is required' }
 
@@ -134,6 +157,7 @@ export function validateAnswers(
     ...EMPTY_ANSWERS,
     email,
     firstName,
+    phone,
     trainingStage: stage.value,
   }
 

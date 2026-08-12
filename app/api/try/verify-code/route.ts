@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { pushTrialLeadToBrevo } from '@/lib/marketing/trialLead';
+import { sendLeadAlertEmail } from '@/lib/email/leadAlertEmail';
 import {
   AKT_TARGETS,
   EXAM_STATUSES,
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
     const { data: lead, error: leadError } = await supabase
       .from('trial_leads')
       .select(
-        'id, email, first_name, training_stage, sca_sit_date, training_start_month, training_start_year, akt_status, akt_sitting, sca_status, sca_sitting, not_in_training_role, station_id, verification_code_hash, verification_expires_at, verification_attempts, email_verified_at',
+        'id, email, first_name, phone, training_stage, sca_sit_date, training_start_month, training_start_year, akt_status, akt_sitting, sca_status, sca_sitting, not_in_training_role, station_id, verification_code_hash, verification_expires_at, verification_attempts, email_verified_at',
       )
       .eq('session_id', sessionId)
       .maybeSingle();
@@ -122,6 +123,7 @@ export async function POST(req: NextRequest) {
     await pushTrialLeadToBrevo({
       email: lead.email,
       firstName: lead.first_name,
+      phone: lead.phone,
       stationTitle,
       score: null,
       trainingStage: findOption(TRAINING_STAGES, lead.training_stage)?.label ?? lead.training_stage,
@@ -135,6 +137,19 @@ export async function POST(req: NextRequest) {
       gpTrainingStart: gpStartLabel,
       notInTrainingRole:
         findOption(NOT_IN_TRAINING_ROLES, lead.not_in_training_role)?.label ?? null,
+    });
+
+    // Internal heads-up so the follow-up call can happen while the mock is
+    // still fresh. Best-effort — never blocks the report unlocking.
+    await sendLeadAlertEmail({
+      sessionId,
+      email: lead.email,
+      firstName: lead.first_name,
+      phone: lead.phone,
+      trainingStage:
+        findOption(TRAINING_STAGES, lead.training_stage)?.label ?? lead.training_stage,
+      scaSitting: scaSittingLabel,
+      stationTitle,
     });
 
     return NextResponse.json({ ok: true });

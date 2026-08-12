@@ -156,6 +156,8 @@ Contact for privacy matters: hello@fourteenfisherman.com
 
 **Account and purchase data.** Name, email address, and records of your plan and purchases. Card details are processed by our payment provider and are not stored by us.
 
+**Free mock details.** Name, email address and phone number you provide when taking a free mock station, together with your questionnaire answers about your training stage and exams. We may use these to contact you by email or phone about your mock and our courses.
+
 **Practice data.** Your interactions with the AI practice stations, including audio of your spoken consultations, transcripts, scores and progress. This is the core of the service: it is how we score your stations, track your progress towards the guarantee, and let you review your own performance.
 
 **Portfolio tool inputs.** Text you enter into the free portfolio tool and the output generated. You must not enter real patient information (see the terms of use). We treat all inputs as fully anonymised text.
@@ -176,6 +178,7 @@ Contact for privacy matters: hello@fourteenfisherman.com
 | Responding to support requests | Legitimate interests (running our service) |
 | Sending you service emails about your course | Performance of a contract |
 | Sending you emails about our courses and related products when you create an account or purchase | Legitimate interests. We tell you about this at sign-up, and every email includes an unsubscribe link, so you can opt out at any time |
+| Contacting you by email or phone about your free mock station and our courses | Legitimate interests. You can ask us to stop at any time |
 | Site analytics | Consent |
 | Improving and developing our products, including our stations, scoring, voice AI and portfolio tool | Legitimate interests (developing our service). We de-identify or aggregate data for this purpose wherever possible |
 | Establishing, exercising or defending legal claims, and preventing fraud (including guarantee fraud) | Legitimate interests |

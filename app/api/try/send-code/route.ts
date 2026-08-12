@@ -98,6 +98,7 @@ export async function POST(req: NextRequest) {
       station_id: session.station_id ?? null,
       email: normalizedEmail,
       first_name: answers.firstName,
+      phone: answers.phone,
       training_stage: answers.trainingStage,
       training_start_month: answers.trainingStartMonth || null,
       training_start_year: answers.trainingStartYear || null,
