@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from('trial_leads')
-      .select('email_verified_at')
+      .select('email_verified_at, phone, phone_verified_at, phone_verification_skipped_at')
       .eq('session_id', sessionId)
       .maybeSingle();
 
@@ -34,7 +34,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ verified: false }, { status: 200 });
     }
 
-    return NextResponse.json({ verified: Boolean(data?.email_verified_at) });
+    // Verified = email confirmed AND the phone step is settled: verified,
+    // skipped (SMS couldn't be sent — fail open), or absent entirely
+    // (legacy leads captured before the phone field existed).
+    const phoneSettled =
+      !data?.phone || Boolean(data?.phone_verified_at) || Boolean(data?.phone_verification_skipped_at);
+    return NextResponse.json({
+      verified: Boolean(data?.email_verified_at) && phoneSettled,
+    });
   } catch (error: unknown) {
     console.error('[gate-status] unexpected error', error);
     return NextResponse.json({ verified: false }, { status: 200 });

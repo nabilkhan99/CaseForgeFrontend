@@ -6,6 +6,8 @@ interface SendLeadAlertEmailArgs {
   email: string
   firstName?: string | null
   phone?: string | null
+  /** Whether the number confirmed a texted code. False = fail-open pass. */
+  phoneVerified?: boolean
   trainingStage?: string | null
   scaSitting?: string | null
   stationTitle?: string | null
@@ -23,6 +25,7 @@ export async function sendLeadAlertEmail({
   email,
   firstName,
   phone,
+  phoneVerified,
   trainingStage,
   scaSitting,
   stationTitle,
@@ -45,7 +48,12 @@ export async function sendLeadAlertEmail({
   const rows: Array<[string, string]> = [
     ['Name', name],
     ['Email', email],
-    ['Phone', phone?.trim() || '—'],
+    [
+      'Phone',
+      phone?.trim()
+        ? `${phone.trim()}${phoneVerified === false ? ' (UNVERIFIED — SMS could not be sent)' : phoneVerified ? ' ✓ verified' : ''}`
+        : '—',
+    ],
     ['Training stage', trainingStage?.trim() || '—'],
     ['SCA sitting', scaSitting?.trim() || '—'],
     ['Station', stationTitle?.trim() || '—'],

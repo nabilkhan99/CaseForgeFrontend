@@ -29,7 +29,7 @@ const FIELD_CLASSES =
 
 const CODE_LENGTH = 6;
 
-type GateStep = 'details' | 'code' | 'verified';
+type GateStep = 'details' | 'code' | 'phoneCode' | 'verified';
 
 interface EmailVerificationGateProps {
   sessionId: string;
@@ -64,6 +64,12 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
   const [cooldown, setCooldown] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Number the SMS code was actually sent to (E.164, echoed by the server),
+  // and the inline "wrong number?" edit state.
+  const [smsPhone, setSmsPhone] = useState('');
+  const [editingPhone, setEditingPhone] = useState(false);
+  const [phoneDraft, setPhoneDraft] = useState('');
 
   const codeInputRef = useRef<HTMLInputElement>(null);
 
@@ -126,8 +132,87 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
   }, [cooldown]);
 
   useEffect(() => {
-    if (step === 'code') codeInputRef.current?.focus();
+    if (step === 'code' || step === 'phoneCode') codeInputRef.current?.focus();
   }, [step]);
+
+  /**
+   * Text a code to the lead's number (optionally a corrected one). The server
+   * fails open when the SMS can't go out — smsUnavailable skips straight to
+   * the report rather than dead-ending someone who has earned it.
+   */
+  async function requestPhoneCode(newPhone?: string) {
+    if (submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/try/send-phone-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, ...(newPhone ? { phone: newPhone } : {}) }),
+      });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        resendCooldown?: number;
+        retryAfter?: number;
+        smsUnavailable?: boolean;
+        alreadyVerified?: boolean;
+        phone?: string;
+      };
+      if (!res.ok || !data.ok) {
+        if (res.status === 429 && data.retryAfter) {
+          setCooldown(data.retryAfter);
+          setCode('');
+          setStep('phoneCode');
+        } else {
+          setError(data.error ?? 'Something went wrong — please try again.');
+        }
+        return;
+      }
+      if (data.smsUnavailable || data.alreadyVerified) {
+        setStep('verified');
+        trackEvent('trial_gate_phone_skipped', { session: sessionId });
+        return;
+      }
+      if (data.phone) setSmsPhone(data.phone);
+      setCooldown(data.resendCooldown ?? 60);
+      setCode('');
+      setEditingPhone(false);
+      setStep('phoneCode');
+      trackEvent('trial_gate_phone_code_requested', { session: sessionId });
+    } catch {
+      setError('Something went wrong — please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function verifyPhoneCode(candidate: string) {
+    if (submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/try/verify-phone-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, code: candidate }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        setError(data.error ?? 'Something went wrong — please try again.');
+        setCode('');
+        codeInputRef.current?.focus();
+        trackEvent('trial_gate_phone_code_failed', { session: sessionId });
+        return;
+      }
+      setStep('verified');
+      trackEvent('trial_gate_phone_code_verified', { session: sessionId });
+    } catch {
+      setError('Something went wrong — please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   async function requestCode() {
     if (submitting) return;
@@ -188,8 +273,12 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
         trackEvent('trial_gate_code_failed', { session: sessionId });
         return;
       }
-      setStep('verified');
       trackEvent('trial_gate_code_verified', { session: sessionId });
+      // Email proven — straight into the phone step. The server texts the
+      // code (or fails open and requestPhoneCode moves to 'verified').
+      setSubmitting(false);
+      await requestPhoneCode();
+      return;
     } catch {
       setError('Something went wrong — please try again.');
     } finally {
@@ -202,7 +291,8 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
     setCode(digits);
     setError(null);
     if (digits.length === CODE_LENGTH) {
-      void verifyCode(digits);
+      if (step === 'phoneCode') void verifyPhoneCode(digits);
+      else void verifyCode(digits);
     }
   }
 
@@ -663,6 +753,129 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
           </div>
         )}
 
+        {step === 'phoneCode' && (
+          <div className={`${card} text-center`}>
+            <CompletePill />
+            <h1 className="mb-2 text-[26px] font-bold tracking-[-0.02em] text-heading">
+              Check your phone
+            </h1>
+            <p className="mb-6 text-[14px] leading-relaxed text-muted">
+              One last step — enter the 6-digit code we&apos;ve just texted to{' '}
+              <b className="font-semibold text-heading">{smsPhone || answers.phone}</b>.
+            </p>
+
+            <div
+              className="relative mx-auto mb-2 flex w-fit cursor-text justify-center gap-2"
+              onClick={() => codeInputRef.current?.focus()}
+            >
+              <input
+                ref={codeInputRef}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]*"
+                aria-label="6-digit SMS verification code"
+                value={code}
+                onChange={(e) => handleCodeChange(e.target.value)}
+                disabled={submitting}
+                className="absolute inset-0 h-full w-full cursor-text opacity-0"
+              />
+              {Array.from({ length: CODE_LENGTH }, (_, i) => {
+                const filled = i < code.length;
+                const active = i === code.length && !submitting;
+                return (
+                  <span
+                    key={i}
+                    aria-hidden="true"
+                    className={`flex h-14 w-12 items-center justify-center rounded-xl border-[1.5px] bg-white font-mono text-[22px] font-medium text-heading transition-shadow ${
+                      active
+                        ? 'border-primary shadow-[0_0_0_3px_rgba(180,83,9,0.15)]'
+                        : filled
+                          ? 'border-stone-400'
+                          : 'border-stone-200'
+                    }`}
+                  >
+                    {code[i] ?? ''}
+                  </span>
+                );
+              })}
+            </div>
+
+            {error && (
+              <div className="mt-3 rounded-lg border border-danger/20 bg-danger/10 p-3">
+                <p className="text-center text-sm text-danger">{error}</p>
+              </div>
+            )}
+
+            <div className="mt-4 flex items-center justify-between text-[12.5px] text-muted">
+              <span>No text? It can take a minute.</span>
+              {cooldown > 0 ? (
+                <span>
+                  Resend code (0:{String(cooldown).padStart(2, '0')})
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void requestPhoneCode()}
+                  disabled={submitting}
+                  className="font-medium text-heading underline underline-offset-2"
+                >
+                  Resend code
+                </button>
+              )}
+            </div>
+
+            <div className="mt-4 rounded-xl border border-stone-200 bg-surface-warm px-3.5 py-3 text-left text-[13px]">
+              {editingPhone ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (phoneDraft.trim()) void requestPhoneCode(phoneDraft.trim());
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <input
+                    type="tel"
+                    autoComplete="tel"
+                    maxLength={20}
+                    value={phoneDraft}
+                    onChange={(e) => setPhoneDraft(e.target.value)}
+                    placeholder="07123 456789"
+                    aria-label="Corrected phone number"
+                    className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-[13px] text-heading outline-none focus:border-primary"
+                  />
+                  <button
+                    type="submit"
+                    disabled={submitting || cooldown > 0}
+                    className="flex-none rounded-lg border border-stone-200 bg-white px-3.5 py-2 text-[12.5px] font-medium text-heading disabled:opacity-50"
+                  >
+                    {cooldown > 0 ? `Wait 0:${String(cooldown).padStart(2, '0')}` : 'Update & resend'}
+                  </button>
+                </form>
+              ) : (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted">
+                    Wrong number?{' '}
+                    <span className="break-all font-semibold text-heading">
+                      {smsPhone || answers.phone}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingPhone(true);
+                      setPhoneDraft('');
+                      setError(null);
+                    }}
+                    className="flex-none rounded-lg border border-stone-200 bg-white px-3.5 py-2 text-[12.5px] font-medium text-heading"
+                  >
+                    Edit number
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {step === 'verified' && (
           <div className={`${card} text-center`}>
             <div
@@ -672,7 +885,7 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
               <Check className="h-6 w-6 text-[#16A34A]" strokeWidth={3} aria-hidden="true" />
             </div>
             <h1 className="mb-2 text-[26px] font-bold tracking-[-0.02em] text-heading">
-              Email verified
+              You&apos;re verified
             </h1>
             {/* No copy of the report is emailed — the only message that goes
                 out is the verification code — so this must not promise one. */}

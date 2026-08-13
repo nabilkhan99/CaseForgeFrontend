@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { sendVerificationEmail } from '@/lib/email/verificationEmail';
 import { validateAnswers } from '@/lib/trial/questionnaire';
+import { toE164 } from '@/lib/trial/phone';
 import {
   CODE_TTL_MS,
   RESEND_COOLDOWN_SECONDS,
@@ -98,7 +99,9 @@ export async function POST(req: NextRequest) {
       station_id: session.station_id ?? null,
       email: normalizedEmail,
       first_name: answers.firstName,
-      phone: answers.phone,
+      // Stored E.164 (+447…) so the SMS step and the founder's call both
+      // work straight off the row.
+      phone: toE164(answers.phone) ?? answers.phone,
       training_stage: answers.trainingStage,
       training_start_month: answers.trainingStartMonth || null,
       training_start_year: answers.trainingStartYear || null,

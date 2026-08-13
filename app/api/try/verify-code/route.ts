@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { pushTrialLeadToBrevo } from '@/lib/marketing/trialLead';
-import { sendLeadAlertEmail } from '@/lib/email/leadAlertEmail';
 import {
   AKT_TARGETS,
   EXAM_STATUSES,
@@ -139,18 +138,9 @@ export async function POST(req: NextRequest) {
         findOption(NOT_IN_TRAINING_ROLES, lead.not_in_training_role)?.label ?? null,
     });
 
-    // Internal heads-up so the follow-up call can happen while the mock is
-    // still fresh. Best-effort — never blocks the report unlocking.
-    await sendLeadAlertEmail({
-      sessionId,
-      email: lead.email,
-      firstName: lead.first_name,
-      phone: lead.phone,
-      trainingStage:
-        findOption(TRAINING_STAGES, lead.training_stage)?.label ?? lead.training_stage,
-      scaSitting: scaSittingLabel,
-      stationTitle,
-    });
+    // The founder lead alert now fires from the phone-verification step
+    // (verify-phone-code, or send-phone-code's fail-open path) so it only
+    // ever carries a number that has actually received a text.
 
     return NextResponse.json({ ok: true });
   } catch (error: unknown) {
