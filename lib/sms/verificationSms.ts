@@ -40,7 +40,11 @@ export async function sendVerificationSms({
       sender: '14Fisherman',
       type: 'transactional',
       content: `${code} is your Fourteen Fisherman verification code. It expires in 10 minutes.`,
-      tag: { field: 'trial-phone-verification' },
+      // The SDK types `tag` as `{ field: string }`, but the live API rejects
+      // that shape with 400 "Invalid tag format" — it wants a plain string.
+      // Cast past the wrong type rather than drop the tag, which is what
+      // makes these sends filterable in Brevo's SMS reports.
+      tag: 'trial-phone-verification' as unknown as { field?: string },
     })
     return { sent: true }
   } catch (error: unknown) {
