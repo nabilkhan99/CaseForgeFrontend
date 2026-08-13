@@ -34,7 +34,10 @@ export async function sendVerificationSms({
     await brevo.transactionalSms.sendTransacSms({
       // Brevo expects the country-coded number without the leading +.
       recipient: toPhone.replace(/^\+/, ''),
-      sender: 'FourteenF',
+      // 11 chars — the carrier limit for alphanumeric sender IDs, so the
+      // full brand name doesn't fit. Keep this stable: a changed sender ID
+      // reads as a different sender to anyone with the old thread saved.
+      sender: '14Fisherman',
       type: 'transactional',
       content: `${code} is your Fourteen Fisherman verification code. It expires in 10 minutes.`,
       tag: { field: 'trial-phone-verification' },
