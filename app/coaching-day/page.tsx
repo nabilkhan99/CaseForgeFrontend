@@ -28,10 +28,16 @@ function countdownLabel(cutoffAt: string, now: number): string | null {
   return `Closes in ${hours}h ${minutes}m`;
 }
 
-function stockLine(day: CoachingDayAvailability): { text: string; tone: 'calm' | 'urgent' | 'muted' } {
+/**
+ * The scarcity badge, or null when there is no scarcity to report. A day with
+ * every place still open shows nothing: the "maximum class of six" promise is
+ * already made in the copy above, so a badge repeating it read as filler.
+ * Only a genuinely filling class earns a badge, and it is always red.
+ */
+function stockLine(day: CoachingDayAvailability): { text: string; tone: 'urgent' | 'muted' } | null {
   if (day.status === 'sold_out') return { text: 'Sold out', tone: 'muted' };
   if (day.status === 'closed') return { text: 'Bookings closed', tone: 'muted' };
-  if (day.places_left >= day.capacity) return { text: `Only ${day.capacity} places per class`, tone: 'calm' };
+  if (day.places_left >= day.capacity) return null;
   if (day.places_left === 1) return { text: 'Only 1 place left', tone: 'urgent' };
   return { text: `Only ${day.places_left} places left`, tone: 'urgent' };
 }
@@ -178,18 +184,18 @@ export default function CoachingDayPage() {
                       )}
                     </div>
                   </div>
-                  <span
-                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] ${
-                      stock.tone === 'muted'
-                        ? 'bg-stone-200 font-semibold text-stone-700'
-                        : stock.tone === 'urgent'
-                          ? 'bg-[#FDECEC] font-bold text-[#B42318]'
-                          : 'bg-[#FDF6EC] font-medium text-[#854F0B]'
-                    }`}
-                  >
-                    {stock.tone !== 'muted' && <Users className="h-3 w-3" aria-hidden="true" />}
-                    {stock.text}
-                  </span>
+                  {stock && (
+                    <span
+                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] ${
+                        stock.tone === 'muted'
+                          ? 'bg-stone-200 font-semibold text-stone-700'
+                          : 'bg-[#FDECEC] font-bold text-[#B42318]'
+                      }`}
+                    >
+                      {stock.tone !== 'muted' && <Users className="h-3 w-3" aria-hidden="true" />}
+                      {stock.text}
+                    </span>
+                  )}
                 </button>
               );
             })}
