@@ -166,9 +166,14 @@ function MobileCards({ selfStudy }: { selfStudy: ReturnType<typeof useSelfStudyC
     {
       key: 'self_study' as const,
       name: 'Self-Study',
-      price: '£299',
-      suffix: 'one-off',
-      tagline: "3 months' access",
+      price: (
+        <>
+          £99
+          <span className="text-sm font-normal text-muted/70">.66</span>
+        </>
+      ),
+      suffix: '/month',
+      tagline: "Billed £299 one-off · 3 months' access",
       highlighted: false,
       badge: null,
       valueLine: null,
@@ -305,10 +310,16 @@ export default function PricingTable() {
               <div />
               <div className="px-3 pb-5 pt-9 text-center">
                 <PlanName>Self-Study</PlanName>
+                {/* Monthly framing only — the charge is still one £299 payment. The
+                    .66 is deliberately small and faint, a footnote hanging off the 99. */}
                 <p className="mt-2.5 text-lg font-medium tracking-tight text-heading sm:text-3xl">
-                  £299 <span className="text-[10px] font-normal text-muted sm:text-xs">one-off</span>
+                  £99
+                  <span className="text-[10px] font-normal text-muted/70 sm:text-sm">.66</span>{' '}
+                  <span className="text-[10px] font-normal text-muted sm:text-xs">/month</span>
                 </p>
-                <p className="mt-1 text-[10px] text-muted sm:text-xs">3 months&rsquo; access</p>
+                <p className="mt-1 text-[10px] text-muted sm:text-xs">
+                  Billed £299 one-off &middot; 3 months&rsquo; access
+                </p>
               </div>
               <div className={`relative ${HIGHLIGHT_BG} px-3 pb-5 pt-9 text-center`}>
                 <span className="absolute left-1/2 top-3 -translate-x-1/2 whitespace-nowrap rounded-full bg-primary px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white sm:text-[10px]">
