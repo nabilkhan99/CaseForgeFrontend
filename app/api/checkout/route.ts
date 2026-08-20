@@ -1,7 +1,14 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getStripe } from '@/lib/commerce/stripe';
-import { getPlan, stripePriceIdFor, type CoachingDayAvailability, type PlanKey } from '@/lib/commerce/plans';
+import {
+  getPlan,
+  isSubscriptionPlan,
+  stripePriceIdFor,
+  stripeRefereeCouponIdFor,
+  type CoachingDayAvailability,
+  type PlanKey,
+} from '@/lib/commerce/plans';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { REFERRAL_COOKIE, normalizeCode } from '@/lib/commerce/referrals';
 
@@ -47,9 +54,10 @@ async function resolveReferralCode(): Promise<string | null> {
 
 /**
  * Creates a Stripe Checkout session for a pre-order.
- * Body: { plan: 'self_study' | 'complete', coachingDay?: 'YYYY-MM-DD' }
+ * Body: { plan: 'self_study' | 'self_study_monthly' | 'complete', coachingDay?: 'YYYY-MM-DD' }
  * Complete requires a coaching day (unit of scarcity, max class of 6) and
  * soft-holds the place for 10 minutes while the buyer pays.
+ * `self_study_monthly` opens a subscription session instead of a one-off payment.
  * Returns: { url } to redirect the buyer to Stripe's hosted checkout.
  */
 export async function POST(request: Request) {
@@ -101,26 +109,51 @@ export async function POST(request: Request) {
     // codes degrade silently — checkout must never fail on a bad referral.
     const referralCode = await resolveReferralCode();
 
+    // Two-sided referral: a valid code also buys the *referee* a discount. Stripe
+    // rejects `discounts` and `allow_promotion_codes` on the same session, so a
+    // referred checkout trades the promo-code box for the automatic discount —
+    // the better deal of the two, and it removes the stack-a-100%-off-code vector
+    // that MIN_QUALIFYING_SPEND_BY_PLAN exists to catch. With no coupon configured
+    // this collapses to the previous behaviour: full price, promo box available.
+    const refereeCoupon = referralCode ? stripeRefereeCouponIdFor(plan.key as PlanKey) : null;
+
     const origin = new URL(request.url).origin;
+    const subscription = isSubscriptionPlan(plan.key);
+    const description = coachingDay
+      ? `Fourteen Fisherman — ${plan.name} (pre-order; AI practice & lectures start 1 September 2026), coaching day ${coachingDay.label}`
+      : `Fourteen Fisherman — ${plan.name} (pre-order; AI practice & lectures start 1 September 2026)`;
+
+    // The metadata block is the contract with the webhook: it reads plan (and
+    // referral_code) off the session to record the order. Subscriptions repeat it
+    // on `subscription_data` because renewal invoices arrive with the
+    // subscription, long after the checkout session is out of reach.
+    const metadata = {
+      plan: plan.key,
+      ...(coachingDay
+        ? { coaching_day: coachingDay.day, coaching_day_label: coachingDay.label }
+        : {}),
+      ...(referralCode ? { referral_code: referralCode } : {}),
+    };
+
     const stripe = getStripe();
     const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
+      mode: subscription ? 'subscription' : 'payment',
       line_items: [{ price: stripePriceIdFor(plan.key as PlanKey), quantity: 1 }],
       success_url: `${origin}/thanks?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: coachingDay ? `${origin}/coaching-day` : `${origin}/#pricing`,
-      allow_promotion_codes: true,
-      metadata: {
-        plan: plan.key,
-        ...(coachingDay
-          ? { coaching_day: coachingDay.day, coaching_day_label: coachingDay.label }
-          : {}),
-        ...(referralCode ? { referral_code: referralCode } : {}),
-      },
-      payment_intent_data: {
-        description: coachingDay
-          ? `Fourteen Fisherman — ${plan.name} (pre-order; AI practice & lectures start 1 September 2026), coaching day ${coachingDay.label}`
-          : `Fourteen Fisherman — ${plan.name} (pre-order; AI practice & lectures start 1 September 2026)`,
-      },
+      ...(refereeCoupon
+        ? { discounts: [{ coupon: refereeCoupon }] }
+        : { allow_promotion_codes: true }),
+      metadata,
+      // Stripe rejects payment_intent_data on a subscription session (there is no
+      // one PaymentIntent — each cycle raises its own invoice).
+      // Monthly charges on purchase, exactly like the one-off plans — it is a
+      // pre-order either way, and the first payment is what starts the referral
+      // reward moving. No trial: the buyer pays today and their month runs from
+      // today. (Founder decision 2026-08-20.)
+      ...(subscription
+        ? { subscription_data: { description, metadata } }
+        : { payment_intent_data: { description } }),
     });
 
     if (!session.url) {

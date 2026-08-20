@@ -9,24 +9,74 @@
 /** Reward paid to the referrer, keyed by the plan the *referee* bought. Pence. */
 export const REWARD_BY_PLAN = {
   complete: 10000, // £100
-  self_study: 2500, // £25
+  self_study: 5000, // £50
+  self_study_monthly: 5000, // £50, on the first payment
 } as const
 
 export type RewardablePlan = keyof typeof REWARD_BY_PLAN
+
+/**
+ * Discount the *referee* receives at checkout, keyed by plan. Pence.
+ *
+ * Deliberately mirrors {@link REWARD_BY_PLAN} pound for pound, so a shared link
+ * reads as "£100 for you, £100 for them" rather than a one-sided bounty.
+ * Founder decision 2026-08-20 (Nabil + Ishaq): price is the objection every
+ * sales call has surfaced, so half the referral budget is spent closing the
+ * *buyer* instead of paying only the sharer. Total exposure per referred sale
+ * is unchanged from a flat £200 referrer bounty.
+ *
+ * Plans absent from this map are simply not discounted — no exclusion logic
+ * needed anywhere else (this is also how a future monthly plan opts out).
+ */
+export const REFEREE_DISCOUNT_BY_PLAN = {
+  complete: 10000, // £100 off £599
+  self_study: 5000, // £50 off £299
+} as const
+
+/**
+ * Largest referee discount across all plans — the honest ceiling for "up to £X
+ * off" copy, derived so the marketing number can never drift from the engine.
+ */
+export const MAX_REFEREE_DISCOUNT_PENCE = Math.max(...Object.values(REFEREE_DISCOUNT_BY_PLAN))
+
+/**
+ * Discount (pence) a referred buyer gets on the given plan. Unknown /
+ * non-discounted plans get nothing rather than throwing, mirroring
+ * {@link rewardFor}.
+ */
+export function refereeDiscountFor(plan: string): number {
+  return (REFEREE_DISCOUNT_BY_PLAN as Record<string, number>)[plan] ?? 0
+}
 
 /**
  * Minimum spend (pence) a referred purchase must clear before it earns a reward,
  * keyed by plan. Set to 50% of each plan's list price (complete £599, self_study
  * £299). Fraud rationale: `allow_promotion_codes` lets a buyer stack a 100%-off
  * code and pay £0 while the reward is keyed only on plan — a free purchase would
- * otherwise mint a £100/£25 payout. Gating on real spend removes that vector
+ * otherwise mint a £100/£50 payout. Gating on real spend removes that vector
  * while still rewarding a genuinely (but not fully) discounted purchase.
+ *
+ * The referee discount lands well clear of these floors by construction (a
+ * referred complete pays £499 against a £299.50 floor; self_study £249 against
+ * £149.50), so a two-sided referral always qualifies. Raising a discount past
+ * 50% of list would silently void its own referral — keep the two maps in
+ * step.
  * Plans absent from this map are non-rewardable and therefore never gated.
  */
 export const MIN_QUALIFYING_SPEND_BY_PLAN = {
   complete: 29950, // 50% of £599
   self_study: 14950, // 50% of £299
+  self_study_monthly: 12900, // one full month at list — a discounted first month earns nothing
 } as const
+
+/**
+ * The reward a referral is ultimately worth: a per-code negotiated override when
+ * present, otherwise the plan tier. Shared by {@link decideReferral} and the
+ * first-payment credit path, so the precedence rule lives in exactly one place.
+ */
+export function resolveReward(plan: string, rewardOverridePence?: number | null): number {
+  return typeof rewardOverridePence === 'number' ? rewardOverridePence : rewardFor(plan)
+}
 
 /**
  * True when a purchase clears the minimum qualifying spend for its plan. Plans
@@ -221,7 +271,7 @@ export interface ReferralDecision {
 export function decideReferral(input: ReferralDecisionInput): ReferralDecision {
   const { ownerEmail, refereeEmail, plan, amountTotalPence, rewardOverridePence, minSpendOverridePence } =
     input
-  const rewardAmount = typeof rewardOverridePence === 'number' ? rewardOverridePence : rewardFor(plan)
+  const rewardAmount = resolveReward(plan, rewardOverridePence)
 
   if (isSelfReferral(ownerEmail, refereeEmail)) {
     return { status: 'void', voidReason: 'self_referral', rewardAmount }

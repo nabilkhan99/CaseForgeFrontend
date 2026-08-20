@@ -4,7 +4,12 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowRight, Info } from 'lucide-react';
-import { ACCESS_OPENS_LABEL, BOOK_A_CALL_URL } from '@/lib/commerce/plans';
+import {
+  ACCESS_OPENS_LABEL,
+  BOOK_A_CALL_URL,
+  type BillingPeriod,
+  type PlanKey,
+} from '@/lib/commerce/plans';
 import { trackEvent } from '@/lib/analytics';
 import { Pill } from './editorial';
 import PaymentMethodsRow from './PaymentMethodsRow';
@@ -48,12 +53,16 @@ const FEATURE_ROWS: readonly FeatureRow[] = [
 /** The warm tint behind the highlighted (Complete) column. */
 const HIGHLIGHT_BG = 'bg-[#FDF6E7]';
 
-/** Kicks off Stripe checkout for the Self-Study plan (no coaching day needed). */
+/**
+ * Kicks off Stripe checkout for whichever Self-Study plan the billing toggle has
+ * selected (no coaching day needed either way). The plan key is passed in rather
+ * than captured so one hook serves both the one-off and the rolling variant.
+ */
 function useSelfStudyCheckout() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function start() {
+  async function start(plan: PlanKey) {
     if (submitting) return;
     setSubmitting(true);
     setError(null);
@@ -61,7 +70,7 @@ function useSelfStudyCheckout() {
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: 'self_study' }),
+        body: JSON.stringify({ plan }),
       });
       const data = (await res.json()) as { url?: string; error?: string };
       if (!res.ok || !data.url) {
@@ -70,7 +79,7 @@ function useSelfStudyCheckout() {
         return;
       }
       // Awaited so the capture flushes before we leave for Stripe.
-      await trackEvent('checkout_started', { plan: 'self_study' });
+      await trackEvent('checkout_started', { plan });
       window.location.assign(data.url);
     } catch {
       setError('Something went wrong — please try again.');
@@ -79,6 +88,106 @@ function useSelfStudyCheckout() {
   }
 
   return { start, submitting, error };
+}
+
+/** The Self-Study plan key behind each billing choice. */
+function selfStudyPlanFor(billing: BillingPeriod): PlanKey {
+  return billing === 'monthly' ? 'self_study_monthly' : 'self_study';
+}
+
+/** Self-Study list prices in pence — the saving below is derived from these. */
+const SELF_STUDY_THREE_MONTH_PENCE = 29900;
+const SELF_STUDY_MONTHLY_PENCE = 12900;
+
+/**
+ * What three months on the rolling plan would cost against the one-off price,
+ * as a percentage. Computed, not typed: change either price above and the badge
+ * follows. £299 vs 3 × £129 = £387 → 23%.
+ */
+const THREE_MONTH_SAVING_PERCENT = Math.round(
+  (1 - SELF_STUDY_THREE_MONTH_PENCE / (SELF_STUDY_MONTHLY_PENCE * 3)) * 100,
+);
+
+/**
+ * How the Self-Study column prices itself under each billing choice. The £299
+ * plan is shown as its monthly equivalent (the headline £299 lands heavy), with
+ * the one-off truth stated plainly underneath. Both charge on purchase.
+ */
+const SELF_STUDY_PRICING: Record<BillingPeriod, { pounds: string; pence?: string; suffix: string; tagline: string }> = {
+  three_month: {
+    pounds: '£99',
+    pence: '.66',
+    suffix: '/month',
+    tagline: `Billed £299 one-off · 3 months' access`,
+  },
+  monthly: {
+    pounds: '£129',
+    suffix: '/month',
+    tagline: 'Cancel any time',
+  },
+};
+
+interface BillingToggleProps {
+  billing: BillingPeriod;
+  onChange: (billing: BillingPeriod) => void;
+}
+
+/**
+ * Segmented 3-month / monthly switch. Only the Self-Study column responds — the
+ * Complete course stays a one-off deliberately, because "course, not
+ * subscription" is the wording that carries a study-budget claim.
+ */
+function BillingToggle({ billing, onChange }: BillingToggleProps) {
+  const options: readonly { key: BillingPeriod; label: string; hint?: string }[] = [
+    { key: 'three_month', label: '3 months', hint: `Save ${THREE_MONTH_SAVING_PERCENT}%` },
+    { key: 'monthly', label: 'Monthly' },
+  ];
+
+  return (
+    <div className="mb-6 flex justify-center">
+      <div
+        role="group"
+        aria-label="Billing period"
+        className="inline-flex items-center gap-1 rounded-full border border-heading/[0.08] bg-white/80 p-1 shadow-elevation-1 backdrop-blur"
+      >
+        {options.map((option) => {
+          const active = billing === option.key;
+          return (
+            <button
+              key={option.key}
+              type="button"
+              aria-pressed={active}
+              onClick={() => {
+                onChange(option.key);
+                trackEvent('pricing_billing_toggled', { billing: option.key });
+              }}
+              className={`relative isolate rounded-full px-4 py-2 text-[13px] font-semibold transition-colors sm:text-sm ${
+                active ? 'text-heading' : 'text-muted hover:text-heading'
+              }`}
+            >
+              {active && (
+                <motion.span
+                  layoutId="billing-toggle-pill"
+                  className={`absolute inset-0 -z-10 rounded-full ${HIGHLIGHT_BG} shadow-elevation-1`}
+                  transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                />
+              )}
+              {option.label}
+              {option.hint && (
+                <span
+                  className={`ml-1.5 font-mono text-[9px] uppercase tracking-[0.1em] sm:text-[10px] ${
+                    active ? 'text-primary' : 'text-muted/70'
+                  }`}
+                >
+                  {option.hint}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function GuaranteeInfo({ align = 'left' }: { align?: 'left' | 'right' }) {
@@ -109,21 +218,24 @@ function GuaranteeInfo({ align = 'left' }: { align?: 'left' | 'right' }) {
 interface CtaButtonsProps {
   selfStudy: ReturnType<typeof useSelfStudyCheckout>;
   variant: 'self_study' | 'complete' | 'intensive';
+  /** Which Self-Study plan the billing toggle currently has selected. */
+  selfStudyPlan: PlanKey;
 }
 
-function PlanCta({ selfStudy, variant }: CtaButtonsProps) {
+function PlanCta({ selfStudy, variant, selfStudyPlan }: CtaButtonsProps) {
   if (variant === 'self_study') {
+    const monthly = selfStudyPlan === 'self_study_monthly';
     return (
       <button
         type="button"
         onClick={() => {
-          trackEvent('checkout_clicked', { plan: 'self_study' });
-          selfStudy.start();
+          trackEvent('checkout_clicked', { plan: selfStudyPlan });
+          selfStudy.start(selfStudyPlan);
         }}
         disabled={selfStudy.submitting}
         className="w-full rounded-full border border-heading/15 bg-white px-2 py-3 text-[13px] font-semibold text-heading transition-colors hover:bg-surface-warm disabled:opacity-60 sm:py-2.5 sm:text-sm"
       >
-        {selfStudy.submitting ? 'Redirecting…' : 'Pre-order now'}
+        {selfStudy.submitting ? 'Redirecting…' : monthly ? 'Start monthly' : 'Pre-order now'}
       </button>
     );
   }
@@ -160,20 +272,29 @@ function PlanName({ children }: { children: React.ReactNode }) {
   );
 }
 
+interface MobileCardsProps {
+  selfStudy: ReturnType<typeof useSelfStudyCheckout>;
+  billing: BillingPeriod;
+}
+
 /** Mobile: one full-width card per plan, same content as its desktop column. */
-function MobileCards({ selfStudy }: { selfStudy: ReturnType<typeof useSelfStudyCheckout> }) {
+function MobileCards({ selfStudy, billing }: MobileCardsProps) {
+  const selfStudyPlan = selfStudyPlanFor(billing);
+  const selfStudyPrice = SELF_STUDY_PRICING[billing];
   const cards = [
     {
       key: 'self_study' as const,
       name: 'Self-Study',
       price: (
         <>
-          £99
-          <span className="text-sm font-normal text-muted/70">.66</span>
+          {selfStudyPrice.pounds}
+          {selfStudyPrice.pence && (
+            <span className="text-sm font-normal text-muted/70">{selfStudyPrice.pence}</span>
+          )}
         </>
       ),
-      suffix: '/month',
-      tagline: "Billed £299 one-off · 3 months' access",
+      suffix: selfStudyPrice.suffix,
+      tagline: selfStudyPrice.tagline,
       highlighted: false,
       badge: null,
       valueLine: null,
@@ -221,11 +342,18 @@ function MobileCards({ selfStudy }: { selfStudy: ReturnType<typeof useSelfStudyC
               </span>
             )}
             <PlanName>{card.name}</PlanName>
-            <p className="mt-2 text-3xl font-medium tracking-tight text-heading">
-              {card.price}{' '}
-              {card.suffix && <span className="text-xs font-normal text-muted">{card.suffix}</span>}
-            </p>
-            <p className="mt-0.5 text-xs text-muted">{card.tagline}</p>
+            <motion.div
+              key={`${card.key}-${billing}`}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+            >
+              <p className="mt-2 text-3xl font-medium tracking-tight text-heading">
+                {card.price}{' '}
+                {card.suffix && <span className="text-xs font-normal text-muted">{card.suffix}</span>}
+              </p>
+              <p className="mt-0.5 text-xs text-muted">{card.tagline}</p>
+            </motion.div>
             {card.valueLine && (
               <p className="mt-0.5 text-xs text-muted line-through">{card.valueLine}</p>
             )}
@@ -269,7 +397,7 @@ function MobileCards({ selfStudy }: { selfStudy: ReturnType<typeof useSelfStudyC
           </div>
 
           <div className="p-3">
-            <PlanCta selfStudy={selfStudy} variant={card.key} />
+            <PlanCta selfStudy={selfStudy} variant={card.key} selfStudyPlan={selfStudyPlan} />
           </div>
         </div>
       ))}
@@ -280,6 +408,11 @@ function MobileCards({ selfStudy }: { selfStudy: ReturnType<typeof useSelfStudyC
 /** The three-tier pricing table: matrix on desktop, stacked cards on mobile. */
 export default function PricingTable() {
   const selfStudy = useSelfStudyCheckout();
+  // Three-month is the default: it is the better deal (£299 vs 3 × £129) and the
+  // one a study budget will reimburse, so monthly is the deliberate opt-out.
+  const [billing, setBilling] = useState<BillingPeriod>('three_month');
+  const selfStudyPlan = selfStudyPlanFor(billing);
+  const selfStudyPrice = SELF_STUDY_PRICING[billing];
 
   return (
     <section id="pricing" className="scroll-mt-24 px-5 py-6 sm:px-8 sm:py-10">
@@ -302,7 +435,9 @@ export default function PricingTable() {
             </span>
           </p>
 
-          <MobileCards selfStudy={selfStudy} />
+          <BillingToggle billing={billing} onChange={setBilling} />
+
+          <MobileCards selfStudy={selfStudy} billing={billing} />
 
           <div className="hidden overflow-hidden rounded-3xl border border-heading/[0.06] bg-white/80 shadow-elevation-2 backdrop-blur sm:block">
             <div className="grid grid-cols-[minmax(84px,170px)_repeat(3,minmax(0,1fr))]">
@@ -310,16 +445,28 @@ export default function PricingTable() {
               <div />
               <div className="px-3 pb-5 pt-9 text-center">
                 <PlanName>Self-Study</PlanName>
-                {/* Monthly framing only — the charge is still one £299 payment. The
-                    .66 is deliberately small and faint, a footnote hanging off the 99. */}
-                <p className="mt-2.5 text-lg font-medium tracking-tight text-heading sm:text-3xl">
-                  £99
-                  <span className="text-[10px] font-normal text-muted/70 sm:text-sm">.66</span>{' '}
-                  <span className="text-[10px] font-normal text-muted sm:text-xs">/month</span>
-                </p>
-                <p className="mt-1 text-[10px] text-muted sm:text-xs">
-                  Billed £299 one-off &middot; 3 months&rsquo; access
-                </p>
+                {/* On 3 months the charge is still one £299 payment — the monthly
+                    figure is framing, and the .66 is deliberately small and faint,
+                    a footnote hanging off the 99. On monthly it is the real rate. */}
+                <motion.div
+                  key={billing}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25, ease: 'easeOut' }}
+                >
+                  <p className="mt-2.5 text-lg font-medium tracking-tight text-heading sm:text-3xl">
+                    {selfStudyPrice.pounds}
+                    {selfStudyPrice.pence && (
+                      <span className="text-[10px] font-normal text-muted/70 sm:text-sm">
+                        {selfStudyPrice.pence}
+                      </span>
+                    )}{' '}
+                    <span className="text-[10px] font-normal text-muted sm:text-xs">
+                      {selfStudyPrice.suffix}
+                    </span>
+                  </p>
+                  <p className="mt-1 text-[10px] text-muted sm:text-xs">{selfStudyPrice.tagline}</p>
+                </motion.div>
               </div>
               <div className={`relative ${HIGHLIGHT_BG} px-3 pb-5 pt-9 text-center`}>
                 <span className="absolute left-1/2 top-3 -translate-x-1/2 whitespace-nowrap rounded-full bg-primary px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white sm:text-[10px]">
@@ -382,13 +529,13 @@ export default function PricingTable() {
               {/* CTA row */}
               <div className="border-t border-heading/[0.06]" />
               <div className="border-t border-heading/[0.06] px-4 py-4">
-                <PlanCta selfStudy={selfStudy} variant="self_study" />
+                <PlanCta selfStudy={selfStudy} variant="self_study" selfStudyPlan={selfStudyPlan} />
               </div>
               <div className={`border-t border-heading/[0.06] ${HIGHLIGHT_BG} px-4 py-4`}>
-                <PlanCta selfStudy={selfStudy} variant="complete" />
+                <PlanCta selfStudy={selfStudy} variant="complete" selfStudyPlan={selfStudyPlan} />
               </div>
               <div className="border-t border-heading/[0.06] px-4 py-4">
-                <PlanCta selfStudy={selfStudy} variant="intensive" />
+                <PlanCta selfStudy={selfStudy} variant="intensive" selfStudyPlan={selfStudyPlan} />
               </div>
 
               {/* One guarantee strip for the whole table */}

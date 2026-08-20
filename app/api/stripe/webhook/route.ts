@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import type Stripe from 'stripe';
 import { getStripe } from '@/lib/commerce/stripe';
 import {
+  REFEREE_DISCOUNT_BY_PLAN,
   REWARD_BY_PLAN,
   decideReferral,
   generateReferralCode,
@@ -34,7 +35,10 @@ type SupabaseAdmin = ReturnType<typeof getSupabaseAdmin>;
  * so it can't be paid out; the pre-order is flipped to refunded only on a full
  * refund (a partially-refunded buyer still holds their seat).
  *
- * Ops: the Stripe webhook endpoint must have `charge.refunded` enabled.
+ * `customer.subscription.deleted` -> mark the monthly order canceled.
+ *
+ * Ops: the Stripe webhook endpoint must have `charge.refunded` and
+ * `customer.subscription.deleted` enabled.
  */
 export async function POST(request: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -64,6 +68,9 @@ export async function POST(request: Request) {
   }
   if (event.type === 'charge.refunded') {
     return handleChargeRefunded(event.data.object as Stripe.Charge);
+  }
+  if (event.type === 'customer.subscription.deleted') {
+    return handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
   }
 
   return NextResponse.json({ received: true, ignored: event.type });
@@ -130,6 +137,12 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
         typeof session.payment_intent === 'string'
           ? session.payment_intent
           : (session.payment_intent?.id ?? null),
+      // Set only for rolling plans. Renewal invoices arrive attached to the
+      // subscription, not the checkout session, so this is the handle back here.
+      stripe_subscription_id:
+        typeof session.subscription === 'string'
+          ? session.subscription
+          : (session.subscription?.id ?? null),
       status: 'paid',
       referral_code: referralCode,
     })
@@ -251,6 +264,34 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
   }
 
   return NextResponse.json({ received: true, recorded: !insertError, preorderId });
+}
+
+/**
+ * Subscription ended (cancelled by the buyer, or after failed payments).
+ *
+ * Marks the order canceled so the admin dashboard stops counting it as live
+ * revenue. A referral already credited is deliberately left alone — it was
+ * earned by a payment that actually cleared; later churn is a normal outcome,
+ * not a clawback. Refunds still void referrals through `charge.refunded`.
+ */
+async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
+  const supabase = getSupabaseAdmin();
+  const { data: updated, error } = await supabase
+    .from('preorders')
+    .update({ status: 'canceled' })
+    .eq('stripe_subscription_id', subscription.id)
+    .eq('status', 'paid')
+    .select('id');
+
+  if (error) {
+    console.error('[stripe-webhook] subscription cancel update failed', {
+      subscriptionId: subscription.id,
+      error,
+    });
+    return NextResponse.json({ error: 'Failed to process cancellation' }, { status: 500 });
+  }
+
+  return NextResponse.json({ received: true, canceled: updated?.length ?? 0 });
 }
 
 interface RecordReferralArgs {
@@ -409,6 +450,7 @@ async function mintAdvocateAndInvite(supabase: SupabaseAdmin, args: MintArgs): P
     toName: name,
     referralUrl: referralUrl(origin, code),
     rewardAmount: REWARD_BY_PLAN.complete, // headline "up to £100"
+    refereeDiscount: REFEREE_DISCOUNT_BY_PLAN.complete, // "...and £100 off for them"
   });
 
   if (!result.sent) {
