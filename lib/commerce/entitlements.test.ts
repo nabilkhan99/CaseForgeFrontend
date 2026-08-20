@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ACCESS_LAUNCH_DATE,
+  NO_ENTITLEMENT,
   accessWindow,
   computeEntitlement,
   type EntitlementRow,
 } from './entitlements'
+import { ACCESS_OPENS } from './plans'
 
 const row = (over: Partial<EntitlementRow>): EntitlementRow => ({
   plan: 'self_study',
@@ -16,16 +18,35 @@ const row = (over: Partial<EntitlementRow>): EntitlementRow => ({
 const DURING = new Date('2026-09-20T00:00:00Z')
 const AFTER_PREORDER_WINDOW = new Date('2026-12-15T00:00:00Z')
 
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
 describe('accessWindow', () => {
-  it('starts at purchase for post-launch buys', () => {
+  it('starts at purchase for post-launch buys and runs 3 calendar months', () => {
     const { start, end } = accessWindow('2026-09-05T10:00:00Z')
     expect(start.toISOString()).toBe('2026-09-05T10:00:00.000Z')
-    expect(end.toISOString()).toBe('2026-12-04T10:00:00.000Z')
+    expect(end.toISOString()).toBe('2026-12-05T23:59:59.999Z')
   })
 
   it('floors preorder-era buys at launch day', () => {
-    const { start } = accessWindow('2026-07-28T09:00:00Z')
+    const { start, end } = accessWindow('2026-07-28T09:00:00Z')
     expect(start).toEqual(ACCESS_LAUNCH_DATE)
+    expect(end.toISOString()).toBe('2026-12-01T23:59:59.999Z')
+  })
+
+  it('takes launch day from the offer, so there is one source of truth', () => {
+    expect(ACCESS_LAUNCH_DATE.toISOString()).toBe(`${ACCESS_OPENS}T00:00:00.000Z`)
+  })
+
+  it('clamps to the last day of a shorter month', () => {
+    // 30 Nov + 3 months lands in February, which has no 30th.
+    expect(accessWindow('2026-11-30T09:00:00Z').end.toISOString()).toBe('2027-02-28T23:59:59.999Z')
+  })
+
+  it('parses a Postgres-shaped timestamp', () => {
+    const { start } = accessWindow('2026-09-05 09:00:00.123456+00')
+    expect(start.toISOString()).toBe('2026-09-05T09:00:00.123Z')
   })
 })
 
@@ -34,11 +55,19 @@ describe('computeEntitlement', () => {
     expect(computeEntitlement([], DURING).state).toBe('none')
   })
 
+  it('never hands back the shared NO_ENTITLEMENT object', () => {
+    const a = computeEntitlement([], DURING)
+    const b = computeEntitlement([], DURING)
+    expect(a).not.toBe(b)
+    expect(a).not.toBe(NO_ENTITLEMENT)
+    expect(Object.isFrozen(NO_ENTITLEMENT)).toBe(true)
+  })
+
   it('self_study is active inside the window, without lectures', () => {
     const e = computeEntitlement([row({})], DURING)
     expect(e.state).toBe('active')
     expect(e.hasLectures).toBe(false)
-    expect(e.expiresAt?.toISOString()).toBe('2026-12-04T10:00:00.000Z')
+    expect(e.expiresAt?.toISOString()).toBe('2026-12-05T23:59:59.999Z')
   })
 
   it('complete is active with lectures and its coaching day', () => {
@@ -49,13 +78,13 @@ describe('computeEntitlement', () => {
     expect(e).toMatchObject({ state: 'active', hasLectures: true, coachingDay: '2026-09-20' })
   })
 
-  it('preorder buy (Sarah) starts 1 Sept and runs to 30 Nov', () => {
+  it('preorder buy (Sarah) starts 1 Sept and runs to 1 Dec', () => {
     const e = computeEntitlement(
       [row({ plan: 'complete', created_at: '2026-07-28T09:00:00Z' })],
       DURING,
     )
     expect(e.state).toBe('active')
-    expect(e.expiresAt?.toISOString()).toBe('2026-11-30T00:00:00.000Z')
+    expect(e.expiresAt?.toISOString()).toBe('2026-12-01T23:59:59.999Z')
   })
 
   it('goes read-only after the window ends', () => {
@@ -84,10 +113,11 @@ describe('computeEntitlement', () => {
 
   it('an active row beats an expired one', () => {
     const e = computeEntitlement(
-      [row({ created_at: '2026-03-01T00:00:00Z' }), row({})],
-      DURING,
+      [row({ created_at: '2026-09-05T10:00:00Z' }), row({ created_at: '2026-12-10T00:00:00Z' })],
+      new Date('2026-12-20T00:00:00Z'),
     )
     expect(e.state).toBe('active')
+    expect(e.expiresAt?.toISOString()).toBe('2027-03-10T23:59:59.999Z')
   })
 
   it('active complete beats active self_study regardless of order', () => {
@@ -95,5 +125,86 @@ describe('computeEntitlement', () => {
     const b = computeEntitlement([row({ plan: 'complete' }), row({})], DURING)
     expect(a.hasLectures).toBe(true)
     expect(b.hasLectures).toBe(true)
+  })
+
+  // ── Finding 2: the window has a start, and it gates ──
+
+  it('a preorder bought before launch grants nothing until launch day', () => {
+    const e = computeEntitlement(
+      [row({ plan: 'complete', created_at: '2026-07-28T09:00:00Z' })],
+      new Date('2026-08-20T22:00:00Z'),
+    )
+    expect(e.state).toBe('none')
+    expect(e.hasLectures).toBe(false)
+    // The purchase is still known — callers can say when access opens and ends.
+    expect(e.plan).toBe('complete')
+    expect(e.expiresAt?.toISOString()).toBe('2026-12-01T23:59:59.999Z')
+  })
+
+  it('turns active the instant launch day arrives', () => {
+    const rows = [row({ created_at: '2026-07-28T09:00:00Z' })]
+    expect(computeEntitlement(rows, new Date(ACCESS_LAUNCH_DATE.getTime() - 1)).state).toBe('none')
+    expect(computeEntitlement(rows, ACCESS_LAUNCH_DATE).state).toBe('active')
+  })
+
+  // ── Finding 9: multi-purchase resolution must not depend on row order ──
+
+  it('the later end date wins between two live one-offs, in either order', () => {
+    const early = row({ created_at: '2026-09-02T00:00:00Z' }) // ends 2 Dec
+    const late = row({ created_at: '2026-11-01T00:00:00Z' }) // ends 1 Feb
+    const forwards = computeEntitlement([early, late], new Date('2026-11-15T00:00:00Z'))
+    const backwards = computeEntitlement([late, early], new Date('2026-11-15T00:00:00Z'))
+    expect(forwards.expiresAt?.toISOString()).toBe('2027-02-01T23:59:59.999Z')
+    expect(backwards.expiresAt?.toISOString()).toBe('2027-02-01T23:59:59.999Z')
+  })
+
+  it('a live monthly outranks a one-off that ends, in either order', () => {
+    const oneOff = row({ created_at: '2026-09-05T10:00:00Z' })
+    const monthly = row({ plan: 'self_study_monthly' })
+    expect(computeEntitlement([oneOff, monthly], DURING).plan).toBe('self_study_monthly')
+    expect(computeEntitlement([monthly, oneOff], DURING).plan).toBe('self_study_monthly')
+  })
+
+  // ── Finding 10: unknown plans must fail closed ──
+
+  it('grants nothing for an unrecognised plan string, and says so', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const e = computeEntitlement([row({ plan: 'lectures_only_typo' })], DURING)
+    expect(e.state).toBe('none')
+    expect(e.plan).toBeUndefined()
+    expect(spy).toHaveBeenCalled()
+  })
+
+  it('does not let an unknown plan mask a real purchase', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const e = computeEntitlement([row({ plan: 'lectures_only_typo' }), row({})], DURING)
+    expect(e.state).toBe('active')
+    expect(e.plan).toBe('self_study')
+    expect(spy).toHaveBeenCalled()
+  })
+
+  // ── Finding 15: exact boundaries ──
+
+  it('access runs to the last millisecond of the final day', () => {
+    const rows = [row({})]
+    const end = accessWindow('2026-09-05T10:00:00Z').end
+    expect(computeEntitlement(rows, new Date(end.getTime() - 1)).state).toBe('active')
+    expect(computeEntitlement(rows, end).state).toBe('active')
+    expect(computeEntitlement(rows, new Date(end.getTime() + 1)).state).toBe('read_only')
+  })
+
+  it('handles a Postgres-shaped created_at', () => {
+    const e = computeEntitlement([row({ created_at: '2026-09-05 09:00:00.123456+00' })], DURING)
+    expect(e.state).toBe('active')
+    expect(e.expiresAt?.toISOString()).toBe('2026-12-05T23:59:59.999Z')
+  })
+
+  it('a refund does not cancel a second, live purchase', () => {
+    const e = computeEntitlement(
+      [row({ status: 'refunded', plan: 'complete' }), row({})],
+      DURING,
+    )
+    expect(e.state).toBe('active')
+    expect(e.plan).toBe('self_study')
   })
 })
