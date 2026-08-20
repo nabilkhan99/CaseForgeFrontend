@@ -14,7 +14,6 @@ import {
   qualificationCutoff,
   isSelfReferral,
   meetsMinimumSpend,
-  isDeferredRewardPlan,
   parseMinSpendOverride,
   refereeDiscountFor,
   resolveReward,
@@ -343,8 +342,8 @@ describe('decideReferral — reward override', () => {
   })
 })
 
-describe('deferred rewards (monthly)', () => {
-  it('records a monthly referral as pending but worth £0 on the first payment', () => {
+describe('monthly referrals', () => {
+  it('pays £50 on the first payment, like any other plan', () => {
     expect(
       decideReferral({
         ownerEmail: 'owner@example.com',
@@ -352,56 +351,51 @@ describe('deferred rewards (monthly)', () => {
         plan: 'self_study_monthly',
         amountTotalPence: 12900,
       }),
-    ).toEqual({ status: 'pending', voidReason: null, rewardAmount: 0 })
+    ).toEqual({ status: 'pending', voidReason: null, rewardAmount: 5000 })
   })
 
-  it('defers a per-code override too — an affiliate waits the same month', () => {
+  it('voids a monthly signup that paid less than a full month', () => {
     expect(
       decideReferral({
         ownerEmail: 'owner@example.com',
         refereeEmail: 'friend@example.com',
         plan: 'self_study_monthly',
-        amountTotalPence: 12900,
-        rewardOverridePence: 10000,
-      }).rewardAmount,
-    ).toBe(0)
-  })
-
-  it('still voids a self-referred monthly signup immediately', () => {
-    expect(
-      decideReferral({
-        ownerEmail: 'owner@example.com',
-        refereeEmail: 'OWNER@example.com',
-        plan: 'self_study_monthly',
-        amountTotalPence: 12900,
+        amountTotalPence: 12899,
       }),
-    ).toEqual({ status: 'void', voidReason: 'self_referral', rewardAmount: 0 })
+    ).toEqual({ status: 'void', voidReason: 'below_min_spend', rewardAmount: 5000 })
   })
 
-  it('does NOT void a monthly signup that paid nothing yet', () => {
-    // Pre-launch monthly signups start on a trial and pay £0 at checkout. The
-    // spend gate moves to the renewal that actually earns the reward (see
-    // handleInvoicePaid) — applying it here would void every genuine referral.
+  it('holds the reward at £0 while a pre-launch subscription is uncharged', () => {
+    // Bought before access opens: billing is held to 1 September, so £0 has
+    // moved. Recorded as a real, pending referral — the invoice.paid handler
+    // credits it the moment the first charge lands.
     expect(
       decideReferral({
         ownerEmail: 'owner@example.com',
         refereeEmail: 'friend@example.com',
         plan: 'self_study_monthly',
         amountTotalPence: 0,
+        awaitingFirstPayment: true,
       }),
     ).toEqual({ status: 'pending', voidReason: null, rewardAmount: 0 })
   })
 
-  it('keeps a monthly floor for the renewal to be tested against', () => {
+  it('still voids a self-referred signup that has not been charged', () => {
+    expect(
+      decideReferral({
+        ownerEmail: 'owner@example.com',
+        refereeEmail: 'OWNER@example.com',
+        plan: 'self_study_monthly',
+        amountTotalPence: 0,
+        awaitingFirstPayment: true,
+      }),
+    ).toEqual({ status: 'void', voidReason: 'self_referral', rewardAmount: 0 })
+  })
+
+  it('keeps a monthly floor for that first payment to be tested against', () => {
     expect(MIN_QUALIFYING_SPEND_BY_PLAN.self_study_monthly).toBe(12900)
     expect(meetsMinimumSpend('self_study_monthly', 12900)).toBe(true)
     expect(meetsMinimumSpend('self_study_monthly', 12899)).toBe(false)
-  })
-
-  it('does not defer the one-off plans', () => {
-    expect(isDeferredRewardPlan('self_study')).toBe(false)
-    expect(isDeferredRewardPlan('complete')).toBe(false)
-    expect(isDeferredRewardPlan('self_study_monthly')).toBe(true)
   })
 
   it('resolveReward keeps override-beats-tier precedence for the credit path', () => {

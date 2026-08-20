@@ -10,7 +10,7 @@
 export const REWARD_BY_PLAN = {
   complete: 10000, // £100
   self_study: 5000, // £50
-  self_study_monthly: 5000, // £50 — but see DEFERRED_REWARD_PLANS
+  self_study_monthly: 5000, // £50, on the first payment
 } as const
 
 export type RewardablePlan = keyof typeof REWARD_BY_PLAN
@@ -70,28 +70,9 @@ export const MIN_QUALIFYING_SPEND_BY_PLAN = {
 } as const
 
 /**
- * Plans whose reward is earned on the SECOND payment, not the first.
- *
- * A £50 payout against a £129 first month that can be cancelled the next day is
- * a loss the moment it is paid; by the second cycle the referral has collected
- * £258 and the buyer has demonstrably stuck. Referrals on these plans are still
- * recorded immediately (so attribution and the dashboard are honest) — they just
- * carry a £0 reward until `creditDeferredReferral` raises it on the renewal.
- * Founder decision 2026-08-20: monthly referrals count, but they have to survive
- * a month first.
- */
-export const DEFERRED_REWARD_PLANS: readonly string[] = ['self_study_monthly']
-
-/** True when a plan's referral reward is only earned on the second payment. */
-export function isDeferredRewardPlan(plan: string): boolean {
-  return DEFERRED_REWARD_PLANS.includes(plan)
-}
-
-/**
  * The reward a referral is ultimately worth: a per-code negotiated override when
- * present, otherwise the plan tier. Shared by {@link decideReferral} (which may
- * defer paying it) and the deferred-credit path, so the precedence rule lives in
- * exactly one place.
+ * present, otherwise the plan tier. Shared by {@link decideReferral} and the
+ * first-payment credit path, so the precedence rule lives in exactly one place.
  */
 export function resolveReward(plan: string, rewardOverridePence?: number | null): number {
   return typeof rewardOverridePence === 'number' ? rewardOverridePence : rewardFor(plan)
@@ -263,6 +244,15 @@ export interface ReferralDecisionInput {
    * per-plan floors.
    */
   minSpendOverridePence?: number | null
+  /**
+   * True when nothing has been charged yet — a subscription bought before launch,
+   * where the first payment is held until access opens. The referral is real and
+   * is recorded now, but it is worth £0 until that first payment actually lands
+   * (see the invoice.paid handler), because a trial that is cancelled before it
+   * bills has produced no revenue to pay a reward out of. Both gates below would
+   * otherwise misfire on a £0 amount.
+   */
+  awaitingFirstPayment?: boolean
 }
 
 export interface ReferralDecision {
@@ -288,23 +278,27 @@ export interface ReferralDecision {
  *   3. otherwise → pending
  */
 export function decideReferral(input: ReferralDecisionInput): ReferralDecision {
-  const { ownerEmail, refereeEmail, plan, amountTotalPence, rewardOverridePence, minSpendOverridePence } =
-    input
-  // Deferred-reward plans record £0 now and are credited on the second payment;
-  // the void checks below still run, so a self-referred or under-spent monthly
-  // signup is voided immediately rather than lying in wait for the renewal.
-  const rewardAmount = isDeferredRewardPlan(plan)
-    ? 0
-    : resolveReward(plan, rewardOverridePence)
+  const {
+    ownerEmail,
+    refereeEmail,
+    plan,
+    amountTotalPence,
+    rewardOverridePence,
+    minSpendOverridePence,
+    awaitingFirstPayment = false,
+  } = input
+  const rewardAmount = awaitingFirstPayment ? 0 : resolveReward(plan, rewardOverridePence)
 
   if (isSelfReferral(ownerEmail, refereeEmail)) {
     return { status: 'void', voidReason: 'self_referral', rewardAmount }
   }
-  // Deferred plans skip the spend gate HERE and take it at the payment that
-  // actually earns the reward. A rolling plan's first charge is £0 whenever it
-  // starts on a trial (pre-launch signups do), so testing it now would void
-  // every genuine monthly referral before it had a chance to pay anything.
-  if (!isDeferredRewardPlan(plan) && !meetsMinimumSpend(plan, amountTotalPence, minSpendOverridePence)) {
+  // The spend gate is meaningless against an amount of £0 that is £0 only because
+  // billing hasn't started — it moves to the first real payment in that case.
+  // Self-referral above still applies: that is wrong from the moment it happens.
+  if (
+    !awaitingFirstPayment &&
+    !meetsMinimumSpend(plan, amountTotalPence, minSpendOverridePence)
+  ) {
     return { status: 'void', voidReason: 'below_min_spend', rewardAmount }
   }
   return { status: 'pending', voidReason: null, rewardAmount }
