@@ -79,14 +79,27 @@ function endOfUtcDay(date: Date): Date {
   return end
 }
 
+/** The UTC day before `date`. */
+function previousUtcDay(date: Date): Date {
+  const previous = new Date(date)
+  previous.setUTCDate(previous.getUTCDate() - 1)
+  return previous
+}
+
 /**
  * Access window of a one-off purchase: 3 calendar months from purchase, floored
  * at launch. `end` is the LAST instant of access (23:59:59.999 UTC), inclusive.
+ *
+ * The day before the +3-months date, not that date itself: an inclusive end on
+ * the same day-of-month would sell "3 calendar months" and deliver 3 months and
+ * a day (1 Sept -> 1 Dec 23:59 is 92 days). Buying on 1 Sept now runs to the
+ * last instant of 30 Nov, which is what a customer reading "3 months" expects.
  */
 export function accessWindow(createdAt: string): { start: Date; end: Date } {
   const purchased = new Date(createdAt)
   const start = purchased < ACCESS_LAUNCH_DATE ? ACCESS_LAUNCH_DATE : purchased
-  return { start, end: endOfUtcDay(addCalendarMonthsUtc(start, ACCESS_WINDOW_MONTHS)) }
+  const sameDayThreeMonthsOn = addCalendarMonthsUtc(start, ACCESS_WINDOW_MONTHS)
+  return { start, end: endOfUtcDay(previousUtcDay(sameDayThreeMonthsOn)) }
 }
 
 function entitlementOf(row: EntitlementRow, now: Date): Entitlement | null {
@@ -100,6 +113,17 @@ function entitlementOf(row: EntitlementRow, now: Date): Entitlement | null {
   }
 
   if (isMonthly(row.plan)) {
+    // NOTE: monthly returns here, BEFORE `accessWindow` — so the 1-Sept launch
+    // floor applies to one-off plans only. A self_study_monthly bought on 20 Aug
+    // is active immediately; a self_study bought the same day is `none` until
+    // launch. That asymmetry is current, documented behaviour and NOT a bug fix
+    // waiting to happen: Stripe starts billing a monthly buyer on day one, so
+    // withholding access would charge for a product they cannot open, while
+    // granting it lets them into stations that are not populated until launch.
+    // Which of the two is right (floor monthly too, or block monthly checkout
+    // before 1 Sept) is a product ruling the founder has not made yet. Do not
+    // "fix" this silently — it changes who gets access on launch day.
+    //
     // 'paid' = subscription alive; anything else = Stripe already ended it.
     if (row.status !== 'paid') return { state: 'read_only', plan: row.plan, hasLectures: false }
     return { state: 'active', plan: row.plan, hasLectures: false }
@@ -123,7 +147,27 @@ function entitlementOf(row: EntitlementRow, now: Date): Entitlement | null {
   }
 }
 
-const STATE_RANK: Record<EntitlementState, number> = { active: 2, read_only: 1, none: 0 }
+/**
+ * Where an entitlement sits on the ladder of "how good is this customer's
+ * position", highest first.
+ *
+ * `none` is deliberately NOT one rank. Since the launch floor landed, a `none`
+ * that carries a plan means "bought, window hasn't opened yet" — a pre-launch
+ * pre-order — which is a strictly BETTER position than lapsed access, not a
+ * worse one. Collapsing the two let an expired old row mask a live new purchase:
+ * a user with a spent self_study plus a fresh Complete pre-order folded to the
+ * expired self_study, and was shown its plan and its past expiry date.
+ *
+ * A `none` with no plan is the fold's empty seed — no purchase at all — and
+ * must lose to every real row.
+ */
+const ACCESS_RANK = { active: 3, pending: 2, read_only: 1, nothing: 0 } as const
+
+function accessRank(e: Entitlement): number {
+  if (e.state === 'active') return ACCESS_RANK.active
+  if (e.state === 'read_only') return ACCESS_RANK.read_only
+  return e.plan ? ACCESS_RANK.pending : ACCESS_RANK.nothing
+}
 
 /**
  * How far into the future an entitlement runs, for tie-breaking. A live monthly
@@ -136,26 +180,51 @@ function endRank(e: Entitlement): number {
 }
 
 /**
- * Fold a user's purchase rows into their single best entitlement.
+ * Precedence keys, most significant first. Compared as a tuple: the first key
+ * that differs decides, and a later key only ever breaks a tie in every key
+ * before it.
  *
- * Active beats read-only; within a state, lectures access beats none; and
- * within that, the later end date wins. The last rule matters because the
- * middleware selects without an ORDER BY — without it, a customer who renews
- * before expiry could be shown (and gated on) the earlier of their two windows,
- * depending on unspecified Postgres row order.
+ * 1. {@link accessRank} — what the purchase is worth to the customer today.
+ * 2. lectures — within one access level, Complete beats self-study.
+ * 3. {@link endRank} — within that, the entitlement that runs longest wins.
+ *    Callers select without an ORDER BY, so without this a customer who renews
+ *    before expiry could be gated on the earlier of their two windows depending
+ *    on unspecified Postgres row order.
+ *
+ * A tuple + comparator rather than a chain of ifs on purpose: the chain was
+ * already hard enough to reason about that the `none`-masks-`read_only` bug
+ * hid in it, and adding a fourth key here is now a one-line edit with the
+ * precedence written down instead of implied by statement order.
+ */
+type PrecedenceKey = readonly [access: number, lectures: number, end: number]
+
+function precedenceOf(e: Entitlement): PrecedenceKey {
+  return [accessRank(e), e.hasLectures ? 1 : 0, endRank(e)]
+}
+
+/** Descending tuple comparison: > 0 when `a` is the better entitlement. */
+function comparePrecedence(a: Entitlement, b: Entitlement): number {
+  const keyA = precedenceOf(a)
+  const keyB = precedenceOf(b)
+  for (let i = 0; i < keyA.length; i += 1) {
+    // Only subtract when they differ, so two infinite end ranks (two live
+    // monthlies) compare equal instead of producing NaN.
+    if (keyA[i] !== keyB[i]) return keyA[i] - keyB[i]
+  }
+  return 0
+}
+
+/**
+ * Fold a user's purchase rows into their single best entitlement, by the
+ * precedence above. Ties keep the incumbent, so the result does not depend on
+ * row order.
  */
 export function computeEntitlement(rows: EntitlementRow[], now: Date = new Date()): Entitlement {
   return rows
     .map((row) => entitlementOf(row, now))
     .filter((e): e is Entitlement => e !== null)
-    .reduce<Entitlement>(
-      (best, e) => {
-        if (STATE_RANK[e.state] !== STATE_RANK[best.state]) {
-          return STATE_RANK[e.state] > STATE_RANK[best.state] ? e : best
-        }
-        if (e.hasLectures !== best.hasLectures) return e.hasLectures ? e : best
-        return endRank(e) > endRank(best) ? e : best
-      },
-      { state: 'none', hasLectures: false },
-    )
+    .reduce<Entitlement>((best, e) => (comparePrecedence(e, best) > 0 ? e : best), {
+      state: 'none',
+      hasLectures: false,
+    })
 }
