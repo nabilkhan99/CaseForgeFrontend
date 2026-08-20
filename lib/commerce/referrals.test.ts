@@ -65,11 +65,10 @@ describe('refereeDiscountFor', () => {
     }
   })
 
-  it('discounts nothing on the monthly plan, which still rewards the referrer', () => {
-    // Deliberate asymmetry: £129/month has no room to give £50 away on top of a
-    // £50 payout. The referrer is still paid (on the second month) — the buyer's
-    // incentive there is the low entry price itself.
-    expect(refereeDiscountFor('self_study_monthly')).toBe(0)
+  it('takes £50 off the first month of the monthly plan', () => {
+    // Founder decision (Ishaq, 2026-08-19; confirmed Nabil 2026-08-20): monthly
+    // is IN the referral, both sides — onboarding users beats the margin.
+    expect(refereeDiscountFor('self_study_monthly')).toBe(5000)
     expect(rewardFor('self_study_monthly')).toBe(5000)
   })
 
@@ -82,7 +81,7 @@ describe('refereeDiscountFor', () => {
     // A referred purchase must still earn its referral: list price minus the
     // referee discount has to clear MIN_QUALIFYING_SPEND_BY_PLAN, or the two-sided
     // offer would silently void every referral it generates.
-    const listPrice = { complete: 59900, self_study: 29900 } as const
+    const listPrice = { complete: 59900, self_study: 29900, self_study_monthly: 12900 } as const
     for (const plan of Object.keys(REFEREE_DISCOUNT_BY_PLAN)) {
       const floor = MIN_QUALIFYING_SPEND_BY_PLAN[plan as keyof typeof MIN_QUALIFYING_SPEND_BY_PLAN]
       const paid = listPrice[plan as keyof typeof listPrice] - refereeDiscountFor(plan)
@@ -354,13 +353,24 @@ describe('monthly referrals', () => {
     ).toEqual({ status: 'pending', voidReason: null, rewardAmount: 5000 })
   })
 
-  it('voids a monthly signup that paid less than a full month', () => {
+  it('records a referred monthly first month (£79) as pending', () => {
     expect(
       decideReferral({
         ownerEmail: 'owner@example.com',
         refereeEmail: 'friend@example.com',
         plan: 'self_study_monthly',
-        amountTotalPence: 12899,
+        amountTotalPence: 7900,
+      }),
+    ).toEqual({ status: 'pending', voidReason: null, rewardAmount: 5000 })
+  })
+
+  it('voids a monthly signup below half a month', () => {
+    expect(
+      decideReferral({
+        ownerEmail: 'owner@example.com',
+        refereeEmail: 'friend@example.com',
+        plan: 'self_study_monthly',
+        amountTotalPence: 6449,
       }),
     ).toEqual({ status: 'void', voidReason: 'below_min_spend', rewardAmount: 5000 })
   })
@@ -376,10 +386,10 @@ describe('monthly referrals', () => {
     ).toEqual({ status: 'void', voidReason: 'self_referral', rewardAmount: 5000 })
   })
 
-  it('keeps a monthly floor for that first payment to be tested against', () => {
-    expect(MIN_QUALIFYING_SPEND_BY_PLAN.self_study_monthly).toBe(12900)
-    expect(meetsMinimumSpend('self_study_monthly', 12900)).toBe(true)
-    expect(meetsMinimumSpend('self_study_monthly', 12899)).toBe(false)
+  it('keeps a monthly floor a referred (£79) first month still clears', () => {
+    expect(MIN_QUALIFYING_SPEND_BY_PLAN.self_study_monthly).toBe(6450)
+    expect(meetsMinimumSpend('self_study_monthly', 12900 - 5000)).toBe(true) // referred
+    expect(meetsMinimumSpend('self_study_monthly', 6449)).toBe(false)
   })
 
   it('resolveReward keeps override-beats-tier precedence', () => {

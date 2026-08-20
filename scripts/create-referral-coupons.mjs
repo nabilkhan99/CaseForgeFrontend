@@ -38,6 +38,9 @@ const amounts = Object.fromEntries(
 const COUPONS = [
   { plan: 'complete', id: 'ff-referred-complete', env: 'STRIPE_COUPON_REFERRED_COMPLETE' },
   { plan: 'self_study', id: 'ff-referred-self-study', env: 'STRIPE_COUPON_REFERRED_SELF_STUDY' },
+  // duration 'once' on a subscription = first invoice only, so this is £50 off
+  // the first month, then full £129 thereafter.
+  { plan: 'self_study_monthly', id: 'ff-referred-self-study-monthly', env: 'STRIPE_COUPON_REFERRED_SELF_STUDY_MONTHLY' },
 ];
 
 const stripe = new Stripe(key);

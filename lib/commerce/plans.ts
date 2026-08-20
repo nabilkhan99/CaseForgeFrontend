@@ -114,9 +114,11 @@ export function stripeRefereeCouponIdFor(key: PlanKey): string | null {
   const id =
     key === 'self_study'
       ? process.env.STRIPE_COUPON_REFERRED_SELF_STUDY
-      : key === 'complete'
-        ? process.env.STRIPE_COUPON_REFERRED_COMPLETE
-        : undefined
+      : key === 'self_study_monthly'
+        ? process.env.STRIPE_COUPON_REFERRED_SELF_STUDY_MONTHLY
+        : key === 'complete'
+          ? process.env.STRIPE_COUPON_REFERRED_COMPLETE
+          : undefined
   const trimmed = id?.trim()
   return trimmed ? trimmed : null
 }

@@ -31,6 +31,7 @@ export type RewardablePlan = keyof typeof REWARD_BY_PLAN
 export const REFEREE_DISCOUNT_BY_PLAN = {
   complete: 10000, // £100 off £599
   self_study: 5000, // £50 off £299
+  self_study_monthly: 5000, // £50 off the FIRST month (coupon duration 'once')
 } as const
 
 /**
@@ -66,7 +67,7 @@ export function refereeDiscountFor(plan: string): number {
 export const MIN_QUALIFYING_SPEND_BY_PLAN = {
   complete: 29950, // 50% of £599
   self_study: 14950, // 50% of £299
-  self_study_monthly: 12900, // one full month at list — a discounted first month earns nothing
+  self_study_monthly: 6450, // 50% of £129 — a referred first month (£79 after £50 off) must still qualify
 } as const
 
 /**
