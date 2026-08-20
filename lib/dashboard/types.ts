@@ -1,6 +1,8 @@
 export interface UserStats {
     currentStreak: number;
     completedStations: number;
+    /** Distinct stations whose best attempt reached a passing verdict. */
+    passedStations: number;
     totalStations: number;
     examCountdownDays: number;
 }

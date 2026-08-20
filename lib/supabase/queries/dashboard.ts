@@ -16,14 +16,18 @@ import type {
     LastStation,
 } from '@/lib/dashboard/types';
 import { visibleStationStates } from '@/lib/stations/visibility';
+import { MAX_WEIGHTED_SCORE, PASSING_VERDICTS } from '@/lib/clinical-master/types';
+import { getStationPassMap, passedStationIds } from '@/lib/supabase/queries/passTracking';
 
 // New SCA schema (Build Package Section 12): domains carry CP/P/F/CF grades and
 // the session carries a verdict + weighted score out of 10.5. For the dashboard
 // analytics we map a grade to an approximate percentage so the existing widgets
 // keep working from the new data.
 const GRADE_PCT: Record<string, number> = { CP: 100, P: 67, F: 33, CF: 0 };
-const PASSING_VERDICTS = ['Pass', 'Bare Pass'];
-const MAX_WEIGHTED = 10.5;
+const MAX_WEIGHTED = MAX_WEIGHTED_SCORE;
+
+/** Widen the canonical Verdict[] so raw DB strings can be tested against it. */
+const PASSING_VERDICT_STRINGS: readonly string[] = PASSING_VERDICTS;
 
 interface DomainGrade {
     domain?: string;
@@ -60,6 +64,11 @@ export async function getUserStats(userId: string): Promise<UserStats> {
         .select('*', { count: 'exact', head: true })
         .in('is_active', visibleStationStates());
 
+    // Stations the user has PASSED (best attempt reached a passing verdict) —
+    // distinct stations, so repeat attempts can never push it past the total.
+    const passMap = await getStationPassMap(userId);
+    const passedStations = passedStationIds(passMap).size;
+
     // Calculate exam countdown
     let examCountdownDays = 0;
     if (profile?.exam_date) {
@@ -72,6 +81,7 @@ export async function getUserStats(userId: string): Promise<UserStats> {
     return {
         currentStreak: profile?.current_streak ?? 0,
         completedStations: completedCount ?? 0,
+        passedStations,
         totalStations: totalStations ?? 0,
         examCountdownDays,
     };
@@ -351,7 +361,7 @@ export async function getSessionHistory(
             verdict: result?.verdict ?? null,
             weightedScore: Number(result?.weighted_score ?? 0),
             maxScore: Number(result?.max_score ?? MAX_WEIGHTED),
-            passed: result?.verdict ? PASSING_VERDICTS.includes(result.verdict) : false,
+            passed: result?.verdict ? PASSING_VERDICT_STRINGS.includes(result.verdict) : false,
             scored,
             marking,
         };

@@ -35,6 +35,7 @@ interface SubscriptionInfo {
 const defaultStats: UserStats = {
   currentStreak: 0,
   completedStations: 0,
+  passedStations: 0,
   totalStations: 0,
   examCountdownDays: 0,
 };
@@ -142,14 +143,33 @@ export default function DashboardPage() {
             ? `You've completed ${stats.completedStations} session${stats.completedStations !== 1 ? 's' : ''}${stats.currentStreak >= 2 ? ` \u00B7 ${stats.currentStreak}-day streak` : ''}`
             : 'Start your first consultation to begin tracking progress'}
         </p>
-        {stats.examCountdownDays > 0 && (
-          <span
-            className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-lg text-[11px] font-semibold font-mono"
-            style={{ background: 'rgba(180,83,9,0.08)', color: '#92400E' }}
-          >
-            SCA exam in {stats.examCountdownDays} days
-          </span>
-        )}
+        <div className="flex flex-wrap items-center gap-2 mt-2">
+          {/* Passing a station is the goal, so it gets its own headline number.
+              Hidden until the first session — "Passed 0 of 78" is a poor greeting. */}
+          {stats.completedStations > 0 && stats.totalStations > 0 && (
+            <motion.span
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, ease: 'easeOut' }}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-semibold font-mono"
+              style={
+                stats.passedStations > 0
+                  ? { background: 'rgba(22,163,74,0.08)', color: '#15803D' }
+                  : { background: 'rgba(0,0,0,0.03)', color: '#78716C' }
+              }
+            >
+              Passed {stats.passedStations} of {stats.totalStations} stations
+            </motion.span>
+          )}
+          {stats.examCountdownDays > 0 && (
+            <span
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-semibold font-mono"
+              style={{ background: 'rgba(180,83,9,0.08)', color: '#92400E' }}
+            >
+              SCA exam in {stats.examCountdownDays} days
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Subscription banners */}
