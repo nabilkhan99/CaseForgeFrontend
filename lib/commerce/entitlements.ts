@@ -17,6 +17,8 @@
  * - Lectures and coaching days belong to Complete only.
  */
 
+import { isSubscriptionPlan } from './plans'
+
 export const ACCESS_LAUNCH_DATE = new Date('2026-09-01T00:00:00Z')
 export const ACCESS_WINDOW_DAYS = 90
 
@@ -44,9 +46,13 @@ export interface Entitlement {
 
 export const NO_ENTITLEMENT: Entitlement = { state: 'none', hasLectures: false }
 
-export function isMonthlyPlan(plan: string): boolean {
-  return plan === 'self_study_monthly'
-}
+/**
+ * One definition of "monthly", owned by the plan catalogue's `billing` shape.
+ * Hardcoding `plan === 'self_study_monthly'` here would mean a second rolling
+ * plan silently became a 90-day one-off: active for 90 days from purchase
+ * whether or not the subscription was still alive.
+ */
+export const isMonthlyPlan = isSubscriptionPlan
 
 /** Access window of a one-off purchase: 90 days from purchase, floored at launch. */
 export function accessWindow(createdAt: string): { start: Date; end: Date } {

@@ -15,12 +15,16 @@ export async function POST(req: NextRequest) {
   // Server-side auth + entitlement: this is the endpoint that spends Azure
   // realtime minutes, so a signed-in account without a live plan must not
   // reach it even though the middleware never sees an API call.
-  const { user, allowed } = await getServerEntitlement();
+  const { user, allowed, entitlement } = await getServerEntitlement();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  // `state` rides along so the caller can pick renew-vs-buy without guessing.
   if (!allowed) {
-    return NextResponse.json({ error: 'no_active_plan' }, { status: 403 });
+    return NextResponse.json(
+      { error: 'no_active_plan', state: entitlement.state },
+      { status: 403 },
+    );
   }
 
   const { sessionId, stationId } = await req.json();

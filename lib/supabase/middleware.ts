@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { decideAccess } from '@/lib/commerce/entitlements';
+import { exactEmailPattern } from '@/lib/commerce/emailFilter';
 import { isStagedDeployment } from '@/lib/stations/visibility';
 import { parseAdminEmails } from '@/lib/admin/guard';
 import { NextResponse, type NextRequest } from 'next/server';
@@ -94,6 +95,7 @@ export async function updateSession(request: NextRequest) {
     const isFeedbackRoute = request.nextUrl.pathname.startsWith('/clinical-master/feedback');
     const requiresSubscription =
         request.nextUrl.pathname.startsWith('/clinical-master') && !isFeedbackRoute;
+    let entitlementFailedOpen = false;
     if (requiresSubscription && user) {
         try {
             // Purchases are matched by email (buying email = account email);
@@ -102,30 +104,38 @@ export async function updateSession(request: NextRequest) {
             // and admins are never locked out of their own product.
             // Belt and braces: RLS already scopes this select to the user's own
             // email, but a dropped policy must degrade to "no rows", not "all rows".
+            // `.ilike` (not `.eq`) because the policy compares lower(email) —
+            // a case-sensitive filter would hide a hand-provisioned row like
+            // `Sarah@Nhs.net` and lock out someone who paid.
             const { data: purchases, error: purchasesError } = await supabase
                 .from('preorders')
                 .select('plan, status, created_at, coaching_day')
-                .eq('email', (user.email ?? '').toLowerCase());
+                .ilike('email', exactEmailPattern(user.email));
             if (purchasesError) {
                 // supabase-js reports query failures as { error }, not a throw —
                 // without this branch a transient DB error reads as "no purchases"
-                // and bounces PAYING users to /pricing. Fail open, loudly.
+                // and bounces PAYING users to /pricing. Fail open, loudly — but
+                // by flagging and falling through, not by returning: the auth and
+                // trial-funnel rules below still have to run, and a future rule
+                // added under them must not silently stop applying here.
                 console.error('[entitlement] middleware fail-open', purchasesError);
-                return supabaseResponse;
-            }
-            const { entitlement, allowed } = decideAccess(purchases ?? [], {
-                email: user.email,
-                staged: isStagedDeployment(),
-                admins: parseAdminEmails(process.env.ADMIN_EMAILS),
-            });
-            if (!allowed) {
-                const url = request.nextUrl.clone();
-                url.pathname = '/pricing';
-                url.searchParams.set(entitlement.state === 'read_only' ? 'renew' : 'upgrade', 'true');
-                return NextResponse.redirect(url);
+                entitlementFailedOpen = true;
+            } else {
+                const { entitlement, allowed } = decideAccess(purchases ?? [], {
+                    email: user.email,
+                    staged: isStagedDeployment(),
+                    admins: parseAdminEmails(process.env.ADMIN_EMAILS),
+                });
+                if (!allowed) {
+                    const url = request.nextUrl.clone();
+                    url.pathname = '/pricing';
+                    url.searchParams.set(entitlement.state === 'read_only' ? 'renew' : 'upgrade', 'true');
+                    return NextResponse.redirect(url);
+                }
             }
         } catch {
             // Fail open — don't block paid users on transient DB errors
+            entitlementFailedOpen = true;
         }
     }
 
@@ -156,6 +166,13 @@ export async function updateSession(request: NextRequest) {
         url.pathname = '/dashboard';
         url.search = '';
         return NextResponse.redirect(url);
+    }
+
+    // A navigation that got through ungated leaves a trace, so "the gate stopped
+    // gating" is visible in request logs rather than only in a console.error
+    // nobody is reading.
+    if (entitlementFailedOpen) {
+        supabaseResponse.headers.set('x-entitlement-fail-open', '1');
     }
 
     return supabaseResponse;

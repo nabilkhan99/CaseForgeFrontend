@@ -185,6 +185,14 @@ export default function SettingsPage() {
               </Link>
             </div>
           )}
+          {/* The card above reports what was bought, which for an admin or a
+              staged tester can read "Ended" while they can still practise. Say
+              why, rather than overwriting the plan's real state with "Active". */}
+          {access?.bypass && access.state !== 'active' && (
+            <p className="text-[12px] text-muted mt-4 pt-4 border-t border-black/[0.06]">
+              You have full access regardless of this plan&apos;s state.
+            </p>
+          )}
         </Container>
       </motion.div>
 
