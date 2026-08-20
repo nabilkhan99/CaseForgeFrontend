@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { visibleStationStates } from '@/lib/stations/visibility';
 
 interface RouteContext {
     params: Promise<{ id: string }>;
@@ -19,7 +20,7 @@ export async function GET(_req: NextRequest, context: RouteContext) {
             .from('stations')
             .select('id, title, patient_name, patient_age, difficulty, consultation_type, reading_duration_seconds, consultation_duration_seconds, candidate_instructions, station_script, data_gathering, clinical_management, relating_to_others, clinical_learning_points, domain_id')
             .eq('id', id)
-            .eq('is_active', true)
+            .in('is_active', visibleStationStates())
             .single();
 
         if (error || !station) {
