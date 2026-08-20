@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getStripe } from '@/lib/commerce/stripe';
 import {
+  ACCESS_OPENS_AT,
   getPlan,
+  isSubscriptionPlan,
   stripePriceIdFor,
   stripeRefereeCouponIdFor,
   type CoachingDayAvailability,
@@ -53,9 +55,10 @@ async function resolveReferralCode(): Promise<string | null> {
 
 /**
  * Creates a Stripe Checkout session for a pre-order.
- * Body: { plan: 'self_study' | 'complete', coachingDay?: 'YYYY-MM-DD' }
+ * Body: { plan: 'self_study' | 'self_study_monthly' | 'complete', coachingDay?: 'YYYY-MM-DD' }
  * Complete requires a coaching day (unit of scarcity, max class of 6) and
  * soft-holds the place for 10 minutes while the buyer pays.
+ * `self_study_monthly` opens a subscription session instead of a one-off payment.
  * Returns: { url } to redirect the buyer to Stripe's hosted checkout.
  */
 export async function POST(request: Request) {
@@ -116,27 +119,51 @@ export async function POST(request: Request) {
     const refereeCoupon = referralCode ? stripeRefereeCouponIdFor(plan.key as PlanKey) : null;
 
     const origin = new URL(request.url).origin;
+    const subscription = isSubscriptionPlan(plan.key);
+    const description = coachingDay
+      ? `Fourteen Fisherman — ${plan.name} (pre-order; AI practice & lectures start 1 September 2026), coaching day ${coachingDay.label}`
+      : `Fourteen Fisherman — ${plan.name} (pre-order; AI practice & lectures start 1 September 2026)`;
+
+    // The metadata block is the contract with the webhook: it reads plan (and
+    // referral_code) off the session to record the order. Subscriptions repeat it
+    // on `subscription_data` because renewal invoices arrive with the
+    // subscription, long after the checkout session is out of reach.
+    const metadata = {
+      plan: plan.key,
+      ...(coachingDay
+        ? { coaching_day: coachingDay.day, coaching_day_label: coachingDay.label }
+        : {}),
+      ...(referralCode ? { referral_code: referralCode } : {}),
+    };
+
     const stripe = getStripe();
     const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
+      mode: subscription ? 'subscription' : 'payment',
       line_items: [{ price: stripePriceIdFor(plan.key as PlanKey), quantity: 1 }],
       success_url: `${origin}/thanks?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: coachingDay ? `${origin}/coaching-day` : `${origin}/#pricing`,
       ...(refereeCoupon
         ? { discounts: [{ coupon: refereeCoupon }] }
         : { allow_promotion_codes: true }),
-      metadata: {
-        plan: plan.key,
-        ...(coachingDay
-          ? { coaching_day: coachingDay.day, coaching_day_label: coachingDay.label }
-          : {}),
-        ...(referralCode ? { referral_code: referralCode } : {}),
-      },
-      payment_intent_data: {
-        description: coachingDay
-          ? `Fourteen Fisherman — ${plan.name} (pre-order; AI practice & lectures start 1 September 2026), coaching day ${coachingDay.label}`
-          : `Fourteen Fisherman — ${plan.name} (pre-order; AI practice & lectures start 1 September 2026)`,
-      },
+      metadata,
+      // Stripe rejects payment_intent_data on a subscription session (there is no
+      // one PaymentIntent — each cycle raises its own invoice).
+      ...(subscription
+        ? {
+            subscription_data: {
+              description,
+              metadata,
+              // Pre-launch: hold the first charge until access actually opens.
+              // Billing a rolling plan from today would take up to two weeks of
+              // £129 for a product nobody can use yet. Stripe wants trial_end at
+              // least 48h out; once 1 September passes this drops away and the
+              // subscription bills immediately, as normal.
+              ...(ACCESS_OPENS_AT.getTime() > Date.now()
+                ? { trial_end: Math.floor(ACCESS_OPENS_AT.getTime() / 1000) }
+                : {}),
+            },
+          }
+        : { payment_intent_data: { description } }),
     });
 
     if (!session.url) {

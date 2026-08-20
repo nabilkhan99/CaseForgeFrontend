@@ -10,6 +10,7 @@
 export const REWARD_BY_PLAN = {
   complete: 10000, // £100
   self_study: 5000, // £50
+  self_study_monthly: 5000, // £50 — but see DEFERRED_REWARD_PLANS
 } as const
 
 export type RewardablePlan = keyof typeof REWARD_BY_PLAN
@@ -65,7 +66,36 @@ export function refereeDiscountFor(plan: string): number {
 export const MIN_QUALIFYING_SPEND_BY_PLAN = {
   complete: 29950, // 50% of £599
   self_study: 14950, // 50% of £299
+  self_study_monthly: 12900, // one full month at list — a discounted first month earns nothing
 } as const
+
+/**
+ * Plans whose reward is earned on the SECOND payment, not the first.
+ *
+ * A £50 payout against a £129 first month that can be cancelled the next day is
+ * a loss the moment it is paid; by the second cycle the referral has collected
+ * £258 and the buyer has demonstrably stuck. Referrals on these plans are still
+ * recorded immediately (so attribution and the dashboard are honest) — they just
+ * carry a £0 reward until `creditDeferredReferral` raises it on the renewal.
+ * Founder decision 2026-08-20: monthly referrals count, but they have to survive
+ * a month first.
+ */
+export const DEFERRED_REWARD_PLANS: readonly string[] = ['self_study_monthly']
+
+/** True when a plan's referral reward is only earned on the second payment. */
+export function isDeferredRewardPlan(plan: string): boolean {
+  return DEFERRED_REWARD_PLANS.includes(plan)
+}
+
+/**
+ * The reward a referral is ultimately worth: a per-code negotiated override when
+ * present, otherwise the plan tier. Shared by {@link decideReferral} (which may
+ * defer paying it) and the deferred-credit path, so the precedence rule lives in
+ * exactly one place.
+ */
+export function resolveReward(plan: string, rewardOverridePence?: number | null): number {
+  return typeof rewardOverridePence === 'number' ? rewardOverridePence : rewardFor(plan)
+}
 
 /**
  * True when a purchase clears the minimum qualifying spend for its plan. Plans
@@ -260,12 +290,21 @@ export interface ReferralDecision {
 export function decideReferral(input: ReferralDecisionInput): ReferralDecision {
   const { ownerEmail, refereeEmail, plan, amountTotalPence, rewardOverridePence, minSpendOverridePence } =
     input
-  const rewardAmount = typeof rewardOverridePence === 'number' ? rewardOverridePence : rewardFor(plan)
+  // Deferred-reward plans record £0 now and are credited on the second payment;
+  // the void checks below still run, so a self-referred or under-spent monthly
+  // signup is voided immediately rather than lying in wait for the renewal.
+  const rewardAmount = isDeferredRewardPlan(plan)
+    ? 0
+    : resolveReward(plan, rewardOverridePence)
 
   if (isSelfReferral(ownerEmail, refereeEmail)) {
     return { status: 'void', voidReason: 'self_referral', rewardAmount }
   }
-  if (!meetsMinimumSpend(plan, amountTotalPence, minSpendOverridePence)) {
+  // Deferred plans skip the spend gate HERE and take it at the payment that
+  // actually earns the reward. A rolling plan's first charge is £0 whenever it
+  // starts on a trial (pre-launch signups do), so testing it now would void
+  // every genuine monthly referral before it had a chance to pay anything.
+  if (!isDeferredRewardPlan(plan) && !meetsMinimumSpend(plan, amountTotalPence, minSpendOverridePence)) {
     return { status: 'void', voidReason: 'below_min_spend', rewardAmount }
   }
   return { status: 'pending', voidReason: null, rewardAmount }

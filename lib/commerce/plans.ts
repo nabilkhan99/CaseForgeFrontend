@@ -3,7 +3,15 @@
  * Amounts are display copy — the charged amount comes from the Stripe Price.
  */
 
-export type PlanKey = 'self_study' | 'complete' | 'intensive'
+export type PlanKey = 'self_study' | 'self_study_monthly' | 'complete' | 'intensive'
+
+/**
+ * How a plan is billed. `three_month` is the pre-order shape everything launched
+ * with: one payment, three months' access, and — critically for study-budget
+ * claims — a *course* rather than a subscription. `monthly` is the rolling
+ * alternative, and deliberately applies to Self-Study only.
+ */
+export type BillingPeriod = 'three_month' | 'monthly'
 
 export interface Plan {
   key: PlanKey
@@ -15,6 +23,14 @@ export interface Plan {
   cta: 'checkout' | 'call'
   ctaLabel: string
   highlighted: boolean
+  /** Billing shape. Drives Stripe checkout `mode` via {@link isSubscriptionPlan}. */
+  billing: BillingPeriod
+  /**
+   * Whether the £500 SCA Guarantee applies. Deliberately false on the monthly
+   * plan: the guarantee pays £500 against a spend that can be stopped after one
+   * £129 month, which inverts the economics it was written for.
+   */
+  guaranteed: boolean
 }
 
 export const PLANS: readonly Plan[] = [
@@ -27,6 +43,20 @@ export const PLANS: readonly Plan[] = [
     cta: 'checkout',
     ctaLabel: 'Pre-order now',
     highlighted: false,
+    billing: 'three_month',
+    guaranteed: true,
+  },
+  {
+    key: 'self_study_monthly',
+    name: 'Self-Study (monthly)',
+    displayPrice: '£129',
+    priceSuffix: '/month',
+    tagline: 'Cancel any time',
+    cta: 'checkout',
+    ctaLabel: 'Start monthly',
+    highlighted: false,
+    billing: 'monthly',
+    guaranteed: false,
   },
   {
     key: 'complete',
@@ -37,6 +67,8 @@ export const PLANS: readonly Plan[] = [
     cta: 'checkout',
     ctaLabel: 'Choose your coaching day',
     highlighted: true,
+    billing: 'three_month',
+    guaranteed: true,
   },
   {
     key: 'intensive',
@@ -47,6 +79,8 @@ export const PLANS: readonly Plan[] = [
     cta: 'call',
     ctaLabel: 'Book a call',
     highlighted: false,
+    billing: 'three_month',
+    guaranteed: true,
   },
 ] as const
 
@@ -54,14 +88,30 @@ export function getPlan(key: string): Plan | undefined {
   return PLANS.find((p) => p.key === key)
 }
 
+/**
+ * True when the plan is a rolling subscription rather than a one-off purchase.
+ * Drives Stripe Checkout `mode` — and nothing else branches on billing shape, so
+ * a second subscription plan needs no new conditionals.
+ */
+export function isSubscriptionPlan(key: string): boolean {
+  return PLANS.find((p) => p.key === key)?.billing === 'monthly'
+}
+
+/** True when a plan carries the £500 SCA Guarantee. Unknown plans do not. */
+export function isGuaranteedPlan(key: string): boolean {
+  return PLANS.find((p) => p.key === key)?.guaranteed === true
+}
+
 /** Server-only: map a checkout-able plan to its Stripe Price id. */
 export function stripePriceIdFor(key: PlanKey): string {
   const id =
     key === 'self_study'
       ? process.env.STRIPE_PRICE_SELF_STUDY
-      : key === 'complete'
-        ? process.env.STRIPE_PRICE_COMPLETE
-        : undefined
+      : key === 'self_study_monthly'
+        ? process.env.STRIPE_PRICE_SELF_STUDY_MONTHLY
+        : key === 'complete'
+          ? process.env.STRIPE_PRICE_COMPLETE
+          : undefined
   if (!id) throw new Error(`No Stripe price configured for plan "${key}"`)
   return id
 }
@@ -101,3 +151,11 @@ export interface CoachingDayAvailability {
 /** The course goes live on this date; purchases before it start then. */
 export const ACCESS_OPENS = '2026-09-01'
 export const ACCESS_OPENS_LABEL = '1 September 2026'
+
+/**
+ * The same moment as {@link ACCESS_OPENS_LABEL}, as an instant. Rolling plans
+ * bought before this date start their billing here rather than on purchase —
+ * charging monthly for a product that has not opened yet would be taking money
+ * for nothing. Self-expiring: once the date passes, monthly bills immediately.
+ */
+export const ACCESS_OPENS_AT = new Date('2026-09-01T00:00:00.000Z')

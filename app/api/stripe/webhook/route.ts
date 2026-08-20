@@ -7,10 +7,13 @@ import {
   REWARD_BY_PLAN,
   decideReferral,
   generateReferralCode,
+  isDeferredRewardPlan,
+  meetsMinimumSpend,
   normalizeCode,
   normalizeEmail,
   parseMinSpendOverride,
   referralUrl,
+  resolveReward,
 } from '@/lib/commerce/referrals';
 import { sendReferralEmail } from '@/lib/email/referralEmail';
 import { sendPurchaseEmail } from '@/lib/email/purchaseEmail';
@@ -35,7 +38,13 @@ type SupabaseAdmin = ReturnType<typeof getSupabaseAdmin>;
  * so it can't be paid out; the pre-order is flipped to refunded only on a full
  * refund (a partially-refunded buyer still holds their seat).
  *
- * Ops: the Stripe webhook endpoint must have `charge.refunded` enabled.
+ * `invoice.paid` (renewal only) -> credit a monthly referral that was recorded
+ * at £0, now that the subscription has survived to a second payment.
+ *
+ * `customer.subscription.deleted` -> mark the monthly order canceled.
+ *
+ * Ops: the Stripe webhook endpoint must have `charge.refunded`, `invoice.paid`
+ * and `customer.subscription.deleted` enabled.
  */
 export async function POST(request: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -66,12 +75,22 @@ export async function POST(request: Request) {
   if (event.type === 'charge.refunded') {
     return handleChargeRefunded(event.data.object as Stripe.Charge);
   }
+  if (event.type === 'invoice.paid') {
+    return handleInvoicePaid(event.data.object as Stripe.Invoice);
+  }
+  if (event.type === 'customer.subscription.deleted') {
+    return handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
+  }
 
   return NextResponse.json({ received: true, ignored: event.type });
 }
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin: string) {
-  if (session.payment_status !== 'paid') {
+  // 'no_payment_required' is the legitimate state for a subscription that starts
+  // on a trial (pre-launch monthly signups bill from 1 September, not today) —
+  // the card is captured and the order is real, so it must be recorded.
+  const trialling = session.mode === 'subscription' && session.payment_status === 'no_payment_required';
+  if (session.payment_status !== 'paid' && !trialling) {
     // Async payment methods settle later via checkout.session.async_payment_succeeded;
     // card payments (our case) are always 'paid' here.
     return NextResponse.json({ received: true, deferred: session.id });
@@ -131,6 +150,12 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
         typeof session.payment_intent === 'string'
           ? session.payment_intent
           : (session.payment_intent?.id ?? null),
+      // Set only for rolling plans. Renewal invoices arrive attached to the
+      // subscription, not the checkout session, so this is the handle back here.
+      stripe_subscription_id:
+        typeof session.subscription === 'string'
+          ? session.subscription
+          : (session.subscription?.id ?? null),
       status: 'paid',
       referral_code: referralCode,
     })
@@ -252,6 +277,134 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
   }
 
   return NextResponse.json({ received: true, recorded: !insertError, preorderId });
+}
+
+/**
+ * Renewal invoice on a rolling plan.
+ *
+ * Monthly referrals are recorded at £0 (see DEFERRED_REWARD_PLANS): a payout on
+ * a first month that can be cancelled the next day is a guaranteed loss. The
+ * second successful payment is the signal that the referral was real, so this
+ * raises the reward to what the referral is actually worth.
+ *
+ * Idempotent by construction: it only ever updates a referral still sitting at
+ * reward_amount = 0, so a redelivered invoice — or the third, fourth and fifth
+ * renewals — is a no-op rather than a repeat credit.
+ */
+async function handleInvoicePaid(invoice: Stripe.Invoice) {
+  // `subscription_create` is the FIRST invoice (the one paid at checkout) and must
+  // not credit anything. Only a genuine renewal cycle counts.
+  if (invoice.billing_reason !== 'subscription_cycle') {
+    return NextResponse.json({ received: true, ignored: invoice.billing_reason ?? 'no_billing_reason' });
+  }
+
+  // Stripe's Basil API moved the subscription off the invoice root: it now hangs
+  // off `parent.subscription_details`, expanded or not.
+  const subscription = invoice.parent?.subscription_details?.subscription ?? null;
+  const subscriptionId = typeof subscription === 'string' ? subscription : (subscription?.id ?? null);
+  if (!subscriptionId) {
+    return NextResponse.json({ received: true, ignored: 'no_subscription', invoiceId: invoice.id });
+  }
+
+  const supabase = getSupabaseAdmin();
+  const { data: preorder, error: findError } = await supabase
+    .from('preorders')
+    .select('id, plan, referral_code, status')
+    .eq('stripe_subscription_id', subscriptionId)
+    .maybeSingle();
+
+  if (findError) {
+    console.error('[stripe-webhook] renewal preorder lookup failed', { subscriptionId, error: findError });
+    return NextResponse.json({ error: 'Failed to process renewal' }, { status: 500 });
+  }
+  // A renewal with no matching order is not an error worth retrying (e.g. a
+  // subscription created outside checkout) — log and move on.
+  if (!preorder) {
+    console.warn('[stripe-webhook] renewal could not be matched to a preorder', { subscriptionId });
+    return NextResponse.json({ received: true, ignored: 'no_preorder', subscriptionId });
+  }
+  if (!preorder.referral_code || !isDeferredRewardPlan(preorder.plan)) {
+    return NextResponse.json({ received: true, ignored: 'not_deferred', preorderId: preorder.id });
+  }
+  // A refunded/cancelled order must not mint a reward on a straggling invoice.
+  if (preorder.status !== 'paid') {
+    return NextResponse.json({ received: true, ignored: `status_${preorder.status}`, preorderId: preorder.id });
+  }
+
+  // Re-resolve the amount rather than trusting a stored one: a per-code override
+  // may have been negotiated (or changed) since the signup.
+  const { data: codeRow, error: codeError } = await supabase
+    .from('referral_codes')
+    .select('reward_override_pence')
+    .eq('code', preorder.referral_code)
+    .maybeSingle();
+  if (codeError) {
+    console.error('[stripe-webhook] renewal code lookup failed', { subscriptionId, error: codeError });
+    return NextResponse.json({ error: 'Failed to process renewal' }, { status: 500 });
+  }
+
+  // The qualifying-spend test that decideReferral skipped at signup lands here,
+  // against the payment that actually earns the reward.
+  const minSpendOverride = parseMinSpendOverride(process.env.REFERRAL_MIN_SPEND_OVERRIDE_PENCE);
+  if (!meetsMinimumSpend(preorder.plan, invoice.amount_paid ?? 0, minSpendOverride)) {
+    console.warn('[stripe-webhook] renewal below qualifying spend — no credit', {
+      preorderId: preorder.id,
+      amountPaid: invoice.amount_paid,
+    });
+    return NextResponse.json({ received: true, ignored: 'below_min_spend', preorderId: preorder.id });
+  }
+
+  const rewardAmount = resolveReward(preorder.plan, codeRow?.reward_override_pence ?? null);
+  const { data: credited, error: updateError } = await supabase
+    .from('referrals')
+    .update({ reward_amount: rewardAmount })
+    .eq('preorder_id', preorder.id)
+    .eq('status', 'pending')
+    .eq('reward_amount', 0)
+    .select('id');
+
+  if (updateError) {
+    console.error('[stripe-webhook] deferred referral credit failed', { preorderId: preorder.id, error: updateError });
+    return NextResponse.json({ error: 'Failed to process renewal' }, { status: 500 });
+  }
+
+  const creditedCount = credited?.length ?? 0;
+  if (creditedCount > 0) {
+    console.log('[stripe-webhook] deferred referral credited on renewal', {
+      preorderId: preorder.id,
+      rewardAmount,
+    });
+  }
+  return NextResponse.json({ received: true, credited: creditedCount });
+}
+
+/**
+ * Subscription ended (cancelled by the buyer, or after failed payments).
+ *
+ * Marks the order canceled so the admin dashboard stops counting it as live
+ * revenue. A referral already credited at the second payment is deliberately
+ * left alone — it was earned by a subscription that ran its qualifying month;
+ * later churn is a normal outcome, not a clawback. Refunds still void referrals
+ * through `charge.refunded`.
+ */
+async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
+  const supabase = getSupabaseAdmin();
+  const { data: updated, error } = await supabase
+    .from('preorders')
+    .update({ status: 'canceled' })
+    .eq('stripe_subscription_id', subscription.id)
+    .eq('status', 'paid')
+    .select('id');
+
+  if (error) {
+    console.error('[stripe-webhook] subscription cancel update failed', {
+      subscriptionId: subscription.id,
+      error,
+    });
+    return NextResponse.json({ error: 'Failed to process cancellation' }, { status: 500 });
+  }
+
+  return NextResponse.json({ received: true, canceled: updated?.length ?? 0 });
 }
 
 interface RecordReferralArgs {

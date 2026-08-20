@@ -14,8 +14,10 @@ import {
   qualificationCutoff,
   isSelfReferral,
   meetsMinimumSpend,
+  isDeferredRewardPlan,
   parseMinSpendOverride,
   refereeDiscountFor,
+  resolveReward,
   normalizeCode,
   normalizeEmail,
   referralUrl,
@@ -58,10 +60,18 @@ describe('refereeDiscountFor', () => {
     expect(refereeDiscountFor('nonsense')).toBe(0)
   })
 
-  it('matches the referrer reward pound for pound on every rewardable plan', () => {
-    for (const plan of Object.keys(REWARD_BY_PLAN)) {
+  it('matches the referrer reward pound for pound on every discounted plan', () => {
+    for (const plan of Object.keys(REFEREE_DISCOUNT_BY_PLAN)) {
       expect(refereeDiscountFor(plan)).toBe(rewardFor(plan))
     }
+  })
+
+  it('discounts nothing on the monthly plan, which still rewards the referrer', () => {
+    // Deliberate asymmetry: £129/month has no room to give £50 away on top of a
+    // £50 payout. The referrer is still paid (on the second month) — the buyer's
+    // incentive there is the low entry price itself.
+    expect(refereeDiscountFor('self_study_monthly')).toBe(0)
+    expect(rewardFor('self_study_monthly')).toBe(5000)
   })
 
   it('exposes the largest discount for "up to £X off" copy', () => {
@@ -74,7 +84,8 @@ describe('refereeDiscountFor', () => {
     // referee discount has to clear MIN_QUALIFYING_SPEND_BY_PLAN, or the two-sided
     // offer would silently void every referral it generates.
     const listPrice = { complete: 59900, self_study: 29900 } as const
-    for (const [plan, floor] of Object.entries(MIN_QUALIFYING_SPEND_BY_PLAN)) {
+    for (const plan of Object.keys(REFEREE_DISCOUNT_BY_PLAN)) {
+      const floor = MIN_QUALIFYING_SPEND_BY_PLAN[plan as keyof typeof MIN_QUALIFYING_SPEND_BY_PLAN]
       const paid = listPrice[plan as keyof typeof listPrice] - refereeDiscountFor(plan)
       expect(paid).toBeGreaterThanOrEqual(floor)
       expect(meetsMinimumSpend(plan, paid)).toBe(true)
@@ -329,6 +340,74 @@ describe('decideReferral — reward override', () => {
         amountTotalPence: 59900,
       }),
     ).toEqual({ status: 'pending', voidReason: null, rewardAmount: 10000 })
+  })
+})
+
+describe('deferred rewards (monthly)', () => {
+  it('records a monthly referral as pending but worth £0 on the first payment', () => {
+    expect(
+      decideReferral({
+        ownerEmail: 'owner@example.com',
+        refereeEmail: 'friend@example.com',
+        plan: 'self_study_monthly',
+        amountTotalPence: 12900,
+      }),
+    ).toEqual({ status: 'pending', voidReason: null, rewardAmount: 0 })
+  })
+
+  it('defers a per-code override too — an affiliate waits the same month', () => {
+    expect(
+      decideReferral({
+        ownerEmail: 'owner@example.com',
+        refereeEmail: 'friend@example.com',
+        plan: 'self_study_monthly',
+        amountTotalPence: 12900,
+        rewardOverridePence: 10000,
+      }).rewardAmount,
+    ).toBe(0)
+  })
+
+  it('still voids a self-referred monthly signup immediately', () => {
+    expect(
+      decideReferral({
+        ownerEmail: 'owner@example.com',
+        refereeEmail: 'OWNER@example.com',
+        plan: 'self_study_monthly',
+        amountTotalPence: 12900,
+      }),
+    ).toEqual({ status: 'void', voidReason: 'self_referral', rewardAmount: 0 })
+  })
+
+  it('does NOT void a monthly signup that paid nothing yet', () => {
+    // Pre-launch monthly signups start on a trial and pay £0 at checkout. The
+    // spend gate moves to the renewal that actually earns the reward (see
+    // handleInvoicePaid) — applying it here would void every genuine referral.
+    expect(
+      decideReferral({
+        ownerEmail: 'owner@example.com',
+        refereeEmail: 'friend@example.com',
+        plan: 'self_study_monthly',
+        amountTotalPence: 0,
+      }),
+    ).toEqual({ status: 'pending', voidReason: null, rewardAmount: 0 })
+  })
+
+  it('keeps a monthly floor for the renewal to be tested against', () => {
+    expect(MIN_QUALIFYING_SPEND_BY_PLAN.self_study_monthly).toBe(12900)
+    expect(meetsMinimumSpend('self_study_monthly', 12900)).toBe(true)
+    expect(meetsMinimumSpend('self_study_monthly', 12899)).toBe(false)
+  })
+
+  it('does not defer the one-off plans', () => {
+    expect(isDeferredRewardPlan('self_study')).toBe(false)
+    expect(isDeferredRewardPlan('complete')).toBe(false)
+    expect(isDeferredRewardPlan('self_study_monthly')).toBe(true)
+  })
+
+  it('resolveReward keeps override-beats-tier precedence for the credit path', () => {
+    expect(resolveReward('self_study_monthly')).toBe(5000)
+    expect(resolveReward('self_study_monthly', 10000)).toBe(10000)
+    expect(resolveReward('self_study_monthly', null)).toBe(5000)
   })
 })
 
