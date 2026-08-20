@@ -10,26 +10,10 @@ import Container from '@/components/ui/Container';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import SecondaryButton from '@/components/ui/SecondaryButton';
 import PageHeader from '@/components/ui/PageHeader';
+import type { SubscriptionResponse } from '@/app/api/subscription/route';
+import { ACCESS_WINDOW_DAYS } from '@/lib/commerce/entitlements';
 
-interface SubscriptionInfo {
-  plan: string;
-  status: string;
-  expires_at: string;
-  purchased_at: string;
-  days_remaining: number;
-}
-
-const PLAN_NAMES: Record<string, string> = {
-  sprint: 'The Sprint',
-  standard: 'The Standard',
-  mastery: 'The Mastery',
-};
-
-const PLAN_DURATIONS: Record<string, number> = {
-  sprint: 30,
-  standard: 90,
-  mastery: 180,
-};
+const DAY_MS = 86_400_000;
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -39,7 +23,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
+  const [access, setAccess] = useState<SubscriptionResponse | null>(null);
 
   const [fullName, setFullName] = useState('');
   const [examDate, setExamDate] = useState('');
@@ -55,8 +39,9 @@ export default function SettingsPage() {
     fetch('/api/subscription')
       .then((r) => r.json())
       .then((data) => {
-        if (data.subscription) setSubscription(data.subscription);
-      });
+        if (data?.state) setAccess(data as SubscriptionResponse);
+      })
+      .catch(() => setAccess(null));
   }, [supabase.auth]);
 
   const handleSave = async () => {
@@ -131,11 +116,18 @@ export default function SettingsPage() {
           <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-5">
             Plan
           </div>
-          {subscription ? (() => {
-            const totalDays = PLAN_DURATIONS[subscription.plan] || 90;
-            const elapsed = totalDays - subscription.days_remaining;
-            const progress = Math.min((elapsed / totalDays) * 100, 100);
-            const expiryDate = new Date(subscription.expires_at).toLocaleDateString('en-GB', {
+          {access?.plan ? (() => {
+            const ended = access.state !== 'active';
+            const expiry = access.expiresAt ? new Date(access.expiresAt) : null;
+            // Monthly has no expiry to count down to — it runs until canceled.
+            const daysRemaining = expiry
+              ? Math.ceil((expiry.getTime() - Date.now()) / DAY_MS)
+              : null;
+            const progress =
+              daysRemaining === null
+                ? null
+                : Math.min(Math.max(((ACCESS_WINDOW_DAYS - daysRemaining) / ACCESS_WINDOW_DAYS) * 100, 0), 100);
+            const expiryDate = expiry?.toLocaleDateString('en-GB', {
               day: 'numeric',
               month: 'long',
               year: 'numeric',
@@ -148,24 +140,37 @@ export default function SettingsPage() {
                     className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-white"
                     style={{ background: 'linear-gradient(135deg, #B45309, #D97706)' }}
                   >
-                    {PLAN_NAMES[subscription.plan] || subscription.plan}
+                    {access.planName || access.plan}
                   </span>
-                  <span className="text-[12px] text-success font-medium">Active</span>
+                  <span
+                    className={`text-[12px] font-medium ${ended ? 'text-muted' : 'text-success'}`}
+                  >
+                    {ended ? 'Ended' : 'Active'}
+                  </span>
                 </div>
                 <p className="text-[13px] text-muted mb-3">
-                  Expires in {subscription.days_remaining} day{subscription.days_remaining !== 1 ? 's' : ''} &middot; {expiryDate}
+                  {ended
+                    ? `Access ended${expiryDate ? ` on ${expiryDate}` : ''} · your history and feedback stay available`
+                    : access.isMonthly
+                      ? 'Renews monthly · cancel any time'
+                      : `Expires in ${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} · ${expiryDate}`}
                 </p>
-                <div className="relative h-2 rounded-full bg-black/[0.04] overflow-hidden mb-3">
-                  <motion.div
-                    className="h-full rounded-full"
-                    style={{ background: 'linear-gradient(90deg, #B45309, #D97706)' }}
-                    initial={{ width: 0 }}
-                    animate={{ width: `${progress}%` }}
-                    transition={{ type: 'spring', stiffness: 40, damping: 20 }}
-                  />
-                </div>
-                <Link href="/pricing" className="text-[13px] text-primary font-medium hover:underline">
-                  Extend or upgrade &rarr;
+                {progress !== null && (
+                  <div className="relative h-2 rounded-full bg-black/[0.04] overflow-hidden mb-3">
+                    <motion.div
+                      className="h-full rounded-full"
+                      style={{ background: 'linear-gradient(90deg, #B45309, #D97706)' }}
+                      initial={{ width: 0 }}
+                      animate={{ width: `${progress}%` }}
+                      transition={{ type: 'spring', stiffness: 40, damping: 20 }}
+                    />
+                  </div>
+                )}
+                <Link
+                  href={ended ? '/pricing?renew=true' : '/pricing'}
+                  className="text-[13px] text-primary font-medium hover:underline"
+                >
+                  {ended ? 'Renew your access' : 'Extend or upgrade'} &rarr;
                 </Link>
               </div>
             );

@@ -87,6 +87,14 @@ function ReadingPhaseContent() {
         body: JSON.stringify({ sessionId, stationId }),
       });
 
+      // Plan lapsed since this page loaded (the middleware only checks on
+      // navigation) — send them where the middleware would have, rather than
+      // surfacing the API's error code as a message.
+      if (res.status === 403) {
+        router.push('/pricing?renew=true');
+        return;
+      }
+
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || 'Failed to create session');

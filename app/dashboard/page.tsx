@@ -23,14 +23,8 @@ import type {
   LastStation,
 } from '@/lib/dashboard/types';
 import type { SessionHistoryItem } from '@/lib/supabase/queries/dashboard';
+import type { SubscriptionResponse } from '@/app/api/subscription/route';
 import { formatRelativeDate } from '@/lib/utils';
-
-interface SubscriptionInfo {
-  plan: string;
-  status: string;
-  expires_at: string;
-  days_remaining: number;
-}
 
 const defaultStats: UserStats = {
   currentStreak: 0,
@@ -51,6 +45,14 @@ const DOMAIN_LABELS: Record<string, string> = {
   interpersonalSkills: 'Interpersonal Skills',
 };
 
+function formatAccessDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
 export default function DashboardPage() {
   const supabase = createClient();
   const [user, setUser] = useState<User | null>(null);
@@ -59,7 +61,7 @@ export default function DashboardPage() {
   const [lastStation, setLastStation] = useState<LastStation | null>(null);
   const [recentSessions, setRecentSessions] = useState<SessionHistoryItem[]>([]);
   const [randomStation, setRandomStation] = useState<Station | null>(null);
-  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
+  const [access, setAccess] = useState<SubscriptionResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -76,7 +78,7 @@ export default function DashboardPage() {
       }
 
       try {
-        const [statsData, metricsData, lastStationData, recentData, randomStationData, subRes] = await Promise.all([
+        const [statsData, metricsData, lastStationData, recentData, randomStationData, accessRes] = await Promise.all([
           getUserStats(user.id),
           getPerformanceMetrics(user.id),
           getLastStation(user.id),
@@ -90,7 +92,7 @@ export default function DashboardPage() {
         setLastStation(lastStationData);
         setRecentSessions(recentData);
         setRandomStation(randomStationData);
-        if (subRes.subscription) setSubscription(subRes.subscription);
+        if (accessRes?.state) setAccess(accessRes as SubscriptionResponse);
       } catch (error) {
         if (error instanceof Error) {
           // Silently handle dashboard data errors
@@ -152,8 +154,9 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Subscription banners */}
-      {!loading && !subscription && (
+      {/* Plan state. Expiry is read-only, not a lockout: the loud banner says so,
+          because the history and feedback below it still work. */}
+      {access?.state === 'none' && (
         <motion.div
           className="mb-6 px-4 py-3 rounded-xl flex items-center justify-between gap-3"
           style={{ background: 'rgba(180,83,9,0.04)', border: '1px solid rgba(180,83,9,0.08)' }}
@@ -168,19 +171,33 @@ export default function DashboardPage() {
           </p>
         </motion.div>
       )}
-      {subscription && subscription.days_remaining <= 7 && subscription.days_remaining > 0 && (
+      {access?.state === 'read_only' && (
         <motion.div
           className="mb-6 px-4 py-3 rounded-xl flex items-center justify-between gap-3"
-          style={{ background: 'rgba(180,83,9,0.06)', border: '1px solid rgba(180,83,9,0.12)' }}
+          style={{ background: 'rgba(180,83,9,0.08)', border: '1px solid rgba(180,83,9,0.18)' }}
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
         >
           <p className="text-[13px] text-heading">
-            Your plan expires in {subscription.days_remaining} day{subscription.days_remaining !== 1 ? 's' : ''} &mdash;{' '}
-            <Link href="/pricing" className="text-primary font-semibold hover:underline">
-              renew to keep access
+            Your access has ended &mdash; your history stays available.{' '}
+            <Link href="/pricing?renew=true" className="text-primary font-semibold hover:underline">
+              Renew to practise again
             </Link>
           </p>
+        </motion.div>
+      )}
+      {access?.state === 'active' && access.planName && (
+        <motion.div
+          className="mb-6 text-[12px] text-muted"
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          {access.planName}
+          {access.isMonthly
+            ? ' · renews monthly'
+            : access.expiresAt
+              ? ` · access until ${formatAccessDate(access.expiresAt)}`
+              : ''}
         </motion.div>
       )}
 

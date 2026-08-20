@@ -1,39 +1,43 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { isMonthlyPlan, type EntitlementState } from '@/lib/commerce/entitlements';
+import { getPlan } from '@/lib/commerce/plans';
+import { getServerEntitlement } from '@/lib/commerce/serverEntitlement';
 
+export interface SubscriptionResponse {
+  /** Plan key of the purchase the access derives from, null when there is none. */
+  plan: string | null;
+  planName: string | null;
+  state: EntitlementState;
+  /** ISO date access ends; null for monthly, which runs until it is canceled. */
+  expiresAt: string | null;
+  isMonthly: boolean;
+}
+
+/**
+ * The signed-in user's plan and expiry, as the rest of the product sees it.
+ *
+ * Reads the same entitlement the gate reads (purchases in `preorders`), not
+ * the retired `subscriptions` table, whose sprint/standard/mastery rows no
+ * checkout has written since the preorder launch — which is why the banners
+ * built on it had gone quiet.
+ */
 export async function GET() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { user, entitlement, allowed } = await getServerEntitlement();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { data: subscription } = await supabase
-    .from('subscriptions')
-    .select('plan, status, expires_at, purchased_at')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .gt('expires_at', new Date().toISOString())
-    .order('expires_at', { ascending: false })
-    .limit(1)
-    .single();
+  const plan = entitlement.plan ?? null;
+  const body: SubscriptionResponse = {
+    plan,
+    planName: plan ? getPlan(plan)?.name ?? null : null,
+    // `allowed` folds in the admin and staged-deployment bypass, so an admin
+    // is never nagged to buy the product they run.
+    state: allowed ? 'active' : entitlement.state,
+    expiresAt: entitlement.expiresAt?.toISOString() ?? null,
+    isMonthly: plan ? isMonthlyPlan(plan) : false,
+  };
 
-  if (!subscription) {
-    return NextResponse.json({ subscription: null });
-  }
-
-  const daysRemaining = Math.ceil(
-    (new Date(subscription.expires_at).getTime() - Date.now()) / 86_400_000
-  );
-
-  return NextResponse.json({
-    subscription: {
-      plan: subscription.plan,
-      status: subscription.status,
-      expires_at: subscription.expires_at,
-      purchased_at: subscription.purchased_at,
-      days_remaining: daysRemaining,
-    },
-  });
+  return NextResponse.json(body);
 }

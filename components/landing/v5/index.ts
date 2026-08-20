@@ -8,3 +8,4 @@ export { default as Testimonials } from './Testimonials';
 export { default as NhsBanner } from './NhsBanner';
 export { default as StudyBudgetChecker } from './StudyBudgetChecker';
 export { default as Faq } from './Faq';
+export { default as AccessNotice } from './AccessNotice';

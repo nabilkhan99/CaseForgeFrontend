@@ -7,30 +7,13 @@ import { motion } from 'framer-motion';
 import AuthLayout from '@/components/auth/AuthLayout';
 import AuthCard from '@/components/auth/AuthCard';
 import PrimaryButton from '@/components/ui/PrimaryButton';
-
-interface SubscriptionData {
-  plan: string;
-  expires_at: string;
-  days_remaining: number;
-}
-
-const PLAN_NAMES: Record<string, string> = {
-  sprint: 'The Sprint',
-  standard: 'The Standard',
-  mastery: 'The Mastery',
-};
-
-const PLAN_DURATIONS: Record<string, string> = {
-  sprint: '30 days',
-  standard: '90 days',
-  mastery: '180 days',
-};
+import type { SubscriptionResponse } from '@/app/api/subscription/route';
 
 function CheckoutSuccessContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id');
 
-  const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
+  const [access, setAccess] = useState<SubscriptionResponse | null>(null);
   const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
@@ -44,8 +27,10 @@ function CheckoutSuccessContent() {
       try {
         const res = await fetch('/api/subscription');
         const data = await res.json();
-        if (data.subscription) {
-          setSubscription(data.subscription);
+        // Wait for the purchase row the webhook writes, not just any answer:
+        // a signed-in buyer polls here while provisioning catches up.
+        if (data?.state === 'active' && data.plan) {
+          setAccess(data as SubscriptionResponse);
           clearInterval(poll);
         }
       } catch {
@@ -82,7 +67,7 @@ function CheckoutSuccessContent() {
   }
 
   // Still polling
-  if (!subscription && !timedOut) {
+  if (!access && !timedOut) {
     return (
       <AuthLayout>
         <AuthCard
@@ -108,7 +93,7 @@ function CheckoutSuccessContent() {
   }
 
   // Timed out
-  if (timedOut && !subscription) {
+  if (timedOut && !access) {
     return (
       <AuthLayout>
         <AuthCard
@@ -130,13 +115,14 @@ function CheckoutSuccessContent() {
   }
 
   // Success
-  const planName = PLAN_NAMES[subscription!.plan] || subscription!.plan;
-  const planDuration = PLAN_DURATIONS[subscription!.plan] || '';
-  const expiryDate = new Date(subscription!.expires_at).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+  const planName = access!.planName || access!.plan;
+  const expiryDate = access!.expiresAt
+    ? new Date(access!.expiresAt).toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      })
+    : null;
 
   return (
     <AuthLayout>
@@ -156,13 +142,17 @@ function CheckoutSuccessContent() {
               <span className="font-semibold text-heading">{planName}</span>
             </div>
             <div className="flex justify-between text-[13px]">
-              <span className="text-muted">Duration</span>
-              <span className="font-semibold text-heading">{planDuration} unlimited access</span>
+              <span className="text-muted">Billing</span>
+              <span className="font-semibold text-heading">
+                {access!.isMonthly ? 'Monthly · cancel any time' : 'One-off · unlimited access'}
+              </span>
             </div>
-            <div className="flex justify-between text-[13px]">
-              <span className="text-muted">Expires</span>
-              <span className="font-semibold text-heading">{expiryDate}</span>
-            </div>
+            {expiryDate && (
+              <div className="flex justify-between text-[13px]">
+                <span className="text-muted">Expires</span>
+                <span className="font-semibold text-heading">{expiryDate}</span>
+              </div>
+            )}
           </div>
 
           <Link href="/dashboard" className="block">
