@@ -10,8 +10,14 @@ import { LECTURES_BUCKET } from '@/lib/lectures/media';
  * Same gate as the list endpoint — Complete tier, active access, or the
  * staged/admin bypass — but the failure mode is different: 404, never 403, and
  * never a distinction between "no such lecture", "not published" and "not your
- * tier". A 403 here would confirm to any signed-in account exactly which
- * lecture ids exist, which is the shape of the paid course.
+ * tier". The ids themselves are not secret (GET /api/lectures hands every
+ * published id to every signed-in user, locked ones included); what the single
+ * 404 withholds is the *tier oracle* — a 403 here would let anyone probe which
+ * lectures their plan is short of, and separate "not yours" from "not there".
+ *
+ * ⚠️ Fails closed on a degraded entitlement (`failedOpen`), unlike the practice
+ * gate. See the note in app/api/lectures/route.ts: a signed URL survives the
+ * incident that produced it, so a broken lookup must not mint one.
  *
  * Mirrors app/api/clinical-master/recording/[sessionId] deliberately: same
  * uuid guard, same fail-closed auth handling, same TTL.
@@ -33,8 +39,9 @@ export async function GET(
 
   let unlocked = false;
   try {
-    const { user, entitlement, bypass, allowed } = await getServerEntitlement();
-    unlocked = Boolean(user) && allowed && (entitlement.hasLectures || bypass);
+    const { user, entitlement, bypass, allowed, failedOpen } = await getServerEntitlement();
+    unlocked =
+      Boolean(user) && !failedOpen && allowed && (entitlement.hasLectures || bypass);
   } catch (authError: unknown) {
     // Fail closed — an unreadable session is not an entitled one.
     console.error('[lecture-play] entitlement check failed', authError);

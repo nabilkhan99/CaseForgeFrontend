@@ -37,12 +37,13 @@ const ROWS = [
 ]
 
 function stubLectureTable(result: { data: unknown; error: unknown }) {
-  const order = vi.fn().mockResolvedValue(result)
+  const limit = vi.fn().mockResolvedValue(result)
+  const order = vi.fn(() => ({ limit }))
   const eq = vi.fn(() => ({ order }))
   const select = vi.fn(() => ({ eq }))
   const from = vi.fn(() => ({ select }))
   getSupabaseAdmin.mockReturnValue({ from })
-  return { from, select, eq, order }
+  return { from, select, eq, order, limit }
 }
 
 function entitlement(overrides: Partial<Entitlement> = {}): Entitlement {
@@ -53,12 +54,14 @@ function signedIn(opts: {
   entitlement?: Entitlement
   bypass?: boolean
   allowed?: boolean
+  failedOpen?: boolean
 }) {
   getServerEntitlement.mockResolvedValue({
     user: { id: 'user-1', email: 'gp@example.com' },
     entitlement: opts.entitlement ?? entitlement(),
     bypass: opts.bypass ?? false,
     allowed: opts.allowed ?? true,
+    failedOpen: opts.failedOpen ?? false,
     supabase: {},
   })
 }
@@ -75,6 +78,7 @@ describe('GET /api/lectures', () => {
       entitlement: entitlement({ state: 'none' }),
       bypass: false,
       allowed: false,
+      failedOpen: false,
       supabase: {},
     })
 
@@ -127,6 +131,56 @@ describe('GET /api/lectures', () => {
 
     const body = await (await GET()).json()
     expect(body.locked).toBe(true)
+    // The banner branches on this: renew, not upgrade to what they already own.
+    expect(body.state).toBe('read_only')
+    expect(body.unavailable).toBe(false)
+  })
+
+  it('reports state so the lock copy can tell upgrade from renew', async () => {
+    signedIn({ entitlement: entitlement({ state: 'active', plan: 'self_study' }) })
+    expect((await (await GET()).json()).state).toBe('active')
+
+    signedIn({ entitlement: entitlement({ state: 'none' }), allowed: false })
+    expect((await (await GET()).json()).state).toBe('none')
+  })
+
+  it('fails CLOSED when the entitlement lookup degraded, even though it granted', async () => {
+    // getServerEntitlement fails open so a DB blip cannot stop practice. A
+    // signed URL outlives the blip, so lectures must not follow it open.
+    signedIn({
+      entitlement: entitlement({ state: 'none', hasLectures: false }),
+      allowed: true,
+      failedOpen: true,
+    })
+
+    const body = await (await GET()).json()
+    expect(body.locked).toBe(true)
+    expect(body.unavailable).toBe(true)
+    expect(body.lectures[0].description).toBeNull()
+  })
+
+  it('fails closed on a degraded lookup even for a real Complete buyer', async () => {
+    signedIn({
+      entitlement: entitlement({ hasLectures: true, plan: 'complete' }),
+      allowed: true,
+      failedOpen: true,
+    })
+
+    expect((await (await GET()).json()).locked).toBe(true)
+  })
+
+  it('fails closed on a degraded lookup even with bypass set', async () => {
+    signedIn({ bypass: true, allowed: true, failedOpen: true })
+
+    expect((await (await GET()).json()).locked).toBe(true)
+  })
+
+  it('caps the public list the same way the admin list is capped', async () => {
+    signedIn({ entitlement: entitlement({ hasLectures: true }) })
+    const { limit } = stubLectureTable({ data: ROWS, error: null })
+
+    await GET()
+    expect(limit).toHaveBeenCalledWith(200)
   })
 
   it('unlocks a bypass viewer (staged deployment or ADMIN_EMAILS) with no purchase', async () => {

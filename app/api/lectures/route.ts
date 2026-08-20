@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { getServerEntitlement } from '@/lib/commerce/serverEntitlement';
+import type { EntitlementState } from '@/lib/commerce/entitlements';
+import { MAX_LECTURE_ROWS } from '@/lib/lectures/limits';
 
 /**
  * The lecture list for the dashboard.
@@ -11,10 +13,18 @@ import { getServerEntitlement } from '@/lib/commerce/serverEntitlement';
  * Never returns a URL or a storage path in either shape; playback is minted
  * per-lecture by /api/lectures/[id]/play after the same check.
  *
- * Unlocked is `allowed && (hasLectures || bypass)`: the same gate the
- * middleware applies to practising, plus the Complete-only extra, with the
- * staged-deployment / ADMIN_EMAILS bypass that getServerEntitlement already
+ * Unlocked is `!failedOpen && allowed && (hasLectures || bypass)`: the same
+ * gate the middleware applies to practising, plus the Complete-only extra, with
+ * the staged-deployment / ADMIN_EMAILS bypass that getServerEntitlement already
  * decides so testers and founders are never locked out of their own content.
+ *
+ * ⚠️ Lectures fail CLOSED where practice fails open. getServerEntitlement()
+ * grants access when the purchase lookup breaks, because locking paying users
+ * out of a consultation over a DB blip is worse than letting one through — a
+ * consultation is transient. A lecture is not: the signed URL outlives the
+ * incident and the file can be kept. So `failedOpen` denies here, and the
+ * caller is told the difference (`unavailable`) so it can say "try again"
+ * rather than "upgrade".
  */
 
 export interface LectureSummary {
@@ -28,6 +38,10 @@ export interface LectureSummary {
 
 export interface LecturesResponse {
   locked: boolean;
+  /** Why it is locked, so the banner can offer renew rather than upgrade. */
+  state: EntitlementState;
+  /** Locked because the entitlement lookup broke, not because of the tier. */
+  unavailable: boolean;
   lectures: LectureSummary[];
 }
 
@@ -40,19 +54,20 @@ interface LectureRow {
 }
 
 export async function GET() {
-  const { user, entitlement, bypass, allowed } = await getServerEntitlement();
+  const { user, entitlement, bypass, allowed, failedOpen } = await getServerEntitlement();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const unlocked = allowed && (entitlement.hasLectures || bypass);
+  const unlocked = !failedOpen && allowed && (entitlement.hasLectures || bypass);
 
   const { data, error } = await getSupabaseAdmin()
     .from('lectures')
     .select('id, title, description, sort_order, duration_seconds')
     .eq('is_published', true)
-    .order('sort_order', { ascending: true });
+    .order('sort_order', { ascending: true })
+    .limit(MAX_LECTURE_ROWS);
 
   if (error) {
     console.error('[lectures] list query failed', error.message);
@@ -62,6 +77,8 @@ export async function GET() {
   const rows = (data ?? []) as LectureRow[];
   const body: LecturesResponse = {
     locked: !unlocked,
+    state: entitlement.state,
+    unavailable: failedOpen,
     lectures: rows.map((row) => ({
       id: row.id,
       title: row.title,

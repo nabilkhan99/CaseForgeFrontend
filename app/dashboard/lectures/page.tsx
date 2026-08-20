@@ -5,12 +5,47 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import type { LecturesResponse, LectureSummary } from '@/app/api/lectures/route';
+import type { EntitlementState } from '@/lib/commerce/entitlements';
 
 /**
  * The lecture course. Locked users see the same list, greyed — the running
  * order and the titles are the upgrade pitch, so this page never renders an
  * empty "you don't have this" screen; it renders what they'd get.
+ *
+ * Why the lock copy branches: someone who bought Complete and let it lapse owns
+ * this course already. Telling them to "upgrade" to the thing they paid for
+ * reads as a bug and sends them to the wrong /pricing notice, so read_only gets
+ * renew language. And a lock caused by a broken entitlement lookup is not a
+ * tier at all — it gets neither pitch, just "try again".
  */
+
+interface LockNotice {
+  copy: string;
+  href: string | null;
+  cta: string | null;
+}
+
+function lockNotice(state: EntitlementState, unavailable: boolean): LockNotice {
+  if (unavailable) {
+    return {
+      copy: 'Lectures are temporarily unavailable — try again shortly.',
+      href: null,
+      cta: null,
+    };
+  }
+  if (state === 'read_only') {
+    return {
+      copy: 'Your access has ended —',
+      href: '/pricing?renew=true',
+      cta: 'renew to keep watching',
+    };
+  }
+  return {
+    copy: 'The lecture course is part of Complete —',
+    href: '/pricing?upgrade=true',
+    cta: 'upgrade to watch',
+  };
+}
 
 function formatDuration(seconds: number | null): string | null {
   if (!seconds || seconds <= 0) return null;
@@ -117,6 +152,8 @@ function LectureRow({
 export default function LecturesPage() {
   const [lectures, setLectures] = useState<LectureSummary[]>([]);
   const [locked, setLocked] = useState(false);
+  const [state, setState] = useState<EntitlementState>('none');
+  const [unavailable, setUnavailable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -130,6 +167,8 @@ export default function LecturesPage() {
         if (cancelled) return;
         setLectures(data.lectures ?? []);
         setLocked(Boolean(data.locked));
+        setState(data.state ?? 'none');
+        setUnavailable(Boolean(data.unavailable));
       } catch {
         if (!cancelled) setError('Could not load the lectures.');
       } finally {
@@ -142,13 +181,16 @@ export default function LecturesPage() {
     };
   }, []);
 
+  const count = `${lectures.length} lecture${lectures.length !== 1 ? 's' : ''}`;
   const subtitle = loading
     ? 'Loading…'
     : lectures.length === 0
       ? 'Lectures are on the way'
-      : locked
-        ? `${lectures.length} lecture${lectures.length !== 1 ? 's' : ''} — included with Complete`
-        : `${lectures.length} lecture${lectures.length !== 1 ? 's' : ''}`;
+      : locked && !unavailable && state !== 'read_only'
+        ? `${count} — included with Complete`
+        : count;
+
+  const notice = lockNotice(state, unavailable);
 
   return (
     <div>
@@ -162,10 +204,15 @@ export default function LecturesPage() {
           animate={{ opacity: 1, y: 0 }}
         >
           <p className="text-[13px] text-heading">
-            The lecture course is part of Complete &mdash;{' '}
-            <Link href="/pricing?upgrade=true" className="text-primary font-semibold hover:underline">
-              upgrade to watch
-            </Link>
+            {notice.copy}
+            {notice.href && notice.cta && (
+              <>
+                {' '}
+                <Link href={notice.href} className="text-primary font-semibold hover:underline">
+                  {notice.cta}
+                </Link>
+              </>
+            )}
           </p>
         </motion.div>
       )}
