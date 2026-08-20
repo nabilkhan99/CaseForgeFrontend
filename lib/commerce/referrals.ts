@@ -210,6 +210,18 @@ export function qualificationCutoff(now: Date): Date {
   return new Date(now.getTime() - QUALIFICATION_WINDOW_DAYS * MS_PER_DAY)
 }
 
+/**
+ * The moment a referral becomes payable: five days after it was created, but
+ * never before the launch floor. Pure counterpart to
+ * {@link isPastQualificationWindow} — that answers "is it payable yet?", this
+ * answers "when will it be?", which is what the payout queue needs to show a
+ * referral that exists but can't be paid yet.
+ */
+export function payableFrom(createdAt: Date): Date {
+  const window = new Date(createdAt.getTime() + QUALIFICATION_WINDOW_DAYS * MS_PER_DAY)
+  return window.getTime() > PAYOUT_FLOOR_DATE.getTime() ? window : PAYOUT_FLOOR_DATE
+}
+
 /** Cookie that carries an attributed referral code through checkout. */
 export const REFERRAL_COOKIE = 'ff_ref'
 

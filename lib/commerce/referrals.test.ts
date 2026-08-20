@@ -15,6 +15,7 @@ import {
   isSelfReferral,
   meetsMinimumSpend,
   parseMinSpendOverride,
+  payableFrom,
   refereeRewardFor,
   resolveReward,
   normalizeCode,
@@ -414,6 +415,26 @@ describe('decideReferral — the referee side', () => {
 
   it('owes the buyer nothing on a non-rewardable plan', () => {
     expect(decideReferral({ ...base, plan: 'intensive', amountTotalPence: 299900 }).refereeRewardAmount).toBe(0)
+  })
+})
+
+describe('payableFrom', () => {
+  it('is five days after creation once past the launch floor', () => {
+    const created = new Date('2026-09-10T09:00:00.000Z')
+    expect(payableFrom(created).toISOString()).toBe('2026-09-15T09:00:00.000Z')
+  })
+
+  it('is the launch floor for anything bought before it', () => {
+    // A pre-order from July is not payable in July however old it gets.
+    expect(payableFrom(new Date('2026-07-01T00:00:00.000Z'))).toEqual(PAYOUT_FLOOR_DATE)
+    expect(payableFrom(new Date('2026-08-20T00:00:00.000Z'))).toEqual(PAYOUT_FLOOR_DATE)
+  })
+
+  it('agrees with isPastQualificationWindow at the boundary', () => {
+    const created = new Date('2026-09-10T09:00:00.000Z')
+    const due = payableFrom(created)
+    expect(isPastQualificationWindow(created, new Date(due.getTime() - 1))).toBe(false)
+    expect(isPastQualificationWindow(created, due)).toBe(true)
   })
 })
 
