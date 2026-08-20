@@ -5,7 +5,6 @@ import {
   getPlan,
   isSubscriptionPlan,
   stripePriceIdFor,
-  stripeRefereeCouponIdFor,
   type CoachingDayAvailability,
   type PlanKey,
 } from '@/lib/commerce/plans';
@@ -109,13 +108,11 @@ export async function POST(request: Request) {
     // codes degrade silently — checkout must never fail on a bad referral.
     const referralCode = await resolveReferralCode();
 
-    // Two-sided referral: a valid code also buys the *referee* a discount. Stripe
-    // rejects `discounts` and `allow_promotion_codes` on the same session, so a
-    // referred checkout trades the promo-code box for the automatic discount —
-    // the better deal of the two, and it removes the stack-a-100%-off-code vector
-    // that MIN_QUALIFYING_SPEND_BY_PLAN exists to catch. With no coupon configured
-    // this collapses to the previous behaviour: full price, promo box available.
-    const refereeCoupon = referralCode ? stripeRefereeCouponIdFor(plan.key as PlanKey) : null;
+    // Referred buyers are NOT discounted here: they pay list price so their
+    // receipt covers the whole course, and their side of the referral reaches
+    // them afterwards as cash (see REFEREE_REWARD_BY_PLAN). That also keeps
+    // Stripe's promo-code box available on every session — Stripe allows an
+    // automatic discount or the code box, never both.
 
     const origin = new URL(request.url).origin;
     const subscription = isSubscriptionPlan(plan.key);
@@ -141,9 +138,7 @@ export async function POST(request: Request) {
       line_items: [{ price: stripePriceIdFor(plan.key as PlanKey), quantity: 1 }],
       success_url: `${origin}/thanks?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: coachingDay ? `${origin}/coaching-day` : `${origin}/#pricing`,
-      ...(refereeCoupon
-        ? { discounts: [{ coupon: refereeCoupon }] }
-        : { allow_promotion_codes: true }),
+      allow_promotion_codes: true,
       metadata,
       // Stripe rejects payment_intent_data on a subscription session (there is no
       // one PaymentIntent — each cycle raises its own invoice).
