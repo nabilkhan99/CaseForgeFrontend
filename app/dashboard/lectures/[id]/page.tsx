@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -15,6 +15,11 @@ import type { LecturesResponse, LectureSummary } from '@/app/api/lectures/route'
  *
  * The URL is short-lived and minted per view; it is never persisted anywhere,
  * so leaving the page and coming back re-signs rather than reusing.
+ *
+ * It is also short-lived enough to die mid-watch — a lecture longer than the
+ * TTL, or a pause over lunch — and Storage answers the next range request with
+ * a 400, which a bare <video> shows as nothing at all. So `onError` drops the
+ * URL and offers a re-sign rather than leaving a dead player on screen.
  */
 
 export default function LecturePlayerPage() {
@@ -25,6 +30,30 @@ export default function LecturePlayerPage() {
   const [lecture, setLecture] = useState<LectureSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expired, setExpired] = useState(false);
+  const [resigning, setResigning] = useState(false);
+
+  /**
+   * Mint (or re-mint) a playback URL. Returns the outcome rather than setting
+   * state, so a caller that has been unmounted can drop it on the floor.
+   */
+  const signPlayback = useCallback(async (): Promise<{
+    url: string | null;
+    error: string | null;
+  }> => {
+    const res = await fetch(`/api/lectures/${id}/play`, { cache: 'no-store' });
+    if (!res.ok) {
+      return {
+        url: null,
+        error:
+          res.status === 404
+            ? "This lecture isn't available on your plan."
+            : 'Could not start playback. Try again in a moment.',
+      };
+    }
+    const data: { url?: string } = await res.json();
+    return { url: data.url ?? null, error: null };
+  }, [id]);
 
   useEffect(() => {
     if (!id) return;
@@ -34,8 +63,8 @@ export default function LecturePlayerPage() {
       try {
         // The list is the only place the title lives; a failure there is
         // cosmetic, so it must not block playback.
-        const [playRes, listRes] = await Promise.all([
-          fetch(`/api/lectures/${id}/play`, { cache: 'no-store' }),
+        const [play, listRes] = await Promise.all([
+          signPlayback(),
           fetch('/api/lectures', { cache: 'no-store' }),
         ]);
 
@@ -44,20 +73,9 @@ export default function LecturePlayerPage() {
           const match = (list.lectures ?? []).find((l) => l.id === id) ?? null;
           if (!cancelled) setLecture(match);
         }
-
-        if (!playRes.ok) {
-          if (!cancelled) {
-            setError(
-              playRes.status === 404
-                ? "This lecture isn't available on your plan."
-                : 'Could not start playback. Try again in a moment.',
-            );
-          }
-          return;
-        }
-
-        const data: { url?: string } = await playRes.json();
-        if (!cancelled) setUrl(data.url ?? null);
+        if (cancelled) return;
+        setUrl(play.url);
+        setError(play.error);
       } catch {
         if (!cancelled) setError('Could not start playback. Try again in a moment.');
       } finally {
@@ -69,7 +87,22 @@ export default function LecturePlayerPage() {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, signPlayback]);
+
+  async function retryPlayback() {
+    setResigning(true);
+    setError(null);
+    try {
+      const play = await signPlayback();
+      setUrl(play.url);
+      setError(play.error);
+      if (play.url) setExpired(false);
+    } catch {
+      setError('Could not start playback. Try again in a moment.');
+    } finally {
+      setResigning(false);
+    }
+  }
 
   return (
     <div>
@@ -86,6 +119,17 @@ export default function LecturePlayerPage() {
             animate={{ rotate: 360 }}
             transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
           />
+        </div>
+      ) : expired && !error ? (
+        <div className="border-l-2 border-primary pl-4 py-2 text-[13px] text-heading">
+          Playback link expired &mdash;{' '}
+          <button
+            onClick={retryPlayback}
+            disabled={resigning}
+            className="text-primary font-semibold hover:underline disabled:opacity-40"
+          >
+            {resigning ? 'reloading…' : 'reload to continue'}
+          </button>
         </div>
       ) : error || !url ? (
         <div className="border-l-2 border-danger pl-4 py-2 text-[13px] text-danger">
@@ -104,6 +148,13 @@ export default function LecturePlayerPage() {
             playsInline
             preload="metadata"
             src={url}
+            onError={() => {
+              // Almost always the signed URL aging out mid-watch; a genuinely
+              // broken file re-signs once and fails again, which reads the same
+              // to the user as "try reloading".
+              setUrl(null);
+              setExpired(true);
+            }}
             className="w-full aspect-video bg-black"
           >
             <track kind="captions" />
