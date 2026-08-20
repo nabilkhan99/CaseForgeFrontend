@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/admin/guard';
 import { qualificationCutoff, referralUrl } from '@/lib/commerce/referrals';
 import { validateNewCode } from '@/lib/commerce/advocates';
+import { sendPayoutReadyEmail } from '@/lib/email/payoutReadyEmail';
 import {
   computeDashboardStats,
   type CodeRow,
@@ -18,6 +19,67 @@ function getOrigin(request: Request): string {
   const host = request.headers.get('host') ?? 'www.fourteenfisherman.com';
   const proto = request.headers.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
   return `${proto}://${host}`;
+}
+
+/**
+ * Email the earners of referrals that JUST qualified, asking how to be paid.
+ *
+ * Runs off the back of lazy qualification, so it inherits its trigger: an admin
+ * loading the dashboard. That is deliberate — there is no cron, and a payout
+ * nobody has looked at does not need announcing.
+ *
+ * Sends at most once per referral (`notified_at`), and only stamps the row when
+ * the send actually succeeded, so a Brevo outage retries on the next page load
+ * rather than silently swallowing someone's payout notice.
+ *
+ * Gated OFF by default: set REFERRAL_PAYOUT_EMAIL=true to enable. Both sides are
+ * emailed — the sharer and, when they are owed one, the buyer.
+ */
+async function notifyNewlyQualified(supabase: SupabaseAdmin, ids: string[]): Promise<void> {
+  if (process.env.REFERRAL_PAYOUT_EMAIL !== 'true') return;
+
+  try {
+    const { data: rows, error } = await supabase
+      .from('referrals')
+      .select('id, referrer_email, referee_email, reward_amount, referee_reward_amount, notified_at')
+      .in('id', ids)
+      .is('notified_at', null);
+    if (error) {
+      console.error('[admin-referrals] payout notify lookup failed', error);
+      return;
+    }
+
+    for (const row of rows ?? []) {
+      const sends = [
+        row.reward_amount > 0
+          ? sendPayoutReadyEmail({ toEmail: row.referrer_email, amount: row.reward_amount, side: 'referrer' as const })
+          : null,
+        row.referee_reward_amount > 0
+          ? sendPayoutReadyEmail({ toEmail: row.referee_email, amount: row.referee_reward_amount, side: 'referee' as const })
+          : null,
+      ].filter(Boolean) as Promise<{ sent: boolean }>[];
+
+      if (sends.length === 0) continue;
+      const results = await Promise.allSettled(sends);
+      // Stamp only when every intended email landed; a partial failure retries
+      // both next time, which is a duplicate risk we accept over a silent miss.
+      const allSent = results.every((r) => r.status === 'fulfilled' && r.value.sent);
+      if (!allSent) {
+        console.error('[admin-referrals] payout notify incomplete — will retry', { referralId: row.id });
+        continue;
+      }
+      const { error: stampError } = await supabase
+        .from('referrals')
+        .update({ notified_at: new Date().toISOString() })
+        .eq('id', row.id);
+      if (stampError) {
+        console.error('[admin-referrals] notified_at stamp failed', { referralId: row.id, error: stampError });
+      }
+    }
+  } catch (err: unknown) {
+    // Notification is never allowed to break the dashboard.
+    console.error('[admin-referrals] payout notify threw', err);
+  }
 }
 
 export interface AdminReferral {
@@ -89,6 +151,8 @@ export async function GET(request: Request) {
           .eq('status', 'pending');
         if (updateError) {
           console.error('[admin-referrals] qualification update failed', updateError);
+        } else {
+          await notifyNewlyQualified(supabase, ids);
         }
       }
     }
