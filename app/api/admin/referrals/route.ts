@@ -28,11 +28,13 @@ export interface AdminReferral {
   plan: string;
   amount: number;
   reward_amount: number;
+  referee_reward_amount: number;
   status: 'pending' | 'qualified' | 'paid' | 'void';
   void_reason: string | null;
   created_at: string;
   qualified_at: string | null;
   paid_at: string | null;
+  referee_paid_at: string | null;
 }
 
 /**
@@ -41,7 +43,8 @@ export interface AdminReferral {
  *
  * GET  — lazily qualifies eligible pending referrals, then returns the full list.
  * POST — discriminated on `action`:
- *   - `mark_paid`   { id }                          — mark a qualified referral paid.
+ *   - `mark_paid`   { id }                          — mark the SHARER's payout sent.
+ *   - `mark_referee_paid` { id }                    — mark the BUYER's cashback sent.
  *   - `create_code` { ownerName, ownerEmail, code?, rewardOverridePence? }
  *                                                    — issue an affiliate code.
  *   - `set_active`  { code, active }                — activate/deactivate a code.
@@ -96,7 +99,7 @@ export async function GET(request: Request) {
   const { data, error } = await supabase
     .from('referrals')
     .select(
-      'id, referral_code, referrer_email, referee_email, plan, amount, reward_amount, status, void_reason, created_at, qualified_at, paid_at',
+      'id, referral_code, referrer_email, referee_email, plan, amount, reward_amount, referee_reward_amount, status, void_reason, created_at, qualified_at, paid_at, referee_paid_at',
     )
     .order('created_at', { ascending: false });
 
@@ -160,6 +163,8 @@ export async function POST(request: Request) {
   switch (body.action) {
     case 'mark_paid':
       return markPaid(supabase, body);
+    case 'mark_referee_paid':
+      return markRefereePaid(supabase, body);
     case 'create_code':
       return createCode(supabase, request, body);
     case 'set_active':
@@ -171,7 +176,7 @@ export async function POST(request: Request) {
 
 type SupabaseAdmin = ReturnType<typeof getSupabaseAdmin>;
 
-/** Mark a qualified referral as paid out. Unchanged from the original handler. */
+/** Mark the SHARER's payout as sent. */
 async function markPaid(supabase: SupabaseAdmin, body: PostBody) {
   if (!body.id) {
     return NextResponse.json({ error: 'Expected { id, action: "mark_paid" }' }, { status: 400 });
@@ -192,6 +197,43 @@ async function markPaid(supabase: SupabaseAdmin, body: PostBody) {
   }
   if (!data) {
     return NextResponse.json({ error: 'Referral not found or not in qualified state' }, { status: 409 });
+  }
+
+  return NextResponse.json({ success: true, referral: data });
+}
+
+/**
+ * Mark the BUYER's cashback as sent — the second half of a two-sided referral.
+ *
+ * Deliberately independent of the sharer's payout: the two go to different
+ * people, often on different days, and either can be sent first. Only a
+ * referral that actually owes the buyer something can be marked, so a legacy
+ * (pre-cashback) or void row can't be ticked off by accident.
+ */
+async function markRefereePaid(supabase: SupabaseAdmin, body: PostBody) {
+  if (!body.id) {
+    return NextResponse.json({ error: 'Expected { id, action: "mark_referee_paid" }' }, { status: 400 });
+  }
+
+  const { data, error } = await supabase
+    .from('referrals')
+    .update({ referee_paid_at: new Date().toISOString() })
+    .eq('id', body.id)
+    .in('status', ['qualified', 'paid'])
+    .gt('referee_reward_amount', 0)
+    .is('referee_paid_at', null)
+    .select('id, referee_paid_at')
+    .maybeSingle();
+
+  if (error) {
+    console.error('[admin-referrals] mark_referee_paid failed', { id: body.id, error });
+    return NextResponse.json({ error: 'Failed to mark buyer paid' }, { status: 500 });
+  }
+  if (!data) {
+    return NextResponse.json(
+      { error: 'Referral not found, owes the buyer nothing, or is already marked paid' },
+      { status: 409 },
+    );
   }
 
   return NextResponse.json({ success: true, referral: data });

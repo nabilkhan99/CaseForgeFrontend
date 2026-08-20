@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   CODE_ALPHABET,
-  MAX_REFEREE_DISCOUNT_PENCE,
+  MAX_REFEREE_REWARD_PENCE,
   MIN_QUALIFYING_SPEND_BY_PLAN,
-  REFEREE_DISCOUNT_BY_PLAN,
+  REFEREE_REWARD_BY_PLAN,
   PAYOUT_FLOOR_DATE,
   QUALIFICATION_WINDOW_DAYS,
   REFERRAL_COOKIE,
@@ -15,7 +15,7 @@ import {
   isSelfReferral,
   meetsMinimumSpend,
   parseMinSpendOverride,
-  refereeDiscountFor,
+  refereeRewardFor,
   resolveReward,
   normalizeCode,
   normalizeEmail,
@@ -42,50 +42,47 @@ describe('rewardFor', () => {
   })
 })
 
-describe('refereeDiscountFor', () => {
-  it('takes £100 (10000p) off the complete plan', () => {
-    expect(refereeDiscountFor('complete')).toBe(10000)
-    expect(REFEREE_DISCOUNT_BY_PLAN.complete).toBe(10000)
+describe('refereeRewardFor', () => {
+  it('pays £100 (10000p) back on the complete plan', () => {
+    expect(refereeRewardFor('complete')).toBe(10000)
+    expect(REFEREE_REWARD_BY_PLAN.complete).toBe(10000)
   })
 
-  it('takes £50 (5000p) off the self_study plan', () => {
-    expect(refereeDiscountFor('self_study')).toBe(5000)
-    expect(REFEREE_DISCOUNT_BY_PLAN.self_study).toBe(5000)
+  it('pays £50 (5000p) back on the self_study plan', () => {
+    expect(refereeRewardFor('self_study')).toBe(5000)
+    expect(REFEREE_REWARD_BY_PLAN.self_study).toBe(5000)
   })
 
-  it('discounts nothing for an unknown / non-discounted plan', () => {
-    expect(refereeDiscountFor('intensive')).toBe(0)
-    expect(refereeDiscountFor('')).toBe(0)
-    expect(refereeDiscountFor('nonsense')).toBe(0)
+  it('pays nothing back for an unknown plan', () => {
+    expect(refereeRewardFor('intensive')).toBe(0)
+    expect(refereeRewardFor('')).toBe(0)
+    expect(refereeRewardFor('nonsense')).toBe(0)
   })
 
-  it('matches the referrer reward pound for pound on every discounted plan', () => {
-    for (const plan of Object.keys(REFEREE_DISCOUNT_BY_PLAN)) {
-      expect(refereeDiscountFor(plan)).toBe(rewardFor(plan))
+  it('matches the referrer reward pound for pound on every plan', () => {
+    for (const plan of Object.keys(REFEREE_REWARD_BY_PLAN)) {
+      expect(refereeRewardFor(plan)).toBe(rewardFor(plan))
     }
   })
 
-  it('takes £50 off the first month of the monthly plan', () => {
+  it('pays £50 back on the monthly plan', () => {
     // Founder decision (Ishaq, 2026-08-19; confirmed Nabil 2026-08-20): monthly
     // is IN the referral, both sides — onboarding users beats the margin.
-    expect(refereeDiscountFor('self_study_monthly')).toBe(5000)
+    expect(refereeRewardFor('self_study_monthly')).toBe(5000)
     expect(rewardFor('self_study_monthly')).toBe(5000)
   })
 
-  it('exposes the largest discount for "up to £X off" copy', () => {
-    expect(MAX_REFEREE_DISCOUNT_PENCE).toBe(10000)
-    expect(MAX_REFEREE_DISCOUNT_PENCE).toBe(Math.max(...Object.values(REFEREE_DISCOUNT_BY_PLAN)))
+  it('exposes the largest reward for "up to £X back" copy', () => {
+    expect(MAX_REFEREE_REWARD_PENCE).toBe(10000)
+    expect(MAX_REFEREE_REWARD_PENCE).toBe(Math.max(...Object.values(REFEREE_REWARD_BY_PLAN)))
   })
 
-  it('leaves every discounted plan clear of its own qualifying floor', () => {
-    // A referred purchase must still earn its referral: list price minus the
-    // referee discount has to clear MIN_QUALIFYING_SPEND_BY_PLAN, or the two-sided
-    // offer would silently void every referral it generates.
+  it('leaves a full-price purchase clear of its own qualifying floor', () => {
+    // Referred buyers pay list price — their reward arrives later as cash — so
+    // every genuine referral clears the floor. The floor is there for the
+    // stacked-promo-code case, not for the referral itself.
     const listPrice = { complete: 59900, self_study: 29900, self_study_monthly: 12900 } as const
-    for (const plan of Object.keys(REFEREE_DISCOUNT_BY_PLAN)) {
-      const floor = MIN_QUALIFYING_SPEND_BY_PLAN[plan as keyof typeof MIN_QUALIFYING_SPEND_BY_PLAN]
-      const paid = listPrice[plan as keyof typeof listPrice] - refereeDiscountFor(plan)
-      expect(paid).toBeGreaterThanOrEqual(floor)
+    for (const [plan, paid] of Object.entries(listPrice)) {
       expect(meetsMinimumSpend(plan, paid)).toBe(true)
     }
   })
@@ -172,7 +169,7 @@ describe('decideReferral', () => {
         plan: 'complete',
         amountTotalPence: 59900,
       }),
-    ).toEqual({ status: 'pending', voidReason: null, rewardAmount: 10000 })
+    ).toMatchObject({ status: 'pending', voidReason: null, rewardAmount: 10000 })
   })
 
   it('records a full-price self_study purchase as pending, £50', () => {
@@ -183,7 +180,7 @@ describe('decideReferral', () => {
         plan: 'self_study',
         amountTotalPence: 19900,
       }),
-    ).toEqual({ status: 'pending', voidReason: null, rewardAmount: 5000 })
+    ).toMatchObject({ status: 'pending', voidReason: null, rewardAmount: 5000 })
   })
 
   it('voids a self-referral regardless of case/whitespace, reward still recorded', () => {
@@ -194,7 +191,7 @@ describe('decideReferral', () => {
         plan: 'complete',
         amountTotalPence: 59900,
       }),
-    ).toEqual({ status: 'void', voidReason: 'self_referral', rewardAmount: 10000 })
+    ).toMatchObject({ status: 'void', voidReason: 'self_referral', rewardAmount: 10000 })
   })
 
   it('prefers self_referral over below_min_spend when both apply (£0 self-referral)', () => {
@@ -205,7 +202,7 @@ describe('decideReferral', () => {
         plan: 'complete',
         amountTotalPence: 0,
       }),
-    ).toEqual({ status: 'void', voidReason: 'self_referral', rewardAmount: 10000 })
+    ).toMatchObject({ status: 'void', voidReason: 'self_referral', rewardAmount: 10000 })
   })
 
   it('voids a £0 complete purchase as below_min_spend, reward still 10000', () => {
@@ -216,7 +213,7 @@ describe('decideReferral', () => {
         plan: 'complete',
         amountTotalPence: 0,
       }),
-    ).toEqual({ status: 'void', voidReason: 'below_min_spend', rewardAmount: 10000 })
+    ).toMatchObject({ status: 'void', voidReason: 'below_min_spend', rewardAmount: 10000 })
   })
 
   it('applies the complete floor at the boundary (29950 pending, 29949 void)', () => {
@@ -225,12 +222,12 @@ describe('decideReferral', () => {
       refereeEmail: 'buyer@example.com',
       plan: 'complete',
     }
-    expect(decideReferral({ ...base, amountTotalPence: 29950 })).toEqual({
+    expect(decideReferral({ ...base, amountTotalPence: 29950 })).toMatchObject({
       status: 'pending',
       voidReason: null,
       rewardAmount: 10000,
     })
-    expect(decideReferral({ ...base, amountTotalPence: 29949 })).toEqual({
+    expect(decideReferral({ ...base, amountTotalPence: 29949 })).toMatchObject({
       status: 'void',
       voidReason: 'below_min_spend',
       rewardAmount: 10000,
@@ -243,12 +240,12 @@ describe('decideReferral', () => {
       refereeEmail: 'buyer@example.com',
       plan: 'self_study',
     }
-    expect(decideReferral({ ...base, amountTotalPence: 14950 })).toEqual({
+    expect(decideReferral({ ...base, amountTotalPence: 14950 })).toMatchObject({
       status: 'pending',
       voidReason: null,
       rewardAmount: 5000,
     })
-    expect(decideReferral({ ...base, amountTotalPence: 14949 })).toEqual({
+    expect(decideReferral({ ...base, amountTotalPence: 14949 })).toMatchObject({
       status: 'void',
       voidReason: 'below_min_spend',
       rewardAmount: 5000,
@@ -264,7 +261,7 @@ describe('decideReferral', () => {
           plan,
           amountTotalPence: 0,
         }),
-      ).toEqual({ status: 'pending', voidReason: null, rewardAmount: 0 })
+      ).toMatchObject({ status: 'pending', voidReason: null, rewardAmount: 0 })
     }
   })
 })
@@ -279,7 +276,7 @@ describe('decideReferral — reward override', () => {
         amountTotalPence: 19900,
         rewardOverridePence: 5000,
       }),
-    ).toEqual({ status: 'pending', voidReason: null, rewardAmount: 5000 })
+    ).toMatchObject({ status: 'pending', voidReason: null, rewardAmount: 5000 })
   })
 
   it('still voids below_min_spend on the plan floor, recording the override as reward', () => {
@@ -293,7 +290,7 @@ describe('decideReferral — reward override', () => {
         amountTotalPence: 100,
         rewardOverridePence: 5000,
       }),
-    ).toEqual({ status: 'void', voidReason: 'below_min_spend', rewardAmount: 5000 })
+    ).toMatchObject({ status: 'void', voidReason: 'below_min_spend', rewardAmount: 5000 })
   })
 
   it('still voids a self-referral even with an override (override recorded)', () => {
@@ -305,7 +302,7 @@ describe('decideReferral — reward override', () => {
         amountTotalPence: 59900,
         rewardOverridePence: 5000,
       }),
-    ).toEqual({ status: 'void', voidReason: 'self_referral', rewardAmount: 5000 })
+    ).toMatchObject({ status: 'void', voidReason: 'self_referral', rewardAmount: 5000 })
   })
 
   it('accepts a £0 override (flat-free affiliate) as the reward', () => {
@@ -317,7 +314,7 @@ describe('decideReferral — reward override', () => {
         amountTotalPence: 59900,
         rewardOverridePence: 0,
       }),
-    ).toEqual({ status: 'pending', voidReason: null, rewardAmount: 0 })
+    ).toMatchObject({ status: 'pending', voidReason: null, rewardAmount: 0 })
   })
 
   it('falls back to the standard plan tier when the override is null or omitted', () => {
@@ -329,7 +326,7 @@ describe('decideReferral — reward override', () => {
         amountTotalPence: 59900,
         rewardOverridePence: null,
       }),
-    ).toEqual({ status: 'pending', voidReason: null, rewardAmount: 10000 })
+    ).toMatchObject({ status: 'pending', voidReason: null, rewardAmount: 10000 })
     expect(
       decideReferral({
         ownerEmail: 'owner@example.com',
@@ -337,7 +334,7 @@ describe('decideReferral — reward override', () => {
         plan: 'complete',
         amountTotalPence: 59900,
       }),
-    ).toEqual({ status: 'pending', voidReason: null, rewardAmount: 10000 })
+    ).toMatchObject({ status: 'pending', voidReason: null, rewardAmount: 10000 })
   })
 })
 
@@ -350,7 +347,7 @@ describe('monthly referrals', () => {
         plan: 'self_study_monthly',
         amountTotalPence: 12900,
       }),
-    ).toEqual({ status: 'pending', voidReason: null, rewardAmount: 5000 })
+    ).toMatchObject({ status: 'pending', voidReason: null, rewardAmount: 5000 })
   })
 
   it('records a referred monthly first month (£79) as pending', () => {
@@ -361,7 +358,7 @@ describe('monthly referrals', () => {
         plan: 'self_study_monthly',
         amountTotalPence: 7900,
       }),
-    ).toEqual({ status: 'pending', voidReason: null, rewardAmount: 5000 })
+    ).toMatchObject({ status: 'pending', voidReason: null, rewardAmount: 5000 })
   })
 
   it('voids a monthly signup below half a month', () => {
@@ -372,7 +369,7 @@ describe('monthly referrals', () => {
         plan: 'self_study_monthly',
         amountTotalPence: 6449,
       }),
-    ).toEqual({ status: 'void', voidReason: 'below_min_spend', rewardAmount: 5000 })
+    ).toMatchObject({ status: 'void', voidReason: 'below_min_spend', rewardAmount: 5000 })
   })
 
   it('voids a self-referred monthly signup', () => {
@@ -383,7 +380,7 @@ describe('monthly referrals', () => {
         plan: 'self_study_monthly',
         amountTotalPence: 12900,
       }),
-    ).toEqual({ status: 'void', voidReason: 'self_referral', rewardAmount: 5000 })
+    ).toMatchObject({ status: 'void', voidReason: 'self_referral', rewardAmount: 5000 })
   })
 
   it('keeps a monthly floor a referred (£79) first month still clears', () => {
@@ -396,6 +393,27 @@ describe('monthly referrals', () => {
     expect(resolveReward('self_study_monthly')).toBe(5000)
     expect(resolveReward('self_study_monthly', 10000)).toBe(10000)
     expect(resolveReward('self_study_monthly', null)).toBe(5000)
+  })
+})
+
+describe('decideReferral — the referee side', () => {
+  const base = { ownerEmail: 'owner@example.com', refereeEmail: 'friend@example.com' }
+
+  it('owes the buyer their plan tier on a good referral', () => {
+    expect(decideReferral({ ...base, plan: 'complete', amountTotalPence: 59900 }).refereeRewardAmount).toBe(10000)
+    expect(decideReferral({ ...base, plan: 'self_study', amountTotalPence: 29900 }).refereeRewardAmount).toBe(5000)
+    expect(decideReferral({ ...base, plan: 'self_study_monthly', amountTotalPence: 12900 }).refereeRewardAmount).toBe(5000)
+  })
+
+  it('follows the plan tier even when the SHARER has a negotiated override', () => {
+    // An affiliate's rate is their own; it must not inflate what the buyer is owed.
+    const d = decideReferral({ ...base, plan: 'complete', amountTotalPence: 59900, rewardOverridePence: 25000 })
+    expect(d.rewardAmount).toBe(25000)
+    expect(d.refereeRewardAmount).toBe(10000)
+  })
+
+  it('owes the buyer nothing on a non-rewardable plan', () => {
+    expect(decideReferral({ ...base, plan: 'intensive', amountTotalPence: 299900 }).refereeRewardAmount).toBe(0)
   })
 })
 
@@ -523,7 +541,7 @@ describe('min-spend override (test rig)', () => {
 
   it('lets a £1 purchase qualify when the floor is overridden to 1p', () => {
     const decision = decideReferral({ ...base, minSpendOverridePence: 1 })
-    expect(decision).toEqual({ status: 'pending', voidReason: null, rewardAmount: 10000 })
+    expect(decision).toMatchObject({ status: 'pending', voidReason: null, rewardAmount: 10000 })
   })
 
   it('self-referral still beats the override', () => {
