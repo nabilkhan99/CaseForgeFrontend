@@ -15,4 +15,4 @@ alter table public.preorders add column if not exists set_password_sent_at times
 comment on column public.preorders.provisioned_at is
   'When the auth user for this buyer was created (or found to already exist) by the Stripe webhook.';
 comment on column public.preorders.set_password_sent_at is
-  'When the set-password email was successfully sent. Null = the buyer still owes an email; provisioning retries on it.';
+  'When the set-password obligation was closed: the email was sent, or the buyer already had an account and was owed none. Null = the buyer still owes an email; provisioning retries on it.';

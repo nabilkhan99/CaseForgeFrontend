@@ -50,7 +50,7 @@ describe('provisionAccountForPurchase', () => {
       user_metadata: { full_name: 'Jane Doe' },
     })
     expect(mocks.generateLink).toHaveBeenCalledWith({ type: 'recovery', email: 'buyer@x.com' })
-    expect(result).toEqual({ created: true, emailSent: true, error: undefined })
+    expect(result).toEqual({ created: true, alreadyExisted: false, emailSent: true, error: undefined })
   })
 
   it('lowercases and trims the buying email before creating the account', async () => {
@@ -84,6 +84,9 @@ describe('provisionAccountForPurchase', () => {
     // ...but says so, so the caller can log it. A silent skip here is exactly
     // how a stranded buyer stayed invisible.
     expect(result.error).toBe('account_already_exists')
+    // And says it in a form the caller can act on: this buyer owes no email, so
+    // provisioning stamps them terminal instead of retrying for three days.
+    expect(result.alreadyExisted).toBe(true)
   })
 
   it('recognises the legacy already-registered error shape (no code)', async () => {
@@ -96,7 +99,7 @@ describe('provisionAccountForPurchase', () => {
 
     expect(mocks.generateLink).not.toHaveBeenCalled()
     expect(mocks.sendSetPasswordEmail).not.toHaveBeenCalled()
-    expect(result).toEqual({ created: false, emailSent: false, error: 'account_already_exists' })
+    expect(result).toEqual({ created: false, alreadyExisted: true, emailSent: false, error: 'account_already_exists' })
   })
 
   it('reports an unrelated createUser failure and sends nothing', async () => {
@@ -104,7 +107,7 @@ describe('provisionAccountForPurchase', () => {
 
     const result = await provisionAccountForPurchase({ email: 'buyer@x.com' })
 
-    expect(result).toEqual({ created: false, emailSent: false, error: 'fetch failed' })
+    expect(result).toEqual({ created: false, alreadyExisted: false, emailSent: false, error: 'fetch failed' })
     expect(mocks.sendSetPasswordEmail).not.toHaveBeenCalled()
   })
 
@@ -113,7 +116,7 @@ describe('provisionAccountForPurchase', () => {
 
     const result = await provisionAccountForPurchase({ email: 'buyer@x.com' })
 
-    expect(result).toEqual({ created: true, emailSent: false, error: 'link boom' })
+    expect(result).toEqual({ created: true, alreadyExisted: false, emailSent: false, error: 'link boom' })
     expect(mocks.sendSetPasswordEmail).not.toHaveBeenCalled()
   })
 
@@ -122,7 +125,7 @@ describe('provisionAccountForPurchase', () => {
 
     const result = await provisionAccountForPurchase({ email: 'buyer@x.com' })
 
-    expect(result).toEqual({ created: true, emailSent: false, error: 'no token in link' })
+    expect(result).toEqual({ created: true, alreadyExisted: false, emailSent: false, error: 'no token in link' })
   })
 
   it('reports a Brevo send failure', async () => {
@@ -130,7 +133,7 @@ describe('provisionAccountForPurchase', () => {
 
     const result = await provisionAccountForPurchase({ email: 'buyer@x.com' })
 
-    expect(result).toEqual({ created: true, emailSent: false, error: 'brevo_error' })
+    expect(result).toEqual({ created: true, alreadyExisted: false, emailSent: false, error: 'brevo_error' })
   })
 
   it('emails exactly once when a second call races in behind the first', async () => {

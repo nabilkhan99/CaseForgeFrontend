@@ -15,7 +15,7 @@ import {
 import { sendReferralEmail } from '@/lib/email/referralEmail';
 import { sendPurchaseEmail } from '@/lib/email/purchaseEmail';
 import { pushPreorderContactToBrevo } from '@/lib/marketing/preorderContact';
-import { provisionAccountForPurchase, sendSetPasswordLink } from '@/lib/auth/provisioning';
+import { provisionBuyerAccount } from '@/lib/auth/provisionBuyer';
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -39,9 +39,10 @@ type SupabaseAdmin = ReturnType<typeof getSupabaseAdmin>;
  * `customer.subscription.deleted` -> mark the monthly order canceled.
  *
  * `customer.subscription.updated` -> mark it canceled too when the subscription
- * has reached a dead status. Dunning can leave a subscription `unpaid` (or
- * `incomplete_expired`) forever without ever emitting `deleted`, which would
- * otherwise leave a failed card holding permanent access.
+ * has reached a dead status, and back to paid when a dead one recovers. Dunning
+ * can leave a subscription `unpaid` forever without ever emitting `deleted`,
+ * which would otherwise leave a failed card holding permanent access — and
+ * paying that invoice revives it, which must not leave the buyer locked out.
  *
  * Ops: the Stripe webhook endpoint must have `charge.refunded`,
  * `customer.subscription.deleted` AND `customer.subscription.updated` enabled.
@@ -286,84 +287,6 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
   return NextResponse.json({ received: true, recorded: !insertError, preorderId });
 }
 
-interface ProvisionBuyerArgs {
-  preorderId: string;
-  email: string;
-  name: string | null;
-  sessionId: string;
-}
-
-/**
- * Create the buyer's auth account and send the set-password email, then stamp
- * what happened on the preorder row.
- *
- * Driven off `set_password_sent_at is null` on the ROW rather than "did this
- * webhook call insert it", so a Brevo failure is recoverable: Stripe's retry
- * takes the 23505 duplicate path, reads no send recorded, and tries again.
- * `provisioned_at` is stamped only when we actually created the user, so the
- * second attempt for that buyer resends the link instead of bouncing off
- * "account already exists" — and a buyer who already had an account before this
- * purchase is never emailed a set-password link they didn't ask for.
- *
- * The stamps are read here, in their own query, rather than off the insert:
- * they arrive in a later migration than the rest of this table, and a deploy
- * that landed before it must degrade to "no provisioning" rather than failing
- * the whole purchase record. Best-effort throughout for the same reason — a
- * provisioning failure must never fail the webhook, or Stripe would re-process
- * a pre-order that was recorded fine.
- */
-async function provisionBuyerAccount(
-  supabase: SupabaseAdmin,
-  args: ProvisionBuyerArgs,
-): Promise<void> {
-  const { preorderId, email, name, sessionId } = args;
-
-  const { data: row, error: readError } = await supabase
-    .from('preorders')
-    .select('provisioned_at, set_password_sent_at')
-    .eq('id', preorderId)
-    .maybeSingle();
-
-  if (readError) {
-    console.error('[stripe-webhook] provisioning state read failed — skipping', {
-      sessionId,
-      preorderId,
-      error: readError,
-    });
-    return;
-  }
-  if (row?.set_password_sent_at) return; // already emailed; nothing owed
-
-  const stamps: { provisioned_at?: string; set_password_sent_at?: string } = {};
-  const now = new Date().toISOString();
-
-  try {
-    if (row?.provisioned_at) {
-      // The account exists from a previous attempt; only the email is owed.
-      const result = await sendSetPasswordLink({ email, fullName: name });
-      if (result.sent) stamps.set_password_sent_at = now;
-      else console.error('[stripe-webhook] set-password resend failed', { sessionId, preorderId, result });
-    } else {
-      const result = await provisionAccountForPurchase({ email, fullName: name });
-      if (result.created) stamps.provisioned_at = now;
-      if (result.emailSent) stamps.set_password_sent_at = now;
-      if (result.error) {
-        console.error('[stripe-webhook] account provisioning failed', { sessionId, preorderId, result });
-      }
-    }
-  } catch (error: unknown) {
-    console.error('[stripe-webhook] account provisioning threw', { sessionId, preorderId, error });
-  }
-
-  if (Object.keys(stamps).length === 0) return;
-  const { error: stampError } = await supabase.from('preorders').update(stamps).eq('id', preorderId);
-  if (stampError) {
-    // The email went out; failing to stamp risks one duplicate on the next
-    // retry, which is far less harmful than never provisioning at all.
-    console.error('[stripe-webhook] provisioning stamp failed', { sessionId, preorderId, error: stampError });
-  }
-}
-
 /**
  * Subscription ended (cancelled by the buyer, or after failed payments).
  *
@@ -393,9 +316,11 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
 }
 
 /**
- * Statuses a subscription never comes back from. `past_due` is deliberately NOT
- * here — Stripe is still retrying the card and the buyer still has access, which
- * is the behaviour we want during dunning.
+ * Subscription is dead for our purposes. `past_due` is deliberately NOT here —
+ * Stripe is still retrying the card and the buyer still has access, which is
+ * the behaviour we want during dunning.
+ *
+ * `unpaid` is here but is NOT terminal at Stripe's end (see below).
  */
 const DEAD_SUBSCRIPTION_STATUSES: ReadonlySet<string> = new Set([
   'canceled',
@@ -403,20 +328,65 @@ const DEAD_SUBSCRIPTION_STATUSES: ReadonlySet<string> = new Set([
   'incomplete_expired',
 ]);
 
+/** Subscription is billing normally: the customer should have access. */
+const LIVE_SUBSCRIPTION_STATUSES: ReadonlySet<string> = new Set(['active', 'trialing']);
+
 /**
- * Subscription changed. Only terminal statuses matter here: depending on the
- * dunning settings, a subscription whose card keeps failing can end up `unpaid`
- * and simply stay there — `customer.subscription.deleted` never fires, and the
- * row would keep its `paid` status (and therefore full access) forever.
+ * A dead subscription came back to life.
  *
- * Same shape and idempotency as handleSubscriptionDeleted: `paid` -> `canceled`
- * for the matching row, a no-op once it has already been flipped.
+ * `unpaid` is a dead end for us but not for Stripe: paying the outstanding
+ * invoice moves the subscription back to `active` and emits an `updated` event.
+ * Without this arm nothing in the codebase ever writes `paid` onto a preorder
+ * row again after the original insert, so a customer who settles their bill
+ * keeps being charged monthly while their row stays `canceled` and their
+ * entitlement stays read-only — permanently, with no self-service way back.
+ *
+ * Idempotent, and narrow on purpose: only rows currently `canceled` are
+ * touched, so this can never resurrect a `refunded` purchase or re-stamp a row
+ * that is already `paid`.
+ */
+async function handleSubscriptionRecovered(subscription: Stripe.Subscription) {
+  const supabase = getSupabaseAdmin();
+  const { data: updated, error } = await supabase
+    .from('preorders')
+    .update({ status: 'paid' })
+    .eq('stripe_subscription_id', subscription.id)
+    .eq('status', 'canceled')
+    .select('id');
+
+  if (error) {
+    console.error('[stripe-webhook] subscription recovery update failed', {
+      subscriptionId: subscription.id,
+      error,
+    });
+    return NextResponse.json({ error: 'Failed to process recovery' }, { status: 500 });
+  }
+
+  return NextResponse.json({ received: true, recovered: updated?.length ?? 0 });
+}
+
+/**
+ * Subscription changed. Two transitions matter, in both directions.
+ *
+ * Downwards: depending on the dunning settings, a subscription whose card keeps
+ * failing can end up `unpaid` and simply stay there — `customer.subscription
+ * .deleted` never fires, and the row would keep its `paid` status (and
+ * therefore full access) forever.
+ *
+ * Upwards: that same `unpaid` subscription becomes `active` again the moment
+ * the invoice is paid, and the row has to follow it back.
+ *
+ * Everything in between (`past_due`, `incomplete`) is left alone: the buyer's
+ * access is unchanged while Stripe works it out.
  */
 async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
-  if (!DEAD_SUBSCRIPTION_STATUSES.has(subscription.status)) {
-    return NextResponse.json({ received: true, ignored: subscription.status });
+  if (DEAD_SUBSCRIPTION_STATUSES.has(subscription.status)) {
+    return handleSubscriptionDeleted(subscription);
   }
-  return handleSubscriptionDeleted(subscription);
+  if (LIVE_SUBSCRIPTION_STATUSES.has(subscription.status)) {
+    return handleSubscriptionRecovered(subscription);
+  }
+  return NextResponse.json({ received: true, ignored: subscription.status });
 }
 
 interface RecordReferralArgs {

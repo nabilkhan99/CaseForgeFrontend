@@ -25,7 +25,18 @@ import { SITE_URL } from '@/lib/seo/site';
  */
 
 export interface ProvisionResult {
+  /** We created the auth user on this call. */
   created: boolean;
+  /**
+   * The auth user was already there, so nothing was created and nothing sent —
+   * but the buyer is NOT stranded and owes no email.
+   *
+   * Distinct from `created` because the caller stamps on it: without a flag to
+   * hang that on, a repeat buyer left both stamps NULL forever, every Stripe
+   * retry for three days re-attempted `createUser`, and no ops query could tell
+   * "already had an account" from "Brevo ate their link".
+   */
+  alreadyExisted: boolean;
   emailSent: boolean;
   error?: string;
 }
@@ -95,11 +106,16 @@ export async function provisionAccountForPurchase(args: {
       // An existing account keeps its password, so we deliberately send nothing.
       // Still an error: the caller has recorded no send for this buyer, and a
       // silent skip is exactly how the stranded-buyer case stayed invisible.
-      return { created: false, emailSent: false, error: 'account_already_exists' };
+      return {
+        created: false,
+        alreadyExisted: true,
+        emailSent: false,
+        error: 'account_already_exists',
+      };
     }
-    return { created: false, emailSent: false, error: createError.message };
+    return { created: false, alreadyExisted: false, emailSent: false, error: createError.message };
   }
 
   const result = await sendSetPasswordLink({ email, fullName: args.fullName });
-  return { created: true, emailSent: result.sent, error: result.error };
+  return { created: true, alreadyExisted: false, emailSent: result.sent, error: result.error };
 }
