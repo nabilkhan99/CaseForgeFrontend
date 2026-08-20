@@ -7,31 +7,15 @@ import { motion } from 'framer-motion';
 import AuthLayout from '@/components/auth/AuthLayout';
 import AuthCard from '@/components/auth/AuthCard';
 import PrimaryButton from '@/components/ui/PrimaryButton';
-
-interface SubscriptionData {
-  plan: string;
-  expires_at: string;
-  days_remaining: number;
-}
-
-const PLAN_NAMES: Record<string, string> = {
-  sprint: 'The Sprint',
-  standard: 'The Standard',
-  mastery: 'The Mastery',
-};
-
-const PLAN_DURATIONS: Record<string, string> = {
-  sprint: '30 days',
-  standard: '90 days',
-  mastery: '180 days',
-};
+import type { SubscriptionResponse } from '@/app/api/subscription/route';
 
 function CheckoutSuccessContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id');
 
-  const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
+  const [access, setAccess] = useState<SubscriptionResponse | null>(null);
   const [timedOut, setTimedOut] = useState(false);
+  const [needsPassword, setNeedsPassword] = useState(false);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -43,9 +27,21 @@ function CheckoutSuccessContent() {
       attempts++;
       try {
         const res = await fetch('/api/subscription');
+        // 401 is the *normal* post-purchase case, not an error: accounts are
+        // provisioned by emailed set-password link, so the buyer who just paid
+        // has no session yet. Polling can never succeed — stop, and tell them
+        // to go and open the email instead of spinning at them for 30 seconds
+        // and then pointing at a dashboard they cannot sign in to.
+        if (res.status === 401) {
+          clearInterval(poll);
+          setNeedsPassword(true);
+          return;
+        }
         const data = await res.json();
-        if (data.subscription) {
-          setSubscription(data.subscription);
+        // Wait for the purchase row the webhook writes, not just any answer:
+        // a signed-in buyer polls here while provisioning catches up.
+        if (data?.state === 'active' && data.plan) {
+          setAccess(data as SubscriptionResponse);
           clearInterval(poll);
         }
       } catch {
@@ -81,8 +77,36 @@ function CheckoutSuccessContent() {
     );
   }
 
+  // Signed out — the ordinary path. Their account exists; the way into it is
+  // the email, so that is the only instruction on this card. Deliberately no
+  // dashboard CTA: it would bounce them to a sign-in they have no password for.
+  if (needsPassword && !access) {
+    return (
+      <AuthLayout>
+        <AuthCard
+          icon={
+            <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+            </svg>
+          }
+          title="Payment Successful"
+          subtitle="Check your email to set your password — that link is how you open your new account."
+        >
+          <p className="text-[13px] text-muted text-center leading-relaxed">
+            The email can take a minute to arrive. If it isn&apos;t there, check your
+            spam folder, then email us at{' '}
+            <a href="mailto:hello@fourteenfisherman.com" className="text-primary font-medium hover:underline">
+              hello@fourteenfisherman.com
+            </a>{' '}
+            and we&apos;ll sort it out.
+          </p>
+        </AuthCard>
+      </AuthLayout>
+    );
+  }
+
   // Still polling
-  if (!subscription && !timedOut) {
+  if (!access && !timedOut) {
     return (
       <AuthLayout>
         <AuthCard
@@ -108,7 +132,7 @@ function CheckoutSuccessContent() {
   }
 
   // Timed out
-  if (timedOut && !subscription) {
+  if (timedOut && !access) {
     return (
       <AuthLayout>
         <AuthCard
@@ -130,13 +154,14 @@ function CheckoutSuccessContent() {
   }
 
   // Success
-  const planName = PLAN_NAMES[subscription!.plan] || subscription!.plan;
-  const planDuration = PLAN_DURATIONS[subscription!.plan] || '';
-  const expiryDate = new Date(subscription!.expires_at).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+  const planName = access!.planName || access!.plan;
+  const expiryDate = access!.expiresAt
+    ? new Date(access!.expiresAt).toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      })
+    : null;
 
   return (
     <AuthLayout>
@@ -156,13 +181,17 @@ function CheckoutSuccessContent() {
               <span className="font-semibold text-heading">{planName}</span>
             </div>
             <div className="flex justify-between text-[13px]">
-              <span className="text-muted">Duration</span>
-              <span className="font-semibold text-heading">{planDuration} unlimited access</span>
+              <span className="text-muted">Billing</span>
+              <span className="font-semibold text-heading">
+                {access!.isMonthly ? 'Monthly · cancel any time' : 'One-off · unlimited access'}
+              </span>
             </div>
-            <div className="flex justify-between text-[13px]">
-              <span className="text-muted">Expires</span>
-              <span className="font-semibold text-heading">{expiryDate}</span>
-            </div>
+            {expiryDate && (
+              <div className="flex justify-between text-[13px]">
+                <span className="text-muted">Expires</span>
+                <span className="font-semibold text-heading">{expiryDate}</span>
+              </div>
+            )}
           </div>
 
           <Link href="/dashboard" className="block">

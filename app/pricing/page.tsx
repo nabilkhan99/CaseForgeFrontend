@@ -1,8 +1,9 @@
 'use client';
 
+import { Suspense } from 'react';
 import LandingNavbar from '@/components/landing/LandingNavbar';
 import LandingFooter from '@/components/landing/LandingFooter';
-import { Faq, GuaranteeCard, NhsBanner } from '@/components/landing/v5';
+import { AccessNotice, Faq, GuaranteeCard, NhsBanner } from '@/components/landing/v5';
 import PricingTable from '@/components/landing/v5/PricingTable';
 import { ACCESS_OPENS_LABEL } from '@/lib/commerce/plans';
 
@@ -26,6 +27,11 @@ export default function PricingPage() {
             {ACCESS_OPENS_LABEL}. Your coaching day runs on the date you choose.
           </p>
         </header>
+        {/* Renders nothing without a ?renew/?upgrade param, so it costs the
+            marketing page no vertical rhythm when nobody was redirected. */}
+        <Suspense fallback={null}>
+          <AccessNotice />
+        </Suspense>
         <NhsBanner />
         <PricingTable />
         <GuaranteeCard />

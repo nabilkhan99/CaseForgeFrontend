@@ -87,6 +87,18 @@ function ReadingPhaseContent() {
         body: JSON.stringify({ sessionId, stationId }),
       });
 
+      // No live plan (the middleware only checks on navigation, so it can lapse
+      // while this page is open) — send them where the middleware would have,
+      // rather than surfacing the API's error code as a message. The 403 body
+      // carries the entitlement state so someone who never bought is told they
+      // need a plan, not that their access "has ended".
+      if (res.status === 403) {
+        const body = await res.json().catch(() => null);
+        const renewing = body?.state === 'read_only';
+        router.push(renewing ? '/pricing?renew=true' : '/pricing?upgrade=true');
+        return;
+      }
+
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || 'Failed to create session');

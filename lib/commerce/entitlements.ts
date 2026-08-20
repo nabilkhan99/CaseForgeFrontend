@@ -1,4 +1,4 @@
-import { ACCESS_OPENS, PLANS } from './plans'
+import { ACCESS_OPENS, PLANS, isSubscriptionPlan } from './plans'
 
 /**
  * What a user's purchases entitle them to, and until when.
@@ -58,9 +58,13 @@ export const NO_ENTITLEMENT: Entitlement = Object.freeze({ state: 'none', hasLec
 
 const KNOWN_PLANS: ReadonlySet<string> = new Set(PLANS.map((p) => p.key))
 
-function isMonthly(plan: string): boolean {
-  return plan === 'self_study_monthly'
-}
+/**
+ * One definition of "monthly", owned by the plan catalogue's `billing` shape.
+ * Hardcoding `plan === 'self_study_monthly'` here would mean a second rolling
+ * plan silently became a 90-day one-off: active for 90 days from purchase
+ * whether or not the subscription was still alive.
+ */
+export const isMonthlyPlan = isSubscriptionPlan
 
 /** Same day-of-month `months` later, clamped to the last day of a shorter month. */
 function addCalendarMonthsUtc(date: Date, months: number): Date {
@@ -112,7 +116,7 @@ function entitlementOf(row: EntitlementRow, now: Date): Entitlement | null {
     return null
   }
 
-  if (isMonthly(row.plan)) {
+  if (isMonthlyPlan(row.plan)) {
     // NOTE: monthly returns here, BEFORE `accessWindow` — so the 1-Sept launch
     // floor applies to one-off plans only. A self_study_monthly bought on 20 Aug
     // is active immediately; a self_study bought the same day is `none` until
@@ -227,4 +231,35 @@ export function computeEntitlement(rows: EntitlementRow[], now: Date = new Date(
       state: 'none',
       hasLectures: false,
     })
+}
+
+export interface AccessContext {
+  /** Signed-in user's email — purchases and the admin allowlist both key off it. */
+  email?: string | null
+  /** Staged deployment (develop preview, local dev): testers count as entitled. */
+  staged: boolean
+  /** Normalized ADMIN_EMAILS allowlist — admins are never locked out of the product. */
+  admins: Set<string>
+  now?: Date
+}
+
+export interface AccessDecision {
+  entitlement: Entitlement
+  /** Access waived rather than bought: staged deployment or admin allowlist. */
+  bypass: boolean
+  /** May start a consultation. Read-only surfaces (history, feedback) ignore this. */
+  allowed: boolean
+}
+
+/**
+ * The one gate the page middleware and the server API chokepoints share, so a
+ * route can never disagree with the middleware about who may practise.
+ *
+ * Pure by construction: env reading stays with the callers, which run in
+ * different runtimes (edge middleware vs. node route handlers).
+ */
+export function decideAccess(rows: EntitlementRow[], ctx: AccessContext): AccessDecision {
+  const entitlement = computeEntitlement(rows, ctx.now ?? new Date())
+  const bypass = ctx.staged || ctx.admins.has((ctx.email ?? '').trim().toLowerCase())
+  return { entitlement, bypass, allowed: entitlement.state === 'active' || bypass }
 }
