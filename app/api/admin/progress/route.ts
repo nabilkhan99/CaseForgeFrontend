@@ -19,8 +19,12 @@ import { reduceStationPassMap, type StationAttemptRow } from '@/lib/supabase/que
 
 /** Users returned. A founder scanning progress does not page; they scan. */
 const MAX_USERS = 500;
-/** Completed sessions read. Comfortably above the current bank (~250) and
- *  bounded so one runaway account cannot blow the response up. */
+/**
+ * Completed sessions read, newest first, so one runaway account cannot blow the
+ * response up. Completed sessions grow without bound (unlike the ~250-station
+ * bank), so hitting this cap silently drops the OLDEST attempts — a user's early
+ * pass would move to "Attempted, not passed". Report it rather than hide it.
+ */
 const MAX_SESSIONS = 5000;
 
 export interface AdminUserProgress {
@@ -124,6 +128,10 @@ export async function GET() {
   // arbitrary slice.
   progress.sort((a, b) => b.passed - a.passed || b.attempted - a.attempted);
   const capped = progress.slice(0, MAX_USERS);
+  // Two different truncations with two different consequences: a user cap hides
+  // whole rows, a session cap silently understates the rows that are shown.
+  const usersTruncated = progress.length > MAX_USERS;
+  const sessionsTruncated = sessions.length >= MAX_SESSIONS;
 
   // ── Who each user is ──
   // Secondary context: a failure here degrades to a null identity rather than
@@ -153,6 +161,9 @@ export async function GET() {
       fullName: profileById.get(p.userId)?.fullName ?? null,
     })),
     totalStations: totalStations ?? 0,
-    truncated: progress.length > MAX_USERS,
+    truncated: usersTruncated || sessionsTruncated,
+    usersTruncated,
+    sessionsTruncated,
+    sessionLimit: MAX_SESSIONS,
   });
 }

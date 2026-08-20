@@ -36,7 +36,9 @@ function fmtTimestamp(date: Date): string {
 export default function ProgressTable() {
   const [progress, setProgress] = useState<AdminUserProgress[]>([]);
   const [totalStations, setTotalStations] = useState(0);
-  const [truncated, setTruncated] = useState(false);
+  const [usersTruncated, setUsersTruncated] = useState(false);
+  const [sessionsTruncated, setSessionsTruncated] = useState(false);
+  const [sessionLimit, setSessionLimit] = useState(0);
   const [sort, setSort] = useState<SortKey>('passed');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,7 +59,9 @@ export default function ProgressTable() {
       const data = await res.json();
       setProgress(data.progress ?? []);
       setTotalStations(data.totalStations ?? 0);
-      setTruncated(Boolean(data.truncated));
+      setUsersTruncated(Boolean(data.usersTruncated));
+      setSessionsTruncated(Boolean(data.sessionsTruncated));
+      setSessionLimit(data.sessionLimit ?? 0);
       setUpdatedAt(new Date());
     } catch {
       setError('Failed to load progress.');
@@ -265,9 +269,19 @@ export default function ProgressTable() {
                 );
               })}
 
-              {truncated && (
+              {usersTruncated && (
                 <p className="mt-4 text-xs text-muted">
                   Showing the {rows.length} most-progressed users.
+                </p>
+              )}
+
+              {/* Distinct from the user cap: this one understates the rows that
+                  ARE shown, so it has to read as a warning, not a footnote. */}
+              {sessionsTruncated && (
+                <p className="mt-2 text-xs font-semibold text-primary">
+                  Only the most recent {sessionLimit.toLocaleString('en-GB')} completed sessions
+                  were read — older attempts are missing, so pass counts here are a floor, not a
+                  total.
                 </p>
               )}
             </div>
@@ -299,8 +313,10 @@ function StationList({
         <p className="mt-2 text-sm text-muted">{empty}</p>
       ) : (
         <ul className="mt-2 space-y-1">
-          {stations.map((s) => (
-            <li key={s} className="text-sm text-body">
+          {/* Titles are not unique — two stations can share one — so the index
+              disambiguates. The list is a stable, sorted snapshot. */}
+          {stations.map((s, i) => (
+            <li key={`${s}-${i}`} className="text-sm text-body">
               {s}
             </li>
           ))}
