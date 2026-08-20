@@ -140,6 +140,8 @@ export interface ConsultationFeedback {
 
 /** Verdict band helpers shared by the feedback UI. */
 export const PASSING_VERDICTS: Verdict[] = ['Pass', 'Bare Pass'];
+/** The SCA weighted total every marked consultation is scored out of. */
+export const MAX_WEIGHTED_SCORE = 10.5;
 export const GRADE_LABELS: Record<Grade, string> = {
   CP: 'Clear Pass',
   P: 'Pass',
