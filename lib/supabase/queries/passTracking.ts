@@ -21,6 +21,7 @@
  */
 
 import { createClient } from '@/lib/supabase/client';
+import { visibleStationStates } from '@/lib/stations/visibility';
 import { PASSING_VERDICTS, type Verdict } from '@/lib/clinical-master/types';
 
 /**
@@ -32,6 +33,12 @@ export interface StationAttemptRow {
   station_id: string | null;
   verdict: string | null;
   weighted_score: number | string | null;
+  /**
+   * The denominator this attempt was marked out of. Optional because callers
+   * that only need pass counts have no reason to select it; every score
+   * display falls back to MAX_WEIGHTED_SCORE when it is absent.
+   */
+  max_score?: number | string | null;
 }
 
 /** What a user has achieved at one station, across all their attempts. */
@@ -40,8 +47,15 @@ export interface StationPassState {
   passed: boolean;
   /** Best verdict achieved across scored attempts; null if none were scored. */
   bestVerdict: Verdict | null;
-  /** Highest weighted score across scored attempts; null if none were scored. */
+  /**
+   * Score of the attempt behind `bestVerdict` — NOT an independent maximum.
+   * The two are carried together so the UI can never render one attempt's
+   * verdict beside another attempt's score ("PASSED · best 6.0" from a Fail).
+   * Within the winning band the higher score wins.
+   */
   bestScore: number | null;
+  /** Denominator that same attempt was marked out of; null when unknown. */
+  bestMaxScore: number | null;
   /** Completed attempts, including unscored ones. */
   attempts: number;
 }
@@ -68,6 +82,11 @@ function asVerdict(value: string | null): Verdict | null {
  * `bestVerdict` is the best verdict ranked by band, not the verdict of the
  * highest-scoring attempt, which keeps it consistent with `passed`: a station
  * is passed exactly when its bestVerdict is a passing one.
+ *
+ * `bestScore`/`bestMaxScore` belong to that same winning attempt. Ranking the
+ * score independently would let the UI print "PASSED · best 6.0/10.5" where the
+ * 6.0 came from a Fail, which the verdict is not guaranteed to be a monotone
+ * function of (domain-level CF rules live in the marking engine, not here).
  */
 export function reduceStationPassMap(
   rows: readonly StationAttemptRow[],
@@ -81,6 +100,7 @@ export function reduceStationPassMap(
       passed: false,
       bestVerdict: null,
       bestScore: null,
+      bestMaxScore: null,
       attempts: 0,
     };
 
@@ -88,17 +108,29 @@ export function reduceStationPassMap(
     const verdict = asVerdict(row.verdict);
     const scored = verdict !== null && score !== null && Number.isFinite(score) && score > 0;
 
-    const bestVerdict =
-      scored &&
-      (current.bestVerdict === null ||
-        VERDICT_RANK[verdict] > VERDICT_RANK[current.bestVerdict])
-        ? verdict
-        : current.bestVerdict;
+    const rawMax = row.max_score == null ? null : Number(row.max_score);
+    const maxScore = rawMax !== null && Number.isFinite(rawMax) && rawMax > 0 ? rawMax : null;
+
+    let { passed, bestVerdict, bestScore, bestMaxScore } = current;
+
+    if (scored && verdict !== null && score !== null) {
+      // Rank by band first; within the winning band the higher score wins. All
+      // three move together, so the trio always describes one real attempt.
+      const currentRank = bestVerdict === null ? -1 : VERDICT_RANK[bestVerdict];
+      const rank = VERDICT_RANK[verdict];
+      if (rank > currentRank || (rank === currentRank && score > (bestScore ?? -Infinity))) {
+        bestVerdict = verdict;
+        bestScore = score;
+        bestMaxScore = maxScore;
+      }
+      passed = passed || PASSING_VERDICTS.includes(verdict);
+    }
 
     byStation.set(row.station_id, {
-      passed: current.passed || (scored && PASSING_VERDICTS.includes(verdict)),
+      passed,
       bestVerdict,
-      bestScore: scored ? Math.max(current.bestScore ?? score, score) : current.bestScore,
+      bestScore,
+      bestMaxScore,
       attempts: current.attempts + 1,
     });
   }
@@ -116,24 +148,38 @@ export function passedStationIds(passMap: Map<string, StationPassState>): Set<st
 }
 
 /**
- * Every station this user has attempted, with its pass state.
+ * Every VISIBLE station this user has attempted, with its pass state.
  *
  * One round trip: completed sessions joined to their (1:1) marking result.
  * Guest sessions never appear — they carry a null user_id and are filtered out
  * by the user_id match.
+ *
+ * The `stations!inner` join filters to the same station states the library and
+ * the station-count denominators use. Without it a pass at a staged station —
+ * runnable on preview deployments, or live-then-deactivated — counts towards a
+ * numerator whose denominator excludes it, and the dashboard can render the
+ * impossible "Passed 4 of 3 stations".
+ *
+ * Returns null (not an empty Map) when the query fails, so callers can hide the
+ * number instead of asserting a fabricated zero.
  */
-export async function getStationPassMap(userId: string): Promise<Map<string, StationPassState>> {
+export async function getStationPassMap(
+  userId: string,
+): Promise<Map<string, StationPassState> | null> {
   const supabase = createClient();
 
   const { data, error } = await supabase
     .from('clinical_sessions')
-    .select('station_id, session_results(verdict, weighted_score)')
+    .select(
+      'station_id, stations!inner(is_active), session_results(verdict, weighted_score, max_score)',
+    )
     .eq('user_id', userId)
-    .eq('status', 'completed');
+    .eq('status', 'completed')
+    .in('stations.is_active', visibleStationStates());
 
   if (error) {
     console.error('[passTracking] session query failed', error);
-    return new Map();
+    return null;
   }
 
   return reduceStationPassMap(flattenSessionRows(data));
@@ -141,7 +187,11 @@ export async function getStationPassMap(userId: string): Promise<Map<string, Sta
 
 interface JoinedSessionRow {
   station_id: string | null;
-  session_results: { verdict: string | null; weighted_score: number | string | null } | null;
+  session_results: {
+    verdict: string | null;
+    weighted_score: number | string | null;
+    max_score?: number | string | null;
+  } | null;
 }
 
 /**
@@ -160,6 +210,7 @@ export function flattenSessionRows(rows: unknown): StationAttemptRow[] {
       station_id: row.station_id,
       verdict: result?.verdict ?? null,
       weighted_score: result?.weighted_score ?? null,
+      max_score: result?.max_score ?? null,
     };
   });
 }

@@ -6,7 +6,11 @@
 
 import { createClient } from '@/lib/supabase/client';
 import { visibleStationStates } from '@/lib/stations/visibility';
-import { reduceStationPassMap, type StationAttemptRow } from '@/lib/supabase/queries/passTracking';
+import {
+    reduceStationPassMap,
+    type StationAttemptRow,
+    type StationPassState,
+} from '@/lib/supabase/queries/passTracking';
 import type { Verdict } from '@/lib/clinical-master/types';
 
 export interface Domain {
@@ -45,8 +49,10 @@ export interface Station {
     passed: boolean;
     /** Best verdict band achieved; null when nothing was genuinely marked. */
     bestVerdict: Verdict | null;
-    /** Highest weighted score achieved; null when nothing was genuinely marked. */
+    /** Score of that same best attempt; null when nothing was genuinely marked. */
     bestScore: number | null;
+    /** Denominator that attempt was marked out of; null when unknown. */
+    bestMaxScore: number | null;
 }
 
 /**
@@ -84,11 +90,15 @@ export async function getDomains(userId?: string): Promise<Domain[]> {
     const completedByDomain: Record<string, number> = {};
     const passedByDomain: Record<string, number> = {};
     if (userId) {
+        // The visibility filter must match the station-count denominator above:
+        // a pass at a station the library does not list would otherwise print
+        // "2 of 1 passed" here while the domain detail page says "1 of 1".
         const { data: sessions } = await supabase
             .from('clinical_sessions')
-            .select('station_id, stations!inner(domain_id), session_results(verdict, weighted_score)')
+            .select('station_id, stations!inner(domain_id, is_active), session_results(verdict, weighted_score)')
             .eq('user_id', userId)
-            .eq('status', 'completed');
+            .eq('status', 'completed')
+            .in('stations.is_active', visibleStationStates());
 
         // Pass state is per station across every attempt, so reduce first and
         // then count the passed stations back into their domains.
@@ -180,14 +190,15 @@ export async function getStationsForDomain(domainId: string, userId?: string): P
     }
     const latestByStation: Record<string, SessionInfo> = {};
     const attemptsByStation: Record<string, CompletedAttempt[]> = {};
-    let passMap = new Map<string, { passed: boolean; bestVerdict: Verdict | null; bestScore: number | null }>();
+    let passMap = new Map<string, StationPassState>();
 
     if (userId && stations.length > 0) {
         // session_results rides along on the same query — the pass badge must not
-        // cost the library page a second round trip.
+        // cost the library page a second round trip. max_score comes with it so
+        // the score denominator matches the feedback report for the same session.
         const { data: sessions } = await supabase
             .from('clinical_sessions')
-            .select('id, station_id, status, overall_score, started_at, completed_at, session_results(verdict, weighted_score)')
+            .select('id, station_id, status, overall_score, started_at, completed_at, session_results(verdict, weighted_score, max_score)')
             .eq('user_id', userId)
             .in('station_id', stations.map(s => s.id))
             .order('started_at', { ascending: false });
@@ -201,11 +212,13 @@ export async function getStationsForDomain(domainId: string, userId?: string): P
                     const result = s.session_results as unknown as {
                         verdict: string | null;
                         weighted_score: number | string | null;
+                        max_score: number | string | null;
                     } | null;
                     return {
                         station_id: s.station_id,
                         verdict: result?.verdict ?? null,
                         weighted_score: result?.weighted_score ?? null,
+                        max_score: result?.max_score ?? null,
                     } satisfies StationAttemptRow;
                 }),
         );
@@ -262,6 +275,7 @@ export async function getStationsForDomain(domainId: string, userId?: string): P
             passed: passState?.passed ?? false,
             bestVerdict: passState?.bestVerdict ?? null,
             bestScore: passState?.bestScore ?? null,
+            bestMaxScore: passState?.bestMaxScore ?? null,
         };
     });
 }
@@ -314,6 +328,7 @@ export async function getAllStations(): Promise<Station[]> {
         passed: false,
         bestVerdict: null,
         bestScore: null,
+        bestMaxScore: null,
     }));
 }
 

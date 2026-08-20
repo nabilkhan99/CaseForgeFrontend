@@ -145,8 +145,10 @@ export default function DashboardPage() {
         </p>
         <div className="flex flex-wrap items-center gap-2 mt-2">
           {/* Passing a station is the goal, so it gets its own headline number.
-              Hidden until the first session — "Passed 0 of 78" is a poor greeting. */}
-          {stats.completedStations > 0 && stats.totalStations > 0 && (
+              Hidden until the first session — "Passed 0 of 78" is a poor greeting —
+              and hidden again when the pass query failed (passedStations === null),
+              because a confident zero would be a fabricated fact. */}
+          {stats.passedStations !== null && stats.completedStations > 0 && stats.totalStations > 0 && (
             <motion.span
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}

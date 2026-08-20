@@ -1,6 +1,57 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+/**
+ * A minimal PostgREST builder stub. It records the select string and every
+ * filter so the tests can assert the SHAPE of the query — specifically that the
+ * station-visibility join is present, which is the whole of finding #1.
+ */
+const db = vi.hoisted(() => {
+  const state = {
+    select: '',
+    filters: [] as Array<[string, string, unknown]>,
+    response: { data: [] as unknown, error: null as unknown },
+  };
+
+  interface Chain extends PromiseLike<{ data: unknown; error: unknown }> {
+    select(columns: string): Chain;
+    eq(column: string, value: unknown): Chain;
+    in(column: string, value: unknown): Chain;
+  }
+
+  const chain: Chain = {
+    select(columns) {
+      state.select = columns;
+      return chain;
+    },
+    eq(column, value) {
+      state.filters.push(['eq', column, value]);
+      return chain;
+    },
+    in(column, value) {
+      state.filters.push(['in', column, value]);
+      return chain;
+    },
+    then(onFulfilled) {
+      return Promise.resolve(state.response).then(onFulfilled);
+    },
+  };
+
+  return {
+    state,
+    client: { from: () => chain },
+    reset(response: { data?: unknown; error?: unknown } = {}) {
+      state.select = '';
+      state.filters = [];
+      state.response = { data: response.data ?? [], error: response.error ?? null };
+    },
+  };
+});
+
+vi.mock('@/lib/supabase/client', () => ({ createClient: () => db.client }));
+
 import {
   flattenSessionRows,
+  getStationPassMap,
   passedStationIds,
   reduceStationPassMap,
   type StationAttemptRow,
@@ -54,12 +105,64 @@ describe('reduceStationPassMap — best attempt wins', () => {
     expect(state?.bestVerdict).toBe('Pass');
   });
 
-  it('reports the highest score, not the latest', () => {
+  it('reports the winning attempt score, not the latest', () => {
     expect(state?.bestScore).toBe(9.0);
   });
 
   it('counts every attempt', () => {
     expect(state?.attempts).toBe(3);
+  });
+});
+
+describe('reduceStationPassMap — score belongs to the verdict beside it', () => {
+  // The marking engine's verdict is not guaranteed to be monotone in
+  // weighted_score (domain-level CF rules can fail a high-scoring attempt), so a
+  // score ranked independently could be printed under someone else's verdict.
+  const state = reduceStationPassMap([
+    attempt({ verdict: 'Bare Pass', weighted_score: 5.8, max_score: 10.5 }),
+    attempt({ verdict: 'Fail', weighted_score: 9.4, max_score: 10.5 }),
+  ]).get('station-a');
+
+  it('keeps the passing verdict', () => {
+    expect(state?.passed).toBe(true);
+    expect(state?.bestVerdict).toBe('Bare Pass');
+  });
+
+  it('never lends the failing attempt score to the passing verdict', () => {
+    expect(state?.bestScore).toBe(5.8);
+  });
+
+  it('takes the higher score when two attempts share the winning band', () => {
+    const tied = reduceStationPassMap([
+      attempt({ verdict: 'Pass', weighted_score: 7.1 }),
+      attempt({ verdict: 'Pass', weighted_score: 8.9 }),
+    ]).get('station-a');
+
+    expect(tied?.bestScore).toBe(8.9);
+  });
+});
+
+describe('reduceStationPassMap — max_score denominator', () => {
+  it('carries the winning attempt own denominator', () => {
+    const state = reduceStationPassMap([
+      attempt({ verdict: 'Fail', weighted_score: 40, max_score: 70 }),
+      attempt({ verdict: 'Pass', weighted_score: 8.5, max_score: 10.5 }),
+    ]).get('station-a');
+
+    expect(state?.bestScore).toBe(8.5);
+    expect(state?.bestMaxScore).toBe(10.5);
+  });
+
+  it('leaves the denominator null when the column was not selected', () => {
+    expect(reduceStationPassMap([attempt()]).get('station-a')?.bestMaxScore).toBeNull();
+  });
+
+  it('rejects a zero or non-numeric denominator rather than dividing by it', () => {
+    const state = reduceStationPassMap([
+      attempt({ verdict: 'Pass', weighted_score: 8.5, max_score: 0 }),
+    ]).get('station-a');
+
+    expect(state?.bestMaxScore).toBeNull();
   });
 });
 
@@ -169,7 +272,9 @@ describe('flattenSessionRows', () => {
       flattenSessionRows([
         { station_id: 'station-a', session_results: { verdict: 'Pass', weighted_score: 8.5 } },
       ]),
-    ).toEqual([{ station_id: 'station-a', verdict: 'Pass', weighted_score: 8.5 }]);
+    ).toEqual([
+      { station_id: 'station-a', verdict: 'Pass', weighted_score: 8.5, max_score: null },
+    ]);
   });
 
   it('tolerates the array shape', () => {
@@ -177,16 +282,91 @@ describe('flattenSessionRows', () => {
       flattenSessionRows([
         { station_id: 'station-a', session_results: [{ verdict: 'Fail', weighted_score: 3 }] },
       ]),
-    ).toEqual([{ station_id: 'station-a', verdict: 'Fail', weighted_score: 3 }]);
+    ).toEqual([{ station_id: 'station-a', verdict: 'Fail', weighted_score: 3, max_score: null }]);
   });
 
   it('turns a session with no result into an unscored attempt', () => {
     expect(
       flattenSessionRows([{ station_id: 'station-a', session_results: null }]),
-    ).toEqual([{ station_id: 'station-a', verdict: null, weighted_score: null }]);
+    ).toEqual([
+      { station_id: 'station-a', verdict: null, weighted_score: null, max_score: null },
+    ]);
   });
 
   it('returns nothing when the query errored and handed back no array', () => {
     expect(flattenSessionRows(null)).toEqual([]);
+  });
+
+  it('carries max_score through the join', () => {
+    expect(
+      flattenSessionRows([
+        {
+          station_id: 'station-a',
+          session_results: { verdict: 'Pass', weighted_score: 8.5, max_score: 10.5 },
+        },
+      ]),
+    ).toEqual([
+      { station_id: 'station-a', verdict: 'Pass', weighted_score: 8.5, max_score: 10.5 },
+    ]);
+  });
+});
+
+describe('getStationPassMap — query shape', () => {
+  const staged = process.env.NEXT_PUBLIC_SHOW_STAGED_STATIONS;
+
+  beforeEach(() => db.reset());
+  afterEach(() => {
+    process.env.NEXT_PUBLIC_SHOW_STAGED_STATIONS = staged;
+  });
+
+  it('filters sessions by the same station visibility the denominators use', async () => {
+    delete process.env.NEXT_PUBLIC_SHOW_STAGED_STATIONS;
+    await getStationPassMap('user-1');
+
+    expect(db.state.select).toContain('stations!inner(is_active)');
+    expect(db.state.filters).toContainEqual(['in', 'stations.is_active', [true]]);
+  });
+
+  it('widens with the deployment when staged stations are visible', async () => {
+    process.env.NEXT_PUBLIC_SHOW_STAGED_STATIONS = '1';
+    await getStationPassMap('user-1');
+
+    expect(db.state.filters).toContainEqual(['in', 'stations.is_active', [true, false]]);
+  });
+
+  it('scopes to the user own completed sessions', async () => {
+    await getStationPassMap('user-1');
+
+    expect(db.state.filters).toContainEqual(['eq', 'user_id', 'user-1']);
+    expect(db.state.filters).toContainEqual(['eq', 'status', 'completed']);
+  });
+
+  it('selects the max_score denominator alongside the verdict', async () => {
+    await getStationPassMap('user-1');
+
+    expect(db.state.select).toContain('session_results(verdict, weighted_score, max_score)');
+  });
+
+  it('returns null on query failure so callers can hide the number', async () => {
+    db.reset({ data: null, error: { message: 'permission denied' } });
+
+    // An empty Map would be indistinguishable from "passed nothing", which the
+    // dashboard would then state as fact.
+    expect(await getStationPassMap('user-1')).toBeNull();
+  });
+
+  it('returns a real map when the query succeeds', async () => {
+    db.reset({
+      data: [
+        {
+          station_id: 'station-a',
+          session_results: { verdict: 'Pass', weighted_score: 8.5, max_score: 10.5 },
+        },
+      ],
+    });
+
+    const map = await getStationPassMap('user-1');
+    expect(map?.get('station-a')?.passed).toBe(true);
+    expect(map?.get('station-a')?.bestMaxScore).toBe(10.5);
   });
 });

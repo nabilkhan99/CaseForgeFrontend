@@ -66,8 +66,10 @@ export async function getUserStats(userId: string): Promise<UserStats> {
 
     // Stations the user has PASSED (best attempt reached a passing verdict) —
     // distinct stations, so repeat attempts can never push it past the total.
+    // null means the query failed; a fabricated 0 would read as "you have passed
+    // nothing", which is a different and much worse claim than "we don't know".
     const passMap = await getStationPassMap(userId);
-    const passedStations = passedStationIds(passMap).size;
+    const passedStations = passMap === null ? null : passedStationIds(passMap).size;
 
     // Calculate exam countdown
     let examCountdownDays = 0;
