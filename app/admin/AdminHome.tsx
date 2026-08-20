@@ -31,6 +31,11 @@ const DESTINATIONS: readonly AdminDestination[] = [
     title: 'Recordings',
     blurb: 'Listen back to real consultations — who sat what, and how it actually sounded.',
   },
+  {
+    href: '/admin/lectures',
+    title: 'Lectures',
+    blurb: 'The Complete-tier course — add a lecture, upload its video, publish it.',
+  },
 ] as const;
 
 /**
