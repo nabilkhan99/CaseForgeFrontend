@@ -15,6 +15,21 @@ import ScoreBadge from '@/components/ui/ScoreBadge';
 import VerdictPill from '@/components/ui/VerdictPill';
 import { MAX_WEIGHTED_SCORE } from '@/lib/clinical-master/types';
 
+/**
+ * `clinical_sessions.overall_score` carries two historical scales (old ~0-100,
+ * new 0-10.5 weighted), so it can never be rendered as a percentage directly —
+ * a raw 8.4 through ScoreBadge reads "8% REFER" beside "5 of 5 passed".
+ *
+ * Normalise against the weighted maximum, and return null for anything that
+ * overshoots it: that row is old-scale and there is no way to recover what it
+ * meant, so we show no badge rather than a fabricated one.
+ */
+function weightedPercent(score: number | null | undefined): number | null {
+  if (score == null || !Number.isFinite(score) || score <= 0) return null;
+  if (score > MAX_WEIGHTED_SCORE) return null;
+  return Math.round((score / MAX_WEIGHTED_SCORE) * 100);
+}
+
 function formatDate(dateStr?: string): string {
   if (!dateStr) return '';
   const date = new Date(dateStr);
@@ -35,6 +50,7 @@ function StationRow({ station, onStart, onViewFeedback }: {
   const [expanded, setExpanded] = useState(false);
   const hasAttempts = station.attempts.length > 0;
   const latestAttempt = hasAttempts ? station.attempts[0] : null;
+  const latestPercent = weightedPercent(latestAttempt?.score);
 
   const handleClick = () => {
     if (hasAttempts) {
@@ -85,19 +101,22 @@ function StationRow({ station, onStart, onViewFeedback }: {
             )}
             {station.bestScore !== null && (
               <span className="text-[11px] font-mono text-muted">
-                best {station.bestScore.toFixed(1)}/{MAX_WEIGHTED_SCORE}
+                best {station.bestScore.toFixed(1)}/{station.bestMaxScore ?? MAX_WEIGHTED_SCORE}
               </span>
             )}
           </div>
         </div>
 
-        {/* Verdict from the best attempt, else the legacy score badge */}
+        {/* Verdict from the best attempt; otherwise the legacy score, but only
+            when it normalises onto the current scale (see weightedPercent). */}
         {station.bestVerdict ? (
           <motion.span initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }}>
             <VerdictPill verdict={station.bestVerdict} passed={station.passed} />
           </motion.span>
-        ) : hasAttempts && latestAttempt?.score != null ? (
-          <ScoreBadge score={latestAttempt.score} showLabel />
+        ) : hasAttempts && latestPercent !== null ? (
+          <ScoreBadge score={latestPercent} showLabel />
+        ) : hasAttempts ? (
+          <span className="text-[12px] text-muted">Completed</span>
         ) : (
           <span className="text-[12px] text-muted">Not started</span>
         )}
@@ -139,23 +158,24 @@ function StationRow({ station, onStart, onViewFeedback }: {
             className="overflow-hidden"
           >
             <div className="pl-6 pb-3 space-y-1">
-              {station.attempts.map((attempt, i) => (
-                <div
-                  key={attempt.sessionId}
-                  onClick={() => onViewFeedback(attempt.sessionId)}
-                  className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-lg hover:bg-black/[0.02] cursor-pointer transition-colors min-h-[44px]"
-                >
-                  <span className="text-[11px] text-muted font-mono w-5">
-                    #{station.attempts.length - i}
-                  </span>
-                  <span className="text-[13px] text-body flex-1">
-                    {formatDate(attempt.completedAt)}
-                  </span>
-                  {attempt.score != null && (
-                    <ScoreBadge score={attempt.score} size="sm" />
-                  )}
-                </div>
-              ))}
+              {station.attempts.map((attempt, i) => {
+                const percent = weightedPercent(attempt.score);
+                return (
+                  <div
+                    key={attempt.sessionId}
+                    onClick={() => onViewFeedback(attempt.sessionId)}
+                    className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-lg hover:bg-black/[0.02] cursor-pointer transition-colors min-h-[44px]"
+                  >
+                    <span className="text-[11px] text-muted font-mono w-5">
+                      #{station.attempts.length - i}
+                    </span>
+                    <span className="text-[13px] text-body flex-1">
+                      {formatDate(attempt.completedAt)}
+                    </span>
+                    {percent !== null && <ScoreBadge score={percent} size="sm" />}
+                  </div>
+                );
+              })}
               <button
                 onClick={(e) => { e.stopPropagation(); onStart(station.id); }}
                 className="flex items-center gap-1.5 py-2 px-2 -mx-2 text-[13px] font-semibold text-primary hover:underline cursor-pointer min-h-[44px]"
@@ -221,9 +241,18 @@ export default function DomainDetailPage({ params }: PageProps) {
 
   const completedCount = stations.filter(s => s.status === 'completed').length;
   const passedCount = stations.filter(s => s.passed).length;
-  const stationsWithScores = stations.filter(s => s.attempts.length > 0 && s.attempts[0].score != null);
-  const avgScore = stationsWithScores.length > 0
-    ? Math.round(stationsWithScores.reduce((sum, s) => sum + (s.attempts[0].score || 0), 0) / stationsWithScores.length)
+  // Average off the marked weighted scores, not clinical_sessions.overall_score:
+  // the latter mixes two scales, so averaging it produced a red "8% REFER" badge
+  // sitting next to "5 of 5 passed". These come from session_results, are all on
+  // the 0–MAX_WEIGHTED_SCORE scale, and agree with the verdicts beside them.
+  const scoredStations = stations.filter(s => s.bestScore !== null);
+  const avgScore = scoredStations.length > 0
+    ? Math.round(
+        (scoredStations.reduce(
+          (sum, s) => sum + (s.bestScore ?? 0) / (s.bestMaxScore ?? MAX_WEIGHTED_SCORE),
+          0,
+        ) / scoredStations.length) * 100,
+      )
     : 0;
 
   return (
@@ -232,7 +261,7 @@ export default function DomainDetailPage({ params }: PageProps) {
         title={domainName || 'Loading...'}
         subtitle={
           stations.length > 0
-            ? `${passedCount} of ${stations.length} passed \u00B7 ${completedCount} attempted${avgScore > 0 ? ` \u00B7 Average: ${avgScore}%` : ''}`
+            ? `${passedCount} of ${stations.length} passed \u00B7 ${completedCount} attempted${avgScore > 0 ? ` \u00B7 Best-attempt average: ${avgScore}%` : ''}`
             : undefined
         }
         breadcrumbs={[

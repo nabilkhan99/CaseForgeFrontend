@@ -90,11 +90,11 @@ export default function StationLibraryPage() {
                       <div className="text-[12px] text-muted mt-0.5">
                         {domain.station_count} station{domain.station_count !== 1 ? 's' : ''}
                         {hasCompleted && ` \u00B7 ${domain.completed_count} completed`}
-                        {hasCompleted && (
-                          <span
-                            className="ml-1 font-semibold"
-                            style={{ color: domain.passed_count > 0 ? '#15803D' : undefined }}
-                          >
+                        {/* Zero passes stays unsaid, matching the dashboard rule
+                            that "Passed 0 of N" is a poor thing to greet someone
+                            with. Attempts are already shown above. */}
+                        {domain.passed_count > 0 && (
+                          <span className="ml-1 font-semibold" style={{ color: '#15803D' }}>
                             {`\u00B7 ${domain.passed_count} of ${domain.station_count} passed`}
                           </span>
                         )}
