@@ -17,6 +17,10 @@ alter table public.preorders enable row level security;
 -- already contained: a session for someone else's email cannot exist without
 -- access to that inbox (sign-up is invite-gated, set-password goes to the
 -- buying address, and no OTP sign-in path mints sessions).
+-- `create policy` has no `if not exists`, and this policy is already applied to
+-- prod (see header) — so without the drop, re-running this file raises 42710 and
+-- the "Idempotent" claim above is false for the half that matters.
+drop policy if exists "read own purchases by email" on public.preorders;
 create policy "read own purchases by email" on public.preorders
   for select to authenticated
   using (lower(email) = lower(auth.jwt()->>'email'));
