@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/admin/guard';
+import { MAX_LECTURE_ROWS } from '@/lib/lectures/limits';
 
 /**
- * Content ops for lectures: list, create, publish. ADMIN_EMAILS-guarded
+ * Content ops for lectures: list, create, edit, publish. ADMIN_EMAILS-guarded
  * (fail-closed) exactly like /api/admin/recordings — the check runs before any
  * data access and answers 403 JSON.
  *
@@ -12,10 +13,15 @@ import { isAdmin } from '@/lib/admin/guard';
  * signed upload URL can be minted for it. A lecture therefore lives briefly as
  * a titled placeholder with no video, which is why the list reports
  * `hasVideo` and why is_published starts false.
+ *
+ * PATCH edits the fields a human gets wrong — title, description, running
+ * order — as well as publication, so a typo does not need an engineer with
+ * service-role access. The video itself is not editable here: swapping the
+ * file is DELETE then re-upload on /api/admin/lectures/upload-url, which
+ * unpublishes first so a live lecture never points at nothing.
  */
 
 const MAX_TITLE_LENGTH = 200;
-const MAX_ROWS = 200;
 
 export interface AdminLecture {
   id: string;
@@ -65,7 +71,7 @@ export async function GET() {
     .from('lectures')
     .select(SELECT)
     .order('sort_order', { ascending: true })
-    .limit(MAX_ROWS);
+    .limit(MAX_LECTURE_ROWS);
 
   if (error) {
     console.error('[admin-lectures] list failed', error.message);
@@ -119,13 +125,24 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ lecture: toAdminLecture(data as AdminLectureRow) }, { status: 201 });
 }
 
-/** Toggle publication. Publishing without a video would list a dead row. */
+/**
+ * Edit a lecture: any of title, description, running order, publication.
+ * Every field is optional, so a caller changes only what it names — but at
+ * least one has to be named, or this would report success for a no-op.
+ * Publishing without a video would list a dead row, so it is refused.
+ */
 export async function PATCH(req: NextRequest) {
   if (!(await isAdmin())) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  let body: { id?: unknown; isPublished?: unknown };
+  let body: {
+    id?: unknown;
+    isPublished?: unknown;
+    title?: unknown;
+    description?: unknown;
+    sortOrder?: unknown;
+  };
   try {
     body = await req.json();
   } catch {
@@ -136,10 +153,50 @@ export async function PATCH(req: NextRequest) {
   if (!id) {
     return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
   }
-  if (typeof body.isPublished !== 'boolean') {
-    return NextResponse.json({ error: 'isPublished must be a boolean' }, { status: 400 });
+
+  const patch: {
+    is_published?: boolean;
+    title?: string;
+    description?: string | null;
+    sort_order?: number;
+  } = {};
+
+  if (body.isPublished !== undefined) {
+    if (typeof body.isPublished !== 'boolean') {
+      return NextResponse.json({ error: 'isPublished must be a boolean' }, { status: 400 });
+    }
+    patch.is_published = body.isPublished;
   }
-  const isPublished = body.isPublished;
+
+  if (body.title !== undefined) {
+    const title = typeof body.title === 'string' ? body.title.trim() : '';
+    if (!title || title.length > MAX_TITLE_LENGTH) {
+      return NextResponse.json({ error: 'A title is required' }, { status: 400 });
+    }
+    patch.title = title;
+  }
+
+  if (body.description !== undefined) {
+    // Null and empty both mean "no description" — the column is nullable and a
+    // blank string would render as a stray separator on the dashboard row.
+    if (body.description !== null && typeof body.description !== 'string') {
+      return NextResponse.json({ error: 'description must be text or null' }, { status: 400 });
+    }
+    const description = typeof body.description === 'string' ? body.description.trim() : '';
+    patch.description = description || null;
+  }
+
+  if (body.sortOrder !== undefined) {
+    const sortOrder = Number(body.sortOrder);
+    if (!Number.isFinite(sortOrder) || !Number.isInteger(sortOrder)) {
+      return NextResponse.json({ error: 'sortOrder must be a whole number' }, { status: 400 });
+    }
+    patch.sort_order = sortOrder;
+  }
+
+  if (Object.keys(patch).length === 0) {
+    return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
+  }
 
   const admin = getSupabaseAdmin();
   const { data: existing, error: lookupError } = await admin
@@ -155,19 +212,19 @@ export async function PATCH(req: NextRequest) {
   if (!existing) {
     return NextResponse.json({ error: 'Lecture not found' }, { status: 404 });
   }
-  if (isPublished && !existing.storage_path) {
+  if (patch.is_published && !existing.storage_path) {
     return NextResponse.json({ error: 'Upload a video before publishing' }, { status: 409 });
   }
 
   const { data, error } = await admin
     .from('lectures')
-    .update({ is_published: isPublished, updated_at: new Date().toISOString() })
+    .update({ ...patch, updated_at: new Date().toISOString() })
     .eq('id', id)
     .select(SELECT)
     .single();
 
   if (error || !data) {
-    console.error('[admin-lectures] publish toggle failed', error?.message);
+    console.error('[admin-lectures] update failed', error?.message);
     return NextResponse.json({ error: 'Failed to update lecture' }, { status: 500 });
   }
 
