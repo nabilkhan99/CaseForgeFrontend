@@ -15,6 +15,7 @@ import {
 import { sendReferralEmail } from '@/lib/email/referralEmail';
 import { sendPurchaseEmail } from '@/lib/email/purchaseEmail';
 import { pushPreorderContactToBrevo } from '@/lib/marketing/preorderContact';
+import { provisionAccountForPurchase } from '@/lib/auth/provisioning';
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -230,7 +231,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
   if (isNewPreorder) {
     try {
       const coachingDayLabel = session.metadata?.coaching_day_label ?? null;
-      const [emailResult, contactResult] = await Promise.allSettled([
+      const [emailResult, contactResult, provisionResult] = await Promise.allSettled([
         sendPurchaseEmail({ toEmail: buyerEmail, toName: buyerName, planKey: plan, coachingDayLabel }),
         pushPreorderContactToBrevo({
           email: buyerEmail,
@@ -239,6 +240,9 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
           coachingDayLabel,
           amountPence: session.amount_total ?? 0,
         }),
+        // Account provisioning: create the auth user + send the set-password
+        // email. Idempotent inside, but still gated here so retries stay quiet.
+        provisionAccountForPurchase({ email: buyerEmail, fullName: buyerName, origin }),
       ]);
 
       if (emailResult.status === 'rejected') {
@@ -256,6 +260,17 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
         console.error('[stripe-webhook] preorder contact sync threw', {
           sessionId: session.id,
           reason: contactResult.reason,
+        });
+      }
+      if (provisionResult.status === 'rejected') {
+        console.error('[stripe-webhook] account provisioning threw', {
+          sessionId: session.id,
+          reason: provisionResult.reason,
+        });
+      } else if (provisionResult.value.error) {
+        console.error('[stripe-webhook] account provisioning failed', {
+          sessionId: session.id,
+          result: provisionResult.value,
         });
       }
     } catch (error: unknown) {

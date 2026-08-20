@@ -1,4 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
+import { computeEntitlement } from '@/lib/commerce/entitlements';
+import { isStagedDeployment } from '@/lib/stations/visibility';
+import { parseAdminEmails } from '@/lib/admin/guard';
 import { NextResponse, type NextRequest } from 'next/server';
 
 /** Carries a valid sign-up invite through the registration flow. */
@@ -93,19 +96,20 @@ export async function updateSession(request: NextRequest) {
         request.nextUrl.pathname.startsWith('/clinical-master') && !isFeedbackRoute;
     if (requiresSubscription && user) {
         try {
-            const { data: subscription } = await supabase
-                .from('subscriptions')
-                .select('id')
-                .eq('user_id', user.id)
-                .eq('status', 'active')
-                .gt('expires_at', new Date().toISOString())
-                .limit(1)
-                .single();
-
-            if (!subscription) {
+            // Purchases are matched by email (buying email = account email);
+            // the RLS policy "read own purchases by email" scopes this select.
+            // Staged deployments (develop preview) treat testers as entitled,
+            // and admins are never locked out of their own product.
+            const { data: purchases } = await supabase
+                .from('preorders')
+                .select('plan, status, created_at, coaching_day');
+            const entitlement = computeEntitlement(purchases ?? []);
+            const admins = parseAdminEmails(process.env.ADMIN_EMAILS);
+            const bypass = isStagedDeployment() || admins.has((user.email ?? '').toLowerCase());
+            if (entitlement.state !== 'active' && !bypass) {
                 const url = request.nextUrl.clone();
                 url.pathname = '/pricing';
-                url.searchParams.set('upgrade', 'true');
+                url.searchParams.set(entitlement.state === 'read_only' ? 'renew' : 'upgrade', 'true');
                 return NextResponse.redirect(url);
             }
         } catch {
