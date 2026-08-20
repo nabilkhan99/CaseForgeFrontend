@@ -15,7 +15,7 @@ import {
 import { sendReferralEmail } from '@/lib/email/referralEmail';
 import { sendPurchaseEmail } from '@/lib/email/purchaseEmail';
 import { pushPreorderContactToBrevo } from '@/lib/marketing/preorderContact';
-import { provisionAccountForPurchase } from '@/lib/auth/provisioning';
+import { provisionAccountForPurchase, sendSetPasswordLink } from '@/lib/auth/provisioning';
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -38,8 +38,15 @@ type SupabaseAdmin = ReturnType<typeof getSupabaseAdmin>;
  *
  * `customer.subscription.deleted` -> mark the monthly order canceled.
  *
- * Ops: the Stripe webhook endpoint must have `charge.refunded` and
- * `customer.subscription.deleted` enabled.
+ * `customer.subscription.updated` -> mark it canceled too when the subscription
+ * has reached a dead status. Dunning can leave a subscription `unpaid` (or
+ * `incomplete_expired`) forever without ever emitting `deleted`, which would
+ * otherwise leave a failed card holding permanent access.
+ *
+ * Ops: the Stripe webhook endpoint must have `charge.refunded`,
+ * `customer.subscription.deleted` AND `customer.subscription.updated` enabled.
+ * Without the last one, a subscription that dies by dunning rather than by
+ * cancellation keeps its `paid` row and its entitlement.
  */
 export async function POST(request: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -72,6 +79,9 @@ export async function POST(request: Request) {
   }
   if (event.type === 'customer.subscription.deleted') {
     return handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
+  }
+  if (event.type === 'customer.subscription.updated') {
+    return handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
   }
 
   return NextResponse.json({ received: true, ignored: event.type });
@@ -231,7 +241,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
   if (isNewPreorder) {
     try {
       const coachingDayLabel = session.metadata?.coaching_day_label ?? null;
-      const [emailResult, contactResult, provisionResult] = await Promise.allSettled([
+      const [emailResult, contactResult] = await Promise.allSettled([
         sendPurchaseEmail({ toEmail: buyerEmail, toName: buyerName, planKey: plan, coachingDayLabel }),
         pushPreorderContactToBrevo({
           email: buyerEmail,
@@ -240,9 +250,6 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
           coachingDayLabel,
           amountPence: session.amount_total ?? 0,
         }),
-        // Account provisioning: create the auth user + send the set-password
-        // email. Idempotent inside, but still gated here so retries stay quiet.
-        provisionAccountForPurchase({ email: buyerEmail, fullName: buyerName, origin }),
       ]);
 
       if (emailResult.status === 'rejected') {
@@ -262,23 +269,99 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
           reason: contactResult.reason,
         });
       }
-      if (provisionResult.status === 'rejected') {
-        console.error('[stripe-webhook] account provisioning threw', {
-          sessionId: session.id,
-          reason: provisionResult.reason,
-        });
-      } else if (provisionResult.value.error) {
-        console.error('[stripe-webhook] account provisioning failed', {
-          sessionId: session.id,
-          result: provisionResult.value,
-        });
-      }
     } catch (error: unknown) {
       console.error('[stripe-webhook] purchase confirmation error', { sessionId: session.id, error });
     }
   }
 
+  if (preorderId) {
+    await provisionBuyerAccount(supabase, {
+      preorderId,
+      email: buyerEmail,
+      name: buyerName,
+      sessionId: session.id,
+    });
+  }
+
   return NextResponse.json({ received: true, recorded: !insertError, preorderId });
+}
+
+interface ProvisionBuyerArgs {
+  preorderId: string;
+  email: string;
+  name: string | null;
+  sessionId: string;
+}
+
+/**
+ * Create the buyer's auth account and send the set-password email, then stamp
+ * what happened on the preorder row.
+ *
+ * Driven off `set_password_sent_at is null` on the ROW rather than "did this
+ * webhook call insert it", so a Brevo failure is recoverable: Stripe's retry
+ * takes the 23505 duplicate path, reads no send recorded, and tries again.
+ * `provisioned_at` is stamped only when we actually created the user, so the
+ * second attempt for that buyer resends the link instead of bouncing off
+ * "account already exists" — and a buyer who already had an account before this
+ * purchase is never emailed a set-password link they didn't ask for.
+ *
+ * The stamps are read here, in their own query, rather than off the insert:
+ * they arrive in a later migration than the rest of this table, and a deploy
+ * that landed before it must degrade to "no provisioning" rather than failing
+ * the whole purchase record. Best-effort throughout for the same reason — a
+ * provisioning failure must never fail the webhook, or Stripe would re-process
+ * a pre-order that was recorded fine.
+ */
+async function provisionBuyerAccount(
+  supabase: SupabaseAdmin,
+  args: ProvisionBuyerArgs,
+): Promise<void> {
+  const { preorderId, email, name, sessionId } = args;
+
+  const { data: row, error: readError } = await supabase
+    .from('preorders')
+    .select('provisioned_at, set_password_sent_at')
+    .eq('id', preorderId)
+    .maybeSingle();
+
+  if (readError) {
+    console.error('[stripe-webhook] provisioning state read failed — skipping', {
+      sessionId,
+      preorderId,
+      error: readError,
+    });
+    return;
+  }
+  if (row?.set_password_sent_at) return; // already emailed; nothing owed
+
+  const stamps: { provisioned_at?: string; set_password_sent_at?: string } = {};
+  const now = new Date().toISOString();
+
+  try {
+    if (row?.provisioned_at) {
+      // The account exists from a previous attempt; only the email is owed.
+      const result = await sendSetPasswordLink({ email, fullName: name });
+      if (result.sent) stamps.set_password_sent_at = now;
+      else console.error('[stripe-webhook] set-password resend failed', { sessionId, preorderId, result });
+    } else {
+      const result = await provisionAccountForPurchase({ email, fullName: name });
+      if (result.created) stamps.provisioned_at = now;
+      if (result.emailSent) stamps.set_password_sent_at = now;
+      if (result.error) {
+        console.error('[stripe-webhook] account provisioning failed', { sessionId, preorderId, result });
+      }
+    }
+  } catch (error: unknown) {
+    console.error('[stripe-webhook] account provisioning threw', { sessionId, preorderId, error });
+  }
+
+  if (Object.keys(stamps).length === 0) return;
+  const { error: stampError } = await supabase.from('preorders').update(stamps).eq('id', preorderId);
+  if (stampError) {
+    // The email went out; failing to stamp risks one duplicate on the next
+    // retry, which is far less harmful than never provisioning at all.
+    console.error('[stripe-webhook] provisioning stamp failed', { sessionId, preorderId, error: stampError });
+  }
 }
 
 /**
@@ -307,6 +390,33 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   }
 
   return NextResponse.json({ received: true, canceled: updated?.length ?? 0 });
+}
+
+/**
+ * Statuses a subscription never comes back from. `past_due` is deliberately NOT
+ * here — Stripe is still retrying the card and the buyer still has access, which
+ * is the behaviour we want during dunning.
+ */
+const DEAD_SUBSCRIPTION_STATUSES: ReadonlySet<string> = new Set([
+  'canceled',
+  'unpaid',
+  'incomplete_expired',
+]);
+
+/**
+ * Subscription changed. Only terminal statuses matter here: depending on the
+ * dunning settings, a subscription whose card keeps failing can end up `unpaid`
+ * and simply stay there — `customer.subscription.deleted` never fires, and the
+ * row would keep its `paid` status (and therefore full access) forever.
+ *
+ * Same shape and idempotency as handleSubscriptionDeleted: `paid` -> `canceled`
+ * for the matching row, a no-op once it has already been flipped.
+ */
+async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
+  if (!DEAD_SUBSCRIPTION_STATUSES.has(subscription.status)) {
+    return NextResponse.json({ received: true, ignored: subscription.status });
+  }
+  return handleSubscriptionDeleted(subscription);
 }
 
 interface RecordReferralArgs {
