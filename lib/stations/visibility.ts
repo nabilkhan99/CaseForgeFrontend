@@ -18,13 +18,21 @@ export function visibleStationStates(): boolean[] {
 
 /**
  * True on deployments meant to preview the post-launch state (develop preview,
- * local dev). Hard-refused on the Production environment even if the flag
- * leaks there: staged mode also bypasses the entitlement gate, so a stray env
- * var must never be able to give the whole product away on the live site.
+ * local dev). Hard-refused anywhere that isn't provably one of those: staged
+ * mode also bypasses the entitlement gate, so a stray env var must never be
+ * able to give the whole product away on the live site.
+ *
+ * Deliberately an allowlist of safe environments, not a denylist of
+ * `!== 'production'`. NEXT_PUBLIC_VERCEL_ENV only exists when Vercel's
+ * "automatically expose System Environment Variables" is switched on; with it
+ * off the variable is undefined on production too, and a denylist would read
+ * that as "staged" — failing open on the one deployment that must fail closed.
+ * Undefined therefore falls back to NODE_ENV, which Next always sets.
  */
 export function isStagedDeployment(): boolean {
-    return (
-        process.env.NEXT_PUBLIC_SHOW_STAGED_STATIONS === '1' &&
-        process.env.NEXT_PUBLIC_VERCEL_ENV !== 'production'
-    );
+    if (process.env.NEXT_PUBLIC_SHOW_STAGED_STATIONS !== '1') return false;
+
+    const vercelEnv = process.env.NEXT_PUBLIC_VERCEL_ENV;
+    if (vercelEnv) return vercelEnv === 'preview' || vercelEnv === 'development';
+    return process.env.NODE_ENV !== 'production';
 }

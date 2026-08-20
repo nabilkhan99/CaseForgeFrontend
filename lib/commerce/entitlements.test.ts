@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { parseAdminEmails } from '@/lib/admin/guard'
 import {
   ACCESS_LAUNCH_DATE,
   accessWindow,
@@ -17,6 +18,8 @@ const row = (over: Partial<EntitlementRow>): EntitlementRow => ({
 
 const DURING = new Date('2026-09-20T00:00:00Z')
 const AFTER_PREORDER_WINDOW = new Date('2026-12-15T00:00:00Z')
+/** Before the 1 Sept launch — a preorder row's access window has not opened. */
+const BEFORE_LAUNCH = new Date('2026-08-20T00:00:00Z')
 
 describe('accessWindow', () => {
   it('starts at purchase for post-launch buys', () => {
@@ -68,6 +71,35 @@ describe('computeEntitlement', () => {
 
   it('refunded rows grant nothing', () => {
     expect(computeEntitlement([row({ status: 'refunded' })], DURING).state).toBe('none')
+  })
+
+  it('a one-off row still mid-provisioning grants nothing', () => {
+    // Only `paid` counts, so a buyer whose webhook has written `pending` is
+    // told they have no plan rather than "we are setting you up". Pinned so
+    // the copy question is a deliberate product call, not an accident.
+    expect(computeEntitlement([row({ status: 'pending' })], DURING).state).toBe('none')
+  })
+
+  it('intensive is complete-tier: active with lectures and its coaching day', () => {
+    const e = computeEntitlement(
+      [row({ plan: 'intensive', coaching_day: '2026-09-20' })],
+      DURING,
+    )
+    expect(e).toMatchObject({ state: 'active', hasLectures: true, coachingDay: '2026-09-20' })
+  })
+
+  it('a preorder row reads active before its window opens (CURRENT behaviour)', () => {
+    // `accessWindow().start` floors preorder buys at 1 Sept, but entitlementOf
+    // only tests `now >= end`, so today (20 Aug) a preorder buyer computes as
+    // active twelve days before the advertised opening. Asserted as-is to pin
+    // the status quo — the start-gate semantics land in a sibling branch, and
+    // this expectation is what that change should flip.
+    const e = computeEntitlement(
+      [row({ plan: 'complete', created_at: '2026-07-28T09:00:00Z' })],
+      BEFORE_LAUNCH,
+    )
+    expect(e.state).toBe('active')
+    expect(accessWindow('2026-07-28T09:00:00Z').start > BEFORE_LAUNCH).toBe(true)
   })
 
   it('monthly is active while paid, has no lectures and no expiry', () => {
@@ -160,5 +192,20 @@ describe('decideAccess', () => {
   it('does not treat a missing email as an admin match', () => {
     const d = decideAccess([], ctx({ email: null, admins: new Set(['owner@fourteen.com']) }))
     expect(d.allowed).toBe(false)
+  })
+
+  it('a blank admin entry would match a missing email — parseAdminEmails is what stops it', () => {
+    // decideAccess normalizes a null email to ''. An allowlist that contained
+    // '' would therefore hand an admin bypass to every account without an
+    // email — this is the failure mode:
+    expect(decideAccess([], ctx({ email: null, admins: new Set(['']) })).bypass).toBe(true)
+    // ...and this is the `.filter(Boolean)` in parseAdminEmails preventing it.
+    // ADMIN_EMAILS=',' is the shape that produces blanks (a stray comma, a
+    // trailing separator), so the two are asserted together: neither half is
+    // safe to change without the other.
+    expect(parseAdminEmails(',').size).toBe(0)
+    expect(
+      decideAccess([], ctx({ email: null, admins: parseAdminEmails(', ,') })).allowed,
+    ).toBe(false)
   })
 })
