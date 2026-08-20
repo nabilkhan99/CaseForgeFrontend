@@ -3,6 +3,8 @@ import {
   ACCESS_LAUNCH_DATE,
   accessWindow,
   computeEntitlement,
+  decideAccess,
+  type AccessContext,
   type EntitlementRow,
 } from './entitlements'
 
@@ -95,5 +97,68 @@ describe('computeEntitlement', () => {
     const b = computeEntitlement([row({ plan: 'complete' }), row({})], DURING)
     expect(a.hasLectures).toBe(true)
     expect(b.hasLectures).toBe(true)
+  })
+})
+
+describe('decideAccess', () => {
+  const ctx = (over: Partial<AccessContext> = {}): AccessContext => ({
+    email: 'trainee@nhs.net',
+    staged: false,
+    admins: new Set<string>(),
+    now: DURING,
+    ...over,
+  })
+
+  it('lets an active complete purchase practise', () => {
+    const d = decideAccess([row({ plan: 'complete' })], ctx())
+    expect(d).toMatchObject({ allowed: true, bypass: false })
+    expect(d.entitlement.hasLectures).toBe(true)
+  })
+
+  it('lets an active monthly subscriber practise', () => {
+    const d = decideAccess([row({ plan: 'self_study_monthly' })], ctx())
+    expect(d.allowed).toBe(true)
+    expect(d.entitlement.state).toBe('active')
+  })
+
+  it('blocks a canceled monthly subscriber, read-only', () => {
+    const d = decideAccess([row({ plan: 'self_study_monthly', status: 'canceled' })], ctx())
+    expect(d.allowed).toBe(false)
+    expect(d.entitlement.state).toBe('read_only')
+  })
+
+  it('blocks an expired three-month purchase, read-only', () => {
+    const d = decideAccess([row({})], ctx({ now: AFTER_PREORDER_WINDOW }))
+    expect(d.allowed).toBe(false)
+    expect(d.entitlement.state).toBe('read_only')
+  })
+
+  it('blocks a refunded purchase with nothing at all', () => {
+    const d = decideAccess([row({ status: 'refunded' })], ctx())
+    expect(d.allowed).toBe(false)
+    expect(d.entitlement.state).toBe('none')
+  })
+
+  it('blocks a signed-in user who never bought', () => {
+    expect(decideAccess([], ctx())).toMatchObject({ allowed: false, bypass: false })
+  })
+
+  it('bypasses for admins, however lapsed their purchases', () => {
+    const d = decideAccess(
+      [row({ status: 'refunded' })],
+      ctx({ email: 'Owner@Fourteen.com', admins: new Set(['owner@fourteen.com']) }),
+    )
+    expect(d).toMatchObject({ allowed: true, bypass: true })
+    // The bypass grants access without rewriting what was actually bought.
+    expect(d.entitlement.state).toBe('none')
+  })
+
+  it('bypasses for every signed-in tester on a staged deployment', () => {
+    expect(decideAccess([], ctx({ staged: true }))).toMatchObject({ allowed: true, bypass: true })
+  })
+
+  it('does not treat a missing email as an admin match', () => {
+    const d = decideAccess([], ctx({ email: null, admins: new Set(['owner@fourteen.com']) }))
+    expect(d.allowed).toBe(false)
   })
 })

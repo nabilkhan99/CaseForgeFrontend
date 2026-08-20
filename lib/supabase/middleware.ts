@@ -1,5 +1,5 @@
 import { createServerClient } from '@supabase/ssr';
-import { computeEntitlement } from '@/lib/commerce/entitlements';
+import { decideAccess } from '@/lib/commerce/entitlements';
 import { isStagedDeployment } from '@/lib/stations/visibility';
 import { parseAdminEmails } from '@/lib/admin/guard';
 import { NextResponse, type NextRequest } from 'next/server';
@@ -103,10 +103,12 @@ export async function updateSession(request: NextRequest) {
             const { data: purchases } = await supabase
                 .from('preorders')
                 .select('plan, status, created_at, coaching_day');
-            const entitlement = computeEntitlement(purchases ?? []);
-            const admins = parseAdminEmails(process.env.ADMIN_EMAILS);
-            const bypass = isStagedDeployment() || admins.has((user.email ?? '').toLowerCase());
-            if (entitlement.state !== 'active' && !bypass) {
+            const { entitlement, allowed } = decideAccess(purchases ?? [], {
+                email: user.email,
+                staged: isStagedDeployment(),
+                admins: parseAdminEmails(process.env.ADMIN_EMAILS),
+            });
+            if (!allowed) {
                 const url = request.nextUrl.clone();
                 url.pathname = '/pricing';
                 url.searchParams.set(entitlement.state === 'read_only' ? 'renew' : 'upgrade', 'true');

@@ -44,7 +44,7 @@ export interface Entitlement {
 
 export const NO_ENTITLEMENT: Entitlement = { state: 'none', hasLectures: false }
 
-function isMonthly(plan: string): boolean {
+export function isMonthlyPlan(plan: string): boolean {
   return plan === 'self_study_monthly'
 }
 
@@ -58,7 +58,7 @@ export function accessWindow(createdAt: string): { start: Date; end: Date } {
 function entitlementOf(row: EntitlementRow, now: Date): Entitlement | null {
   if (row.status === 'refunded') return null
 
-  if (isMonthly(row.plan)) {
+  if (isMonthlyPlan(row.plan)) {
     // 'paid' = subscription alive; 'canceled' = Stripe already ended it.
     if (row.status !== 'paid') return { state: 'read_only', plan: row.plan, hasLectures: false }
     return { state: 'active', plan: row.plan, hasLectures: false }
@@ -93,4 +93,35 @@ export function computeEntitlement(rows: EntitlementRow[], now: Date = new Date(
       }
       return e.hasLectures && !best.hasLectures ? e : best
     }, NO_ENTITLEMENT)
+}
+
+export interface AccessContext {
+  /** Signed-in user's email — purchases and the admin allowlist both key off it. */
+  email?: string | null
+  /** Staged deployment (develop preview, local dev): testers count as entitled. */
+  staged: boolean
+  /** Normalized ADMIN_EMAILS allowlist — admins are never locked out of the product. */
+  admins: Set<string>
+  now?: Date
+}
+
+export interface AccessDecision {
+  entitlement: Entitlement
+  /** Access waived rather than bought: staged deployment or admin allowlist. */
+  bypass: boolean
+  /** May start a consultation. Read-only surfaces (history, feedback) ignore this. */
+  allowed: boolean
+}
+
+/**
+ * The one gate the page middleware and the server API chokepoints share, so a
+ * route can never disagree with the middleware about who may practise.
+ *
+ * Pure by construction: env reading stays with the callers, which run in
+ * different runtimes (edge middleware vs. node route handlers).
+ */
+export function decideAccess(rows: EntitlementRow[], ctx: AccessContext): AccessDecision {
+  const entitlement = computeEntitlement(rows, ctx.now ?? new Date())
+  const bypass = ctx.staged || ctx.admins.has((ctx.email ?? '').trim().toLowerCase())
+  return { entitlement, bypass, allowed: entitlement.state === 'active' || bypass }
 }

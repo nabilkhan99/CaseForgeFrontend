@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { getServerEntitlement } from '@/lib/commerce/serverEntitlement';
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { supabase, user, allowed } = await getServerEntitlement();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // The middleware only guards the page; without this an expired or
+  // never-paid account could start sessions straight from the API.
+  if (!allowed) {
+    return NextResponse.json({ error: 'no_active_plan' }, { status: 403 });
   }
 
   const { sessionId, stationId } = await req.json();
