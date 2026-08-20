@@ -6,6 +6,8 @@
 
 import { createClient } from '@/lib/supabase/client';
 import { visibleStationStates } from '@/lib/stations/visibility';
+import { reduceStationPassMap, type StationAttemptRow } from '@/lib/supabase/queries/passTracking';
+import type { Verdict } from '@/lib/clinical-master/types';
 
 export interface Domain {
     id: string;
@@ -13,6 +15,8 @@ export interface Domain {
     description: string;
     station_count: number;
     completed_count: number;
+    /** Distinct stations in this domain whose best attempt passed. */
+    passed_count: number;
 }
 
 export interface CompletedAttempt {
@@ -36,6 +40,13 @@ export interface Station {
     sessionId?: string;
     last_attempted?: string;
     attempts: CompletedAttempt[];
+    // Pass state, from session_results across every attempt (see passTracking.ts)
+    /** Best attempt reached a passing verdict — a later fail never revokes it. */
+    passed: boolean;
+    /** Best verdict band achieved; null when nothing was genuinely marked. */
+    bestVerdict: Verdict | null;
+    /** Highest weighted score achieved; null when nothing was genuinely marked. */
+    bestScore: number | null;
 }
 
 /**
@@ -71,22 +82,47 @@ export async function getDomains(userId?: string): Promise<Domain[]> {
     // stations, not sessions — repeat attempts at the same case must not push
     // completion above the number of stations in the domain.
     const completedByDomain: Record<string, number> = {};
+    const passedByDomain: Record<string, number> = {};
     if (userId) {
         const { data: sessions } = await supabase
             .from('clinical_sessions')
-            .select('station_id, stations!inner(domain_id)')
+            .select('station_id, stations!inner(domain_id), session_results(verdict, weighted_score)')
             .eq('user_id', userId)
             .eq('status', 'completed');
 
+        // Pass state is per station across every attempt, so reduce first and
+        // then count the passed stations back into their domains.
+        const passMap = reduceStationPassMap(
+            (sessions ?? []).map((s) => {
+                const result = s.session_results as unknown as {
+                    verdict: string | null;
+                    weighted_score: number | string | null;
+                } | null;
+                return {
+                    station_id: s.station_id,
+                    verdict: result?.verdict ?? null,
+                    weighted_score: result?.weighted_score ?? null,
+                } satisfies StationAttemptRow;
+            }),
+        );
+
         const stationsByDomain: Record<string, Set<string>> = {};
+        const passedStationsByDomain: Record<string, Set<string>> = {};
         sessions?.forEach((s) => {
             const domainId = (s.stations as unknown as { domain_id: string }).domain_id;
             if (!s.station_id) return;
             if (!stationsByDomain[domainId]) stationsByDomain[domainId] = new Set();
             stationsByDomain[domainId].add(s.station_id);
+            if (passMap.get(s.station_id)?.passed) {
+                if (!passedStationsByDomain[domainId]) passedStationsByDomain[domainId] = new Set();
+                passedStationsByDomain[domainId].add(s.station_id);
+            }
         });
         Object.entries(stationsByDomain).forEach(([domainId, stationIds]) => {
             completedByDomain[domainId] = stationIds.size;
+        });
+        Object.entries(passedStationsByDomain).forEach(([domainId, stationIds]) => {
+            passedByDomain[domainId] = stationIds.size;
         });
     }
 
@@ -96,6 +132,7 @@ export async function getDomains(userId?: string): Promise<Domain[]> {
         description: d.description,
         station_count: countByDomain[d.id] || 0,
         completed_count: completedByDomain[d.id] || 0,
+        passed_count: passedByDomain[d.id] || 0,
     }));
 }
 
@@ -143,14 +180,35 @@ export async function getStationsForDomain(domainId: string, userId?: string): P
     }
     const latestByStation: Record<string, SessionInfo> = {};
     const attemptsByStation: Record<string, CompletedAttempt[]> = {};
+    let passMap = new Map<string, { passed: boolean; bestVerdict: Verdict | null; bestScore: number | null }>();
 
     if (userId && stations.length > 0) {
+        // session_results rides along on the same query — the pass badge must not
+        // cost the library page a second round trip.
         const { data: sessions } = await supabase
             .from('clinical_sessions')
-            .select('id, station_id, status, overall_score, started_at, completed_at')
+            .select('id, station_id, status, overall_score, started_at, completed_at, session_results(verdict, weighted_score)')
             .eq('user_id', userId)
             .in('station_id', stations.map(s => s.id))
             .order('started_at', { ascending: false });
+
+        // Only completed sessions carry a mark; an in-progress row would count
+        // as an attempt it hasn't earned.
+        passMap = reduceStationPassMap(
+            (sessions ?? [])
+                .filter(s => s.status === 'completed')
+                .map(s => {
+                    const result = s.session_results as unknown as {
+                        verdict: string | null;
+                        weighted_score: number | string | null;
+                    } | null;
+                    return {
+                        station_id: s.station_id,
+                        verdict: result?.verdict ?? null,
+                        weighted_score: result?.weighted_score ?? null,
+                    } satisfies StationAttemptRow;
+                }),
+        );
 
         sessions?.forEach(session => {
             // Collect all completed attempts
@@ -185,6 +243,7 @@ export async function getStationsForDomain(domainId: string, userId?: string): P
 
         // Use the most recent completed attempt for score display
         const latestCompleted = attempts.length > 0 ? attempts[0] : null;
+        const passState = passMap.get(s.id);
 
         return {
             id: s.id,
@@ -200,6 +259,9 @@ export async function getStationsForDomain(domainId: string, userId?: string): P
             sessionId: latestCompleted?.sessionId ?? session?.id,
             last_attempted: session?.started_at,
             attempts,
+            passed: passState?.passed ?? false,
+            bestVerdict: passState?.bestVerdict ?? null,
+            bestScore: passState?.bestScore ?? null,
         };
     });
 }
@@ -249,6 +311,9 @@ export async function getAllStations(): Promise<Station[]> {
         is_active: s.is_active,
         status: 'not-started' as const,
         attempts: [],
+        passed: false,
+        bestVerdict: null,
+        bestScore: null,
     }));
 }
 

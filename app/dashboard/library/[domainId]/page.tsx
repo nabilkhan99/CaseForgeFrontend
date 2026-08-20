@@ -12,6 +12,8 @@ import PageHeader from '@/components/ui/PageHeader';
 import Container from '@/components/ui/Container';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import ScoreBadge from '@/components/ui/ScoreBadge';
+import VerdictPill from '@/components/ui/VerdictPill';
+import { MAX_WEIGHTED_SCORE } from '@/lib/clinical-master/types';
 
 function formatDate(dateStr?: string): string {
   if (!dateStr) return '';
@@ -81,11 +83,20 @@ function StationRow({ station, onStart, onViewFeedback }: {
                 {station.attempts.length} attempt{station.attempts.length !== 1 ? 's' : ''}
               </span>
             )}
+            {station.bestScore !== null && (
+              <span className="text-[11px] font-mono text-muted">
+                best {station.bestScore.toFixed(1)}/{MAX_WEIGHTED_SCORE}
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Score or Start button */}
-        {hasAttempts && latestAttempt?.score != null ? (
+        {/* Verdict from the best attempt, else the legacy score badge */}
+        {station.bestVerdict ? (
+          <motion.span initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }}>
+            <VerdictPill verdict={station.bestVerdict} passed={station.passed} />
+          </motion.span>
+        ) : hasAttempts && latestAttempt?.score != null ? (
           <ScoreBadge score={latestAttempt.score} showLabel />
         ) : (
           <span className="text-[12px] text-muted">Not started</span>
@@ -209,6 +220,7 @@ export default function DomainDetailPage({ params }: PageProps) {
   };
 
   const completedCount = stations.filter(s => s.status === 'completed').length;
+  const passedCount = stations.filter(s => s.passed).length;
   const stationsWithScores = stations.filter(s => s.attempts.length > 0 && s.attempts[0].score != null);
   const avgScore = stationsWithScores.length > 0
     ? Math.round(stationsWithScores.reduce((sum, s) => sum + (s.attempts[0].score || 0), 0) / stationsWithScores.length)
@@ -220,7 +232,7 @@ export default function DomainDetailPage({ params }: PageProps) {
         title={domainName || 'Loading...'}
         subtitle={
           stations.length > 0
-            ? `${completedCount}/${stations.length} completed${avgScore > 0 ? ` \u00B7 Average: ${avgScore}%` : ''}`
+            ? `${passedCount} of ${stations.length} passed \u00B7 ${completedCount} attempted${avgScore > 0 ? ` \u00B7 Average: ${avgScore}%` : ''}`
             : undefined
         }
         breadcrumbs={[
