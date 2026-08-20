@@ -25,6 +25,7 @@ import type {
 import type { SessionHistoryItem } from '@/lib/supabase/queries/dashboard';
 import type { SubscriptionResponse } from '@/app/api/subscription/route';
 import { formatRelativeDate } from '@/lib/utils';
+import { ACCESS_OPENS_LABEL } from '@/lib/commerce/plans';
 
 const defaultStats: UserStats = {
   currentStreak: 0,
@@ -193,7 +194,22 @@ export default function DashboardPage() {
           silence would be worse, because the buy path would simply vanish.
           `bypass` (admin, staged deployment, fail-open) suppresses the nags:
           those users have access, whatever their own purchases say. */}
-      {!access?.bypass && (access === null || access.state === 'none') && (
+      {/* state 'none' WITH a plan = a preorder whose window hasn't opened.
+          They paid; the one message that must never appear is "upgrade". */}
+      {access?.state === 'none' && access.plan && !access.bypass && (
+        <motion.div
+          className="mb-6 px-4 py-3 rounded-xl flex items-center justify-between gap-3"
+          style={{ background: 'rgba(180,83,9,0.06)', border: '1px solid rgba(180,83,9,0.12)' }}
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <p className="text-[13px] text-heading">
+            You&apos;re in{access.planName ? ` — ${access.planName}` : ''}. Your access opens on{' '}
+            <span className="font-semibold">{ACCESS_OPENS_LABEL}</span>.
+          </p>
+        </motion.div>
+      )}
+      {!access?.bypass && (access === null || (access.state === 'none' && !access.plan)) && (
         <motion.div
           className="mb-6 px-4 py-3 rounded-xl flex items-center justify-between gap-3"
           style={{ background: 'rgba(180,83,9,0.04)', border: '1px solid rgba(180,83,9,0.08)' }}

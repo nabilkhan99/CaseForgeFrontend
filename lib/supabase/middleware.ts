@@ -128,8 +128,17 @@ export async function updateSession(request: NextRequest) {
                 });
                 if (!allowed) {
                     const url = request.nextUrl.clone();
-                    url.pathname = '/pricing';
-                    url.searchParams.set(entitlement.state === 'read_only' ? 'renew' : 'upgrade', 'true');
+                    // state 'none' WITH a plan is a preorder whose window hasn't
+                    // opened — a paying customer. Sending them to /pricing reads
+                    // as "your purchase doesn't exist"; the dashboard explains
+                    // that access opens 1 Sept instead.
+                    if (entitlement.state === 'none' && entitlement.plan) {
+                        url.pathname = '/dashboard';
+                        url.search = '';
+                    } else {
+                        url.pathname = '/pricing';
+                        url.searchParams.set(entitlement.state === 'read_only' ? 'renew' : 'upgrade', 'true');
+                    }
                     return NextResponse.redirect(url);
                 }
             }
