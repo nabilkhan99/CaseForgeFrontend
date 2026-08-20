@@ -244,15 +244,6 @@ export interface ReferralDecisionInput {
    * per-plan floors.
    */
   minSpendOverridePence?: number | null
-  /**
-   * True when nothing has been charged yet — a subscription bought before launch,
-   * where the first payment is held until access opens. The referral is real and
-   * is recorded now, but it is worth £0 until that first payment actually lands
-   * (see the invoice.paid handler), because a trial that is cancelled before it
-   * bills has produced no revenue to pay a reward out of. Both gates below would
-   * otherwise misfire on a £0 amount.
-   */
-  awaitingFirstPayment?: boolean
 }
 
 export interface ReferralDecision {
@@ -278,27 +269,14 @@ export interface ReferralDecision {
  *   3. otherwise → pending
  */
 export function decideReferral(input: ReferralDecisionInput): ReferralDecision {
-  const {
-    ownerEmail,
-    refereeEmail,
-    plan,
-    amountTotalPence,
-    rewardOverridePence,
-    minSpendOverridePence,
-    awaitingFirstPayment = false,
-  } = input
-  const rewardAmount = awaitingFirstPayment ? 0 : resolveReward(plan, rewardOverridePence)
+  const { ownerEmail, refereeEmail, plan, amountTotalPence, rewardOverridePence, minSpendOverridePence } =
+    input
+  const rewardAmount = resolveReward(plan, rewardOverridePence)
 
   if (isSelfReferral(ownerEmail, refereeEmail)) {
     return { status: 'void', voidReason: 'self_referral', rewardAmount }
   }
-  // The spend gate is meaningless against an amount of £0 that is £0 only because
-  // billing hasn't started — it moves to the first real payment in that case.
-  // Self-referral above still applies: that is wrong from the moment it happens.
-  if (
-    !awaitingFirstPayment &&
-    !meetsMinimumSpend(plan, amountTotalPence, minSpendOverridePence)
-  ) {
+  if (!meetsMinimumSpend(plan, amountTotalPence, minSpendOverridePence)) {
     return { status: 'void', voidReason: 'below_min_spend', rewardAmount }
   }
   return { status: 'pending', voidReason: null, rewardAmount }

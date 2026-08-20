@@ -365,31 +365,15 @@ describe('monthly referrals', () => {
     ).toEqual({ status: 'void', voidReason: 'below_min_spend', rewardAmount: 5000 })
   })
 
-  it('holds the reward at £0 while a pre-launch subscription is uncharged', () => {
-    // Bought before access opens: billing is held to 1 September, so £0 has
-    // moved. Recorded as a real, pending referral — the invoice.paid handler
-    // credits it the moment the first charge lands.
-    expect(
-      decideReferral({
-        ownerEmail: 'owner@example.com',
-        refereeEmail: 'friend@example.com',
-        plan: 'self_study_monthly',
-        amountTotalPence: 0,
-        awaitingFirstPayment: true,
-      }),
-    ).toEqual({ status: 'pending', voidReason: null, rewardAmount: 0 })
-  })
-
-  it('still voids a self-referred signup that has not been charged', () => {
+  it('voids a self-referred monthly signup', () => {
     expect(
       decideReferral({
         ownerEmail: 'owner@example.com',
         refereeEmail: 'OWNER@example.com',
         plan: 'self_study_monthly',
-        amountTotalPence: 0,
-        awaitingFirstPayment: true,
+        amountTotalPence: 12900,
       }),
-    ).toEqual({ status: 'void', voidReason: 'self_referral', rewardAmount: 0 })
+    ).toEqual({ status: 'void', voidReason: 'self_referral', rewardAmount: 5000 })
   })
 
   it('keeps a monthly floor for that first payment to be tested against', () => {
@@ -398,7 +382,7 @@ describe('monthly referrals', () => {
     expect(meetsMinimumSpend('self_study_monthly', 12899)).toBe(false)
   })
 
-  it('resolveReward keeps override-beats-tier precedence for the credit path', () => {
+  it('resolveReward keeps override-beats-tier precedence', () => {
     expect(resolveReward('self_study_monthly')).toBe(5000)
     expect(resolveReward('self_study_monthly', 10000)).toBe(10000)
     expect(resolveReward('self_study_monthly', null)).toBe(5000)

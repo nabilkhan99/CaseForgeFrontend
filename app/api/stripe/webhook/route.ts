@@ -7,12 +7,10 @@ import {
   REWARD_BY_PLAN,
   decideReferral,
   generateReferralCode,
-  meetsMinimumSpend,
   normalizeCode,
   normalizeEmail,
   parseMinSpendOverride,
   referralUrl,
-  resolveReward,
 } from '@/lib/commerce/referrals';
 import { sendReferralEmail } from '@/lib/email/referralEmail';
 import { sendPurchaseEmail } from '@/lib/email/purchaseEmail';
@@ -37,13 +35,10 @@ type SupabaseAdmin = ReturnType<typeof getSupabaseAdmin>;
  * so it can't be paid out; the pre-order is flipped to refunded only on a full
  * refund (a partially-refunded buyer still holds their seat).
  *
- * `invoice.paid` -> credit a monthly referral that was recorded at £0 because
- * the subscription had not been charged yet (pre-launch signups bill on 1 Sept).
- *
  * `customer.subscription.deleted` -> mark the monthly order canceled.
  *
- * Ops: the Stripe webhook endpoint must have `charge.refunded`, `invoice.paid`
- * and `customer.subscription.deleted` enabled.
+ * Ops: the Stripe webhook endpoint must have `charge.refunded` and
+ * `customer.subscription.deleted` enabled.
  */
 export async function POST(request: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -74,9 +69,6 @@ export async function POST(request: Request) {
   if (event.type === 'charge.refunded') {
     return handleChargeRefunded(event.data.object as Stripe.Charge);
   }
-  if (event.type === 'invoice.paid') {
-    return handleInvoicePaid(event.data.object as Stripe.Invoice);
-  }
   if (event.type === 'customer.subscription.deleted') {
     return handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
   }
@@ -85,11 +77,7 @@ export async function POST(request: Request) {
 }
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin: string) {
-  // 'no_payment_required' is the legitimate state for a subscription that starts
-  // on a trial (pre-launch monthly signups bill from 1 September, not today) —
-  // the card is captured and the order is real, so it must be recorded.
-  const trialling = session.mode === 'subscription' && session.payment_status === 'no_payment_required';
-  if (session.payment_status !== 'paid' && !trialling) {
+  if (session.payment_status !== 'paid') {
     // Async payment methods settle later via checkout.session.async_payment_succeeded;
     // card payments (our case) are always 'paid' here.
     return NextResponse.json({ received: true, deferred: session.id });
@@ -191,7 +179,6 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
       refereeEmail: buyerEmail,
       plan,
       amount: session.amount_total ?? 0,
-      awaitingFirstPayment: trialling,
     });
     if (recorded === 'failed') {
       return NextResponse.json({ error: 'Failed to record referral' }, { status: 500 });
@@ -280,106 +267,6 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
 }
 
 /**
- * A subscription invoice was paid.
- *
- * This exists for one job: crediting a referral recorded at £0 because the
- * subscription had not been charged yet. Monthly referrals pay £50 on the FIRST
- * payment (founder decision 2026-08-20), and for a plan bought after launch that
- * payment happens at checkout — recordReferral has already set the reward and
- * this handler finds nothing to do. Only a pre-launch signup, whose first charge
- * is held until access opens, arrives here still owed its reward.
- *
- * Deliberately NOT gated on `billing_reason`: what matters is whether money
- * actually moved, not which invoice moved it. The £0 trial invoice fails the
- * spend check below; the first real charge passes it.
- *
- * Idempotent by construction: it only ever updates a referral still sitting at
- * reward_amount = 0, so a redelivered invoice — or every later renewal — is a
- * no-op rather than a repeat credit.
- */
-async function handleInvoicePaid(invoice: Stripe.Invoice) {
-  // Stripe's Basil API moved the subscription off the invoice root: it now hangs
-  // off `parent.subscription_details`, expanded or not.
-  const subscription = invoice.parent?.subscription_details?.subscription ?? null;
-  const subscriptionId = typeof subscription === 'string' ? subscription : (subscription?.id ?? null);
-  if (!subscriptionId) {
-    return NextResponse.json({ received: true, ignored: 'no_subscription', invoiceId: invoice.id });
-  }
-
-  const supabase = getSupabaseAdmin();
-  const { data: preorder, error: findError } = await supabase
-    .from('preorders')
-    .select('id, plan, referral_code, status')
-    .eq('stripe_subscription_id', subscriptionId)
-    .maybeSingle();
-
-  if (findError) {
-    console.error('[stripe-webhook] renewal preorder lookup failed', { subscriptionId, error: findError });
-    return NextResponse.json({ error: 'Failed to process renewal' }, { status: 500 });
-  }
-  // A renewal with no matching order is not an error worth retrying (e.g. a
-  // subscription created outside checkout) — log and move on.
-  if (!preorder) {
-    console.warn('[stripe-webhook] renewal could not be matched to a preorder', { subscriptionId });
-    return NextResponse.json({ received: true, ignored: 'no_preorder', subscriptionId });
-  }
-  if (!preorder.referral_code) {
-    return NextResponse.json({ received: true, ignored: 'no_referral', preorderId: preorder.id });
-  }
-  // A refunded/cancelled order must not mint a reward on a straggling invoice.
-  if (preorder.status !== 'paid') {
-    return NextResponse.json({ received: true, ignored: `status_${preorder.status}`, preorderId: preorder.id });
-  }
-
-  // Re-resolve the amount rather than trusting a stored one: a per-code override
-  // may have been negotiated (or changed) since the signup.
-  const { data: codeRow, error: codeError } = await supabase
-    .from('referral_codes')
-    .select('reward_override_pence')
-    .eq('code', preorder.referral_code)
-    .maybeSingle();
-  if (codeError) {
-    console.error('[stripe-webhook] renewal code lookup failed', { subscriptionId, error: codeError });
-    return NextResponse.json({ error: 'Failed to process renewal' }, { status: 500 });
-  }
-
-  // The qualifying-spend test that decideReferral skipped for an uncharged
-  // subscription lands here, against the payment that actually earns the reward.
-  // This is also what stops the £0 trial invoice from crediting anything.
-  const minSpendOverride = parseMinSpendOverride(process.env.REFERRAL_MIN_SPEND_OVERRIDE_PENCE);
-  if (!meetsMinimumSpend(preorder.plan, invoice.amount_paid ?? 0, minSpendOverride)) {
-    console.warn('[stripe-webhook] renewal below qualifying spend — no credit', {
-      preorderId: preorder.id,
-      amountPaid: invoice.amount_paid,
-    });
-    return NextResponse.json({ received: true, ignored: 'below_min_spend', preorderId: preorder.id });
-  }
-
-  const rewardAmount = resolveReward(preorder.plan, codeRow?.reward_override_pence ?? null);
-  const { data: credited, error: updateError } = await supabase
-    .from('referrals')
-    .update({ reward_amount: rewardAmount })
-    .eq('preorder_id', preorder.id)
-    .eq('status', 'pending')
-    .eq('reward_amount', 0)
-    .select('id');
-
-  if (updateError) {
-    console.error('[stripe-webhook] referral credit failed', { preorderId: preorder.id, error: updateError });
-    return NextResponse.json({ error: 'Failed to process renewal' }, { status: 500 });
-  }
-
-  const creditedCount = credited?.length ?? 0;
-  if (creditedCount > 0) {
-    console.log('[stripe-webhook] referral credited on first payment', {
-      preorderId: preorder.id,
-      rewardAmount,
-    });
-  }
-  return NextResponse.json({ received: true, credited: creditedCount });
-}
-
-/**
  * Subscription ended (cancelled by the buyer, or after failed payments).
  *
  * Marks the order canceled so the admin dashboard stops counting it as live
@@ -413,8 +300,6 @@ interface RecordReferralArgs {
   refereeEmail: string;
   plan: string;
   amount: number;
-  /** Subscription bought pre-launch: nothing charged yet, so the reward waits. */
-  awaitingFirstPayment?: boolean;
 }
 
 /**
@@ -430,7 +315,7 @@ async function recordReferral(
   supabase: SupabaseAdmin,
   args: RecordReferralArgs,
 ): Promise<'ok' | 'skipped' | 'failed'> {
-  const { referralCode, preorderId, refereeEmail, plan, amount, awaitingFirstPayment } = args;
+  const { referralCode, preorderId, refereeEmail, plan, amount } = args;
   if (!referralCode) return 'skipped';
 
   const { data: codeRow, error: codeError } = await supabase
@@ -456,7 +341,6 @@ async function recordReferral(
     // full happy path (pending -> qualified -> paid) is testable. Unset in
     // production, where the real 50%-of-list floors apply.
     minSpendOverridePence: parseMinSpendOverride(process.env.REFERRAL_MIN_SPEND_OVERRIDE_PENCE),
-    awaitingFirstPayment,
   });
 
   const { error: referralError } = await supabase.from('referrals').insert({

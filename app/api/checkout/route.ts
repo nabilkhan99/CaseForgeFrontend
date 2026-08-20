@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getStripe } from '@/lib/commerce/stripe';
 import {
-  ACCESS_OPENS_AT,
   getPlan,
   isSubscriptionPlan,
   stripePriceIdFor,
@@ -148,21 +147,12 @@ export async function POST(request: Request) {
       metadata,
       // Stripe rejects payment_intent_data on a subscription session (there is no
       // one PaymentIntent — each cycle raises its own invoice).
+      // Monthly charges on purchase, exactly like the one-off plans — it is a
+      // pre-order either way, and the first payment is what starts the referral
+      // reward moving. No trial: the buyer pays today and their month runs from
+      // today. (Founder decision 2026-08-20.)
       ...(subscription
-        ? {
-            subscription_data: {
-              description,
-              metadata,
-              // Pre-launch: hold the first charge until access actually opens.
-              // Billing a rolling plan from today would take up to two weeks of
-              // £129 for a product nobody can use yet. Stripe wants trial_end at
-              // least 48h out; once 1 September passes this drops away and the
-              // subscription bills immediately, as normal.
-              ...(ACCESS_OPENS_AT.getTime() > Date.now()
-                ? { trial_end: Math.floor(ACCESS_OPENS_AT.getTime() / 1000) }
-                : {}),
-            },
-          }
+        ? { subscription_data: { description, metadata } }
         : { payment_intent_data: { description } }),
     });
 

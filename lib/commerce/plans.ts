@@ -25,12 +25,6 @@ export interface Plan {
   highlighted: boolean
   /** Billing shape. Drives Stripe checkout `mode` via {@link isSubscriptionPlan}. */
   billing: BillingPeriod
-  /**
-   * Whether the £500 SCA Guarantee applies. Deliberately false on the monthly
-   * plan: the guarantee pays £500 against a spend that can be stopped after one
-   * £129 month, which inverts the economics it was written for.
-   */
-  guaranteed: boolean
 }
 
 export const PLANS: readonly Plan[] = [
@@ -44,7 +38,6 @@ export const PLANS: readonly Plan[] = [
     ctaLabel: 'Pre-order now',
     highlighted: false,
     billing: 'three_month',
-    guaranteed: true,
   },
   {
     key: 'self_study_monthly',
@@ -56,7 +49,6 @@ export const PLANS: readonly Plan[] = [
     ctaLabel: 'Start monthly',
     highlighted: false,
     billing: 'monthly',
-    guaranteed: false,
   },
   {
     key: 'complete',
@@ -68,7 +60,6 @@ export const PLANS: readonly Plan[] = [
     ctaLabel: 'Choose your coaching day',
     highlighted: true,
     billing: 'three_month',
-    guaranteed: true,
   },
   {
     key: 'intensive',
@@ -80,7 +71,6 @@ export const PLANS: readonly Plan[] = [
     ctaLabel: 'Book a call',
     highlighted: false,
     billing: 'three_month',
-    guaranteed: true,
   },
 ] as const
 
@@ -95,11 +85,6 @@ export function getPlan(key: string): Plan | undefined {
  */
 export function isSubscriptionPlan(key: string): boolean {
   return PLANS.find((p) => p.key === key)?.billing === 'monthly'
-}
-
-/** True when a plan carries the £500 SCA Guarantee. Unknown plans do not. */
-export function isGuaranteedPlan(key: string): boolean {
-  return PLANS.find((p) => p.key === key)?.guaranteed === true
 }
 
 /** Server-only: map a checkout-able plan to its Stripe Price id. */
@@ -151,11 +136,3 @@ export interface CoachingDayAvailability {
 /** The course goes live on this date; purchases before it start then. */
 export const ACCESS_OPENS = '2026-09-01'
 export const ACCESS_OPENS_LABEL = '1 September 2026'
-
-/**
- * The same moment as {@link ACCESS_OPENS_LABEL}, as an instant. Rolling plans
- * bought before this date start their billing here rather than on purchase —
- * charging monthly for a product that has not opened yet would be taking money
- * for nothing. Self-expiring: once the date passes, monthly bills immediately.
- */
-export const ACCESS_OPENS_AT = new Date('2026-09-01T00:00:00.000Z')

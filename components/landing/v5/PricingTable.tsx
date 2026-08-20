@@ -7,7 +7,6 @@ import { ArrowRight, Info } from 'lucide-react';
 import {
   ACCESS_OPENS_LABEL,
   BOOK_A_CALL_URL,
-  isGuaranteedPlan,
   type BillingPeriod,
   type PlanKey,
 } from '@/lib/commerce/plans';
@@ -96,11 +95,23 @@ function selfStudyPlanFor(billing: BillingPeriod): PlanKey {
   return billing === 'monthly' ? 'self_study_monthly' : 'self_study';
 }
 
+/** Self-Study list prices in pence — the saving below is derived from these. */
+const SELF_STUDY_THREE_MONTH_PENCE = 29900;
+const SELF_STUDY_MONTHLY_PENCE = 12900;
+
+/**
+ * What three months on the rolling plan would cost against the one-off price,
+ * as a percentage. Computed, not typed: change either price above and the badge
+ * follows. £299 vs 3 × £129 = £387 → 23%.
+ */
+const THREE_MONTH_SAVING_PERCENT = Math.round(
+  (1 - SELF_STUDY_THREE_MONTH_PENCE / (SELF_STUDY_MONTHLY_PENCE * 3)) * 100,
+);
+
 /**
  * How the Self-Study column prices itself under each billing choice. The £299
  * plan is shown as its monthly equivalent (the headline £299 lands heavy), with
- * the one-off truth stated plainly underneath; monthly states the launch date,
- * because a pre-launch subscription doesn't start billing until access opens.
+ * the one-off truth stated plainly underneath. Both charge on purchase.
  */
 const SELF_STUDY_PRICING: Record<BillingPeriod, { pounds: string; pence?: string; suffix: string; tagline: string }> = {
   three_month: {
@@ -112,7 +123,7 @@ const SELF_STUDY_PRICING: Record<BillingPeriod, { pounds: string; pence?: string
   monthly: {
     pounds: '£129',
     suffix: '/month',
-    tagline: `Cancel any time · First payment ${ACCESS_OPENS_LABEL}`,
+    tagline: 'Cancel any time',
   },
 };
 
@@ -128,7 +139,7 @@ interface BillingToggleProps {
  */
 function BillingToggle({ billing, onChange }: BillingToggleProps) {
   const options: readonly { key: BillingPeriod; label: string; hint?: string }[] = [
-    { key: 'three_month', label: '3 months', hint: 'Save £88' },
+    { key: 'three_month', label: '3 months', hint: `Save ${THREE_MONTH_SAVING_PERCENT}%` },
     { key: 'monthly', label: 'Monthly' },
   ];
 
@@ -288,7 +299,6 @@ function MobileCards({ selfStudy, billing }: MobileCardsProps) {
       badge: null,
       valueLine: null,
       cellIndex: 0,
-      guaranteed: isGuaranteedPlan(selfStudyPlan),
     },
     {
       key: 'complete' as const,
@@ -300,7 +310,6 @@ function MobileCards({ selfStudy, billing }: MobileCardsProps) {
       badge: 'Most popular',
       valueLine: '£1,497 total value',
       cellIndex: 1,
-      guaranteed: true,
     },
     {
       key: 'intensive' as const,
@@ -312,7 +321,6 @@ function MobileCards({ selfStudy, billing }: MobileCardsProps) {
       badge: null,
       valueLine: null,
       cellIndex: 2,
-      guaranteed: true,
     },
   ];
 
@@ -379,22 +387,13 @@ function MobileCards({ selfStudy, billing }: MobileCardsProps) {
               );
             })}
 
-            {/* Guarantee row — monthly doesn't carry it (see Plan.guaranteed). */}
-            {card.guaranteed ? (
-              <div className="flex items-center justify-between gap-3 bg-[#EAF3DE] px-5 py-3.5">
-                <GuaranteeInfo />
-                <p className="text-right text-[11px] leading-snug text-[#27500A]">
-                  Don’t pass? We pay you £500
-                </p>
-              </div>
-            ) : (
-              <div className="flex items-center justify-between gap-3 bg-surface-warm px-5 py-3.5">
-                <p className="text-[11px] font-medium text-muted">SCA Guarantee</p>
-                <p className="text-right text-[11px] leading-snug text-muted">
-                  On 3-month plans only
-                </p>
-              </div>
-            )}
+            {/* Guarantee row */}
+            <div className="flex items-center justify-between gap-3 bg-[#EAF3DE] px-5 py-3.5">
+              <GuaranteeInfo />
+              <p className="text-right text-[11px] leading-snug text-[#27500A]">
+                Don’t pass? We pay you £500
+              </p>
+            </div>
           </div>
 
           <div className="p-3">
@@ -409,12 +408,11 @@ function MobileCards({ selfStudy, billing }: MobileCardsProps) {
 /** The three-tier pricing table: matrix on desktop, stacked cards on mobile. */
 export default function PricingTable() {
   const selfStudy = useSelfStudyCheckout();
-  // Three-month is the default: it is the better deal (£299 vs £387) and the one
-  // a study budget will reimburse, so monthly is the deliberate opt-out.
+  // Three-month is the default: it is the better deal (£299 vs 3 × £129) and the
+  // one a study budget will reimburse, so monthly is the deliberate opt-out.
   const [billing, setBilling] = useState<BillingPeriod>('three_month');
   const selfStudyPlan = selfStudyPlanFor(billing);
   const selfStudyPrice = SELF_STUDY_PRICING[billing];
-  const everyPlanGuaranteed = isGuaranteedPlan(selfStudyPlan);
 
   return (
     <section id="pricing" className="scroll-mt-24 px-5 py-6 sm:px-8 sm:py-10">
@@ -544,9 +542,7 @@ export default function PricingTable() {
               <div className="col-span-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-[#EAF3DE] px-6 py-3.5 text-center">
                 <GuaranteeInfo />
                 <p className="text-[11px] text-[#27500A] sm:text-xs">
-                  {everyPlanGuaranteed
-                    ? 'Every plan — don’t pass, and we pay you £500.'
-                    : 'On the 3-month plans — don’t pass, and we pay you £500.'}
+                  Every plan — don&rsquo;t pass, and we pay you £500.
                 </p>
               </div>
             </div>
