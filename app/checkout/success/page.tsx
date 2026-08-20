@@ -15,6 +15,7 @@ function CheckoutSuccessContent() {
 
   const [access, setAccess] = useState<SubscriptionResponse | null>(null);
   const [timedOut, setTimedOut] = useState(false);
+  const [needsPassword, setNeedsPassword] = useState(false);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -26,6 +27,16 @@ function CheckoutSuccessContent() {
       attempts++;
       try {
         const res = await fetch('/api/subscription');
+        // 401 is the *normal* post-purchase case, not an error: accounts are
+        // provisioned by emailed set-password link, so the buyer who just paid
+        // has no session yet. Polling can never succeed — stop, and tell them
+        // to go and open the email instead of spinning at them for 30 seconds
+        // and then pointing at a dashboard they cannot sign in to.
+        if (res.status === 401) {
+          clearInterval(poll);
+          setNeedsPassword(true);
+          return;
+        }
         const data = await res.json();
         // Wait for the purchase row the webhook writes, not just any answer:
         // a signed-in buyer polls here while provisioning catches up.
@@ -61,6 +72,34 @@ function CheckoutSuccessContent() {
           <Link href="/dashboard" className="block">
             <PrimaryButton fullWidth>Go to Dashboard</PrimaryButton>
           </Link>
+        </AuthCard>
+      </AuthLayout>
+    );
+  }
+
+  // Signed out — the ordinary path. Their account exists; the way into it is
+  // the email, so that is the only instruction on this card. Deliberately no
+  // dashboard CTA: it would bounce them to a sign-in they have no password for.
+  if (needsPassword && !access) {
+    return (
+      <AuthLayout>
+        <AuthCard
+          icon={
+            <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+            </svg>
+          }
+          title="Payment Successful"
+          subtitle="Check your email to set your password — that link is how you open your new account."
+        >
+          <p className="text-[13px] text-muted text-center leading-relaxed">
+            The email can take a minute to arrive. If it isn&apos;t there, check your
+            spam folder, then email us at{' '}
+            <a href="mailto:hello@fourteenfisherman.com" className="text-primary font-medium hover:underline">
+              hello@fourteenfisherman.com
+            </a>{' '}
+            and we&apos;ll sort it out.
+          </p>
         </AuthCard>
       </AuthLayout>
     );

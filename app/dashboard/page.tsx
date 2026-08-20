@@ -45,12 +45,21 @@ const DOMAIN_LABELS: Record<string, string> = {
   interpersonalSkills: 'Interpersonal Skills',
 };
 
+const DAY_MS = 86_400_000;
+
+/** How long before expiry the renewal nudge appears. */
+const RENEWAL_WARNING_DAYS = 7;
+
 function formatAccessDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
   });
+}
+
+function daysUntil(iso: string): number {
+  return Math.ceil((new Date(iso).getTime() - Date.now()) / DAY_MS);
 }
 
 export default function DashboardPage() {
@@ -84,7 +93,7 @@ export default function DashboardPage() {
           getLastStation(user.id),
           getSessionHistory(user.id, 3, 0),
           getRandomStation(),
-          fetch('/api/subscription').then((r) => r.json()),
+          fetch('/api/subscription').then((r) => (r.ok ? r.json() : null)),
         ]);
 
         setStats(statsData);
@@ -92,7 +101,7 @@ export default function DashboardPage() {
         setLastStation(lastStationData);
         setRecentSessions(recentData);
         setRandomStation(randomStationData);
-        if (accessRes?.state) setAccess(accessRes as SubscriptionResponse);
+        setAccess(accessRes?.state ? (accessRes as SubscriptionResponse) : null);
       } catch (error) {
         if (error instanceof Error) {
           // Silently handle dashboard data errors
@@ -155,8 +164,14 @@ export default function DashboardPage() {
       </div>
 
       {/* Plan state. Expiry is read-only, not a lockout: the loud banner says so,
-          because the history and feedback below it still work. */}
-      {access?.state === 'none' && (
+          because the history and feedback below it still work.
+
+          A failed /api/subscription lookup leaves `access` null and falls into
+          the same "no plan" prompt the old subscriptions-table banner showed —
+          silence would be worse, because the buy path would simply vanish.
+          `bypass` (admin, staged deployment, fail-open) suppresses the nags:
+          those users have access, whatever their own purchases say. */}
+      {!access?.bypass && (access === null || access.state === 'none') && (
         <motion.div
           className="mb-6 px-4 py-3 rounded-xl flex items-center justify-between gap-3"
           style={{ background: 'rgba(180,83,9,0.04)', border: '1px solid rgba(180,83,9,0.08)' }}
@@ -171,7 +186,7 @@ export default function DashboardPage() {
           </p>
         </motion.div>
       )}
-      {access?.state === 'read_only' && (
+      {access?.state === 'read_only' && !access.bypass && (
         <motion.div
           className="mb-6 px-4 py-3 rounded-xl flex items-center justify-between gap-3"
           style={{ background: 'rgba(180,83,9,0.08)', border: '1px solid rgba(180,83,9,0.18)' }}
@@ -186,6 +201,28 @@ export default function DashboardPage() {
           </p>
         </motion.div>
       )}
+      {access?.state === 'active' && access.expiresAt && (() => {
+        // The renewal decision gets made *before* access ends, so the only
+        // prompt that can change the outcome is this one — the post-expiry
+        // banner above is already too late for a three-month product.
+        const daysLeft = daysUntil(access.expiresAt);
+        if (daysLeft > RENEWAL_WARNING_DAYS || daysLeft <= 0) return null;
+        return (
+          <motion.div
+            className="mb-6 px-4 py-3 rounded-xl flex items-center justify-between gap-3"
+            style={{ background: 'rgba(180,83,9,0.06)', border: '1px solid rgba(180,83,9,0.12)' }}
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <p className="text-[13px] text-heading">
+              Your plan expires in {daysLeft} day{daysLeft !== 1 ? 's' : ''} &mdash;{' '}
+              <Link href="/pricing?renew=true" className="text-primary font-semibold hover:underline">
+                renew to keep access
+              </Link>
+            </p>
+          </motion.div>
+        );
+      })()}
       {access?.state === 'active' && access.planName && (
         <motion.div
           className="mb-6 text-[12px] text-muted"
