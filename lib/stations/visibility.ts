@@ -13,14 +13,18 @@
  * switch.
  */
 export function visibleStationStates(): boolean[] {
-    return process.env.NEXT_PUBLIC_SHOW_STAGED_STATIONS === '1' ? [true, false] : [true];
+    return isStagedDeployment() ? [true, false] : [true];
 }
 
 /**
- * True on deployments that preview the post-launch state (develop preview,
- * local dev). Gates test-friendly behaviour beyond station visibility, e.g.
- * treating signed-in testers as fully entitled. Never set in Production.
+ * True on deployments meant to preview the post-launch state (develop preview,
+ * local dev). Hard-refused on the Production environment even if the flag
+ * leaks there: staged mode also bypasses the entitlement gate, so a stray env
+ * var must never be able to give the whole product away on the live site.
  */
 export function isStagedDeployment(): boolean {
-    return process.env.NEXT_PUBLIC_SHOW_STAGED_STATIONS === '1';
+    return (
+        process.env.NEXT_PUBLIC_SHOW_STAGED_STATIONS === '1' &&
+        process.env.NEXT_PUBLIC_VERCEL_ENV !== 'production'
+    );
 }

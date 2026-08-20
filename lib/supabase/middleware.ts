@@ -100,9 +100,19 @@ export async function updateSession(request: NextRequest) {
             // the RLS policy "read own purchases by email" scopes this select.
             // Staged deployments (develop preview) treat testers as entitled,
             // and admins are never locked out of their own product.
-            const { data: purchases } = await supabase
+            // Belt and braces: RLS already scopes this select to the user's own
+            // email, but a dropped policy must degrade to "no rows", not "all rows".
+            const { data: purchases, error: purchasesError } = await supabase
                 .from('preorders')
-                .select('plan, status, created_at, coaching_day');
+                .select('plan, status, created_at, coaching_day')
+                .eq('email', (user.email ?? '').toLowerCase());
+            if (purchasesError) {
+                // supabase-js reports query failures as { error }, not a throw —
+                // without this branch a transient DB error reads as "no purchases"
+                // and bounces PAYING users to /pricing. Fail open, loudly.
+                console.error('[entitlement] middleware fail-open', purchasesError);
+                return supabaseResponse;
+            }
             const { entitlement, allowed } = decideAccess(purchases ?? [], {
                 email: user.email,
                 staged: isStagedDeployment(),
@@ -119,8 +129,14 @@ export async function updateSession(request: NextRequest) {
         }
     }
 
-    // If user is authenticated and trying to access auth pages, redirect to dashboard
-    const isAuthRoute = request.nextUrl.pathname.startsWith('/auth');
+    // If user is authenticated and trying to access auth pages, redirect to
+    // dashboard — EXCEPT the password-setting pages: a provisioned buyer who
+    // re-opens their set-password link already holds a session from verifyOtp,
+    // and bouncing them to /dashboard would mean the password never gets set.
+    const isPasswordRoute =
+        request.nextUrl.pathname.startsWith('/auth/set-password') ||
+        request.nextUrl.pathname.startsWith('/auth/reset-password');
+    const isAuthRoute = request.nextUrl.pathname.startsWith('/auth') && !isPasswordRoute;
     if (isAuthRoute && user) {
         const url = request.nextUrl.clone();
         url.pathname = '/dashboard';
