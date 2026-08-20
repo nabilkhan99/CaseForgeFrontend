@@ -9,6 +9,12 @@ interface SendReferralEmailArgs {
   referralUrl: string
   /** Reward they earn per qualifying referral, in pence. */
   rewardAmount: number
+  /**
+   * Discount their friend gets at checkout, in pence. Omit (or 0) for a
+   * one-sided referral, which drops the "and they get £X off" half of every
+   * line rather than rendering "£0 off".
+   */
+  refereeDiscount?: number
 }
 
 interface SendReferralEmailResult {
@@ -37,6 +43,7 @@ export async function sendReferralEmail({
   toName,
   referralUrl,
   rewardAmount,
+  refereeDiscount = 0,
 }: SendReferralEmailArgs): Promise<SendReferralEmailResult> {
   const brevoKey = process.env.BREVO_API_KEY
   if (!brevoKey) {
@@ -46,6 +53,21 @@ export async function sendReferralEmail({
 
   const reward = formatPounds(rewardAmount)
   const firstName = toName?.trim().split(' ')[0] || 'there'
+
+  // Two-sided referrals lead with the friend's side as well as the advocate's:
+  // "money for you" is a weaker thing to forward to a mate than "money for both
+  // of us". Every string below degrades cleanly to the one-sided wording when no
+  // discount is configured.
+  const discount = refereeDiscount > 0 ? formatPounds(refereeDiscount) : null
+  const subject = discount
+    ? `Your referral link — ${reward} for you, ${discount} off for them`
+    : `Your referral link — earn ${reward} per mate`
+  const preheader = discount
+    ? `Share your link — ${reward} for you, ${discount} off for every mate who joins.`
+    : `Share your link — earn ${reward} for every mate who joins.`
+  const pitch = discount
+    ? `when they enrol, you earn up to ${reward} — and they get up to ${discount} off.`
+    : `when they enrol, you earn up to ${reward}.`
   const brevo = new BrevoClient({ apiKey: brevoKey })
 
   const htmlBody = `<!doctype html>
@@ -55,10 +77,10 @@ export async function sendReferralEmail({
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light">
     <meta name="supported-color-schemes" content="light">
-    <title>Give your mates a leg-up — earn ${reward}</title>
+    <title>${subject}</title>
   </head>
   <body style="margin:0;padding:0;background-color:#F5F0EB;font-family:-apple-system,BlinkMacSystemFont,'Plus Jakarta Sans','Segoe UI',Roboto,sans-serif;color:#1C1917;-webkit-font-smoothing:antialiased;">
-    <div style="display:none;font-size:1px;color:#F5F0EB;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">Share your link — earn ${reward} for every mate who joins.</div>
+    <div style="display:none;font-size:1px;color:#F5F0EB;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">${preheader}</div>
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#F5F0EB;">
       <tr>
         <td align="center" style="padding:40px 16px;">
@@ -76,7 +98,7 @@ export async function sendReferralEmail({
             <tr>
               <td style="padding:20px 40px 0 40px;">
                 <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">Hi ${firstName},</p>
-                <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">Thanks for pre-ordering. Know another GP trainee sweating the SCA? Share your personal link below — when they enrol, you earn up to ${reward}.</p>
+                <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">Thanks for pre-ordering. Know another GP trainee sweating the SCA? Share your personal link below — ${pitch}</p>
                 <p style="margin:0 0 12px 0;font-size:14px;line-height:1.5;color:#78716C;">Your link:</p>
               </td>
             </tr>
@@ -114,7 +136,7 @@ export async function sendReferralEmail({
 
   const textBody = `Hi ${firstName},
 
-Thanks for pre-ordering. Know another GP trainee sweating the SCA? Share your personal link — when they enrol, you earn up to ${reward}.
+Thanks for pre-ordering. Know another GP trainee sweating the SCA? Share your personal link — ${pitch}
 
 Your link: ${referralUrl}
 
@@ -129,7 +151,7 @@ https://www.fourteenfisherman.com`
     const result = await brevo.transactionalEmails.sendTransacEmail({
       sender: { name: 'Fourteen Fisherman', email: 'hello@fourteenfisherman.com' },
       to: [{ email: toEmail, name: toName?.trim() || undefined }],
-      subject: `Your referral link — earn ${reward} per mate`,
+      subject,
       htmlContent: htmlBody,
       textContent: textBody,
       tags: ['referral-invite'],

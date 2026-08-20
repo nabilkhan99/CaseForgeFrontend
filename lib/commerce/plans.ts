@@ -66,6 +66,26 @@ export function stripePriceIdFor(key: PlanKey): string {
   return id
 }
 
+/**
+ * Server-only: the Stripe Coupon id granting the referee (referred buyer) their
+ * side of a two-sided referral, or null when none is configured.
+ *
+ * Deliberately returns null instead of throwing, unlike {@link stripePriceIdFor}:
+ * a missing coupon must degrade to a full-price sale, never block checkout. The
+ * pound values themselves live in `REFEREE_DISCOUNT_BY_PLAN` — these coupons must
+ * be created in Stripe to match (see scripts/create-referral-coupons.mjs).
+ */
+export function stripeRefereeCouponIdFor(key: PlanKey): string | null {
+  const id =
+    key === 'self_study'
+      ? process.env.STRIPE_COUPON_REFERRED_SELF_STUDY
+      : key === 'complete'
+        ? process.env.STRIPE_COUPON_REFERRED_COMPLETE
+        : undefined
+  const trimmed = id?.trim()
+  return trimmed ? trimmed : null
+}
+
 /** Intensive booking link. */
 export const BOOK_A_CALL_URL = 'https://calendly.com/hello-fourteenfisherman/30min'
 

@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import type Stripe from 'stripe';
 import { getStripe } from '@/lib/commerce/stripe';
 import {
+  REFEREE_DISCOUNT_BY_PLAN,
   REWARD_BY_PLAN,
   decideReferral,
   generateReferralCode,
@@ -409,6 +410,7 @@ async function mintAdvocateAndInvite(supabase: SupabaseAdmin, args: MintArgs): P
     toName: name,
     referralUrl: referralUrl(origin, code),
     rewardAmount: REWARD_BY_PLAN.complete, // headline "up to £100"
+    refereeDiscount: REFEREE_DISCOUNT_BY_PLAN.complete, // "...and £100 off for them"
   });
 
   if (!result.sent) {

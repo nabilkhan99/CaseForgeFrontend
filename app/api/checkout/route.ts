@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getStripe } from '@/lib/commerce/stripe';
-import { getPlan, stripePriceIdFor, type CoachingDayAvailability, type PlanKey } from '@/lib/commerce/plans';
+import {
+  getPlan,
+  stripePriceIdFor,
+  stripeRefereeCouponIdFor,
+  type CoachingDayAvailability,
+  type PlanKey,
+} from '@/lib/commerce/plans';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { REFERRAL_COOKIE, normalizeCode } from '@/lib/commerce/referrals';
 
@@ -101,6 +107,14 @@ export async function POST(request: Request) {
     // codes degrade silently — checkout must never fail on a bad referral.
     const referralCode = await resolveReferralCode();
 
+    // Two-sided referral: a valid code also buys the *referee* a discount. Stripe
+    // rejects `discounts` and `allow_promotion_codes` on the same session, so a
+    // referred checkout trades the promo-code box for the automatic discount —
+    // the better deal of the two, and it removes the stack-a-100%-off-code vector
+    // that MIN_QUALIFYING_SPEND_BY_PLAN exists to catch. With no coupon configured
+    // this collapses to the previous behaviour: full price, promo box available.
+    const refereeCoupon = referralCode ? stripeRefereeCouponIdFor(plan.key as PlanKey) : null;
+
     const origin = new URL(request.url).origin;
     const stripe = getStripe();
     const session = await stripe.checkout.sessions.create({
@@ -108,7 +122,9 @@ export async function POST(request: Request) {
       line_items: [{ price: stripePriceIdFor(plan.key as PlanKey), quantity: 1 }],
       success_url: `${origin}/thanks?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: coachingDay ? `${origin}/coaching-day` : `${origin}/#pricing`,
-      allow_promotion_codes: true,
+      ...(refereeCoupon
+        ? { discounts: [{ coupon: refereeCoupon }] }
+        : { allow_promotion_codes: true }),
       metadata: {
         plan: plan.key,
         ...(coachingDay

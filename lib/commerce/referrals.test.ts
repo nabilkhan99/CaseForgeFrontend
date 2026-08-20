@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   CODE_ALPHABET,
+  MAX_REFEREE_DISCOUNT_PENCE,
   MIN_QUALIFYING_SPEND_BY_PLAN,
+  REFEREE_DISCOUNT_BY_PLAN,
   PAYOUT_FLOOR_DATE,
   QUALIFICATION_WINDOW_DAYS,
   REFERRAL_COOKIE,
@@ -13,6 +15,7 @@ import {
   isSelfReferral,
   meetsMinimumSpend,
   parseMinSpendOverride,
+  refereeDiscountFor,
   normalizeCode,
   normalizeEmail,
   referralUrl,
@@ -26,15 +29,56 @@ describe('rewardFor', () => {
     expect(REWARD_BY_PLAN.complete).toBe(10000)
   })
 
-  it('pays £25 (2500p) for the self_study plan', () => {
-    expect(rewardFor('self_study')).toBe(2500)
-    expect(REWARD_BY_PLAN.self_study).toBe(2500)
+  it('pays £50 (5000p) for the self_study plan', () => {
+    expect(rewardFor('self_study')).toBe(5000)
+    expect(REWARD_BY_PLAN.self_study).toBe(5000)
   })
 
   it('pays nothing for an unknown / non-rewardable plan', () => {
     expect(rewardFor('intensive')).toBe(0)
     expect(rewardFor('')).toBe(0)
     expect(rewardFor('nonsense')).toBe(0)
+  })
+})
+
+describe('refereeDiscountFor', () => {
+  it('takes £100 (10000p) off the complete plan', () => {
+    expect(refereeDiscountFor('complete')).toBe(10000)
+    expect(REFEREE_DISCOUNT_BY_PLAN.complete).toBe(10000)
+  })
+
+  it('takes £50 (5000p) off the self_study plan', () => {
+    expect(refereeDiscountFor('self_study')).toBe(5000)
+    expect(REFEREE_DISCOUNT_BY_PLAN.self_study).toBe(5000)
+  })
+
+  it('discounts nothing for an unknown / non-discounted plan', () => {
+    expect(refereeDiscountFor('intensive')).toBe(0)
+    expect(refereeDiscountFor('')).toBe(0)
+    expect(refereeDiscountFor('nonsense')).toBe(0)
+  })
+
+  it('matches the referrer reward pound for pound on every rewardable plan', () => {
+    for (const plan of Object.keys(REWARD_BY_PLAN)) {
+      expect(refereeDiscountFor(plan)).toBe(rewardFor(plan))
+    }
+  })
+
+  it('exposes the largest discount for "up to £X off" copy', () => {
+    expect(MAX_REFEREE_DISCOUNT_PENCE).toBe(10000)
+    expect(MAX_REFEREE_DISCOUNT_PENCE).toBe(Math.max(...Object.values(REFEREE_DISCOUNT_BY_PLAN)))
+  })
+
+  it('leaves every discounted plan clear of its own qualifying floor', () => {
+    // A referred purchase must still earn its referral: list price minus the
+    // referee discount has to clear MIN_QUALIFYING_SPEND_BY_PLAN, or the two-sided
+    // offer would silently void every referral it generates.
+    const listPrice = { complete: 59900, self_study: 29900 } as const
+    for (const [plan, floor] of Object.entries(MIN_QUALIFYING_SPEND_BY_PLAN)) {
+      const paid = listPrice[plan as keyof typeof listPrice] - refereeDiscountFor(plan)
+      expect(paid).toBeGreaterThanOrEqual(floor)
+      expect(meetsMinimumSpend(plan, paid)).toBe(true)
+    }
   })
 })
 
@@ -122,7 +166,7 @@ describe('decideReferral', () => {
     ).toEqual({ status: 'pending', voidReason: null, rewardAmount: 10000 })
   })
 
-  it('records a full-price self_study purchase as pending, £25', () => {
+  it('records a full-price self_study purchase as pending, £50', () => {
     expect(
       decideReferral({
         ownerEmail: 'owner@example.com',
@@ -130,7 +174,7 @@ describe('decideReferral', () => {
         plan: 'self_study',
         amountTotalPence: 19900,
       }),
-    ).toEqual({ status: 'pending', voidReason: null, rewardAmount: 2500 })
+    ).toEqual({ status: 'pending', voidReason: null, rewardAmount: 5000 })
   })
 
   it('voids a self-referral regardless of case/whitespace, reward still recorded', () => {
@@ -193,12 +237,12 @@ describe('decideReferral', () => {
     expect(decideReferral({ ...base, amountTotalPence: 14950 })).toEqual({
       status: 'pending',
       voidReason: null,
-      rewardAmount: 2500,
+      rewardAmount: 5000,
     })
     expect(decideReferral({ ...base, amountTotalPence: 14949 })).toEqual({
       status: 'void',
       voidReason: 'below_min_spend',
-      rewardAmount: 2500,
+      rewardAmount: 5000,
     })
   })
 

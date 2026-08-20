@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { REFERRAL_DISPLAY_COOKIE } from '@/lib/commerce/referrals';
+import { MAX_REFEREE_DISCOUNT_PENCE, REFERRAL_DISPLAY_COOKIE } from '@/lib/commerce/referrals';
 
 const SEEN_KEY = 'ff_ref_welcome_seen';
 
@@ -34,8 +34,11 @@ function markSeen(): void {
 
 /**
  * One-time floating notice shown to visitors who arrived through a referral
- * link, so they know the recommendation is attached to their order. Shows at
- * most once per browser: it is marked seen the moment it appears. Driven purely
+ * link, so they know both that the recommendation is attached to their order and
+ * that it carries money off — the discount is only visible on Stripe's page
+ * otherwise, which is far too late to influence the decision to click Buy.
+ * Shows at most once per browser: it is marked seen the moment it appears.
+ * The headline number is derived from the engine, never hardcoded. Driven purely
  * by the presence of the `ff_ref_by` flag cookie — no cookie data is rendered,
  * and attribution runs on the HttpOnly `ff_ref` re-validated server-side.
  */
@@ -70,7 +73,8 @@ export default function ReferralWelcome() {
             <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[#B45309]" aria-hidden="true" />
             <p className="text-sm leading-snug text-[#44403C]">
               <span className="font-semibold text-[#1C1917]">You were recommended</span> Fourteen
-              Fisherman — the referral is attached to your order.
+              Fisherman — up to £{MAX_REFEREE_DISCOUNT_PENCE / 100} off is attached to your order,
+              applied at checkout.
             </p>
             <button
               type="button"
