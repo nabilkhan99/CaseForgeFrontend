@@ -15,6 +15,7 @@ import type {
     BlueprintDomain,
     LastStation,
 } from '@/lib/dashboard/types';
+import { visibleStationStates } from '@/lib/stations/visibility';
 
 // New SCA schema (Build Package Section 12): domains carry CP/P/F/CF grades and
 // the session carries a verdict + weighted score out of 10.5. For the dashboard
@@ -57,7 +58,7 @@ export async function getUserStats(userId: string): Promise<UserStats> {
     const { count: totalStations } = await supabase
         .from('stations')
         .select('*', { count: 'exact', head: true })
-        .eq('is_active', true);
+        .in('is_active', visibleStationStates());
 
     // Calculate exam countdown
     let examCountdownDays = 0;
@@ -160,7 +161,7 @@ export async function getBlueprintDomains(userId: string): Promise<BlueprintDoma
     const { data: stationCounts } = await supabase
         .from('stations')
         .select('domain_id')
-        .eq('is_active', true);
+        .in('is_active', visibleStationStates());
 
     const countByDomain: Record<string, number> = {};
     stationCounts?.forEach(s => {

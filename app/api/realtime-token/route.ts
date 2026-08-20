@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { mintEphemeralKey, unreliableEchoCancellation } from '@/lib/clinical-master/realtimeToken';
 import { voiceForStation } from '@/lib/clinical-master/realtimeSession';
+import { visibleStationStates } from '@/lib/stations/visibility';
 
 /**
  * Mint an Azure gpt-realtime ephemeral key for an authenticated consultation.
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
     .from('stations')
     .select('*')
     .eq('id', stationId)
-    .eq('is_active', true)
+    .in('is_active', visibleStationStates())
     .maybeSingle();
   if (stationErr || !station) {
     return NextResponse.json({ error: 'Station not found' }, { status: 404 });

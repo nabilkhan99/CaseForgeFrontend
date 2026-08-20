@@ -5,6 +5,7 @@
  */
 
 import { createClient } from '@/lib/supabase/client';
+import { visibleStationStates } from '@/lib/stations/visibility';
 
 export interface Domain {
     id: string;
@@ -58,7 +59,7 @@ export async function getDomains(userId?: string): Promise<Domain[]> {
     const { data: stationCounts } = await supabase
         .from('stations')
         .select('domain_id')
-        .eq('is_active', true);
+        .in('is_active', visibleStationStates());
 
     // Count stations per domain
     const countByDomain: Record<string, number> = {};
@@ -109,7 +110,7 @@ export async function getStationsForDomain(domainId: string, userId?: string): P
         .from('stations')
         .select('id, title, patient_name, domain_id, consultation_duration_seconds, difficulty, is_active')
         .eq('domain_id', domainId)
-        .eq('is_active', true)
+        .in('is_active', visibleStationStates())
         .order('title');
 
     if (error) {
@@ -213,7 +214,7 @@ export async function getAllStations(): Promise<Station[]> {
     const { data: stations, error } = await supabase
         .from('stations')
         .select('id, title, patient_name, domain_id, consultation_duration_seconds, difficulty, is_active')
-        .eq('is_active', true)
+        .in('is_active', visibleStationStates())
         .order('title');
 
     if (error) {

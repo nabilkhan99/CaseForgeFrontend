@@ -5,6 +5,7 @@
  */
 
 import { createClient } from '@/lib/supabase/client';
+import { visibleStationStates } from '@/lib/stations/visibility';
 
 export interface CaseBankStation {
     id: string;
@@ -55,7 +56,7 @@ export async function getCasesGroupedByDomain(): Promise<CaseBankDomain[]> {
     const { data: stations, error: stationsError } = await supabase
         .from('stations')
         .select('id, title, patient_name, patient_age, difficulty, consultation_type, reading_duration_seconds, consultation_duration_seconds, candidate_instructions, domain_id')
-        .eq('is_active', true)
+        .in('is_active', visibleStationStates())
         .order('title');
 
     if (stationsError || !stations) {
