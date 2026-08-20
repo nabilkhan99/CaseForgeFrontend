@@ -15,7 +15,7 @@ import {
 import { sendReferralEmail } from '@/lib/email/referralEmail';
 import { sendPurchaseEmail } from '@/lib/email/purchaseEmail';
 import { pushPreorderContactToBrevo } from '@/lib/marketing/preorderContact';
-import { provisionAccountForPurchase } from '@/lib/auth/provisioning';
+import { provisionBuyerAccount } from '@/lib/auth/provisionBuyer';
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -38,8 +38,16 @@ type SupabaseAdmin = ReturnType<typeof getSupabaseAdmin>;
  *
  * `customer.subscription.deleted` -> mark the monthly order canceled.
  *
- * Ops: the Stripe webhook endpoint must have `charge.refunded` and
- * `customer.subscription.deleted` enabled.
+ * `customer.subscription.updated` -> mark it canceled too when the subscription
+ * has reached a dead status, and back to paid when a dead one recovers. Dunning
+ * can leave a subscription `unpaid` forever without ever emitting `deleted`,
+ * which would otherwise leave a failed card holding permanent access — and
+ * paying that invoice revives it, which must not leave the buyer locked out.
+ *
+ * Ops: the Stripe webhook endpoint must have `charge.refunded`,
+ * `customer.subscription.deleted` AND `customer.subscription.updated` enabled.
+ * Without the last one, a subscription that dies by dunning rather than by
+ * cancellation keeps its `paid` row and its entitlement.
  */
 export async function POST(request: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -72,6 +80,9 @@ export async function POST(request: Request) {
   }
   if (event.type === 'customer.subscription.deleted') {
     return handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
+  }
+  if (event.type === 'customer.subscription.updated') {
+    return handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
   }
 
   return NextResponse.json({ received: true, ignored: event.type });
@@ -231,7 +242,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
   if (isNewPreorder) {
     try {
       const coachingDayLabel = session.metadata?.coaching_day_label ?? null;
-      const [emailResult, contactResult, provisionResult] = await Promise.allSettled([
+      const [emailResult, contactResult] = await Promise.allSettled([
         sendPurchaseEmail({ toEmail: buyerEmail, toName: buyerName, planKey: plan, coachingDayLabel }),
         pushPreorderContactToBrevo({
           email: buyerEmail,
@@ -240,9 +251,6 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
           coachingDayLabel,
           amountPence: session.amount_total ?? 0,
         }),
-        // Account provisioning: create the auth user + send the set-password
-        // email. Idempotent inside, but still gated here so retries stay quiet.
-        provisionAccountForPurchase({ email: buyerEmail, fullName: buyerName, origin }),
       ]);
 
       if (emailResult.status === 'rejected') {
@@ -262,20 +270,18 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
           reason: contactResult.reason,
         });
       }
-      if (provisionResult.status === 'rejected') {
-        console.error('[stripe-webhook] account provisioning threw', {
-          sessionId: session.id,
-          reason: provisionResult.reason,
-        });
-      } else if (provisionResult.value.error) {
-        console.error('[stripe-webhook] account provisioning failed', {
-          sessionId: session.id,
-          result: provisionResult.value,
-        });
-      }
     } catch (error: unknown) {
       console.error('[stripe-webhook] purchase confirmation error', { sessionId: session.id, error });
     }
+  }
+
+  if (preorderId) {
+    await provisionBuyerAccount(supabase, {
+      preorderId,
+      email: buyerEmail,
+      name: buyerName,
+      sessionId: session.id,
+    });
   }
 
   return NextResponse.json({ received: true, recorded: !insertError, preorderId });
@@ -307,6 +313,80 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   }
 
   return NextResponse.json({ received: true, canceled: updated?.length ?? 0 });
+}
+
+/**
+ * Subscription is dead for our purposes. `past_due` is deliberately NOT here —
+ * Stripe is still retrying the card and the buyer still has access, which is
+ * the behaviour we want during dunning.
+ *
+ * `unpaid` is here but is NOT terminal at Stripe's end (see below).
+ */
+const DEAD_SUBSCRIPTION_STATUSES: ReadonlySet<string> = new Set([
+  'canceled',
+  'unpaid',
+  'incomplete_expired',
+]);
+
+/** Subscription is billing normally: the customer should have access. */
+const LIVE_SUBSCRIPTION_STATUSES: ReadonlySet<string> = new Set(['active', 'trialing']);
+
+/**
+ * A dead subscription came back to life.
+ *
+ * `unpaid` is a dead end for us but not for Stripe: paying the outstanding
+ * invoice moves the subscription back to `active` and emits an `updated` event.
+ * Without this arm nothing in the codebase ever writes `paid` onto a preorder
+ * row again after the original insert, so a customer who settles their bill
+ * keeps being charged monthly while their row stays `canceled` and their
+ * entitlement stays read-only — permanently, with no self-service way back.
+ *
+ * Idempotent, and narrow on purpose: only rows currently `canceled` are
+ * touched, so this can never resurrect a `refunded` purchase or re-stamp a row
+ * that is already `paid`.
+ */
+async function handleSubscriptionRecovered(subscription: Stripe.Subscription) {
+  const supabase = getSupabaseAdmin();
+  const { data: updated, error } = await supabase
+    .from('preorders')
+    .update({ status: 'paid' })
+    .eq('stripe_subscription_id', subscription.id)
+    .eq('status', 'canceled')
+    .select('id');
+
+  if (error) {
+    console.error('[stripe-webhook] subscription recovery update failed', {
+      subscriptionId: subscription.id,
+      error,
+    });
+    return NextResponse.json({ error: 'Failed to process recovery' }, { status: 500 });
+  }
+
+  return NextResponse.json({ received: true, recovered: updated?.length ?? 0 });
+}
+
+/**
+ * Subscription changed. Two transitions matter, in both directions.
+ *
+ * Downwards: depending on the dunning settings, a subscription whose card keeps
+ * failing can end up `unpaid` and simply stay there — `customer.subscription
+ * .deleted` never fires, and the row would keep its `paid` status (and
+ * therefore full access) forever.
+ *
+ * Upwards: that same `unpaid` subscription becomes `active` again the moment
+ * the invoice is paid, and the row has to follow it back.
+ *
+ * Everything in between (`past_due`, `incomplete`) is left alone: the buyer's
+ * access is unchanged while Stripe works it out.
+ */
+async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
+  if (DEAD_SUBSCRIPTION_STATUSES.has(subscription.status)) {
+    return handleSubscriptionDeleted(subscription);
+  }
+  if (LIVE_SUBSCRIPTION_STATUSES.has(subscription.status)) {
+    return handleSubscriptionRecovered(subscription);
+  }
+  return NextResponse.json({ received: true, ignored: subscription.status });
 }
 
 interface RecordReferralArgs {
