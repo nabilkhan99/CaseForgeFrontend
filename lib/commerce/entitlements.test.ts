@@ -112,6 +112,15 @@ describe('computeEntitlement', () => {
     expect(computeEntitlement([row({ status: 'refunded' })], DURING).state).toBe('none')
   })
 
+  it('a monthly buy before launch waits for launch day like every other plan', () => {
+    // Founder ruling 21 Aug 2026: all plans activate on 1 Sept. The plan is
+    // carried so the dashboard can say "you're in, access opens 1 September".
+    const beforeLaunch = new Date(ACCESS_LAUNCH_DATE.getTime() - 1)
+    const e = computeEntitlement([row({ plan: 'self_study_monthly' })], beforeLaunch)
+    expect(e).toMatchObject({ state: 'none', plan: 'self_study_monthly', hasLectures: false })
+    expect(computeEntitlement([row({ plan: 'self_study_monthly' })], ACCESS_LAUNCH_DATE).state).toBe('active')
+  })
+
   it('monthly is active while paid, has no lectures and no expiry', () => {
     const e = computeEntitlement([row({ plan: 'self_study_monthly' })], DURING)
     expect(e).toMatchObject({ state: 'active', hasLectures: false })
@@ -266,14 +275,24 @@ describe('computeEntitlement', () => {
     expect(e.plan).toBe('self_study')
   })
 
-  it('live access still beats a pending preorder', () => {
-    // Pending outranks lapsed, but never outranks access the customer has now —
-    // otherwise the middleware would gate someone out of a window they are in.
-    const live = row({ plan: 'self_study_monthly' })
+  it('before launch, nothing is live — a paid monthly and a preorder both wait', () => {
+    // Founder ruling 21 Aug 2026: all plans activate on launch day, so the old
+    // "live access beats pending" scenario cannot exist pre-launch. Both rows
+    // fold to the pending state, and a plan is still carried for the
+    // "you're in, access opens 1 September" banner.
+    const monthly = row({ plan: 'self_study_monthly' })
     const pending = row({ plan: 'complete', created_at: '2026-07-28T09:00:00Z' })
     const beforeLaunch = new Date('2026-08-20T22:00:00Z')
-    expect(computeEntitlement([live, pending], beforeLaunch).state).toBe('active')
-    expect(computeEntitlement([pending, live], beforeLaunch).state).toBe('active')
+    for (const rows of [
+      [monthly, pending],
+      [pending, monthly],
+    ]) {
+      const e = computeEntitlement(rows, beforeLaunch)
+      expect(e.state).toBe('none')
+      expect(e.plan).toBeTruthy()
+    }
+    // And the moment launch arrives, live access exists again and wins outright.
+    expect(computeEntitlement([monthly, pending], ACCESS_LAUNCH_DATE).state).toBe('active')
   })
 
   it('a refund does not cancel a second, live purchase', () => {

@@ -117,19 +117,18 @@ function entitlementOf(row: EntitlementRow, now: Date): Entitlement | null {
   }
 
   if (isMonthlyPlan(row.plan)) {
-    // NOTE: monthly returns here, BEFORE `accessWindow` — so the 1-Sept launch
-    // floor applies to one-off plans only. A self_study_monthly bought on 20 Aug
-    // is active immediately; a self_study bought the same day is `none` until
-    // launch. That asymmetry is current, documented behaviour and NOT a bug fix
-    // waiting to happen: Stripe starts billing a monthly buyer on day one, so
-    // withholding access would charge for a product they cannot open, while
-    // granting it lets them into stations that are not populated until launch.
-    // Which of the two is right (floor monthly too, or block monthly checkout
-    // before 1 Sept) is a product ruling the founder has not made yet. Do not
-    // "fix" this silently — it changes who gets access on launch day.
-    //
+    // Founder ruling, 21 Aug 2026: ALL plans activate on launch day — monthly
+    // included. A pre-launch monthly buy is `none`-with-plan until 1 Sept
+    // (the "you're in, access opens 1 September" state), exactly like a
+    // one-off preorder. Known cost, accepted: Stripe bills the first month
+    // from the purchase date, so a pre-launch subscriber pays for days they
+    // cannot use — the launch runbook says to compensate any such buyer
+    // (extend or credit) by hand; as of the ruling there were zero.
     // 'paid' = subscription alive; anything else = Stripe already ended it.
+    // Status is checked BEFORE the launch floor: a canceled subscription is
+    // dead whatever the date, and must never read as a pending plan.
     if (row.status !== 'paid') return { state: 'read_only', plan: row.plan, hasLectures: false }
+    if (now < ACCESS_LAUNCH_DATE) return { state: 'none', plan: row.plan, hasLectures: false }
     return { state: 'active', plan: row.plan, hasLectures: false }
   }
 
