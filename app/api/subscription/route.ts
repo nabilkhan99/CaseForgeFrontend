@@ -24,6 +24,10 @@ export interface SubscriptionResponse {
   /** ISO date access ends; null for monthly, which runs until it is canceled. */
   expiresAt: string | null;
   isMonthly: boolean;
+  /** Lectures are Complete-only; true for an active Complete plan or a bypass. */
+  hasLectures: boolean;
+  /** Complete's coaching day (ISO date), when one was booked. */
+  coachingDay: string | null;
 }
 
 /**
@@ -54,6 +58,8 @@ export async function GET() {
     allowed,
     expiresAt: entitlement.expiresAt?.toISOString() ?? null,
     isMonthly: plan ? isMonthlyPlan(plan) : false,
+    hasLectures: (entitlement.hasLectures && allowed) || bypass,
+    coachingDay: entitlement.coachingDay ?? null,
   };
 
   return NextResponse.json(body);

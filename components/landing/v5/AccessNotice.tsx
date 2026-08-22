@@ -13,8 +13,11 @@ export default function AccessNotice() {
   const params = useSearchParams();
   const renew = params.get('renew') === 'true';
   const upgrade = params.get('upgrade') === 'true';
+  // A self-study customer who followed "see what Complete adds" from the
+  // lectures page — they have a plan; "you need a plan" would be wrong.
+  const wantsLectures = params.get('want') === 'lectures';
 
-  if (!renew && !upgrade) return null;
+  if (!renew && !upgrade && !wantsLectures) return null;
 
   return (
     <section className="px-5 sm:px-8">
@@ -26,7 +29,9 @@ export default function AccessNotice() {
       >
         {renew
           ? 'Your access has ended. Pick a plan to continue — your history and feedback stay where they are.'
-          : 'You need a plan to start consultations.'}
+          : wantsLectures
+            ? 'The lecture course and the coaching day are part of Complete. Your consultations and history carry over.'
+            : 'You need a plan to start consultations.'}
       </motion.p>
     </section>
   );

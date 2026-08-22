@@ -42,9 +42,59 @@ function lockNotice(state: EntitlementState, unavailable: boolean): LockNotice {
   }
   return {
     copy: 'The lecture course is part of Complete —',
-    href: '/pricing?upgrade=true',
-    cta: 'upgrade to watch',
+    href: '/pricing?want=lectures',
+    cta: 'see what Complete adds',
   };
+}
+
+/** Below this many published lectures a greyed running order sells nothing. */
+const MIN_ROWS_FOR_LOCKED_LIST = 6;
+
+function totalMinutes(lectures: LectureSummary[]): number {
+  return Math.round(lectures.reduce((sum, l) => sum + (l.durationSeconds ?? 0), 0) / 60);
+}
+
+/**
+ * The locked state is a merchandising surface, not an error: the one thing
+ * Self-Study lacks, shown as something worth having. One card, house style —
+ * the list underneath stays as bare rows between rules.
+ */
+function UpgradeHero({ lectures }: { lectures: LectureSummary[] }) {
+  const mins = totalMinutes(lectures);
+  const hours = mins >= 60 ? `${Math.round(mins / 60)} hour${Math.round(mins / 60) === 1 ? '' : 's'}` : mins > 0 ? `${mins} minutes` : null;
+  const n = lectures.length;
+  return (
+    <motion.div
+      className="mb-8 rounded-[20px] px-6 py-6 sm:px-8 sm:py-7"
+      style={{
+        background: 'linear-gradient(135deg, rgba(180,83,9,0.05), rgba(180,83,9,0.02))',
+        border: '1px solid rgba(180,83,9,0.12)',
+        boxShadow: '0 24px 64px rgba(180,83,9,0.06), 0 2px 4px rgba(0,0,0,0.04)',
+      }}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: 'spring', stiffness: 80, damping: 20 }}
+    >
+      <div className="text-[10px] font-semibold text-primary uppercase tracking-[0.1em] mb-3">
+        Included with Complete
+      </div>
+      <h2 className="text-[22px] font-semibold text-heading tracking-[-0.01em] mb-2">
+        {hours ? `${hours} of on-demand SCA teaching` : 'The on-demand SCA lecture course'}
+      </h2>
+      <p className="text-[14px] leading-[1.65] text-muted max-w-xl mb-5">
+        {n > 0 ? `${n} lecture${n === 1 ? '' : 's'} across the three SCA domains` : 'Lectures across the three SCA domains'}
+        , taught against the marking framework your consultations are scored on — watch as often as you like for
+        the length of your plan. Complete also adds a coaching day.
+      </p>
+      <Link
+        href="/pricing?want=lectures"
+        className="inline-flex items-center min-h-[44px] px-5 rounded-xl text-[14px] font-semibold text-white"
+        style={{ background: 'linear-gradient(135deg, #B45309, #D97706)', boxShadow: '0 4px 12px rgba(180,83,9,0.2)' }}
+      >
+        See what Complete adds &rarr;
+      </Link>
+    </motion.div>
+  );
 }
 
 function formatDuration(seconds: number | null): string | null {
@@ -196,7 +246,11 @@ export default function LecturesPage() {
     <div>
       <PageHeader title="Lectures" subtitle={subtitle} />
 
-      {locked && !loading && (
+      {locked && !loading && !unavailable && state !== 'read_only' && (
+        <UpgradeHero lectures={lectures} />
+      )}
+
+      {locked && !loading && (unavailable || state === 'read_only') && (
         <motion.div
           className="mb-8 px-4 py-3 rounded-xl"
           style={{ background: 'rgba(180,83,9,0.04)', border: '1px solid rgba(180,83,9,0.08)' }}
@@ -232,6 +286,10 @@ export default function LecturesPage() {
       ) : lectures.length === 0 && !error ? (
         <p className="py-8 text-[13px] text-muted">
           No lectures published yet. They&apos;ll appear here as they go live.
+        </p>
+      ) : locked && !unavailable && state !== 'read_only' && lectures.length < MIN_ROWS_FOR_LOCKED_LIST ? (
+        <p className="text-[13px] text-muted">
+          The course is being published lecture by lecture &mdash; {lectures.length} live so far, more landing through September.
         </p>
       ) : (
         <div className="divide-y divide-black/[0.06]">
