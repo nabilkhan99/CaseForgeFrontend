@@ -8,6 +8,7 @@ import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import ConsultationTimer from '@/components/clinical-master/ConsultationTimer';
 import AudioVisualizer from '@/components/clinical-master/AudioVisualizer';
 import LiveTranscript from '@/components/clinical-master/LiveTranscript';
+import SessionControls from '@/components/clinical-master/SessionControls';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 
 interface StationData {
@@ -165,7 +166,9 @@ function GuestLiveConsultationContent() {
   return (
     <div className="min-h-[100dvh] bg-surface font-sans flex flex-col">
       {/* Top bar */}
-      <div className="h-14 flex items-center justify-between px-4 sm:px-6 border-b border-black/[0.06] bg-surface/80 backdrop-blur-xl flex-shrink-0">
+      {/* viewportFit is 'cover', so the timer and Exit would sit under the notch
+          in landscape and in a home-screen launch without these insets. */}
+      <div className="min-h-14 flex items-center justify-between border-b border-black/[0.06] bg-surface/80 backdrop-blur-xl flex-shrink-0 pt-[env(safe-area-inset-top)] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] sm:pl-[max(1.5rem,env(safe-area-inset-left))] sm:pr-[max(1.5rem,env(safe-area-inset-right))]">
         <button
           onClick={() => setShowLeaveModal(true)}
           className="min-h-[44px] min-w-[44px] text-[13px] text-muted hover:text-heading transition-colors flex items-center gap-1 flex-shrink-0 cursor-pointer"
@@ -239,53 +242,14 @@ function GuestLiveConsultationContent() {
       </div>
 
       {/* Controls bar */}
-      <div className="min-h-[80px] flex items-center justify-center gap-3 sm:gap-4 px-4 sm:px-6 border-t border-black/[0.06] flex-shrink-0 pb-[env(safe-area-inset-bottom)]">
-        <button
-          onClick={handleToggleMute}
-          disabled={!isConnected}
-          className="w-11 h-11 rounded-full flex items-center justify-center border border-black/[0.08] cursor-pointer hover:bg-black/[0.02] transition-colors disabled:opacity-40 flex-shrink-0"
-        >
-          <svg width="16" height="16" viewBox="0 0 14 14" fill="none" className={isMuted ? 'text-danger' : 'text-muted'}>
-            {isMuted ? (
-              <path d="M7 1v12M4 4v6M10 3v8M1 6v2M13 5v4M2 2l10 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            ) : (
-              <path d="M7 1v12M4 4v6M10 3v8M1 6v2M13 5v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            )}
-          </svg>
-        </button>
-
-        <button
-          onClick={() => setShowTranscript(prev => !prev)}
-          className={`w-11 h-11 rounded-full flex items-center justify-center border cursor-pointer hover:bg-black/[0.02] transition-colors ${
-            showTranscript ? 'border-primary/30 bg-primary/5' : 'border-black/[0.08]'
-          }`}
-          title={showTranscript ? 'Show waveform' : 'Show transcript'}
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className={showTranscript ? 'text-primary' : 'text-muted'}>
-            <path d="M2 4h12M2 8h8M2 12h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-        </button>
-
-        <motion.div
-          className="w-14 h-14 rounded-full flex items-center justify-center cursor-pointer"
-          style={{ background: 'linear-gradient(135deg, #B45309, #D97706)', boxShadow: '0 4px 16px rgba(180,83,9,0.25)' }}
-          animate={isConnected ? { boxShadow: ['0 4px 16px rgba(180,83,9,0.25)', '0 6px 20px rgba(180,83,9,0.35)', '0 4px 16px rgba(180,83,9,0.25)'] } : {}}
-          transition={{ duration: 2, repeat: Infinity }}
-        >
-          <svg width="16" height="16" viewBox="0 0 14 14" fill="none">
-            <path d="M7 1C5.62 1 4.5 2.12 4.5 3.5v3.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V3.5C9.5 2.12 8.38 1 7 1z" fill="white" />
-            <path d="M3 6.5v.5a4 4 0 0 0 8 0v-.5M7 11v2M5 13h4" stroke="white" strokeWidth="1.2" strokeLinecap="round" />
-          </svg>
-        </motion.div>
-
-        <button
-          onClick={() => setShowEndModal(true)}
-          className="min-h-[44px] px-3 sm:px-5 py-2.5 rounded-xl text-[13px] font-medium text-danger bg-red-50 border border-red-200 hover:bg-red-100 transition-colors cursor-pointer whitespace-nowrap flex-shrink-0"
-        >
-          <span className="hidden sm:inline">End Consultation</span>
-          <span className="sm:hidden">End</span>
-        </button>
-      </div>
+      <SessionControls
+        isConnected={isConnected}
+        isMuted={isMuted}
+        onToggleMute={handleToggleMute}
+        showTranscript={showTranscript}
+        onToggleTranscript={() => setShowTranscript(prev => !prev)}
+        onEnd={() => setShowEndModal(true)}
+      />
 
       <ConfirmModal
         open={showEndModal}
