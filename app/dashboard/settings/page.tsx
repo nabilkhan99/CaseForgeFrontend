@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation';
 import type { User } from '@supabase/supabase-js';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { ACCESS_OPENS_LABEL, COMPLETE_UPGRADE_PRICE_LABEL } from '@/lib/commerce/plans';
+import { ACCESS_OPENS_LABEL } from '@/lib/commerce/plans';
+import ManageBillingButton from '@/components/commerce/ManageBillingButton';
 import Container from '@/components/ui/Container';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import SecondaryButton from '@/components/ui/SecondaryButton';
@@ -33,10 +34,6 @@ export default function SettingsPage() {
 
   const [fullName, setFullName] = useState('');
   const [examDate, setExamDate] = useState('');
-  // Stripe's Customer Portal is a redirect, not a page of ours — the only
-  // local state it needs is "we've asked" and "it didn't work".
-  const [portalBusy, setPortalBusy] = useState(false);
-  const [portalError, setPortalError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -86,30 +83,6 @@ export default function SettingsPage() {
       setSaveError('Your changes could not be saved. Please try again.');
     } finally {
       setSaving(false);
-    }
-  };
-
-  /**
-   * Hand the buyer to Stripe's Customer Portal to cancel or re-card. Kept a
-   * POST + redirect rather than a link: the portal session is short-lived and
-   * has to be minted per visit.
-   */
-  const handleManageBilling = async () => {
-    if (portalBusy) return;
-    setPortalBusy(true);
-    setPortalError(null);
-    try {
-      const res = await fetch('/api/billing/portal', { method: 'POST' });
-      const data = (await res.json()) as { url?: string; message?: string; error?: string };
-      if (!res.ok || !data.url) {
-        setPortalError(data.message ?? data.error ?? 'Could not open billing — please try again.');
-        setPortalBusy(false);
-        return;
-      }
-      window.location.assign(data.url);
-    } catch {
-      setPortalError('Could not open billing — please try again.');
-      setPortalBusy(false);
     }
   };
 
@@ -165,7 +138,17 @@ export default function SettingsPage() {
             // plan is a renewal, not an upgrade, and Complete has nothing above it.
             const canUpgrade =
               !ended && (access.plan === 'self_study' || access.plan === 'self_study_monthly');
+            // A Complete bought at checkout picks its coaching day before
+            // paying; one upgraded to in Stripe's Portal cannot, so the row
+            // lands without a date and the customer books it in the app.
+            const needsCoachingDay =
+              !ended && access.plan === 'complete' && !access.coachingDay;
             const expiry = access.expiresAt ? new Date(access.expiresAt) : null;
+            const renews = access.renewsAt ? new Date(access.renewsAt) : null;
+            const renewsDate = renews?.toLocaleDateString('en-GB', {
+              day: 'numeric',
+              month: 'long',
+            });
             // Monthly has no expiry to count down to — it runs until canceled.
             const daysRemaining = expiry
               ? Math.ceil((expiry.getTime() - Date.now()) / DAY_MS)
@@ -201,8 +184,8 @@ export default function SettingsPage() {
                     : pending
                       ? `You're in. Your access opens on ${ACCESS_OPENS_LABEL}${expiryDate ? ` and runs to ${expiryDate}` : ''}.`
                     : access.isMonthly
-                      ? 'Renews monthly · cancel any time'
-                      : `Expires in ${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} · ${expiryDate}`}
+                      ? `Renews monthly${renewsDate ? ` · next payment ${renewsDate}` : ''} · cancel any time`
+                      : `Ends in ${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} · ${expiryDate} · nothing renews`}
                 </p>
                 {progress !== null && (
                   <div className="relative h-2 rounded-full bg-black/[0.04] overflow-hidden mb-3">
@@ -216,10 +199,11 @@ export default function SettingsPage() {
                   </div>
                 )}
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-                  {/* The generic /pricing link is suppressed once a specific
-                      upgrade link is showing: "Extend or upgrade" next to
-                      "Upgrade to Complete — £300" is the same offer twice, and
-                      the vaguer one costs £599. A pending buyer still gets the
+                  {/* The generic /pricing link is suppressed once the specific
+                      upgrade button is showing: "Extend or upgrade" next to
+                      "Upgrade to Complete" is the same offer twice, and the
+                      vaguer one sells a whole second plan at £599 instead of
+                      switching the one they have. A pending buyer still gets the
                       library link, which is a different destination entirely. */}
                   {(!canUpgrade || pending) && (
                     <Link
@@ -230,39 +214,43 @@ export default function SettingsPage() {
                     </Link>
                   )}
                   {/* One of the three sanctioned upgrade slots (lectures hero,
-                      here, and nowhere on the dashboard home). It points at the
-                      in-app upgrade, priced at the difference — /pricing would
-                      charge this customer the full £599 for what they part-own. */}
+                      here, and nowhere on the dashboard home). It opens Stripe's
+                      Portal on the plan switcher: the customer pays only for the
+                      time left on their term, so no headline price is quoted. */}
                   {canUpgrade && (
+                    <ManageBillingButton
+                      flow="subscription_update"
+                      busyLabel="Opening Stripe…"
+                      className="text-[13px] text-primary font-medium hover:underline disabled:opacity-60"
+                      errorClassName="text-[12px] text-danger mt-2"
+                    >
+                      Upgrade to Complete &rarr;
+                    </ManageBillingButton>
+                  )}
+                  {/* Complete without a date: the one thing they still owe us. */}
+                  {needsCoachingDay && (
                     <Link
-                      href="/dashboard/upgrade"
+                      href="/dashboard/coaching-day"
                       className="text-[13px] text-primary font-medium hover:underline"
                     >
-                      Upgrade to Complete &mdash; {COMPLETE_UPGRADE_PRICE_LABEL} &rarr;
+                      Choose your coaching day &rarr;
                     </Link>
                   )}
-                  {/* "Cancel any time" needs a mechanism behind it. */}
-                  {access.isMonthly && (
-                    <button
-                      type="button"
-                      onClick={handleManageBilling}
-                      disabled={portalBusy}
-                      className="text-[13px] text-primary font-medium hover:underline disabled:opacity-60"
-                    >
-                      {portalBusy ? 'Opening billing…' : 'Manage billing'} &rarr;
-                    </button>
-                  )}
+                  {/* Every plan is a subscription now, so every plan has a
+                      portal: invoices for a study-budget claim, a new card, and
+                      — on the rolling plan — cancellation. */}
+                  <ManageBillingButton
+                    className="text-[13px] text-primary font-medium hover:underline disabled:opacity-60"
+                    errorClassName="text-[12px] text-danger mt-2"
+                  >
+                    Manage billing &rarr;
+                  </ManageBillingButton>
                 </div>
-                {access.isMonthly && (
-                  <p className="text-[12px] text-muted mt-2">
-                    Cancel or update your card in Stripe&rsquo;s secure billing portal.
-                  </p>
-                )}
-                {portalError && (
-                  <p role="alert" className="text-[12px] text-danger mt-2">
-                    {portalError}
-                  </p>
-                )}
+                <p className="text-[12px] text-muted mt-2">
+                  {access.isMonthly
+                    ? 'Cancel, change plan or update your card in Stripe’s secure billing portal.'
+                    : 'Invoices, receipts and your card live in Stripe’s secure billing portal. Nothing renews — your plan simply ends on the date above.'}
+                </p>
               </div>
             );
           })() : (

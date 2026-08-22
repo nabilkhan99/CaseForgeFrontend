@@ -7,7 +7,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import type { LecturesResponse, LectureSummary } from '@/app/api/lectures/route';
 import type { EntitlementState } from '@/lib/commerce/entitlements';
 import type { SubscriptionResponse } from '@/app/api/subscription/route';
-import { COMPLETE_UPGRADE_PRICE_LABEL } from '@/lib/commerce/plans';
+import ManageBillingButton from '@/components/commerce/ManageBillingButton';
 
 /**
  * The lecture course. Locked users see the same list, greyed — the running
@@ -61,7 +61,11 @@ function totalMinutes(lectures: LectureSummary[]): number {
  * Self-Study lacks, shown as something worth having. One card, house style —
  * the list underneath stays as bare rows between rules.
  */
-function UpgradeHero({ lectures, upgradeHref }: { lectures: LectureSummary[]; upgradeHref: string }) {
+/** The hero's single primary action, shared by both of its two shapes. */
+const UPGRADE_CTA_CLASS =
+  'inline-flex items-center min-h-[44px] px-5 rounded-xl text-[14px] font-semibold text-white bg-gradient-to-br from-[#B45309] to-[#D97706] shadow-[0_4px_12px_rgba(180,83,9,0.2)] disabled:opacity-60';
+
+function UpgradeHero({ lectures, canSwitch }: { lectures: LectureSummary[]; canSwitch: boolean }) {
   const mins = totalMinutes(lectures);
   const n = lectures.length;
   // Only quantify once there is something to quantify — "18 minutes of
@@ -91,15 +95,27 @@ function UpgradeHero({ lectures, upgradeHref }: { lectures: LectureSummary[]; up
         against the marking framework your consultations are scored on &mdash; watch as often as you like for the
         length of your plan. Complete also adds a coaching day.
       </p>
-      <Link
-        href={upgradeHref}
-        className="inline-flex items-center min-h-[44px] px-5 rounded-xl text-[14px] font-semibold text-white"
-        style={{ background: 'linear-gradient(135deg, #B45309, #D97706)', boxShadow: '0 4px 12px rgba(180,83,9,0.2)' }}
-      >
-        {upgradeHref.startsWith('/dashboard')
-          ? `Upgrade to Complete — ${COMPLETE_UPGRADE_PRICE_LABEL} →`
-          : 'See what Complete adds →'}
-      </Link>
+      {/* A live Self-Study customer switches plan inside Stripe's Portal, which
+          prorates the difference against the time left on their term. Everyone
+          else — no plan, or a lapsed one — belongs on the acquisition page. */}
+      {canSwitch ? (
+        <>
+          <ManageBillingButton
+            flow="subscription_update"
+            busyLabel="Opening Stripe…"
+            className={UPGRADE_CTA_CLASS}
+          >
+            Upgrade to Complete &rarr;
+          </ManageBillingButton>
+          <p className="text-[12px] text-muted mt-3">
+            You pay only for the time left on your plan.
+          </p>
+        </>
+      ) : (
+        <Link href="/pricing?want=lectures" className={UPGRADE_CTA_CLASS}>
+          See what Complete adds &rarr;
+        </Link>
+      )}
     </motion.div>
   );
 }
@@ -213,10 +229,10 @@ export default function LecturesPage() {
   const [unavailable, setUnavailable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Where "what Complete adds" should send them. Defaults to the acquisition
-  // page — the safe answer for anyone without a plan — and is upgraded to the
-  // in-app, price-the-difference flow once we know they hold Self-Study.
-  const [upgradeHref, setUpgradeHref] = useState('/pricing?want=lectures');
+  // Whether "what Complete adds" is a Stripe plan switch or a trip to the
+  // acquisition page. Defaults to false — the safe answer for anyone without a
+  // plan — and flips once we know they hold a LIVE Self-Study subscription.
+  const [canSwitch, setCanSwitch] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -225,7 +241,7 @@ export default function LecturesPage() {
       .then((data: SubscriptionResponse | null) => {
         if (cancelled || !data) return;
         const selfStudy = data.plan === 'self_study' || data.plan === 'self_study_monthly';
-        if (selfStudy && data.state !== 'read_only') setUpgradeHref('/dashboard/upgrade');
+        if (selfStudy && data.state !== 'read_only') setCanSwitch(true);
       })
       .catch(() => {});
     return () => {
@@ -273,7 +289,7 @@ export default function LecturesPage() {
       <PageHeader title="Lectures" subtitle={subtitle} />
 
       {locked && !loading && !unavailable && state !== 'read_only' && (
-        <UpgradeHero lectures={lectures} upgradeHref={upgradeHref} />
+        <UpgradeHero lectures={lectures} canSwitch={canSwitch} />
       )}
 
       {locked && !loading && (unavailable || state === 'read_only') && (

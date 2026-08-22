@@ -4,54 +4,64 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
 import CoachingDayPicker, { useCoachingDays } from '@/components/commerce/CoachingDayPicker';
-import { COMPLETE_UPGRADE_PRICE_LABEL } from '@/lib/commerce/plans';
-import { COMPLETE_UPGRADE_PLAN } from '@/lib/commerce/upgrade';
 import { trackEvent } from '@/lib/analytics';
 
-interface UpgradeFlowProps {
-  /** The account the purchase will be filed under — stated, never guessed at. */
+interface CoachingDaySelectProps {
+  /** The account the booking attaches to — stated, never guessed at. */
   accountEmail: string;
 }
 
 /**
- * Buy the difference between Self-Study and Complete.
+ * Book the coaching day after the fact.
  *
- * The coaching day is chosen here rather than on the acquisition picker because
- * the upgrade buys one: it is the same product decision (a place in a class of
- * six), so it goes through the same component and the same soft hold.
+ * A Complete bought at checkout picks its day before paying. A Complete
+ * *upgraded* to through the Stripe Customer Portal cannot — Stripe's page knows
+ * nothing about the class — so the day is chosen here instead, through the same
+ * picker, against the same availability, so scarcity and cut-offs cannot drift
+ * between the two routes in.
  */
-export default function UpgradeFlow({ accountEmail }: UpgradeFlowProps) {
+export default function CoachingDaySelect({ accountEmail }: CoachingDaySelectProps) {
   const { days, loadError, selectable } = useCoachingDays();
   const [selected, setSelected] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [booked, setBooked] = useState<string | null>(null);
 
-  async function handleUpgrade() {
+  async function handleBook() {
     if (!selected || submitting) return;
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch('/api/checkout', {
+      const res = await fetch('/api/coaching-day/select', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: COMPLETE_UPGRADE_PLAN, coachingDay: selected }),
+        body: JSON.stringify({ coachingDay: selected }),
       });
-      const data = (await res.json()) as { url?: string; error?: string };
-      if (!res.ok || !data.url) {
+      const data = (await res.json()) as { label?: string; error?: string };
+      if (!res.ok || !data.label) {
         setError(data.error ?? 'Something went wrong — please try again.');
         setSubmitting(false);
         return;
       }
-      // Awaited so the capture flushes before we leave for Stripe.
-      await trackEvent('checkout_started', {
-        plan: COMPLETE_UPGRADE_PLAN,
-        coaching_day: selected,
-      });
-      window.location.assign(data.url);
+      await trackEvent('coaching_day_booked', { coaching_day: selected });
+      setBooked(data.label);
+      setSubmitting(false);
     } catch {
       setError('Something went wrong — please try again.');
       setSubmitting(false);
     }
+  }
+
+  if (booked) {
+    return (
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+        <p className="text-[15px] font-semibold text-heading">Your coaching day is booked.</p>
+        <p className="mt-1 text-[13px] leading-[1.65] text-muted">
+          {booked} &mdash; 9am to 5pm, remote, maximum class of six. We&rsquo;ll email the joining
+          details nearer the time.
+        </p>
+      </motion.div>
+    );
   }
 
   return (
@@ -85,20 +95,19 @@ export default function UpgradeFlow({ accountEmail }: UpgradeFlowProps) {
         <>
           <button
             type="button"
-            onClick={handleUpgrade}
+            onClick={handleBook}
             disabled={!selected || submitting}
             className="cta-button mt-7 w-full px-6 py-4 text-base sm:w-auto"
           >
-            {submitting
-              ? 'Redirecting to secure checkout…'
-              : `Upgrade — ${COMPLETE_UPGRADE_PRICE_LABEL}`}
+            {submitting ? 'Booking your place…' : 'Book this coaching day'}
             {!submitting && <ArrowRight className="h-4 w-4" />}
           </button>
           <p className="mt-3 text-[12px] text-muted">
-            This purchase will be linked to <span className="font-medium text-heading">{accountEmail}</span>.
+            This booking will be linked to{' '}
+            <span className="font-medium text-heading">{accountEmail}</span>.
           </p>
           <p className="mt-1 text-[12px] text-muted">
-            Secure payment via Stripe · Your Self-Study access and history carry over unchanged.
+            Nothing more to pay &mdash; the coaching day is part of Complete.
           </p>
         </>
       )}
