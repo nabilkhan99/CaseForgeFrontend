@@ -66,12 +66,15 @@ export default function SessionControls({
               ? undefined
               : { background: 'linear-gradient(135deg, #B45309, #D97706)', boxShadow: '0 4px 16px rgba(180,83,9,0.25)' }
           }
+          // The muted branch clears the shadow explicitly rather than passing
+          // `{}` — Framer holds the last animated value, which left an amber
+          // glow burning behind the red muted circle.
           animate={
             isConnected && !isMuted
               ? { boxShadow: ['0 4px 16px rgba(180,83,9,0.25)', '0 6px 20px rgba(180,83,9,0.35)', '0 4px 16px rgba(180,83,9,0.25)'] }
-              : {}
+              : { boxShadow: '0 0 0 0 rgba(180,83,9,0)' }
           }
-          transition={{ duration: 2, repeat: Infinity }}
+          transition={isConnected && !isMuted ? { duration: 2, repeat: Infinity } : { duration: 0.2 }}
         >
           <svg width="18" height="18" viewBox="0 0 14 14" fill="none" className={isMuted ? 'text-danger' : ''}>
             <path

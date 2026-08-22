@@ -180,7 +180,7 @@ export default function TryReadingPhasePage() {
                 <div className="text-[16px] font-semibold text-heading mb-0.5">{station.patient_name}</div>
                 <div className="flex items-center gap-2 mt-1">
                   <DomainTag name={station.domain_name} size="sm" />
-                  <span className="text-[11px] font-mono text-primary font-semibold px-2 py-0.5 rounded-md" style={{ background: 'rgba(180,83,9,0.08)' }}>
+                  <span className="text-[11px] font-mono text-primary font-semibold px-2 py-0.5 rounded-md whitespace-nowrap" style={{ background: 'rgba(180,83,9,0.08)' }}>
                     {Math.round(station.consultation_duration_seconds / 60)}-min consultation
                   </span>
                 </div>

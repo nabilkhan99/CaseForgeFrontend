@@ -84,14 +84,28 @@ export default function AppNavbar() {
     setDropdownOpen(false);
   }, [pathname]);
 
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDropdownOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [dropdownOpen]);
+
   // Lock the page behind the open menu. Without this the page scrolls under the
   // panel on a phone, so closing the menu drops you somewhere you didn't choose.
   useEffect(() => {
     if (!mobileOpen) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMobileOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
     return () => {
       document.body.style.overflow = previous;
+      document.removeEventListener('keydown', onKey);
     };
   }, [mobileOpen]);
 
@@ -111,6 +125,17 @@ export default function AppNavbar() {
     // hamburger would sit under the sensor housing in landscape and under the
     // status bar in a home-screen launch without these insets.
     <div className="fixed top-[max(1rem,env(safe-area-inset-top))] left-0 right-0 z-50 flex justify-center pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
+      {/* Click-catcher for the avatar dropdown. It sits outside <motion.nav>
+          deliberately: the nav is transformed by Framer, which makes it the
+          containing block for `position: fixed` children, so an inset-0 overlay
+          nested inside it would only ever cover the navbar. */}
+      {dropdownOpen && (
+        <div
+          className="hidden md:block fixed inset-0 z-40"
+          onClick={() => setDropdownOpen(false)}
+          aria-hidden="true"
+        />
+      )}
       <motion.nav
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         style={{ maxWidth: 'min(92%, 1200px)', backgroundColor: navBg, boxShadow: navShadow } as any}
@@ -157,14 +182,6 @@ export default function AppNavbar() {
           {/* Dropdown */}
           <AnimatePresence>
             {dropdownOpen && (
-              <>
-              {/* Same click-catcher as the mobile menu: clicking anywhere else
-                  should dismiss the menu, not activate what's underneath. */}
-              <div
-                className="fixed inset-0 z-40"
-                onClick={() => setDropdownOpen(false)}
-                aria-hidden="true"
-              />
               <motion.div
                 initial={{ opacity: 0, y: -4, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -190,7 +207,6 @@ export default function AppNavbar() {
                   Sign out
                 </button>
               </motion.div>
-              </>
             )}
           </AnimatePresence>
         </div>
@@ -229,9 +245,11 @@ export default function AppNavbar() {
                 "close this" gesture on a phone; without an element to catch it
                 the tap fell through and fired whatever row was underneath, so
                 you ended up on a page you never chose with the menu still open. */}
-            <motion.button
-              type="button"
-              aria-label="Close menu"
+            <motion.div
+              // Not a button: the hamburger is already the labelled "Close
+              // menu" control and Escape closes it too, so a second focusable
+              // element with the same name is noise for a screen reader.
+              aria-hidden="true"
               onClick={() => setMobileOpen(false)}
               className="fixed inset-0 z-40 md:hidden cursor-default"
               style={{ background: 'rgba(28,25,23,0.18)' }}
