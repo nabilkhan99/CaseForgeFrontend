@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { decideAccess } from '@/lib/commerce/entitlements';
 import { exactEmailPattern } from '@/lib/commerce/emailFilter';
-import { isStagedDeployment } from '@/lib/stations/visibility';
+import { effectiveLaunchDate } from '@/lib/commerce/launchDate';
 import { parseAdminEmails } from '@/lib/admin/guard';
 import { NextResponse, type NextRequest } from 'next/server';
 
@@ -123,7 +123,7 @@ export async function updateSession(request: NextRequest) {
             } else {
                 const { entitlement, allowed } = decideAccess(purchases ?? [], {
                     email: user.email,
-                    staged: isStagedDeployment(),
+                    launchDate: effectiveLaunchDate(),
                     admins: parseAdminEmails(process.env.ADMIN_EMAILS),
                 });
                 if (!allowed) {
@@ -135,6 +135,10 @@ export async function updateSession(request: NextRequest) {
                     if (entitlement.state === 'none' && entitlement.plan) {
                         url.pathname = '/dashboard';
                         url.search = '';
+                        // Carry the reason, so the dashboard can say why the
+                        // page they asked for came back here instead of
+                        // reloading under them with no explanation.
+                        url.searchParams.set('access', 'pending');
                     } else {
                         url.pathname = '/pricing';
                         url.searchParams.set(entitlement.state === 'read_only' ? 'renew' : 'upgrade', 'true');

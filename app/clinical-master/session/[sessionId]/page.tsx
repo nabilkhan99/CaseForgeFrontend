@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useRealtimeSession } from '@/hooks/useRealtimeSession';
+import { micRecoveryHint } from '@/lib/clinical-master/micErrors';
 import { createClient } from '@/lib/supabase/client';
 import ConsultationTimer from '@/components/clinical-master/ConsultationTimer';
 import AudioVisualizer from '@/components/clinical-master/AudioVisualizer';
@@ -69,7 +70,7 @@ function LiveConsultationContent() {
     router.push(feedbackUrl);
   }, [router, sessionId, from]);
 
-  const { isConnected, isSpeaking, transcript, connect, endConsultation, disconnect, setMicMuted, error, status } =
+  const { isConnected, isSpeaking, transcript, connect, endConsultation, disconnect, setMicMuted, error, errorKind, status } =
     useRealtimeSession({
       sessionId,
       stationId: stationId || undefined,
@@ -94,11 +95,30 @@ function LiveConsultationContent() {
     setMicMuted(newMuted);
   };
 
-  // Abandon: tear down without saving or generating feedback.
+  // Abandon: tear down without saving or generating feedback, and record it —
+  // otherwise the row stays 'live' and haunts the dashboard as "Unfinished".
+  const markAbandoned = useCallback(() => {
+    if (isEndingRef.current) return;
+    const body = JSON.stringify({ sessionId });
+    if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+      navigator.sendBeacon('/api/clinical-master/abandon-session', new Blob([body], { type: 'text/plain' }));
+    } else {
+      fetch('/api/clinical-master/abandon-session', { method: 'POST', body, keepalive: true }).catch(() => {});
+    }
+  }, [sessionId]);
+
   const handleLeaveWithoutFinishing = useCallback(() => {
     disconnect();
+    markAbandoned();
     router.push('/dashboard/library');
-  }, [disconnect, router]);
+  }, [disconnect, markAbandoned, router]);
+
+  // Closing the tab or navigating away mid-consultation is also an abandon.
+  useEffect(() => {
+    const onHide = () => { if (!isEndingRef.current && !isProcessing) markAbandoned(); };
+    window.addEventListener('pagehide', onHide);
+    return () => window.removeEventListener('pagehide', onHide);
+  }, [markAbandoned, isProcessing]);
 
   const patientInitials = station
     ? station.patient_name.split(' ').map(n => n[0]).join('').slice(0, 2)
@@ -121,6 +141,14 @@ function LiveConsultationContent() {
   }
 
   if (error && !isConnected) {
+    const micProblem = errorKind !== null && errorKind !== 'connection';
+    const hint = micRecoveryHint(errorKind ?? 'connection', typeof navigator !== 'undefined' ? navigator.userAgent : '');
+    const title =
+      errorKind === 'mic_denied' ? 'Microphone blocked'
+      : errorKind === 'mic_missing' ? 'No microphone found'
+      : errorKind === 'mic_busy' ? 'Microphone in use'
+      : errorKind === 'mic_unsupported' ? "This browser can't capture audio"
+      : 'Connection problem';
     return (
       <div className="min-h-[100dvh] bg-surface flex items-center justify-center px-6">
         <motion.div
@@ -134,15 +162,21 @@ function LiveConsultationContent() {
               <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.5" />
             </svg>
           </div>
-          <h3 className="text-[18px] font-semibold text-heading mb-2">Connection problem</h3>
-          <p className="text-[14px] leading-[1.65] text-muted mb-6">{error}</p>
+          <h3 className="text-[18px] font-semibold text-heading mb-2">{title}</h3>
+          <p className="text-[14px] leading-[1.65] text-muted mb-2">
+            {micProblem ? 'The consultation needs your microphone to hear you.' : error}
+          </p>
+          <p className="text-[13px] leading-[1.65] text-muted mb-6">{hint}</p>
           <div className="flex flex-col items-center gap-3">
+            {/* A denied mic stays denied until the site setting changes, so
+                re-running connect() would loop forever. Reload re-prompts
+                once the permission has been reset. */}
             <button
-              onClick={() => connect()}
+              onClick={() => (micProblem ? window.location.reload() : connect())}
               className="min-h-[44px] rounded-xl px-6 py-3 text-[14px] font-semibold text-white cursor-pointer"
               style={{ background: 'linear-gradient(135deg, #B45309, #D97706)', boxShadow: '0 4px 12px rgba(180,83,9,0.2)' }}
             >
-              Try again
+              {micProblem ? "I've fixed it — reload" : 'Try again'}
             </button>
             <Link href="/dashboard/library" className="text-[13px] font-semibold text-primary hover:underline">
               Back to library
@@ -160,6 +194,31 @@ function LiveConsultationContent() {
           <p className="text-muted mb-4">Missing station information</p>
           <Link href="/dashboard/library" className="text-primary hover:underline text-sm">Back to Library</Link>
         </div>
+      </div>
+    );
+  }
+
+  // Don't paint the live consultation (avatar, "Listening…", running clock)
+  // while the token, microphone and WebRTC handshake are still in flight —
+  // first-timers were talking into a dead line for up to ten seconds.
+  if (!isConnected && !isProcessing) {
+    return (
+      <div className="min-h-[100dvh] bg-surface flex flex-col items-center justify-center gap-6 px-6">
+        <motion.div
+          className="w-12 h-12 rounded-full border-2 border-primary border-t-transparent"
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+        />
+        <div className="text-center max-w-sm">
+          <h3 className="text-[18px] font-semibold text-heading mb-1">Connecting you to {station?.patient_name || 'your patient'}</h3>
+          <p className="text-[14px] leading-[1.65] text-muted">
+            Your browser will ask for your microphone &mdash; choose <span className="font-semibold text-heading">Allow</span>.
+            Headphones help. The patient speaks first; the clock starts when they do.
+          </p>
+        </div>
+        <button onClick={handleLeaveWithoutFinishing} className="text-[13px] font-semibold text-primary hover:underline cursor-pointer">
+          Cancel
+        </button>
       </div>
     );
   }

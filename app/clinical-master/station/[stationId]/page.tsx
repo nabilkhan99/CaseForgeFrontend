@@ -94,6 +94,13 @@ function ReadingPhaseContent() {
       // need a plan, not that their access "has ended".
       if (res.status === 403) {
         const body = await res.json().catch(() => null);
+        // A purchase whose window hasn't opened is a paying customer — the
+        // dashboard explains when practice starts; /pricing would read as
+        // "your purchase doesn't exist".
+        if (body?.pending) {
+          router.push('/dashboard?access=pending');
+          return;
+        }
         const renewing = body?.state === 'read_only';
         router.push(renewing ? '/pricing?renew=true' : '/pricing?upgrade=true');
         return;

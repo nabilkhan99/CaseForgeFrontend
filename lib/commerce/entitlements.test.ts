@@ -327,7 +327,6 @@ describe('computeEntitlement', () => {
 describe('decideAccess', () => {
   const ctx = (over: Partial<AccessContext> = {}): AccessContext => ({
     email: 'trainee@nhs.net',
-    staged: false,
     admins: new Set<string>(),
     now: DURING,
     ...over,
@@ -377,8 +376,19 @@ describe('decideAccess', () => {
     expect(d.entitlement.state).toBe('none')
   })
 
-  it('bypasses for every signed-in tester on a staged deployment', () => {
-    expect(decideAccess([], ctx({ staged: true }))).toMatchObject({ allowed: true, bypass: true })
+  it('never bypasses for a non-admin, whatever the deployment', () => {
+    expect(decideAccess([], ctx())).toMatchObject({ allowed: false, bypass: false })
+  })
+
+  it('opens a pre-launch purchase early when the launch date is brought forward', () => {
+    const bought = { plan: 'self_study', status: 'paid', created_at: '2026-08-22T12:00:00Z' }
+    const now = new Date('2026-08-23T12:00:00Z')
+    expect(decideAccess([bought], ctx({ now })).entitlement.state).toBe('none')
+    const early = decideAccess([bought], ctx({ now, launchDate: new Date('2026-08-22T00:00:00Z') }))
+    expect(early.entitlement.state).toBe('active')
+    expect(early.bypass).toBe(false)
+    // The window still runs 3 calendar months from the (earlier) start.
+    expect(early.entitlement.expiresAt?.toISOString()).toBe('2026-11-21T23:59:59.999Z')
   })
 
   it('does not treat a missing email as an admin match', () => {

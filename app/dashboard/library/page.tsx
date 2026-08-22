@@ -7,7 +7,6 @@ import { getDomains, type Domain } from '@/lib/supabase/queries/station-library'
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
-import ScoreBadge from '@/components/ui/ScoreBadge';
 import { getDomainColor } from '@/lib/constants/domains';
 
 export default function StationLibraryPage() {
@@ -101,12 +100,13 @@ export default function StationLibraryPage() {
                       </div>
                     </div>
 
-                    {/* Score or completion */}
+                    {/* Coverage, not a grade. This used to feed completed/total
+                        into ScoreBadge, whose Pass/Borderline/Refer thresholds
+                        turned "3 of 9 done" into a red "33% Refer". */}
                     {hasCompleted && (
-                      <ScoreBadge
-                        score={Math.min(100, Math.round((domain.completed_count / Math.max(1, domain.station_count)) * 100))}
-                        size="sm"
-                      />
+                      <span className="text-[11px] font-semibold text-muted tabular-nums flex-shrink-0">
+                        {domain.completed_count}/{domain.station_count}
+                      </span>
                     )}
 
                     {/* Chevron */}

@@ -99,14 +99,17 @@ function previousUtcDay(date: Date): Date {
  * a day (1 Sept -> 1 Dec 23:59 is 92 days). Buying on 1 Sept now runs to the
  * last instant of 30 Nov, which is what a customer reading "3 months" expects.
  */
-export function accessWindow(createdAt: string): { start: Date; end: Date } {
+export function accessWindow(
+  createdAt: string,
+  launchDate: Date = ACCESS_LAUNCH_DATE,
+): { start: Date; end: Date } {
   const purchased = new Date(createdAt)
-  const start = purchased < ACCESS_LAUNCH_DATE ? ACCESS_LAUNCH_DATE : purchased
+  const start = purchased < launchDate ? launchDate : purchased
   const sameDayThreeMonthsOn = addCalendarMonthsUtc(start, ACCESS_WINDOW_MONTHS)
   return { start, end: endOfUtcDay(previousUtcDay(sameDayThreeMonthsOn)) }
 }
 
-function entitlementOf(row: EntitlementRow, now: Date): Entitlement | null {
+function entitlementOf(row: EntitlementRow, now: Date, launchDate: Date): Entitlement | null {
   if (row.status === 'refunded') return null
 
   // An unrecognised plan string must never fail open into a full grant: a
@@ -128,12 +131,12 @@ function entitlementOf(row: EntitlementRow, now: Date): Entitlement | null {
     // Status is checked BEFORE the launch floor: a canceled subscription is
     // dead whatever the date, and must never read as a pending plan.
     if (row.status !== 'paid') return { state: 'read_only', plan: row.plan, hasLectures: false }
-    if (now < ACCESS_LAUNCH_DATE) return { state: 'none', plan: row.plan, hasLectures: false }
+    if (now < launchDate) return { state: 'none', plan: row.plan, hasLectures: false }
     return { state: 'active', plan: row.plan, hasLectures: false }
   }
 
   if (row.status !== 'paid') return null
-  const { start, end } = accessWindow(row.created_at)
+  const { start, end } = accessWindow(row.created_at, launchDate)
   const complete = row.plan === 'complete' || row.plan === 'intensive'
 
   // Before the window opens (preorder-era buys, whose clock starts at launch)
@@ -222,9 +225,13 @@ function comparePrecedence(a: Entitlement, b: Entitlement): number {
  * precedence above. Ties keep the incumbent, so the result does not depend on
  * row order.
  */
-export function computeEntitlement(rows: EntitlementRow[], now: Date = new Date()): Entitlement {
+export function computeEntitlement(
+  rows: EntitlementRow[],
+  now: Date = new Date(),
+  launchDate: Date = ACCESS_LAUNCH_DATE,
+): Entitlement {
   return rows
-    .map((row) => entitlementOf(row, now))
+    .map((row) => entitlementOf(row, now, launchDate))
     .filter((e): e is Entitlement => e !== null)
     .reduce<Entitlement>((best, e) => (comparePrecedence(e, best) > 0 ? e : best), {
       state: 'none',
@@ -235,16 +242,21 @@ export function computeEntitlement(rows: EntitlementRow[], now: Date = new Date(
 export interface AccessContext {
   /** Signed-in user's email — purchases and the admin allowlist both key off it. */
   email?: string | null
-  /** Staged deployment (develop preview, local dev): testers count as entitled. */
-  staged: boolean
   /** Normalized ADMIN_EMAILS allowlist — admins are never locked out of the product. */
   admins: Set<string>
   now?: Date
+  /**
+   * When the access window opens for pre-launch purchases. Defaults to the
+   * real launch day; a staged deployment may bring it forward (see
+   * `effectiveLaunchDate`) so testers can practise before 1 Sept on the
+   * SAME gating code production runs — the gate itself is never waived.
+   */
+  launchDate?: Date
 }
 
 export interface AccessDecision {
   entitlement: Entitlement
-  /** Access waived rather than bought: staged deployment or admin allowlist. */
+  /** Access waived rather than bought: the ADMIN_EMAILS allowlist. */
   bypass: boolean
   /** May start a consultation. Read-only surfaces (history, feedback) ignore this. */
   allowed: boolean
@@ -258,7 +270,12 @@ export interface AccessDecision {
  * different runtimes (edge middleware vs. node route handlers).
  */
 export function decideAccess(rows: EntitlementRow[], ctx: AccessContext): AccessDecision {
-  const entitlement = computeEntitlement(rows, ctx.now ?? new Date())
-  const bypass = ctx.staged || ctx.admins.has((ctx.email ?? '').trim().toLowerCase())
+  const entitlement = computeEntitlement(rows, ctx.now ?? new Date(), ctx.launchDate)
+  // Previews used to waive the gate for every signed-in tester. That showed
+  // testers (and any customer handed a preview link) the Complete product
+  // regardless of what they bought, so the gate could never be seen working
+  // before launch. Only the admin allowlist bypasses now; previews bring the
+  // launch date forward instead (`ctx.launchDate`).
+  const bypass = ctx.admins.has((ctx.email ?? '').trim().toLowerCase())
   return { entitlement, bypass, allowed: entitlement.state === 'active' || bypass }
 }

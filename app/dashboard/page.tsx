@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import Link from 'next/link';
@@ -64,16 +65,25 @@ function daysUntil(iso: string): number {
   return Math.ceil((new Date(iso).getTime() - Date.now()) / DAY_MS);
 }
 
-export default function DashboardPage() {
+function DashboardContent() {
   const supabase = createClient();
-  const [user, setUser] = useState<User | null>(null);
+  // `undefined` = auth not resolved yet; `null` = resolved, signed out. The
+  // two used to share `null`, so the first render treated "not loaded" as
+  // "signed out", skipped the subscription fetch, and painted "Good afternoon,
+  // there — you're on the free tier" at paying customers on every load.
+  const [user, setUser] = useState<User | null | undefined>(undefined);
   const [stats, setStats] = useState<UserStats>(defaultStats);
   const [metrics, setMetrics] = useState<PerformanceMetrics>(defaultMetrics);
   const [lastStation, setLastStation] = useState<LastStation | null>(null);
   const [recentSessions, setRecentSessions] = useState<SessionHistoryItem[]>([]);
   const [randomStation, setRandomStation] = useState<Station | null>(null);
-  const [access, setAccess] = useState<SubscriptionResponse | null>(null);
+  // `undefined` = not fetched yet; `null` = the lookup failed. Only a loaded
+  // answer may drive a "you have no plan" message.
+  const [access, setAccess] = useState<SubscriptionResponse | null | undefined>(undefined);
   const [loading, setLoading] = useState(true);
+  // Set by the middleware / station page when a pending buyer tried to start
+  // a case before their window opened.
+  const bouncedPending = useSearchParams()?.get('access') === 'pending';
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -83,8 +93,9 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function fetchDashboardData() {
+      if (user === undefined) return;
       if (!user?.id) {
-        if (user === null) setLoading(false);
+        setLoading(false);
         return;
       }
 
@@ -105,9 +116,7 @@ export default function DashboardPage() {
         setRandomStation(randomStationData);
         setAccess(accessRes?.state ? (accessRes as SubscriptionResponse) : null);
       } catch (error) {
-        if (error instanceof Error) {
-          // Silently handle dashboard data errors
-        }
+        console.error('[dashboard] failed to load dashboard data', error);
       } finally {
         setLoading(false);
       }
@@ -204,12 +213,13 @@ export default function DashboardPage() {
           animate={{ opacity: 1, y: 0 }}
         >
           <p className="text-[13px] text-heading">
-            You&apos;re in{access.planName ? ` — ${access.planName}` : ''}. Your access opens on{' '}
+            {bouncedPending ? 'Not long now — that case opens on ' : <>You&apos;re in{access.planName ? ` — ${access.planName}` : ''}. Your access opens on </>}
             <span className="font-semibold">{ACCESS_OPENS_LABEL}</span>.
+            {bouncedPending && ' Your plan is ready; consultations start then.'}
           </p>
         </motion.div>
       )}
-      {!access?.bypass && (access === null || (access.state === 'none' && !access.plan)) && (
+      {access && !access.bypass && access.state === 'none' && !access.plan && (
         <motion.div
           className="mb-6 px-4 py-3 rounded-xl flex items-center justify-between gap-3"
           style={{ background: 'rgba(180,83,9,0.04)', border: '1px solid rgba(180,83,9,0.08)' }}
@@ -217,9 +227,9 @@ export default function DashboardPage() {
           animate={{ opacity: 1, y: 0 }}
         >
           <p className="text-[13px] text-heading">
-            You&apos;re on the free tier &mdash;{' '}
+            You don&apos;t have a plan yet &mdash;{' '}
             <Link href="/pricing" className="text-primary font-semibold hover:underline">
-              upgrade to start practicing
+              see what&apos;s included
             </Link>
           </p>
         </motion.div>
@@ -286,7 +296,9 @@ export default function DashboardPage() {
             <div className="flex-1">
               <div className="text-[24px] font-bold text-primary/20 font-mono mb-1">01</div>
               <div className="text-[14px] font-semibold text-heading mb-1">Pick a case</div>
-              <div className="text-[13px] text-muted">Choose from 78 stations across all SCA domains</div>
+              <div className="text-[13px] text-muted">
+                Choose from {stats.totalStations > 0 ? `${stats.totalStations} stations` : 'stations'} across every SCA domain
+              </div>
             </div>
             <div className="flex-1">
               <div className="text-[24px] font-bold text-primary/20 font-mono mb-1">02</div>
@@ -296,20 +308,48 @@ export default function DashboardPage() {
             <div className="flex-1">
               <div className="text-[24px] font-bold text-primary/20 font-mono mb-1">03</div>
               <div className="text-[14px] font-semibold text-heading mb-1">Get scored</div>
-              <div className="text-[13px] text-muted">Instant feedback on all three SCA domains</div>
+              <div className="text-[13px] text-muted">Scored feedback on all three SCA domains, a couple of minutes after you finish</div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Quick start */}
+      {/* Quick start. A buyer whose window hasn't opened (or has closed) can
+          browse the library but not start — say so here rather than letting
+          the button bounce them back to this page with no explanation. */}
       <div className="mb-8">
-        <Link href="/dashboard/library">
-          <PrimaryButton size="lg" fullWidth>
-            Start a New Session
-          </PrimaryButton>
-        </Link>
-        {randomStation && (
+        {access && !access.allowed ? (
+          <div
+            className="px-5 py-4 rounded-xl text-center"
+            style={{ background: 'rgba(180,83,9,0.04)', border: '1px dashed rgba(180,83,9,0.25)' }}
+          >
+            <p className="text-[14px] font-semibold text-heading">
+              {access.state === 'read_only' ? 'Your access has ended' : `Practice opens ${ACCESS_OPENS_LABEL}`}
+            </p>
+            <p className="text-[13px] text-muted mt-1">
+              {access.state === 'read_only' ? (
+                <Link href="/pricing?renew=true" className="text-primary font-medium hover:underline">
+                  Renew to practise again
+                </Link>
+              ) : (
+                <>
+                  In the meantime,{' '}
+                  <Link href="/dashboard/library" className="text-primary font-medium hover:underline">
+                    browse the case library
+                  </Link>
+                  .
+                </>
+              )}
+            </p>
+          </div>
+        ) : (
+          <Link href="/dashboard/library">
+            <PrimaryButton size="lg" fullWidth>
+              Start a New Session
+            </PrimaryButton>
+          </Link>
+        )}
+        {randomStation && (access?.allowed ?? true) && (
           <div className="text-center mt-2">
             <Link
               href={`/clinical-master/station/${randomStation.id}`}
@@ -336,7 +376,9 @@ export default function DashboardPage() {
                     </span>
                   </div>
                 </div>
-                <Link href={`/clinical-master/session/${lastStation.sessionId}?stationId=${lastStation.id}`} className="sm:w-auto">
+                {/* Back through the brief and reading time — a restart that
+                    drops straight into a live consultation skips both. */}
+                <Link href={`/clinical-master/station/${lastStation.id}`} className="sm:w-auto">
                   <SecondaryButton size="sm" fullWidth>Restart case</SecondaryButton>
                 </Link>
               </div>
@@ -455,5 +497,14 @@ export default function DashboardPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/** useSearchParams needs a Suspense boundary for static prerendering. */
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={null}>
+      <DashboardContent />
+    </Suspense>
   );
 }

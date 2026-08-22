@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { MicError, classifyMicError, type SessionErrorKind } from '@/lib/clinical-master/micErrors';
 import { TranscriptItem } from '@/lib/clinical-master/types';
 import { unreliableEchoCancellation } from '@/lib/clinical-master/echoCancellation';
 import { isIncompleteDoctorTurn } from '@/lib/clinical-master/doctorTurn';
@@ -289,6 +290,20 @@ export function useRealtimeSession({
 }: UseRealtimeSessionProps) {
     const [transcript, setTranscript] = useState<TranscriptItem[]>([]);
     const [error, setError] = useState<string | null>(null);
+    const [errorKind, setErrorKind] = useState<SessionErrorKind | null>(null);
+    // Keep the screen on for the length of the consultation: the trainee is
+    // talking, not touching, and a phone locking mid-station suspends the
+    // tab and kills the call. Best-effort — unsupported browsers just skip it.
+    const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null);
+    const acquireWakeLock = useCallback(async () => {
+        try {
+            const nav = navigator as Navigator & { wakeLock?: { request: (t: 'screen') => Promise<{ release: () => Promise<void> }> } };
+            if (!nav.wakeLock || wakeLockRef.current) return;
+            wakeLockRef.current = await nav.wakeLock.request('screen');
+        } catch {
+            /* denied or unsupported — not fatal */
+        }
+    }, []);
     const [status, setStatus] = useState<SessionStatus>('disconnected');
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [isMuted, setIsMuted] = useState(false);
@@ -1225,6 +1240,10 @@ export function useRealtimeSession({
             clearTimeout(greetingWatchdogRef.current);
             greetingWatchdogRef.current = null;
         }
+        if (wakeLockRef.current) {
+            wakeLockRef.current.release().catch(() => {});
+            wakeLockRef.current = null;
+        }
         if (detectorIntervalRef.current) {
             clearInterval(detectorIntervalRef.current);
             detectorIntervalRef.current = null;
@@ -1552,11 +1571,22 @@ export function useRealtimeSession({
         ]
     );
 
+    useEffect(() => {
+        // The OS drops a wake lock whenever the tab is hidden; take it back
+        // when the trainee returns mid-consultation.
+        const onVisible = () => {
+            if (document.visibilityState === 'visible' && status === 'connected') void acquireWakeLock();
+        };
+        document.addEventListener('visibilitychange', onVisible);
+        return () => document.removeEventListener('visibilitychange', onVisible);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [status]);
     const connect = useCallback(async () => {
         if (endedRef.current || status === 'connecting' || status === 'connected') return;
         try {
             setStatus('connecting');
             setError(null);
+            setErrorKind(null);
             endedRef.current = false;
             debugEnabledRef.current =
                 typeof window !== 'undefined' && window.location.search.includes('voicedebug');
@@ -1579,10 +1609,19 @@ export function useRealtimeSession({
             }
             const { ephemeralKey, callsUrl, durationSeconds }: TokenResponse = await res.json();
 
-            // 2. Microphone
-            const micStream = await navigator.mediaDevices.getUserMedia({
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-            });
+            // 2. Microphone — classified separately so a denied mic gets
+            // recovery instructions rather than "Connection problem".
+            let micStream: MediaStream;
+            try {
+                if (!navigator.mediaDevices?.getUserMedia) {
+                    throw new MicError('mic_unsupported', 'This browser cannot capture audio here.');
+                }
+                micStream = await navigator.mediaDevices.getUserMedia({
+                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+                });
+            } catch (micErr) {
+                throw micErr instanceof MicError ? micErr : classifyMicError(micErr);
+            }
             micStreamRef.current = micStream;
             micTrackRef.current = micStream.getAudioTracks()[0] ?? null;
             startDoubleTalkDetector();
@@ -1664,6 +1703,7 @@ export function useRealtimeSession({
             };
             dc.onopen = () => {
                 setStatus('connected');
+                void acquireWakeLock();
                 sessionStartRef.current = Date.now();
                 vadRef.current = {};
                 // Session was minted with turn_detection: null for this
@@ -1762,11 +1802,13 @@ export function useRealtimeSession({
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to connect';
             setError(message);
+            setErrorKind(err instanceof MicError ? err.kind : 'connection');
             teardown();
             onError?.(message);
         }
     }, [
         status,
+        acquireWakeLock,
         tokenEndpoint,
         sessionId,
         stationId,
@@ -1823,6 +1865,7 @@ export function useRealtimeSession({
         disconnect,
         setMicMuted,
         error,
+        errorKind,
         status,
     };
 }

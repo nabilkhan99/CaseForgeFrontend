@@ -104,7 +104,7 @@ describe('GET /api/lectures', () => {
     })
   })
 
-  it('teases Self-Study with titles only — no description, no duration', async () => {
+  it('teases Self-Study with titles and durations — no description', async () => {
     signedIn({ entitlement: entitlement({ hasLectures: false, plan: 'self_study' }) })
 
     const res = await GET()
@@ -116,9 +116,10 @@ describe('GET /api/lectures', () => {
       ROWS[0].title,
       ROWS[1].title,
     ])
-    for (const lecture of body.lectures) {
+    for (const [i, lecture] of body.lectures.entries()) {
       expect(lecture.description).toBeNull()
-      expect(lecture.durationSeconds).toBeNull()
+      // Minutes are the pitch ("10 hours of teaching"); they leak nothing.
+      expect(lecture.durationSeconds).toBe(ROWS[i].duration_seconds)
     }
   })
 

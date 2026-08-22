@@ -19,8 +19,10 @@ export function visibleStationStates(): boolean[] {
 /**
  * True on deployments meant to preview the post-launch state (develop preview,
  * local dev). Hard-refused anywhere that isn't provably one of those: staged
- * mode also bypasses the entitlement gate, so a stray env var must never be
- * able to give the whole product away on the live site.
+ * mode lists unreleased stations and lets `NEXT_PUBLIC_ACCESS_OPENS_OVERRIDE`
+ * bring the launch date forward, so a stray env var must never be able to
+ * open the course early on the live site. It does NOT waive the paywall —
+ * a preview gates exactly as production does.
  *
  * Deliberately an allowlist of safe environments, not a denylist of
  * `!== 'production'`. NEXT_PUBLIC_VERCEL_ENV only exists when Vercel's

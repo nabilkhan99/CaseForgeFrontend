@@ -84,7 +84,9 @@ export async function GET() {
       title: row.title,
       description: unlocked ? row.description : null,
       sortOrder: row.sort_order,
-      durationSeconds: unlocked ? row.duration_seconds : null,
+      // Durations stay visible when locked: titles don't convey how much
+      // teaching Complete adds, minutes do, and they leak nothing.
+      durationSeconds: row.duration_seconds,
     })),
   };
 
