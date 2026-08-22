@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowRight, Info } from 'lucide-react';
@@ -205,7 +205,7 @@ function BillingToggle({ billing, onChange }: BillingToggleProps) {
                 onChange(option.key);
                 trackEvent('pricing_billing_toggled', { billing: option.key });
               }}
-              className={`relative isolate rounded-full px-4 py-2 text-[13px] font-semibold transition-colors sm:text-sm ${
+              className={`relative isolate inline-flex min-h-[44px] items-center rounded-full px-4 py-2 text-[13px] font-semibold transition-colors sm:text-sm ${
                 active ? 'text-heading' : 'text-muted hover:text-heading'
               }`}
             >
@@ -234,27 +234,84 @@ function BillingToggle({ billing, onChange }: BillingToggleProps) {
   );
 }
 
-function GuaranteeInfo({ align = 'left' }: { align?: 'left' | 'right' }) {
+/**
+ * The £500 guarantee's material condition, reachable on a phone.
+ *
+ * This was a hover popover plus a `title` attribute on a 14x14 button with no
+ * click handler — so on touch, where most of the traffic is, the one condition
+ * attached to a £500 promise ("you must first pass all 200 AI stations") could
+ * not be read at all.
+ *
+ * It is now an inline disclosure rather than a floating popover: tap or Enter
+ * expands a paragraph inside the guarantee strip itself, `aria-expanded`
+ * describes it, and the trigger is a 44px target. Inline matters — an absolute
+ * panel opened underneath the fixed navbar whenever the strip happened to be
+ * near the top of the viewport, and no z-index could lift it out of the
+ * transformed card that contains it.
+ *
+ * It owns the strip's layout so the paragraph can take a line of its own; the
+ * right-hand promise is passed as children.
+ */
+function GuaranteeInfo({
+  children,
+  align = 'between',
+}: {
+  children: ReactNode;
+  align?: 'between' | 'center';
+}) {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+  const panelRef = useRef<HTMLParagraphElement>(null);
+
+  // Expanding in flow can put the paragraph just past the fold when the strip
+  // sits at the bottom of the viewport. `block: 'nearest'` nudges only as far
+  // as it has to, and does nothing when the paragraph is already visible.
+  useEffect(() => {
+    if (!open) return;
+    const id = requestAnimationFrame(() =>
+      panelRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    );
+    return () => cancelAnimationFrame(id);
+  }, [open]);
+
   return (
-    <div className="group relative inline-flex items-center gap-1">
-      <p className="text-[11px] font-medium text-[#27500A] sm:text-sm">SCA Guarantee</p>
-      <button
-        type="button"
-        aria-label="About the SCA Guarantee: conditional on passing all 200 AI stations"
-        title="Conditional guarantee: to qualify you must first pass all 200 AI stations."
-        className="inline-flex shrink-0 items-center justify-center rounded-full text-[#27500A]/70 transition-colors hover:text-[#27500A] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#27500A]/40"
-      >
-        <Info className="h-3.5 w-3.5" aria-hidden="true" />
-      </button>
+    <div className="w-full">
       <div
-        role="tooltip"
-        className={`pointer-events-none absolute top-full z-20 mt-1 w-52 rounded-lg border border-heading/10 bg-white p-2.5 text-left text-[10px] leading-snug text-body opacity-0 shadow-elevation-3 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 sm:text-[11px] ${
-          align === 'right' ? 'right-0' : 'left-0'
+        className={`flex flex-wrap items-center gap-x-3 gap-y-1 ${
+          align === 'center' ? 'justify-center text-center' : 'justify-between'
         }`}
       >
-        This is a <span className="font-medium text-[#27500A]">conditional</span> guarantee — to qualify
-        you must first pass all 200 AI stations.
+        <span className="inline-flex items-center gap-1">
+          <span className="text-[11px] font-medium text-[#27500A] sm:text-sm">SCA Guarantee</span>
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}
+            aria-controls={panelId}
+            aria-label="About the SCA Guarantee: conditional on passing all 200 AI stations"
+            // -m-2 keeps the 44px target from changing the height of the strip.
+            className="-m-2 inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full p-2 text-[#27500A]/70 transition-colors hover:text-[#27500A]"
+          >
+            <Info className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        </span>
+        {children}
       </div>
+      {open && (
+        <motion.p
+          ref={panelRef}
+          id={panelId}
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.15 }}
+          className={`mt-2 text-[11px] leading-snug text-[#27500A]/90 ${
+            align === 'center' ? 'text-center' : 'text-left'
+          }`}
+        >
+          This is a <span className="font-medium text-[#27500A]">conditional</span> guarantee &mdash; to
+          qualify you must first pass all 200 AI stations.
+        </motion.p>
+      )}
     </div>
   );
 }
@@ -467,11 +524,12 @@ function MobileCards({ selfStudy, billing, owned, canUpgrade }: MobileCardsProps
             })}
 
             {/* Guarantee row */}
-            <div className="flex items-center justify-between gap-3 bg-[#EAF3DE] px-5 py-3.5">
-              <GuaranteeInfo />
-              <p className="text-right text-[11px] leading-snug text-[#27500A]">
-                Don’t pass? We pay you £500
-              </p>
+            <div className="bg-[#EAF3DE] px-5 py-3.5">
+              <GuaranteeInfo>
+                <p className="text-right text-[11px] leading-snug text-[#27500A]">
+                  Don’t pass? We pay you £500
+                </p>
+              </GuaranteeInfo>
             </div>
           </div>
 
@@ -635,11 +693,12 @@ export default function PricingTable({ ownedPlan, accountEmail, canUpgrade = fal
               </div>
 
               {/* One guarantee strip for the whole table */}
-              <div className="col-span-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-[#EAF3DE] px-6 py-3.5 text-center">
-                <GuaranteeInfo />
-                <p className="text-[11px] text-[#27500A] sm:text-xs">
-                  Every plan — don&rsquo;t pass, and we pay you £500.
-                </p>
+              <div className="col-span-4 bg-[#EAF3DE] px-6 py-3.5">
+                <GuaranteeInfo align="center">
+                  <p className="text-[11px] text-[#27500A] sm:text-xs">
+                    Every plan — don&rsquo;t pass, and we pay you £500.
+                  </p>
+                </GuaranteeInfo>
               </div>
             </div>
           </div>

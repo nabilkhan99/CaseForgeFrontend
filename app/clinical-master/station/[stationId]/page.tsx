@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState, useCallback, useRef, Suspense } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
@@ -36,7 +36,6 @@ function ReadingPhaseContent() {
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [readingComplete, setReadingComplete] = useState(false);
-  const ctaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     async function fetchStation() {
@@ -159,12 +158,13 @@ function ReadingPhaseContent() {
           </Link>
           <ConsultationTimer
             durationSeconds={station.reading_duration_seconds}
-            label="Reading Time"
+            label="Reading time"
             autoStart={true}
-            onComplete={() => {
-              setReadingComplete(true);
-              ctaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }}
+            // Deliberately no scrollIntoView: on a phone the brief is two to
+            // four screens, so the reading window genuinely runs out mid-read
+            // and yanking the page to the button loses the reader's place. The
+            // CTA's pulse is the whole nudge; nothing else happens at zero.
+            onComplete={() => setReadingComplete(true)}
           />
           <span className="hidden sm:inline text-[12px] text-muted">{station.title}</span>
         </div>
@@ -172,6 +172,11 @@ function ReadingPhaseContent() {
 
       {/* Main content */}
       <div className="max-w-[640px] mx-auto px-6 py-8">
+        {/* The clock is already running when this page paints, and nothing on
+            screen said what happens when it hits zero. Say it once, plainly. */}
+        <p className="mb-5 text-[13px] leading-[1.65] text-muted">
+          {Math.round(station.reading_duration_seconds / 60)} minutes&rsquo; reading, as in the exam &mdash; nothing happens at zero, begin when you&rsquo;re ready.
+        </p>
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -190,8 +195,8 @@ function ReadingPhaseContent() {
                 <div className="text-[16px] font-semibold text-heading mb-0.5">{station.patient_name}</div>
                 <div className="flex items-center gap-2 mt-1">
                   <DomainTag name={station.domain_name} size="sm" />
-                  <span className="text-[11px] font-mono text-primary font-semibold px-2 py-0.5 rounded-md" style={{ background: 'rgba(180,83,9,0.08)' }}>
-                    {Math.round(station.consultation_duration_seconds / 60)} min
+                  <span className="text-[11px] font-mono text-primary font-semibold px-2 py-0.5 rounded-md whitespace-nowrap" style={{ background: 'rgba(180,83,9,0.08)' }}>
+                    {Math.round(station.consultation_duration_seconds / 60)}-min consultation
                   </span>
                 </div>
               </div>
@@ -248,7 +253,7 @@ function ReadingPhaseContent() {
             <AudioSetupNotice />
 
             {/* CTA */}
-            <div ref={ctaRef}>
+            <div>
               <motion.div
                 animate={readingComplete ? { boxShadow: ['0 0 0 0 rgba(180,83,9,0)', '0 0 0 8px rgba(180,83,9,0.15)', '0 0 0 0 rgba(180,83,9,0)'] } : {}}
                 transition={readingComplete ? { duration: 2, repeat: Infinity } : {}}

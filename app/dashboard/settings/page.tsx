@@ -134,7 +134,7 @@ export default function SettingsPage() {
   const initial = fullName?.charAt(0)?.toUpperCase() || '?';
 
   return (
-    <div className="max-w-[560px] mx-auto">
+    <div>
       <PageHeader
         title="Settings"
         subtitle="Manage your account preferences"

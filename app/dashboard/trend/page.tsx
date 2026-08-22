@@ -176,7 +176,7 @@ export default function TrendPage() {
   }
 
   return (
-    <div className="max-w-[760px] mx-auto px-6 py-12">
+    <div>
       <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-2">Development Trends</div>
       <h1 className="text-[22px] font-bold text-heading mb-1">
         Trajectory: {report.overall_trajectory}
