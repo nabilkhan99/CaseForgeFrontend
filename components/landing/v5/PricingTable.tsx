@@ -352,7 +352,7 @@ function PlanCta({ selfStudy, variant, selfStudyPlan, owned, canUpgrade }: CtaBu
       <ManageBillingButton
         flow="subscription_update"
         busyLabel="Opening Stripe…"
-        onStart={() => trackEvent('checkout_clicked', { plan: 'complete_upgrade' })}
+        onStart={() => trackEvent('checkout_clicked', { plan: 'complete_switch' })}
         className="cta-button w-full gap-1.5 !rounded-full px-2 py-3.5 text-[13px] disabled:opacity-60 sm:py-3 sm:text-sm"
         errorClassName="mt-2 text-center text-[12px] font-medium text-danger"
       >

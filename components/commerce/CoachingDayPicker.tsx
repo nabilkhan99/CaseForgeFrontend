@@ -6,9 +6,11 @@ import type { CoachingDayAvailability } from '@/lib/commerce/plans';
 
 /**
  * The coaching-day radio group, shared by the two places a coaching day is
- * chosen: the acquisition picker at `/coaching-day` and the in-app upgrade at
- * `/dashboard/upgrade`. One copy, so scarcity, cut-offs and sold-out states
- * cannot drift between the page a stranger sees and the page a customer sees.
+ * chosen: the acquisition picker at `/coaching-day` and the in-app booking at
+ * `/dashboard/coaching-day` (where a customer who upgraded to Complete in
+ * Stripe's Portal picks their date afterwards). One copy, so scarcity,
+ * cut-offs and sold-out states cannot drift between the page a stranger sees
+ * and the page a customer sees.
  */
 
 const COUNTDOWN_WINDOW_MS = 72 * 60 * 60 * 1000;
