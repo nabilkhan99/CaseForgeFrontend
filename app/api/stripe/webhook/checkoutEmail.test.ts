@@ -14,6 +14,9 @@ const mocks = vi.hoisted(() => ({
   constructEventAsync: vi.fn(),
   paymentIntentsUpdate: vi.fn(),
   insert: vi.fn(),
+  update: vi.fn(),
+  subscriptionsRetrieve: vi.fn(),
+  subscriptionsUpdate: vi.fn(),
 }))
 
 vi.mock('server-only', () => ({}))
@@ -22,6 +25,10 @@ vi.mock('@/lib/commerce/stripe', () => ({
   getStripe: () => ({
     webhooks: { constructEventAsync: mocks.constructEventAsync },
     paymentIntents: { update: mocks.paymentIntentsUpdate },
+    subscriptions: {
+      retrieve: mocks.subscriptionsRetrieve,
+      update: mocks.subscriptionsUpdate,
+    },
   }),
 }))
 
@@ -37,6 +44,15 @@ vi.mock('@supabase/supabase-js', () => ({
       insert: (values: Record<string, unknown>) => {
         mocks.insert(values)
         return { select: () => ({ single: async () => ({ data: { id: 'p1' }, error: null }) }) }
+      },
+      update: (values: Record<string, unknown>) => {
+        mocks.update(values)
+        const builder = {
+          eq: () => builder,
+          neq: async () => ({ error: null }),
+          select: async () => ({ data: [{ id: 'p1' }], error: null }),
+        }
+        return builder
       },
     }),
   }),
@@ -59,6 +75,9 @@ function completedSession(over: SessionOverrides) {
         customer_details: { email: over.customerEmail, name: 'A Buyer' },
         amount_total: 29900,
         currency: 'gbp',
+        // Every plan is a subscription now, so every completed session carries
+        // one — and the webhook reads its period back off Stripe.
+        subscription: 'sub_1',
         metadata: over.metadata ?? {},
       },
     },
@@ -85,6 +104,30 @@ function recordedEmail(): string {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('STRIPE_WEBHOOK_SECRET', 'whsec_test')
+  vi.stubEnv('STRIPE_PRICE_SELF_STUDY', 'price_self_study')
+  vi.stubEnv('STRIPE_PRICE_COMPLETE', 'price_complete')
+  mocks.subscriptionsRetrieve.mockResolvedValue({
+    id: 'sub_1',
+    status: 'active',
+    cancel_at: null,
+    cancel_at_period_end: false,
+    items: {
+      data: [
+        {
+          price: { id: 'price_self_study' },
+          current_period_start: 1_755_820_800, // 22 Aug 2026
+          current_period_end: 1_763_769_600, // 22 Nov 2026
+        },
+      ],
+    },
+    // A subscription session has no payment_intent of its own; the id a refund
+    // matches on is read off the first invoice.
+    latest_invoice: {
+      id: 'in_1',
+      payments: { data: [{ is_default: true, payment: { payment_intent: 'pi_1' } }] },
+    },
+  })
+  mocks.subscriptionsUpdate.mockResolvedValue({})
 })
 
 describe('checkout.session.completed — purchase email', () => {
@@ -130,15 +173,12 @@ describe('checkout.session.completed — purchase email', () => {
     error.mockRestore()
   })
 
-  it('records an upgrade as a plain Complete purchase', async () => {
-    // `complete_upgrade` never reaches the database: the row has to read
-    // `complete` or the entitlement fold will not grant lectures.
+  it('records a Complete purchase with its coaching day', async () => {
     await deliver(
       completedSession({
         customerEmail: 'buyer@nhs.net',
         metadata: {
           plan: 'complete',
-          upgrade_from: 'self_study',
           coaching_day: '2026-09-12',
           account_email: 'buyer@nhs.net',
         },

@@ -62,7 +62,7 @@ export default function CoachingDayPage() {
           </Link>
 
           <p className="mt-6 text-[11px] font-medium uppercase tracking-[0.08em] text-[#854F0B] sm:text-xs">
-            Pre-order · Complete SCA Course · £599 one-off
+            Pre-order · Complete SCA Course · £599 for 3 months
           </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-heading sm:text-4xl">
             Choose your coaching day

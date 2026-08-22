@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { customerSearchQuery, pickPortalCustomerId, type CustomerCandidateRow } from './billingPortal'
+import { customerSearchQuery, pickPortalTarget, type CustomerCandidateRow } from './billingPortal'
 
 function row(over: Partial<CustomerCandidateRow>): CustomerCandidateRow {
   return {
@@ -11,36 +11,41 @@ function row(over: Partial<CustomerCandidateRow>): CustomerCandidateRow {
   }
 }
 
-describe('pickPortalCustomerId', () => {
-  it('returns null when nothing carries a customer id', () => {
-    expect(pickPortalCustomerId([row({ stripe_customer_id: null })])).toBeNull()
-    expect(pickPortalCustomerId([])).toBeNull()
+describe('pickPortalTarget', () => {
+  it('returns nothing when no row carries a customer id', () => {
+    expect(pickPortalTarget([row({ stripe_customer_id: null })])).toEqual({
+      customerId: null,
+      subscriptionId: null,
+    })
+    expect(pickPortalTarget([])).toEqual({ customerId: null, subscriptionId: null })
   })
 
-  it('prefers the live subscription over a newer one-off purchase', () => {
-    // The portal exists to cancel or re-card a subscription. A one-off Complete
-    // bought last week must not shadow the monthly plan they came here to end.
-    const picked = pickPortalCustomerId([
-      row({ stripe_customer_id: 'cus_monthly', stripe_subscription_id: 'sub_1', created_at: '2026-06-01T00:00:00Z' }),
-      row({ stripe_customer_id: 'cus_oneoff', created_at: '2026-08-15T00:00:00Z' }),
+  it('prefers the live subscription over a newer pre-migration purchase', () => {
+    // The portal exists to switch plan, cancel or re-card a subscription. A
+    // legacy row with no subscription must not shadow the live one, or the
+    // upgrade flow has no subscription to open on.
+    const picked = pickPortalTarget([
+      row({ stripe_customer_id: 'cus_live', stripe_subscription_id: 'sub_1', created_at: '2026-06-01T00:00:00Z' }),
+      row({ stripe_customer_id: 'cus_legacy', created_at: '2026-08-15T00:00:00Z' }),
     ])
-    expect(picked).toBe('cus_monthly')
+    expect(picked).toEqual({ customerId: 'cus_live', subscriptionId: 'sub_1' })
   })
 
   it('ignores a canceled subscription when a live purchase exists', () => {
-    const picked = pickPortalCustomerId([
+    const picked = pickPortalTarget([
       row({ stripe_customer_id: 'cus_dead', stripe_subscription_id: 'sub_dead', status: 'canceled', created_at: '2026-05-01T00:00:00Z' }),
       row({ stripe_customer_id: 'cus_live', created_at: '2026-08-01T00:00:00Z' }),
     ])
-    expect(picked).toBe('cus_live')
+    // No live subscription to open a flow on — the portal lands on its home page.
+    expect(picked).toEqual({ customerId: 'cus_live', subscriptionId: null })
   })
 
   it('falls back to the most recent row with a customer id', () => {
-    const picked = pickPortalCustomerId([
+    const picked = pickPortalTarget([
       row({ stripe_customer_id: 'cus_old', created_at: '2026-01-01T00:00:00Z' }),
       row({ stripe_customer_id: 'cus_new', created_at: '2026-08-01T00:00:00Z' }),
     ])
-    expect(picked).toBe('cus_new')
+    expect(picked.customerId).toBe('cus_new')
   })
 
   it('does not mutate the caller’s rows', () => {
@@ -48,7 +53,7 @@ describe('pickPortalCustomerId', () => {
       row({ stripe_customer_id: 'cus_old', created_at: '2026-01-01T00:00:00Z' }),
       row({ stripe_customer_id: 'cus_new', created_at: '2026-08-01T00:00:00Z' }),
     ]
-    pickPortalCustomerId(rows)
+    pickPortalTarget(rows)
     expect(rows[0].stripe_customer_id).toBe('cus_old')
   })
 })

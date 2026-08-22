@@ -32,7 +32,7 @@ Contact: hello@fourteenfisherman.com
 
 3.1 Depending on the plan you purchase, we provide some or all of: access to AI voice consultation practice stations, on-demand recorded lectures, small-group coaching sessions, and one-to-one coaching.
 
-3.2 Plan contents, prices and access periods are as described on the pricing page at the time of purchase. All plans are one-off purchases for a fixed course, not subscriptions.
+3.2 Plan contents, prices and access periods are as described on the pricing page at the time of purchase. The Self-Study and Complete plans are sold as a fixed 3-month course term: you make one payment, the term does not renew, and no further charge is made. The monthly Self-Study plan is a rolling monthly plan that renews until you cancel it.
 
 3.3 Course access runs for the access period stated at purchase, starting from the date your access is activated.
 

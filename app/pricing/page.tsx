@@ -6,7 +6,7 @@ import { AccessNotice, Faq, GuaranteeCard, NhsBanner } from '@/components/landin
 import PricingTable from '@/components/landing/v5/PricingTable';
 import { ACCESS_OPENS_LABEL, getPlan } from '@/lib/commerce/plans';
 import { getServerEntitlement } from '@/lib/commerce/serverEntitlement';
-import { canUpgradeToComplete } from '@/lib/commerce/upgrade';
+import { canSwitchPlan } from '@/lib/commerce/upgrade';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,7 +60,7 @@ export default async function PricingPage() {
         <PricingTable
           ownedPlan={entitlement.plan ?? null}
           accountEmail={user?.email ?? null}
-          canUpgrade={canUpgradeToComplete(entitlement)}
+          canUpgrade={canSwitchPlan(entitlement)}
         />
         <GuaranteeCard />
         <Faq />

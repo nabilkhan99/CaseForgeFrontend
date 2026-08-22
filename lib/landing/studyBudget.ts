@@ -284,7 +284,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
     title: "Fundable at your TPD's discretion",
     usesGpCode: false,
     contact: '[your regional NES GP team]',
-    body: 'NES funding sits with your TPD, judged on educational need and curricular relevance against a £600 budget per training stage. Course fees are fundable for individual courses; annual subscriptions are not, and Complete is a course, not a subscription. Expensive courses may be part funded, so the email below asks for full funding with part funding as the fallback.',
+    body: 'NES funding sits with your TPD, judged on educational need and curricular relevance against a £600 budget per training stage. Course fees are fundable for individual courses; annual subscriptions are not, and Complete is a fixed-term course: one payment for 3 months, with nothing renewing afterwards. Expensive courses may be part funded, so the email below asks for full funding with part funding as the fallback.',
     quote:
       'NES will fund course fees for individual GP Continuing Professional Development courses',
     doc: 'NES study leave FAQs for GP registrars, July 2025',
@@ -367,7 +367,7 @@ export function buildEmailBody(
     'I am an ST3 on the [scheme name] programme preparing for the SCA. Before booking, I would like to confirm eligibility for study budget reimbursement for the following as my SCA preparation course claim' +
     gpCode +
     ':\n\n' +
-    'Complete SCA Course, £599 one-off. A structured course with 3 months of access: 10 hours of on-demand lectures, a full-day small-group coaching session (9am to 5pm, max class size 6), and consultation practice across 200 stations built from the RCGP curriculum, mapped to the three SCA marking domains. Full course specification: fourteenfisherman.com/course-spec\n\n' +
+    'Complete SCA Course, £599 for a fixed 3-month course term, paid once with no renewal. A structured course with 3 months of access: 10 hours of on-demand lectures, a full-day small-group coaching session (9am to 5pm, max class size 6), and consultation practice across 200 stations built from the RCGP curriculum, mapped to the three SCA marking domains. Full course specification: fourteenfisherman.com/course-spec\n\n' +
     extra +
     'I have discussed this with my Educational Supervisor and added SCA preparation to my PDP. Could you confirm whether this would be approved, or let me know what else you need?\n\n' +
     'Many thanks,\n[Your name], GPST3, [Scheme]'

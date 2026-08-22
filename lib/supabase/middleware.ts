@@ -109,7 +109,7 @@ export async function updateSession(request: NextRequest) {
             // `Sarah@Nhs.net` and lock out someone who paid.
             const { data: purchases, error: purchasesError } = await supabase
                 .from('preorders')
-                .select('plan, status, created_at, coaching_day')
+                .select('plan, status, created_at, coaching_day, access_starts_at, access_ends_at')
                 .ilike('email', exactEmailPattern(user.email));
             if (purchasesError) {
                 // supabase-js reports query failures as { error }, not a throw —

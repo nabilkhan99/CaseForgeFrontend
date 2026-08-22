@@ -3,18 +3,16 @@ import { cookies } from 'next/headers';
 import { getStripe } from '@/lib/commerce/stripe';
 import {
   getPlan,
-  isSubscriptionPlan,
-  stripeCompleteUpgradePriceId,
   stripePriceIdFor,
   stripeRefereeCouponIdFor,
-  COMPLETE_UPGRADE_PRICE_LABEL,
   type CoachingDayAvailability,
   type PlanKey,
 } from '@/lib/commerce/plans';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { REFERRAL_COOKIE, normalizeCode, normalizeEmail } from '@/lib/commerce/referrals';
 import { getServerEntitlement } from '@/lib/commerce/serverEntitlement';
-import { COMPLETE_UPGRADE_PLAN, canUpgradeToComplete } from '@/lib/commerce/upgrade';
+import { resolveOrCreateCustomerId } from '@/lib/commerce/stripeCustomer';
+import { exactEmailPattern } from '@/lib/commerce/emailFilter';
 
 interface CheckoutBody {
   plan?: string;
@@ -58,26 +56,28 @@ async function resolveReferralCode(): Promise<string | null> {
 
 /**
  * Creates a Stripe Checkout session for a pre-order.
- * Body: { plan: 'self_study' | 'self_study_monthly' | 'complete' | 'complete_upgrade',
+ * Body: { plan: 'self_study' | 'self_study_monthly' | 'complete',
  *         coachingDay?: 'YYYY-MM-DD' }
- * Complete (and the upgrade) require a coaching day (unit of scarcity, max class
- * of 6) and soft-hold the place for 10 minutes while the buyer pays.
- * `self_study_monthly` opens a subscription session instead of a one-off payment.
- * `complete_upgrade` sells Complete at the £300 difference and is refused unless
- * the SERVER-side entitlement says the caller holds Self-Study.
+ *
+ * ALL three plans open a `mode: 'subscription'` session (2026-08-22): the two
+ * course plans are fixed-term subscriptions — one charge, a 3-month Stripe
+ * period, and `cancel_at_period_end` armed by the webhook so nothing renews —
+ * and the monthly plan rolls. Nothing is sold in `payment` mode any more, which
+ * is what gives every customer a Stripe Customer, a Portal, and an invoice
+ * whose printed service period doubles as study-budget evidence.
+ *
+ * Complete requires a coaching day (unit of scarcity, max class of 6) and
+ * soft-holds the place for 10 minutes while the buyer pays. A Self-Study
+ * customer moving up to Complete does NOT come through here — that is a Stripe
+ * Portal plan switch (`POST /api/billing/portal`), priced by proration.
+ *
  * A signed-in buyer's account email is pre-filled and locked on Stripe's page.
  * Returns: { url } to redirect the buyer to Stripe's hosted checkout.
  */
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as CheckoutBody;
-
-    // `complete_upgrade` is not a plan (see lib/commerce/upgrade.ts) — it is
-    // Complete, bought at the difference by someone who already owns
-    // Self-Study. Everything downstream treats it as Complete; only the Price
-    // and the server-side gate differ.
-    const isUpgrade = (body.plan ?? '') === COMPLETE_UPGRADE_PLAN;
-    const plan = getPlan(isUpgrade ? 'complete' : body.plan ?? '');
+    const plan = getPlan(body.plan ?? '');
 
     if (!plan || plan.cta !== 'checkout') {
       return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
@@ -87,30 +87,9 @@ export async function POST(request: Request) {
     // buyer's account address is stamped onto the session (and pre-filled +
     // locked on Stripe's page) — otherwise a different address at checkout buys
     // access that attaches to no account. Signed-out buyers are unaffected.
-    const { user, entitlement, failedOpen } = await getServerEntitlement();
+    const { user, supabase } = await getServerEntitlement();
     const accountEmail = user?.email ? normalizeEmail(user.email) : null;
 
-    if (isUpgrade) {
-      if (!user) {
-        return NextResponse.json({ error: 'Please sign in to upgrade' }, { status: 401 });
-      }
-      // A fail-open entitlement lookup means we do not KNOW what they hold, and
-      // this endpoint sells Complete at half price. Refuse rather than guess.
-      if (failedOpen) {
-        return NextResponse.json(
-          { error: "We couldn't check your current plan — please try again in a moment" },
-          { status: 503 },
-        );
-      }
-      if (!canUpgradeToComplete(entitlement)) {
-        return NextResponse.json(
-          { error: 'The upgrade price is for Self-Study customers — see the plans for your options' },
-          { status: 403 },
-        );
-      }
-    }
-
-    // The upgrade buys the coaching day too, so it goes through the same picker.
     const needsCoachingDay = plan.key === 'complete';
     let coachingDay: CoachingDayAvailability | null = null;
 
@@ -119,8 +98,8 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'A coaching day is required' }, { status: 400 });
       }
 
-      const supabase = getSupabaseAdmin();
-      const { data, error } = await supabase
+      const admin = getSupabaseAdmin();
+      const { data, error } = await admin
         .from('coaching_day_availability')
         .select('day, label, capacity, places_left, cutoff_at, status')
         .eq('day', body.coachingDay)
@@ -149,10 +128,7 @@ export async function POST(request: Request) {
     // Attribution (cookie-only, v1): if a valid, still-active referral code was
     // dropped by /r/[code], carry it into the session metadata. Invalid or absent
     // codes degrade silently — checkout must never fail on a bad referral.
-    // Upgrades are deliberately excluded from referral attribution: the buyer
-    // is an existing customer, not a referred new one, and a £300 top-up would
-    // fail the qualifying-spend floor anyway.
-    const referralCode = isUpgrade ? null : await resolveReferralCode();
+    const referralCode = await resolveReferralCode();
 
     // Two-sided referral: a valid code also buys the *referee* a discount. Stripe
     // rejects `discounts` and `allow_promotion_codes` on the same session, so a
@@ -160,32 +136,28 @@ export async function POST(request: Request) {
     // the better deal of the two, and it removes the stack-a-100%-off-code vector
     // that MIN_QUALIFYING_SPEND_BY_PLAN exists to catch. With no coupon configured
     // this collapses to the previous behaviour: full price, promo box available.
+    // `duration: 'once'` still means "the first invoice", which on a fixed-term
+    // plan is the only invoice — identical economics to the old one-off charge.
     const refereeCoupon = referralCode ? stripeRefereeCouponIdFor(plan.key as PlanKey) : null;
 
     const origin = new URL(request.url).origin;
-    const subscription = !isUpgrade && isSubscriptionPlan(plan.key);
-    const productLine = isUpgrade
-      ? `Upgrade to Complete (${COMPLETE_UPGRADE_PRICE_LABEL} difference from ${entitlement.plan === 'self_study_monthly' ? 'Self-Study monthly' : 'Self-Study'})`
-      : `${plan.name} (pre-order; AI practice & lectures start 1 September 2026)`;
+    const productLine = `${plan.name} (pre-order; AI practice & lectures start 1 September 2026)`;
     const description = coachingDay
       ? `Fourteen Fisherman — ${productLine}, coaching day ${coachingDay.label}`
       : `Fourteen Fisherman — ${productLine}`;
 
     // The metadata block is the contract with the webhook: it reads plan (and
-    // referral_code) off the session to record the order. Subscriptions repeat it
-    // on `subscription_data` because renewal invoices arrive with the
-    // subscription, long after the checkout session is out of reach.
-    // Note `plan` is 'complete' even for an upgrade: the webhook derives the
-    // preorder's plan straight from this field, and the row has to read
-    // `complete` for the entitlement fold to grant lectures. `upgrade_from`
-    // records what it was bought against, so a £300 order is never mistaken
-    // for a £599 one in the ledger.
+    // referral_code) off the session to record the order. It is repeated on
+    // `subscription_data` because renewal, cancellation and plan-change events
+    // arrive with the SUBSCRIPTION, long after the checkout session is out of
+    // reach — and those events carry neither session metadata nor
+    // client_reference_id.
     const metadata = {
       plan: plan.key,
-      ...(isUpgrade ? { upgrade_from: entitlement.plan ?? '' } : {}),
       // The account the buyer was signed into. The webhook files the purchase
       // under this address, whatever they typed on Stripe's page.
       ...(accountEmail ? { account_email: accountEmail } : {}),
+      ...(user ? { supabase_user_id: user.id } : {}),
       ...(coachingDay
         ? { coaching_day: coachingDay.day, coaching_day_label: coachingDay.label }
         : {}),
@@ -193,34 +165,53 @@ export async function POST(request: Request) {
     };
 
     const stripe = getStripe();
+
+    // Resolve the Customer ourselves. `customer_email` on a subscription
+    // session mints a NEW customer per purchase; a repeat buyer would then own
+    // two, and the Portal only ever opens on one of them.
+    let customerId: string | null = null;
+    if (accountEmail) {
+      // A customer id we already recorded is the cheapest and most exact
+      // answer. RLS ("read own purchases by email") scopes this select.
+      const { data: rows } = await supabase
+        .from('preorders')
+        .select('stripe_customer_id, created_at')
+        .ilike('email', exactEmailPattern(accountEmail))
+        .order('created_at', { ascending: false });
+      const known = (rows ?? []).find((r) => r.stripe_customer_id)?.stripe_customer_id ?? null;
+
+      customerId = await resolveOrCreateCustomerId(stripe, {
+        email: accountEmail,
+        name: user?.user_metadata?.full_name ?? null,
+        userId: user?.id ?? null,
+        knownCustomerId: known,
+      });
+    }
+
     const session = await stripe.checkout.sessions.create({
-      mode: subscription ? 'subscription' : 'payment',
-      line_items: [
-        { price: isUpgrade ? stripeCompleteUpgradePriceId() : stripePriceIdFor(plan.key as PlanKey), quantity: 1 },
-      ],
+      // Every plan. The two course plans are fixed-term subscriptions whose
+      // renewal the webhook disarms; see lib/commerce/plans.ts.
+      mode: 'subscription',
+      line_items: [{ price: stripePriceIdFor(plan.key as PlanKey), quantity: 1 }],
       success_url: `${origin}/thanks?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: isUpgrade
-        ? `${origin}/dashboard/upgrade`
-        : coachingDay
-          ? `${origin}/coaching-day`
-          : `${origin}/#pricing`,
-      // Stripe locks the email field when it is pre-filled, so a signed-in
-      // buyer cannot pay under an address their account will never match.
-      ...(accountEmail ? { customer_email: accountEmail } : {}),
+      cancel_url: coachingDay ? `${origin}/coaching-day` : `${origin}/#pricing`,
+      // Stripe locks the email field when the Customer already has one, so a
+      // signed-in buyer still cannot pay under an address their account will
+      // never match. A signed-out buyer has no account to attach to, and
+      // Checkout creates the Customer from what they type.
+      ...(customerId
+        ? { customer: customerId, customer_update: { name: 'auto', address: 'auto' as const } }
+        : {}),
       ...(user ? { client_reference_id: user.id } : {}),
       ...(refereeCoupon
         ? { discounts: [{ coupon: refereeCoupon }] }
         : { allow_promotion_codes: true }),
       metadata,
-      // Stripe rejects payment_intent_data on a subscription session (there is no
-      // one PaymentIntent — each cycle raises its own invoice).
-      // Monthly charges on purchase, exactly like the one-off plans — it is a
+      // Monthly charges on purchase, exactly like the course plans — it is a
       // pre-order either way, and the first payment is what starts the referral
       // reward moving. No trial: the buyer pays today and their month runs from
       // today. (Founder decision 2026-08-20.)
-      ...(subscription
-        ? { subscription_data: { description, metadata } }
-        : { payment_intent_data: { description } }),
+      subscription_data: { description, metadata },
     });
 
     if (!session.url) {

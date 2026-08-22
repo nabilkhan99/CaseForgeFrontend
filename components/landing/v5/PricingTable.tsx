@@ -4,13 +4,8 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowRight, Info } from 'lucide-react';
-import {
-  ACCESS_OPENS_LABEL,
-  BOOK_A_CALL_URL,
-  COMPLETE_UPGRADE_PRICE_LABEL,
-  type BillingPeriod,
-  type PlanKey,
-} from '@/lib/commerce/plans';
+import { ACCESS_OPENS_LABEL, BOOK_A_CALL_URL, type PlanKey } from '@/lib/commerce/plans';
+import ManageBillingButton from '@/components/commerce/ManageBillingButton';
 import { trackEvent } from '@/lib/analytics';
 import { Pill } from './editorial';
 import PaymentMethodsRow from './PaymentMethodsRow';
@@ -50,6 +45,13 @@ const FEATURE_ROWS: readonly FeatureRow[] = [
     cells: [{ text: '', cross: true }, { text: '', cross: true }, { text: '12 x 1hr sessions' }],
   },
 ];
+
+/**
+ * Which Self-Study offer the toggle is showing. A presentation concern, not a
+ * billing one: both are Stripe subscriptions, they simply differ in term. The
+ * plan catalogue owns the real billing shape (`Plan.billing`).
+ */
+type BillingChoice = 'three_month' | 'monthly';
 
 /** The warm tint behind the highlighted (Complete) column. */
 const HIGHLIGHT_BG = 'bg-[#FDF6E7]';
@@ -100,7 +102,7 @@ function OwnedBadge({ className = '' }: { className?: string }) {
 /**
  * Kicks off Stripe checkout for whichever Self-Study plan the billing toggle has
  * selected (no coaching day needed either way). The plan key is passed in rather
- * than captured so one hook serves both the one-off and the rolling variant.
+ * than captured so one hook serves both the fixed-term and rolling variants.
  */
 function useSelfStudyCheckout() {
   const [submitting, setSubmitting] = useState(false);
@@ -135,7 +137,7 @@ function useSelfStudyCheckout() {
 }
 
 /** The Self-Study plan key behind each billing choice. */
-function selfStudyPlanFor(billing: BillingPeriod): PlanKey {
+function selfStudyPlanFor(billing: BillingChoice): PlanKey {
   return billing === 'monthly' ? 'self_study_monthly' : 'self_study';
 }
 
@@ -144,7 +146,7 @@ const SELF_STUDY_THREE_MONTH_PENCE = 29900;
 const SELF_STUDY_MONTHLY_PENCE = 12900;
 
 /**
- * What three months on the rolling plan would cost against the one-off price,
+ * What three months on the rolling plan would cost against the term price,
  * as a percentage. Computed, not typed: change either price above and the badge
  * follows. £299 vs 3 × £129 = £387 → 23%.
  */
@@ -154,15 +156,16 @@ const THREE_MONTH_SAVING_PERCENT = Math.round(
 
 /**
  * How the Self-Study column prices itself under each billing choice. The £299
- * plan is shown as its monthly equivalent (the headline £299 lands heavy), with
- * the one-off truth stated plainly underneath. Both charge on purchase.
+ * term is shown as its monthly equivalent (the headline £299 lands heavy), with
+ * the truth stated plainly underneath: one payment, and it does not renew. Both
+ * charge on purchase.
  */
-const SELF_STUDY_PRICING: Record<BillingPeriod, { pounds: string; pence?: string; suffix: string; tagline: string }> = {
+const SELF_STUDY_PRICING: Record<BillingChoice, { pounds: string; pence?: string; suffix: string; tagline: string }> = {
   three_month: {
     pounds: '£99',
     pence: '.66',
     suffix: '/month',
-    tagline: `Billed £299 one-off · 3 months' access`,
+    tagline: `One payment of £299 · 3-month term, nothing renews`,
   },
   monthly: {
     pounds: '£129',
@@ -172,17 +175,18 @@ const SELF_STUDY_PRICING: Record<BillingPeriod, { pounds: string; pence?: string
 };
 
 interface BillingToggleProps {
-  billing: BillingPeriod;
-  onChange: (billing: BillingPeriod) => void;
+  billing: BillingChoice;
+  onChange: (billing: BillingChoice) => void;
 }
 
 /**
- * Segmented 3-month / monthly switch. Only the Self-Study column responds — the
- * Complete course stays a one-off deliberately, because "course, not
- * subscription" is the wording that carries a study-budget claim.
+ * Segmented 3-month / monthly switch. Only the Self-Study column responds:
+ * Complete is sold as a fixed 3-month course term and has no rolling variant,
+ * because a course with a start, an end and a printed service period is what a
+ * study budget reimburses.
  */
 function BillingToggle({ billing, onChange }: BillingToggleProps) {
-  const options: readonly { key: BillingPeriod; label: string; hint?: string }[] = [
+  const options: readonly { key: BillingChoice; label: string; hint?: string }[] = [
     { key: 'three_month', label: '3 months', hint: `Save ${THREE_MONTH_SAVING_PERCENT}%` },
     { key: 'monthly', label: 'Monthly' },
   ];
@@ -341,16 +345,19 @@ function OwnedCta() {
 function PlanCta({ selfStudy, variant, selfStudyPlan, owned, canUpgrade }: CtaButtonsProps) {
   if (owned === variant) return <OwnedCta />;
   if (variant === 'complete' && canUpgrade) {
-    // A Self-Study customer pays the difference, in the app, on an account we
-    // can already name. Sending them through /coaching-day would charge £599.
+    // A Self-Study customer already has a subscription: Stripe swaps its Price
+    // and invoices only the time left on their term. Sending them through
+    // /coaching-day would charge the full £599 for what they part-own.
     return (
-      <Link
-        href="/dashboard/upgrade"
-        onClick={() => trackEvent('checkout_clicked', { plan: 'complete_upgrade' })}
-        className="cta-button w-full gap-1.5 !rounded-full px-2 py-3.5 text-[13px] sm:py-3 sm:text-sm"
+      <ManageBillingButton
+        flow="subscription_update"
+        busyLabel="Opening Stripe…"
+        onStart={() => trackEvent('checkout_clicked', { plan: 'complete_switch' })}
+        className="cta-button w-full gap-1.5 !rounded-full px-2 py-3.5 text-[13px] disabled:opacity-60 sm:py-3 sm:text-sm"
+        errorClassName="mt-2 text-center text-[12px] font-medium text-danger"
       >
-        Upgrade &mdash; {COMPLETE_UPGRADE_PRICE_LABEL} <ArrowRight className="h-3.5 w-3.5" />
-      </Link>
+        Upgrade to Complete
+      </ManageBillingButton>
     );
   }
   if (variant === 'self_study') {
@@ -404,7 +411,7 @@ function PlanName({ children }: { children: React.ReactNode }) {
 
 interface MobileCardsProps {
   selfStudy: ReturnType<typeof useSelfStudyCheckout>;
-  billing: BillingPeriod;
+  billing: BillingChoice;
   owned: OwnedColumn;
   canUpgrade: boolean;
 }
@@ -436,8 +443,8 @@ function MobileCards({ selfStudy, billing, owned, canUpgrade }: MobileCardsProps
       key: 'complete' as const,
       name: 'Complete SCA Course',
       price: '£599',
-      suffix: 'one-off',
-      tagline: "3 months' access",
+      suffix: '/ 3 months',
+      tagline: 'One payment · nothing renews',
       highlighted: true,
       badge: 'Most popular',
       valueLine: '£1,497 total value',
@@ -554,7 +561,7 @@ export default function PricingTable({ ownedPlan, accountEmail, canUpgrade = fal
   const owned = ownedColumnFor(ownedPlan);
   // Three-month is the default: it is the better deal (£299 vs 3 × £129) and the
   // one a study budget will reimburse, so monthly is the deliberate opt-out.
-  const [billing, setBilling] = useState<BillingPeriod>('three_month');
+  const [billing, setBilling] = useState<BillingChoice>('three_month');
   const selfStudyPlan = selfStudyPlanFor(billing);
   const selfStudyPrice = SELF_STUDY_PRICING[billing];
 
@@ -625,10 +632,11 @@ export default function PricingTable({ ownedPlan, accountEmail, canUpgrade = fal
                 )}
                 <PlanName>Complete SCA Course</PlanName>
                 <p className="mt-2.5 text-lg font-medium tracking-tight text-heading sm:text-3xl">
-                  £599 <span className="text-[10px] font-normal text-muted sm:text-xs">one-off</span>
+                  £599{' '}
+                  <span className="text-[10px] font-normal text-muted sm:text-xs">/ 3 months</span>
                 </p>
                 <p className="mt-1 text-[10px] text-muted sm:text-xs">
-                  3 months&rsquo; access ·{' '}
+                  One payment, nothing renews ·{' '}
                   <span className="line-through">£1,497 value</span>
                 </p>
               </div>

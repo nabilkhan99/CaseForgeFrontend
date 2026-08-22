@@ -1,37 +1,41 @@
 import type { Entitlement } from './entitlements'
 
 /**
- * Self-Study -> Complete, at the price difference.
+ * Self-Study -> Complete, now a Stripe Customer Portal plan switch.
  *
- * The upgrade is requested under its own pseudo-plan key so `/api/checkout` can
- * tell "buy Complete outright (£599)" from "top up to Complete (£300)". It is
- * NOT a `PlanKey`: it never reaches `preorders`, never reaches an entitlement,
- * and never appears in {@link PLANS}. The webhook records the resulting order as
- * a plain `complete` purchase, which is what makes the entitlement fold work —
- * the buyer ends up with Self-Study *and* Complete rows, and `complete` wins on
- * the lectures key.
+ * The bespoke `complete_upgrade` pseudo-plan (a separate £300 Price, its own
+ * `/dashboard/upgrade` page and a checkout branch) is gone. Every plan is a
+ * subscription, so the upgrade is Stripe swapping the subscription's Price and
+ * invoicing the proration — the customer pays only for the time left on their
+ * term, which is why the copy no longer quotes a flat £300.
+ *
+ * What survives is the question of WHO may be offered it, because a CTA shown
+ * to the wrong customer is still a broken product: someone who already holds
+ * Complete has nothing to switch to, and someone whose access has lapsed needs
+ * to renew, not upgrade.
  */
-export const COMPLETE_UPGRADE_PLAN = 'complete_upgrade'
 
-/** The plans the upgrade is priced against. */
+/** The plans there is something above. */
 export const UPGRADEABLE_FROM: ReadonlySet<string> = new Set(['self_study', 'self_study_monthly'])
 
 /**
- * May this entitlement buy the £300 upgrade?
+ * Should this entitlement be offered the switch up to Complete?
  *
- * Server-side gate — a £300 Price with no check would let anyone buy Complete
- * for half price. Takes the *folded* entitlement on purpose: a customer who
- * already holds Complete folds to `complete` (the fold ranks lectures above
- * everything at the same access level) and is refused here, so the upgrade
- * cannot be bought twice.
+ * Takes the *folded* entitlement on purpose: a customer who already holds
+ * Complete folds to `complete` (the fold ranks lectures above everything at the
+ * same access level) and is refused here, so the upgrade CTA cannot appear
+ * twice.
  *
  * `read_only` (a lapsed Self-Study) is deliberately excluded. There is nothing
- * left to upgrade — that customer needs to renew, and the renewal price is the
- * full one.
+ * left to switch — that customer needs to buy again, at the full price.
+ *
+ * Presentation only. The Portal itself is the enforcement: it can only offer
+ * the prices its configuration lists, against a subscription the signed-in
+ * customer owns.
  */
-export function canUpgradeToComplete(entitlement: Entitlement): boolean {
+export function canSwitchPlan(entitlement: Entitlement): boolean {
   if (!entitlement.plan || !UPGRADEABLE_FROM.has(entitlement.plan)) return false
   // 'none' WITH a plan is a pre-launch purchase whose window hasn't opened.
-  // They have bought Self-Study and may absolutely top up before 1 September.
+  // They have bought Self-Study and may absolutely move up before 1 September.
   return entitlement.state === 'active' || entitlement.state === 'none'
 }
