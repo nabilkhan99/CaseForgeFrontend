@@ -64,6 +64,8 @@ const RENEWAL_WARNING_DAYS = 7;
 
 function formatAccessDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', {
+    // The window ends at 23:59 UTC; format in UTC or BST shows the next day.
+    timeZone: 'UTC',
     day: 'numeric',
     month: 'long',
     year: 'numeric',

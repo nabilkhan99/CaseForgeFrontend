@@ -146,6 +146,8 @@ export default function SettingsPage() {
             const expiry = access.expiresAt ? new Date(access.expiresAt) : null;
             const renews = access.renewsAt ? new Date(access.renewsAt) : null;
             const renewsDate = renews?.toLocaleDateString('en-GB', {
+              // The window ends at 23:59 UTC; format in UTC or BST shows the next day.
+              timeZone: 'UTC',
               day: 'numeric',
               month: 'long',
             });
@@ -158,6 +160,8 @@ export default function SettingsPage() {
                 ? null
                 : Math.min(Math.max(((NOMINAL_WINDOW_DAYS - daysRemaining) / NOMINAL_WINDOW_DAYS) * 100, 0), 100);
             const expiryDate = expiry?.toLocaleDateString('en-GB', {
+              // The window ends at 23:59 UTC; format in UTC or BST shows the next day.
+              timeZone: 'UTC',
               day: 'numeric',
               month: 'long',
               year: 'numeric',
