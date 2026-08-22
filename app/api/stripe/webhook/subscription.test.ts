@@ -72,6 +72,13 @@ const { POST } = await import('./route')
 const PERIOD_START = Date.UTC(2026, 7, 22) / 1000
 const PERIOD_END = Date.UTC(2026, 10, 22) / 1000
 
+/** What each Price charges, in pence — `preorders.amount` follows a plan change. */
+const UNIT_AMOUNT: Record<string, number> = {
+  price_self_study: 29_900,
+  price_self_study_monthly: 12_900,
+  price_complete: 59_900,
+}
+
 function subscription(over: Record<string, unknown> = {}, priceId = 'price_self_study') {
   return {
     id: 'sub_123',
@@ -81,7 +88,7 @@ function subscription(over: Record<string, unknown> = {}, priceId = 'price_self_
     items: {
       data: [
         {
-          price: { id: priceId },
+          price: { id: priceId, unit_amount: UNIT_AMOUNT[priceId] ?? null },
           current_period_start: PERIOD_START,
           current_period_end: PERIOD_END,
         },
@@ -89,11 +96,15 @@ function subscription(over: Record<string, unknown> = {}, priceId = 'price_self_
     },
     latest_invoice: {
       id: 'in_1',
+      status: 'paid',
       payments: { data: [{ is_default: true, payment: { payment_intent: 'pi_1' } }] },
     },
     ...over,
   }
 }
+
+/** An invoice raised but not yet cleared — a declined proration, or dunning. */
+const UNPAID_INVOICE = { id: 'in_2', status: 'open' }
 
 async function deliver(event: unknown) {
   mocks.constructEventAsync.mockResolvedValue(event)
@@ -297,11 +308,20 @@ describe('checkout.session.completed — fixed-term plans', () => {
 })
 
 describe('customer.subscription.updated', () => {
+  /**
+   * The handler re-reads the subscription (the delivered payload carries
+   * `latest_invoice` as a bare id, and whether it is paid decides everything),
+   * so the fixture has to answer both the event and the re-read.
+   */
   function updated(over: Record<string, unknown> = {}, priceId = 'price_self_study') {
-    return {
-      type: 'customer.subscription.updated',
-      data: { object: subscription(over, priceId) },
-    }
+    const sub = subscription(over, priceId)
+    mocks.subscriptionsRetrieve.mockResolvedValue(sub)
+    return { type: 'customer.subscription.updated', data: { object: sub } }
+  }
+
+  /** The plan patch written by the last delivery, if any. */
+  function planUpdate(): Record<string, unknown> | undefined {
+    return mocks.updates.find((u) => 'plan' in u)
   }
 
   it('follows a Portal plan switch by price id', async () => {
@@ -310,10 +330,13 @@ describe('customer.subscription.updated', () => {
     // has to say `complete` or the entitlement fold withholds the lectures.
     await deliver(updated({ cancel_at: PERIOD_END }, 'price_complete'))
 
-    expect(mocks.updates[0]).toMatchObject({
-      plan: 'complete',
-      access_ends_at: '2026-11-22T00:00:00.000Z',
-    })
+    expect(mocks.updates[0]).toMatchObject({ access_ends_at: '2026-11-22T00:00:00.000Z' })
+    // The price behind the plan travels with it: the admin ledger reads
+    // `amount` as revenue and would otherwise still say £299.
+    expect(planUpdate()).toEqual({ plan: 'complete', amount: 59_900 })
+    // Narrowed to rows actually changing plan, so a renewal can never overwrite
+    // a referral-discounted `amount` with the list price.
+    expect(mocks.filters).toContainEqual(['neq', 'plan', 'complete'])
     expect(mocks.filters).toContainEqual(['eq', 'stripe_subscription_id', 'sub_123'])
     // A refund is a decision about the order; a late subscription event must
     // not quietly undo it.
@@ -351,13 +374,19 @@ describe('customer.subscription.updated', () => {
     await deliver(updated({}, 'price_self_study_monthly'))
 
     expect(mocks.subscriptionsUpdate).not.toHaveBeenCalled()
-    expect(mocks.updates[0]).toMatchObject({ plan: 'self_study_monthly' })
+    expect(planUpdate()).toMatchObject({ plan: 'self_study_monthly' })
   })
 
   it('flips a dunning-dead subscription to canceled', async () => {
     // `unpaid` never emits `deleted`, so without this the row keeps its paid
-    // status — and its entitlement — behind a card that stopped working.
-    const { body } = await deliver(updated({ status: 'unpaid', cancel_at: PERIOD_END }))
+    // status — and its entitlement — behind a card that stopped working. The
+    // status arm has to run even though the unpaid invoice holds the plan and
+    // period write back.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { body } = await deliver(
+      updated({ status: 'unpaid', cancel_at: PERIOD_END, latest_invoice: UNPAID_INVOICE }),
+    )
+    warn.mockRestore()
 
     expect(mocks.updates).toContainEqual({ status: 'canceled' })
     expect(body).toEqual({ received: true, canceled: 1 })
@@ -371,12 +400,83 @@ describe('customer.subscription.updated', () => {
   })
 
   it('leaves a subscription in dunning alone', async () => {
-    const { body } = await deliver(updated({ status: 'past_due', cancel_at: PERIOD_END }))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { body } = await deliver(
+      updated({ status: 'past_due', cancel_at: PERIOD_END, latest_invoice: UNPAID_INVOICE }),
+    )
+    warn.mockRestore()
 
-    // The period is still refreshed; only the status arm is skipped.
-    expect(mocks.updates).not.toContainEqual({ status: 'canceled' })
-    expect(mocks.updates).not.toContainEqual({ status: 'paid' })
+    // Nothing at all is written: the status arm is skipped, and an unpaid
+    // invoice must not advance the next-payment date either.
+    expect(mocks.updates).toEqual([])
     expect(body).toEqual({ received: true, ignored: 'past_due' })
+  })
+
+  // ── A Portal plan switch is not free until it is paid ──
+  //
+  // The Portal prorates with `always_invoice`: it raises the difference and
+  // attempts it immediately, and this event carries the NEW price whether or
+  // not that attempt cleared.
+
+  it('does not move the customer up a plan on an unpaid proration', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const { body } = await deliver(
+      updated({ status: 'past_due', latest_invoice: UNPAID_INVOICE }, 'price_complete'),
+    )
+
+    // No plan, no amount, no period. A declined card must not buy Complete.
+    expect(mocks.updates).toEqual([])
+    expect(body).toEqual({ received: true, ignored: 'past_due' })
+    expect(warn).toHaveBeenCalledWith(
+      '[stripe-webhook] latest invoice is not paid — plan and period left as they were',
+      expect.objectContaining({ plan: 'complete' }),
+    )
+    warn.mockRestore()
+  })
+
+  it('follows the switch as soon as the proration invoice is paid', async () => {
+    // The catch-up. `invoice.paid` re-reads the subscription, which by then
+    // holds the new price against a settled invoice.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await deliver(updated({ status: 'past_due', latest_invoice: UNPAID_INVOICE }, 'price_complete'))
+    expect(mocks.updates).toEqual([])
+    warn.mockRestore()
+
+    mocks.subscriptionsRetrieve.mockResolvedValue(
+      subscription({ cancel_at: PERIOD_END }, 'price_complete'),
+    )
+    await deliver({
+      type: 'invoice.paid',
+      data: {
+        object: {
+          id: 'in_2',
+          billing_reason: 'subscription_update',
+          parent: { subscription_details: { subscription: 'sub_123' } },
+        },
+      },
+    })
+
+    expect(planUpdate()).toEqual({ plan: 'complete', amount: 59_900 })
+  })
+
+  it('reacts to a cancellation even when Stripe cannot be re-read', async () => {
+    // The re-read is an improvement, not a dependency: a Stripe outage must not
+    // stop a dead subscription from revoking access. The delivered payload's
+    // bare invoice then holds the plan write back, which is the safe direction.
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mocks.subscriptionsRetrieve.mockRejectedValue(new Error('stripe down'))
+
+    const { body } = await deliver({
+      type: 'customer.subscription.updated',
+      data: { object: subscription({ status: 'canceled', latest_invoice: 'in_1' }) },
+    })
+
+    expect(body).toEqual({ received: true, canceled: 1 })
+    expect(mocks.updates).toEqual([{ status: 'canceled' }])
+    error.mockRestore()
+    warn.mockRestore()
   })
 })
 
@@ -395,7 +495,9 @@ describe('invoice.paid', () => {
       },
     })
 
-    expect(mocks.subscriptionsRetrieve).toHaveBeenCalledWith('sub_123')
+    expect(mocks.subscriptionsRetrieve).toHaveBeenCalledWith('sub_123', {
+      expand: ['latest_invoice'],
+    })
     expect(mocks.updates[0]).toMatchObject({ access_ends_at: '2026-11-22T00:00:00.000Z' })
     expect(body).toEqual({ received: true, refreshed: 'sub_123' })
   })
@@ -408,7 +510,9 @@ describe('invoice.paid', () => {
       data: { object: { id: 'in_1', subscription: 'sub_123' } },
     })
 
-    expect(mocks.subscriptionsRetrieve).toHaveBeenCalledWith('sub_123')
+    expect(mocks.subscriptionsRetrieve).toHaveBeenCalledWith('sub_123', {
+      expand: ['latest_invoice'],
+    })
   })
 
   it('ignores an invoice with no subscription behind it', async () => {

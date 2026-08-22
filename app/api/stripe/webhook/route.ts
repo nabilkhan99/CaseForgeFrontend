@@ -200,6 +200,42 @@ function planFromSubscription(subscription: Stripe.Subscription): string | null 
 }
 
 /**
+ * Has the subscription's latest invoice actually been paid?
+ *
+ * This is the gate on following a Customer Portal plan switch. The Portal
+ * prorates with `always_invoice`, which raises the difference as an invoice and
+ * attempts it immediately — and `customer.subscription.updated` carries the NEW
+ * price whether or not that attempt succeeded. Following the price blindly
+ * would hand a customer whose card was declined the Complete plan for nothing:
+ * the row would read `complete` while the subscription sat `past_due`, a status
+ * the status arm deliberately leaves alone.
+ *
+ * Deliberately false for an unexpanded `latest_invoice` (a bare id) and for a
+ * subscription with none at all. "Cannot verify" must read the same as "not
+ * paid" here — the caller's fallback is to leave the row alone and let the
+ * later `invoice.paid` deliver the change, which is the safe direction.
+ */
+function isLatestInvoicePaid(subscription: Stripe.Subscription): boolean {
+  const invoice = subscription.latest_invoice;
+  if (!invoice || typeof invoice === 'string') return false;
+  return invoice.status === 'paid';
+}
+
+/**
+ * What the subscription's current price charges per period, in pence.
+ *
+ * Recorded alongside a plan change so `preorders.amount` — which the admin
+ * ledger reads as revenue — does not still say £299 after someone moved up to
+ * Complete. Only ever written on an actual plan change: rewriting it on every
+ * renewal would overwrite a referral-discounted amount with the list price.
+ */
+function priceAmountPence(subscription: Stripe.Subscription): number | null {
+  const price = subscription.items?.data?.[0]?.price;
+  if (!price || typeof price === 'string') return null;
+  return typeof price.unit_amount === 'number' ? price.unit_amount : null;
+}
+
+/**
  * Fixed-term plans are sold as "one payment, three months, nothing renews", and
  * Stripe Checkout cannot express that: `subscription_data` has no `cancel_at`
  * or `cancel_at_period_end` in API 2026-06-24.dahlia. So the flag is set here,
@@ -232,27 +268,56 @@ async function armFixedTermCancellation(subscription: Stripe.Subscription): Prom
  * after checkout — renewals, Portal plan switches, cancellations — arrives with
  * the subscription and nothing else. Refunded rows are excluded: a refund is a
  * decision about the order, and a late subscription event must not undo it.
+ *
+ * Two writes, not one, because they have different preconditions. The period is
+ * safe to re-stamp on any row. The plan is not: it drags `amount` with it, and
+ * `amount` is what the buyer was actually charged — a referred customer paid
+ * £199, not the £299 list price. So the plan write is narrowed to rows whose
+ * plan is genuinely changing, which is the only time `amount` should move.
  */
 async function writeSubscriptionState(
   supabase: SupabaseAdmin,
   subscriptionId: string,
-  values: { period?: AccessPeriod; plan?: string | null; paymentIntentId?: string | null },
+  values: {
+    period?: AccessPeriod;
+    plan?: string | null;
+    amountPence?: number | null;
+    paymentIntentId?: string | null;
+  },
 ): Promise<'ok' | 'failed'> {
   const patch: Record<string, string> = {};
   if (values.period?.startsAt) patch.access_starts_at = values.period.startsAt;
   if (values.period?.endsAt) patch.access_ends_at = values.period.endsAt;
-  if (values.plan) patch.plan = values.plan;
   if (values.paymentIntentId) patch.stripe_payment_intent_id = values.paymentIntentId;
-  if (Object.keys(patch).length === 0) return 'ok';
 
-  const { error } = await supabase
+  if (Object.keys(patch).length > 0) {
+    const { error } = await supabase
+      .from('preorders')
+      .update(patch)
+      .eq('stripe_subscription_id', subscriptionId)
+      .neq('status', 'refunded');
+    if (error) {
+      console.error('[stripe-webhook] subscription state write failed', { subscriptionId, error });
+      return 'failed';
+    }
+  }
+
+  if (!values.plan) return 'ok';
+
+  const planPatch: Record<string, string | number> = { plan: values.plan };
+  if (typeof values.amountPence === 'number') planPatch.amount = values.amountPence;
+
+  const { error: planError } = await supabase
     .from('preorders')
-    .update(patch)
+    .update(planPatch)
     .eq('stripe_subscription_id', subscriptionId)
-    .neq('status', 'refunded');
+    .neq('status', 'refunded')
+    // The whole point of the second write: a row already on this plan is not
+    // changing plan, so its `amount` must be left exactly as it was charged.
+    .neq('plan', values.plan);
 
-  if (error) {
-    console.error('[stripe-webhook] subscription state write failed', { subscriptionId, error });
+  if (planError) {
+    console.error('[stripe-webhook] subscription plan write failed', { subscriptionId, error: planError });
     return 'failed';
   }
   return 'ok';
@@ -645,7 +710,17 @@ async function handleSubscriptionRecovered(subscription: Stripe.Subscription) {
  * Everything in between (`past_due`, `incomplete`) leaves status alone: the
  * buyer's access is unchanged while Stripe works it out.
  */
-async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
+async function handleSubscriptionUpdated(delivered: Stripe.Subscription) {
+  // Re-read rather than trust the payload. Two reasons: the delivered object
+  // carries `latest_invoice` as a bare id, and whether that invoice is PAID is
+  // what decides if a Portal plan switch may be followed (see
+  // isLatestInvoicePaid); and Stripe does not guarantee delivery order, so a
+  // late event would otherwise write a status the subscription has moved on
+  // from. A failed re-read falls back to the payload — the status arm still
+  // has to run — and the unexpanded invoice then holds the plan remap back,
+  // which is the safe direction.
+  const subscription = await resolveSubscription(delivered);
+
   await syncSubscription(subscription);
 
   if (DEAD_SUBSCRIPTION_STATUSES.has(subscription.status)) {
@@ -658,18 +733,51 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
 }
 
 /**
+ * The subscription as Stripe holds it right now, with the invoice that decides
+ * whether a plan change has been paid for. Falls back to the delivered payload
+ * so a Stripe outage cannot stop us reacting to a cancellation at all.
+ */
+async function resolveSubscription(delivered: Stripe.Subscription): Promise<Stripe.Subscription> {
+  try {
+    return await getStripe().subscriptions.retrieve(delivered.id, {
+      expand: ['latest_invoice'],
+    });
+  } catch (error: unknown) {
+    console.error('[stripe-webhook] subscription re-read failed — falling back to the delivered payload', {
+      subscriptionId: delivered.id,
+      error,
+    });
+    return delivered;
+  }
+}
+
+/**
  * Bring the pre-order row back in line with the subscription: current period,
  * current plan, and (for a fixed-term plan) the renewal still disarmed.
  *
+ * Nothing is written until the subscription's latest invoice is PAID. A Portal
+ * plan switch prorates with `always_invoice`, and the resulting
+ * `customer.subscription.updated` carries the new price whether or not that
+ * invoice cleared — so following it unconditionally would grant Complete to a
+ * declined card. The period is held back with it: on a plan switch the period
+ * belongs to the new price, and on a failed renewal the next-payment date has
+ * not moved.
+ *
+ * Holding back is not the same as losing the change. `invoice.paid` fires when
+ * the money does land and runs this same function, so the row catches up
+ * whichever event order Stripe chooses — and if the payment never clears, the
+ * row correctly never follows.
+ *
  * Best-effort by design. It runs alongside handlers whose own success or
- * failure decides the response — a period that is one event stale is a display
- * bug, not an access one, and the next event corrects it.
+ * failure decides the response.
  */
 async function syncSubscription(subscription: Stripe.Subscription): Promise<void> {
   const plan = planFromSubscription(subscription);
 
   // A live fixed-term subscription must stay disarmed. Skip dead ones: there is
-  // nothing left to cancel, and Stripe rejects the update.
+  // nothing left to cancel, and Stripe rejects the update. Deliberately NOT
+  // gated on the invoice below — an un-cancelled renewal is a charge waiting to
+  // happen and has to be disarmed whatever the billing state.
   if (plan && isFixedTermPlan(plan) && LIVE_SUBSCRIPTION_STATUSES.has(subscription.status)) {
     if (!isCancelScheduled(subscription)) {
       console.warn('[stripe-webhook] fixed-term subscription had its renewal re-armed — disarming', {
@@ -680,9 +788,19 @@ async function syncSubscription(subscription: Stripe.Subscription): Promise<void
     }
   }
 
+  if (!isLatestInvoicePaid(subscription)) {
+    console.warn('[stripe-webhook] latest invoice is not paid — plan and period left as they were', {
+      subscriptionId: subscription.id,
+      status: subscription.status,
+      plan,
+    });
+    return;
+  }
+
   await writeSubscriptionState(getSupabaseAdmin(), subscription.id, {
     period: readAccessPeriod(subscription),
     plan,
+    amountPence: priceAmountPence(subscription),
   });
 }
 
@@ -703,7 +821,11 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
   }
 
   try {
-    const subscription = await getStripe().subscriptions.retrieve(subscriptionId);
+    // Expanded, because syncSubscription will not write anything until it can
+    // see that this invoice is paid.
+    const subscription = await getStripe().subscriptions.retrieve(subscriptionId, {
+      expand: ['latest_invoice'],
+    });
     await syncSubscription(subscription);
   } catch (error: unknown) {
     console.error('[stripe-webhook] invoice.paid period refresh failed (non-fatal)', {
