@@ -69,7 +69,9 @@ export default function LibraryFilters({
                     placeholder={placeholder}
                     // 16px on mobile: anything smaller makes iOS Safari zoom the
                     // page in on focus and never zoom back out.
-                    className="min-w-0 flex-1 border-0 bg-transparent py-1.5 text-base text-heading outline-none placeholder:text-muted sm:text-[15px]"
+                    // @tailwindcss/forms gives every input a blue focus ring and border;
+                    // the amber underline on the wrapper is this field's focus state.
+                    className="min-w-0 flex-1 border-0 bg-transparent py-1.5 text-base text-heading outline-none placeholder:text-muted focus:border-0 focus:outline-none focus:ring-0 sm:text-[15px]"
                 />
                 {query && (
                     <button

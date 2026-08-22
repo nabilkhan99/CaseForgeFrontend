@@ -81,12 +81,12 @@ function DomainDetailContent({ domainId }: { domainId: string }) {
   const filtering = isFilterActive(filters);
   const results = useMemo(() => filterStations(stations, filters), [stations, filters]);
 
-  // Judged across the domain, not the filtered results: 185 of the bank's 200
-  // cases are "intermediate", so most domains are single-tier and the pill
-  // would just be the same word stamped on every row.
+  // 185 of the bank's 200 cases are "intermediate", so most domains are
+  // single-tier and the pill would be the same word stamped on every row.
+  // Judged over the rows on screen, so it stays true after filtering too.
   const showDifficulty = useMemo(
-    () => shouldShowDifficulty(stations.map(s => s.difficulty)),
-    [stations],
+    () => shouldShowDifficulty(results.map(s => s.difficulty)),
+    [results],
   );
 
   const completedCount = stations.filter(s => s.attempts.length > 0).length;

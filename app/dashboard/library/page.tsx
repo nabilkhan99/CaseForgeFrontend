@@ -78,11 +78,12 @@ function StationLibraryContent() {
     [filtering, stations, filters],
   );
 
-  // Computed across the whole bank, not the current results, so pills don't
-  // appear and vanish as someone types.
+  // Judged over the rows actually on screen: a pill that says the same word
+  // on every visible row is decoration, whether that list is the whole bank or
+  // four search results.
   const showDifficulty = useMemo(
-    () => shouldShowDifficulty(stations.map(s => s.difficulty)),
-    [stations],
+    () => shouldShowDifficulty(results.map(s => s.difficulty)),
+    [results],
   );
 
   const nextForYou = useMemo(
