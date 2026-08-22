@@ -216,12 +216,19 @@ export default function SettingsPage() {
                   </div>
                 )}
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-                  <Link
-                    href={ended ? '/pricing?renew=true' : pending ? '/dashboard/library' : '/pricing'}
-                    className="text-[13px] text-primary font-medium hover:underline"
-                  >
-                    {ended ? 'Renew your access' : pending ? 'Browse the case library' : 'Extend or upgrade'} &rarr;
-                  </Link>
+                  {/* The generic /pricing link is suppressed once a specific
+                      upgrade link is showing: "Extend or upgrade" next to
+                      "Upgrade to Complete — £300" is the same offer twice, and
+                      the vaguer one costs £599. A pending buyer still gets the
+                      library link, which is a different destination entirely. */}
+                  {(!canUpgrade || pending) && (
+                    <Link
+                      href={ended ? '/pricing?renew=true' : pending ? '/dashboard/library' : '/pricing'}
+                      className="text-[13px] text-primary font-medium hover:underline"
+                    >
+                      {ended ? 'Renew your access' : pending ? 'Browse the case library' : 'Extend or upgrade'} &rarr;
+                    </Link>
+                  )}
                   {/* One of the three sanctioned upgrade slots (lectures hero,
                       here, and nowhere on the dashboard home). It points at the
                       in-app upgrade, priced at the difference — /pricing would
