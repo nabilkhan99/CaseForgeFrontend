@@ -291,6 +291,19 @@ export function useRealtimeSession({
     const [transcript, setTranscript] = useState<TranscriptItem[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [errorKind, setErrorKind] = useState<SessionErrorKind | null>(null);
+    // Keep the screen on for the length of the consultation: the trainee is
+    // talking, not touching, and a phone locking mid-station suspends the
+    // tab and kills the call. Best-effort — unsupported browsers just skip it.
+    const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null);
+    const acquireWakeLock = useCallback(async () => {
+        try {
+            const nav = navigator as Navigator & { wakeLock?: { request: (t: 'screen') => Promise<{ release: () => Promise<void> }> } };
+            if (!nav.wakeLock || wakeLockRef.current) return;
+            wakeLockRef.current = await nav.wakeLock.request('screen');
+        } catch {
+            /* denied or unsupported — not fatal */
+        }
+    }, []);
     const [status, setStatus] = useState<SessionStatus>('disconnected');
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [isMuted, setIsMuted] = useState(false);
@@ -1227,6 +1240,10 @@ export function useRealtimeSession({
             clearTimeout(greetingWatchdogRef.current);
             greetingWatchdogRef.current = null;
         }
+        if (wakeLockRef.current) {
+            wakeLockRef.current.release().catch(() => {});
+            wakeLockRef.current = null;
+        }
         if (detectorIntervalRef.current) {
             clearInterval(detectorIntervalRef.current);
             detectorIntervalRef.current = null;
@@ -1554,6 +1571,16 @@ export function useRealtimeSession({
         ]
     );
 
+    useEffect(() => {
+        // The OS drops a wake lock whenever the tab is hidden; take it back
+        // when the trainee returns mid-consultation.
+        const onVisible = () => {
+            if (document.visibilityState === 'visible' && status === 'connected') void acquireWakeLock();
+        };
+        document.addEventListener('visibilitychange', onVisible);
+        return () => document.removeEventListener('visibilitychange', onVisible);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [status]);
     const connect = useCallback(async () => {
         if (endedRef.current || status === 'connecting' || status === 'connected') return;
         try {
@@ -1676,6 +1703,7 @@ export function useRealtimeSession({
             };
             dc.onopen = () => {
                 setStatus('connected');
+                void acquireWakeLock();
                 sessionStartRef.current = Date.now();
                 vadRef.current = {};
                 // Session was minted with turn_detection: null for this
@@ -1780,6 +1808,7 @@ export function useRealtimeSession({
         }
     }, [
         status,
+        acquireWakeLock,
         tokenEndpoint,
         sessionId,
         stationId,

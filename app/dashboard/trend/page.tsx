@@ -54,6 +54,11 @@ export default function TrendPage() {
           setLoading(false);
           return;
         }
+        if (data.status === 'insufficient_data') {
+          setEmpty(true);
+          setLoading(false);
+          return;
+        }
         retry.current += 1;
         if (retry.current >= MAX_RETRIES) {
           setEmpty(true);
