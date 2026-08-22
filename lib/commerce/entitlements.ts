@@ -16,6 +16,9 @@ import { ACCESS_OPENS, PLANS, isRollingPlan } from './plans'
  *   back to the calendar-month arithmetic in {@link accessWindow}.
  * - Access is not live before the window starts: a preorder bought today is
  *   `none` until launch.
+ * - A fixed-term row that has gone `canceled` keeps its window: that status is
+ *   how a paid term ENDS (Stripe deletes a `cancel_at_period_end` subscription
+ *   at period end), not how one is revoked. Only `refunded` revokes.
  * - Monthly runs while the subscription lives; Stripe ends it at period end
  *   (`customer.subscription.deleted` / a `canceled|unpaid|incomplete_expired`
  *   `customer.subscription.updated` → webhook flips status to `canceled`), so a
@@ -232,7 +235,21 @@ function entitlementOf(row: EntitlementRow, now: Date, launchDate: Date): Entitl
     return { state: 'active', plan: row.plan, hasLectures: false, renewsAt }
   }
 
-  if (row.status !== 'paid') return null
+  // A fixed term ENDS as a `canceled` subscription. It is sold by arming
+  // `cancel_at_period_end`, so Stripe fires `customer.subscription.deleted` the
+  // moment the paid period runs out and the webhook stamps the row `canceled` —
+  // the normal close of a term the customer paid for in full, not a failure.
+  // Two things go wrong if that status discards the row:
+  //  - a pre-launch buyer loses the days {@link preLaunchShiftMs} added, which
+  //    is precisely the shortfall the shift exists to repay. Stripe's clock
+  //    stops on 22 November; the access they bought runs to 1 December.
+  //  - after the window closes they read as "no purchase at all" rather than
+  //    lapsed, losing the read-only history and the renew prompt.
+  // The window is what decides access here; the status only has to say the
+  // money is still theirs, which `refunded` (handled above) is the case that
+  // does not. Anything else — `pending`, and any status a future writer
+  // invents — still grants nothing, so a half-written row cannot buy access.
+  if (row.status !== 'paid' && row.status !== 'canceled') return null
   const { start, end } = fixedTermWindow(row, launchDate)
   const complete = row.plan === 'complete' || row.plan === 'intensive'
 

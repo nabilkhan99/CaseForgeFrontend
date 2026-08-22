@@ -488,6 +488,67 @@ describe('computeEntitlement with a recorded Stripe period', () => {
     )
     expect(without.coachingDay).toBeNull()
   })
+
+  // ── The end of a fixed term is a `canceled` subscription ──
+  //
+  // A fixed-term plan is sold by arming `cancel_at_period_end`, so Stripe
+  // emits `customer.subscription.deleted` the instant the paid period runs
+  // out and the webhook stamps the row `canceled`. That status is the NORMAL
+  // end of a term the customer paid for in full, not a failed payment — and
+  // for a pre-launch buyer it arrives while they still have the shifted days
+  // the term was extended by.
+
+  it('keeps a pre-launch buyer’s shifted days after Stripe ends the term', () => {
+    // Stripe's period ended 22 Nov and fired `deleted`; the access it paid for
+    // runs to the last instant of 1 Dec. Dropping the row here would take back
+    // the ten days `preLaunchShiftMs` exists to give them.
+    const e = computeEntitlement(
+      [preLaunchStripeRow({ status: 'canceled' })],
+      new Date('2026-11-25T00:00:00Z'),
+    )
+    expect(e.state).toBe('active')
+    expect(e.plan).toBe('self_study')
+    expect(e.expiresAt?.toISOString()).toBe('2026-12-01T23:59:59.999Z')
+  })
+
+  it('lapses that same row to read-only, never to “no purchase”', () => {
+    // After the window closes the customer must still read as a lapsed buyer:
+    // read-only keeps their history and their renew prompt. `none` with no
+    // plan would tell someone who paid £299 that they never bought anything.
+    const e = computeEntitlement(
+      [preLaunchStripeRow({ status: 'canceled' })],
+      new Date('2026-12-15T00:00:00Z'),
+    )
+    expect(e.state).toBe('read_only')
+    expect(e.plan).toBe('self_study')
+  })
+
+  it('grants Complete’s lectures for the whole shifted term, cancelled or not', () => {
+    const e = computeEntitlement(
+      [preLaunchStripeRow({ plan: 'complete', status: 'canceled', coaching_day: '2026-11-28' })],
+      new Date('2026-11-25T00:00:00Z'),
+    )
+    expect(e).toMatchObject({ state: 'active', hasLectures: true, coachingDay: '2026-11-28' })
+  })
+
+  it('still grants nothing on a refunded fixed-term row', () => {
+    // The one status that must keep revoking access outright.
+    expect(
+      computeEntitlement(
+        [preLaunchStripeRow({ status: 'refunded' })],
+        new Date('2026-11-25T00:00:00Z'),
+      ),
+    ).toEqual(NO_ENTITLEMENT)
+  })
+
+  it('still grants nothing on a row that never reached `paid`', () => {
+    expect(
+      computeEntitlement(
+        [preLaunchStripeRow({ status: 'pending' })],
+        new Date('2026-11-25T00:00:00Z'),
+      ).state,
+    ).toBe('none')
+  })
 })
 
 describe('decideAccess', () => {
