@@ -20,7 +20,7 @@ const FAQS: QA[] = [
   {
     question: 'Can I use my study budget for this?',
     answer: [
-      'The Complete SCA Course is built as a course, not a subscription, which is the distinction most NHS England study budgets care about (they typically cap around £600, and it is priced at £599). Eligibility varies by deanery. Most trainees pay nothing out of pocket.',
+      'The Complete SCA Course is bought as one payment for a fixed 3-month course term. Nothing renews and there is no recurring charge — your invoice shows a single £599 fee with the course dates it covers, which is the distinction most NHS England study budgets care about (they typically cap around £600). Eligibility varies by deanery. Most trainees pay nothing out of pocket.',
     ],
   },
   {
@@ -74,7 +74,7 @@ const FAQS: QA[] = [
   {
     question: 'What if I change my mind?',
     answer: [
-      'Our plans include immediate digital access and, in some cases, live coaching. Once digital access begins, you may lose your right to cancel that part of the plan. If services have already begun, we may deduct a proportionate amount for those already provided. After any applicable cancellation period, payments are non-refundable unless required by law. This does not affect your statutory rights.',
+      'Our plans include immediate digital access and, in some cases, live coaching. Once digital access begins, you may lose your right to cancel that part of the plan. If services have already begun, we may deduct a proportionate amount for those already provided. After any applicable cancellation period, payments are non-refundable unless required by law. This does not affect your statutory rights. The rolling monthly plan can be cancelled at any time from your settings page, and stops at the end of the month you have paid for.',
     ],
   },
 ];
