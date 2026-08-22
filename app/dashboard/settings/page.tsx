@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import type { User } from '@supabase/supabase-js';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import { ACCESS_OPENS_LABEL } from '@/lib/commerce/plans';
 import Container from '@/components/ui/Container';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import SecondaryButton from '@/components/ui/SecondaryButton';
@@ -26,7 +27,9 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [access, setAccess] = useState<SubscriptionResponse | null>(null);
+  // `undefined` until the lookup answers — "No active plan" must never be a
+  // loading state.
+  const [access, setAccess] = useState<SubscriptionResponse | null | undefined>(undefined);
 
   const [fullName, setFullName] = useState('');
   const [examDate, setExamDate] = useState('');
@@ -119,15 +122,24 @@ export default function SettingsPage() {
           <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-5">
             Plan
           </div>
-          {access?.plan ? (() => {
-            const ended = access.state !== 'active';
+          {access === undefined ? (
+            <div className="h-16 rounded-xl bg-black/[0.03] animate-pulse" />
+          ) : access?.plan ? (() => {
+            // Three phases, not a boolean: `none` WITH a plan is a purchase whose
+            // window hasn't opened yet (every pre-launch buyer), which is the
+            // opposite of "ended". Folding it into `ended` told a customer who
+            // paid this morning that their access ended on a date in the future.
+            const phase: 'pending' | 'active' | 'ended' =
+              access.state === 'active' ? 'active' : access.state === 'read_only' ? 'ended' : 'pending';
+            const ended = phase === 'ended';
+            const pending = phase === 'pending';
             const expiry = access.expiresAt ? new Date(access.expiresAt) : null;
             // Monthly has no expiry to count down to — it runs until canceled.
             const daysRemaining = expiry
               ? Math.ceil((expiry.getTime() - Date.now()) / DAY_MS)
               : null;
             const progress =
-              daysRemaining === null
+              daysRemaining === null || pending
                 ? null
                 : Math.min(Math.max(((NOMINAL_WINDOW_DAYS - daysRemaining) / NOMINAL_WINDOW_DAYS) * 100, 0), 100);
             const expiryDate = expiry?.toLocaleDateString('en-GB', {
@@ -146,14 +158,16 @@ export default function SettingsPage() {
                     {access.planName || access.plan}
                   </span>
                   <span
-                    className={`text-[12px] font-medium ${ended ? 'text-muted' : 'text-success'}`}
+                    className={`text-[12px] font-medium ${ended ? 'text-muted' : pending ? 'text-primary' : 'text-success'}`}
                   >
-                    {ended ? 'Ended' : 'Active'}
+                    {ended ? 'Ended' : pending ? `Starts ${ACCESS_OPENS_LABEL}` : 'Active'}
                   </span>
                 </div>
                 <p className="text-[13px] text-muted mb-3">
                   {ended
                     ? `Access ended${expiryDate ? ` on ${expiryDate}` : ''} · your history and feedback stay available`
+                    : pending
+                      ? `You're in. Your access opens on ${ACCESS_OPENS_LABEL}${expiryDate ? ` and runs to ${expiryDate}` : ''}.`
                     : access.isMonthly
                       ? 'Renews monthly · cancel any time'
                       : `Expires in ${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} · ${expiryDate}`}
@@ -170,10 +184,10 @@ export default function SettingsPage() {
                   </div>
                 )}
                 <Link
-                  href={ended ? '/pricing?renew=true' : '/pricing'}
+                  href={ended ? '/pricing?renew=true' : pending ? '/dashboard/library' : '/pricing'}
                   className="text-[13px] text-primary font-medium hover:underline"
                 >
-                  {ended ? 'Renew your access' : 'Extend or upgrade'} &rarr;
+                  {ended ? 'Renew your access' : pending ? 'Browse the case library' : 'Extend or upgrade'} &rarr;
                 </Link>
               </div>
             );
@@ -188,12 +202,12 @@ export default function SettingsPage() {
               </Link>
             </div>
           )}
-          {/* The card above reports what was bought, which for an admin or a
-              staged tester can read "Ended" while they can still practise. Say
-              why, rather than overwriting the plan's real state with "Active". */}
+          {/* The card above reports what was bought, which for an admin can
+              read "Ended" while they can still practise. Say why, rather than
+              overwriting the plan's real state with "Active". */}
           {access?.bypass && access.state !== 'active' && (
             <p className="text-[12px] text-muted mt-4 pt-4 border-t border-black/[0.06]">
-              You have full access regardless of this plan&apos;s state.
+              Team access &mdash; you can practise regardless of this plan&apos;s state.
             </p>
           )}
         </Container>
