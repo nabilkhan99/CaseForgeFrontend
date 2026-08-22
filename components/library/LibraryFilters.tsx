@@ -86,7 +86,9 @@ export default function LibraryFilters({
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-2">
-                <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter by progress">
+                {/* One line at 360px: four wrapped chips leave a ragged second row
+                    that reads as a layout accident. */}
+                <div className="flex items-center gap-0.5 sm:gap-1.5" role="group" aria-label="Filter by progress">
                     {LIBRARY_STATUSES.map(option => {
                         const active = option.value === status;
                         return (
@@ -95,7 +97,7 @@ export default function LibraryFilters({
                                 type="button"
                                 onClick={() => onStatusChange(option.value)}
                                 aria-pressed={active}
-                                className={`rounded-full px-3.5 text-[12px] font-semibold transition-colors min-h-[44px] sm:min-h-[32px] focus-visible-ring ${
+                                className={`whitespace-nowrap rounded-full px-2.5 text-[12px] font-semibold transition-colors min-h-[44px] sm:min-h-[32px] sm:px-3.5 focus-visible-ring ${
                                     active
                                         ? 'bg-primary/10 text-primary'
                                         : 'text-muted hover:bg-black/[0.03] hover:text-heading'
@@ -108,12 +110,12 @@ export default function LibraryFilters({
                 </div>
 
                 {domains && onDomainChange && (
-                    <div className="relative">
+                    <div className="relative w-full sm:w-auto">
                         <select
                             value={domainId}
                             onChange={event => onDomainChange(event.target.value)}
                             aria-label="Filter by domain"
-                            className={`appearance-none rounded-full border border-black/[0.08] bg-transparent py-0 pl-3.5 pr-8 text-[12px] font-semibold transition-colors min-h-[44px] sm:min-h-[32px] focus-visible-ring ${
+                            className={`w-full appearance-none truncate rounded-full border border-black/[0.08] bg-transparent py-0 pl-3.5 pr-8 text-[12px] font-semibold transition-colors min-h-[44px] sm:min-h-[32px] sm:w-auto sm:max-w-[240px] focus-visible-ring ${
                                 domainId ? 'text-primary' : 'text-muted hover:text-heading'
                             }`}
                         >

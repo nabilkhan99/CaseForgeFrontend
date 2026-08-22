@@ -70,7 +70,7 @@ export default function StationRow({ station, showDifficulty = false, showDomain
 
     return (
         <div className="border-b border-black/[0.06] last:border-b-0">
-            <div className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:gap-4">
+            <div className="flex items-start gap-2 py-4 sm:items-center sm:gap-4">
                 <Link
                     href={stationHref}
                     className="group -mx-2 min-w-0 flex-1 rounded-lg px-2 py-1 transition-colors hover:bg-black/[0.02] focus-visible-ring"
@@ -104,23 +104,36 @@ export default function StationRow({ station, showDifficulty = false, showDomain
                                 best {station.bestScore.toFixed(1)}/{station.bestMaxScore ?? MAX_WEIGHTED_SCORE}
                             </span>
                         )}
+                        {/* On a phone the verdict belongs under the title with the rest
+                            of the metadata; the right-hand status column is a desktop
+                            affordance and would push the title into a third line. */}
+                        {station.bestVerdict && (
+                            <span className="sm:hidden">
+                                <VerdictPill verdict={station.bestVerdict} passed={station.passed} size="sm" />
+                            </span>
+                        )}
                     </div>
                 </Link>
 
-                <div className="flex items-center gap-3 sm:flex-shrink-0">
+                <div className="flex flex-shrink-0 items-center gap-3">
                     {/* Verdict from the best attempt; otherwise the legacy score, but only
                         when it normalises onto the current scale (see weightedPercent). */}
                     {station.bestVerdict ? (
-                        <motion.span initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }}>
+                        <motion.span
+                            className="hidden sm:inline"
+                            initial={{ opacity: 0, scale: 0.94 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                        >
                             <VerdictPill verdict={station.bestVerdict} passed={station.passed} />
                         </motion.span>
                     ) : hasAttempts && latestPercent !== null ? (
-                        <ScoreBadge score={latestPercent} showLabel />
+                        <span className="hidden sm:inline">
+                            <ScoreBadge score={latestPercent} showLabel />
+                        </span>
                     ) : hasAttempts ? (
-                        <span className="text-[12px] text-muted">Completed</span>
+                        <span className="hidden text-[12px] text-muted sm:inline">Completed</span>
                     ) : (
-                        // Redundant beside "Start" once the row wraps, and it used to
-                        // eat ~40% of a 360px row.
+                        // Redundant beside "Start", and it used to eat ~40% of a 360px row.
                         <span className="hidden text-[12px] text-muted sm:inline">Not started</span>
                     )}
 
@@ -128,10 +141,25 @@ export default function StationRow({ station, showDifficulty = false, showDomain
                         href={stationHref}
                         tabIndex={-1}
                         aria-hidden="true"
-                        className="flex min-h-[44px] items-center text-[12px] font-semibold text-primary hover:underline sm:min-h-0"
+                        className="hidden text-[12px] font-semibold text-primary hover:underline sm:inline"
                     >
                         {hasAttempts ? 'Try again' : 'Start'}
                     </Link>
+
+                    {/* Phones get a chevron instead of the "Start" label: the whole row
+                        is the link, and the label costs a line of height per case. */}
+                    {!hasAttempts && (
+                        <svg
+                            className="mt-1 h-4 w-4 text-muted sm:hidden"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                            aria-hidden="true"
+                        >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                        </svg>
+                    )}
 
                     {hasAttempts && (
                         <button
