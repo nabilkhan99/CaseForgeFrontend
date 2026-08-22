@@ -27,7 +27,8 @@ import type { SessionHistoryItem } from '@/lib/supabase/queries/dashboard';
 import type { SubscriptionResponse } from '@/app/api/subscription/route';
 import { formatRelativeDate } from '@/lib/utils';
 import { ACCESS_OPENS_LABEL } from '@/lib/commerce/plans';
-import { TONE_COLOUR, passMarkCaption } from '@/lib/clinical-master/scoring';
+import { TONE_COLOUR, fmtMark, passMarkFor } from '@/lib/clinical-master/scoring';
+import { MAX_WEIGHTED_SCORE } from '@/lib/clinical-master/types';
 
 /**
  * Completed consultations needed before the trend report can say anything.
@@ -194,7 +195,7 @@ function DashboardContent() {
           )}
           {stats.passedStations !== null && stats.completedStations > 0 && stats.totalStations > 0 && (
             <span className="text-[11px] text-muted">
-              A station counts as passed at {passMarkCaption()}
+              Passed means {fmtMark(passMarkFor())} / {fmtMark(MAX_WEIGHTED_SCORE)} or better
             </span>
           )}
           {stats.examCountdownDays > 0 && (
@@ -422,7 +423,8 @@ function DashboardContent() {
               Recent Sessions
             </div>
             <span className="text-[11px] text-muted">
-              Scored out of 10.5, the SCA weighted total &middot; {passMarkCaption()}
+              Scored out of {fmtMark(MAX_WEIGHTED_SCORE)}, the SCA weighted total &middot;{' '}
+              {fmtMark(passMarkFor())} or above passes
             </span>
           </div>
           <div className="divide-y divide-black/[0.06]">
