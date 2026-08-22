@@ -12,6 +12,7 @@ import {
   parseMinSpendOverride,
   referralUrl,
 } from '@/lib/commerce/referrals';
+import { isFixedTermPlan, planForStripePriceId } from '@/lib/commerce/plans';
 import { resolvePurchaseEmail } from '@/lib/commerce/buyerEmail';
 import { sendReferralEmail } from '@/lib/email/referralEmail';
 import { sendPurchaseEmail } from '@/lib/email/purchaseEmail';
@@ -30,25 +31,34 @@ type SupabaseAdmin = ReturnType<typeof getSupabaseAdmin>;
  * Stripe webhook.
  *
  * `checkout.session.completed` -> record the paid pre-order (drives the seat
- * counter), attribute any referral, and mint the buyer's own advocate code +
- * invite email. Every write is idempotent so Stripe retries are safe.
+ * counter), attribute any referral, mint the buyer's own advocate code +
+ * invite email, and — because every plan is now a subscription — DISARM the
+ * renewal on the two fixed-term course plans and record the Stripe billing
+ * period. Every write is idempotent so Stripe retries are safe.
  *
  * `charge.refunded` -> void the linked referral on ANY refund (partial or full)
  * so it can't be paid out; the pre-order is flipped to refunded only on a full
  * refund (a partially-refunded buyer still holds their seat).
  *
- * `customer.subscription.deleted` -> mark the monthly order canceled.
+ * `customer.subscription.deleted` -> mark the order canceled. For a fixed-term
+ * plan this is also the NORMAL end of a paid term, three months in.
  *
- * `customer.subscription.updated` -> mark it canceled too when the subscription
- * has reached a dead status, and back to paid when a dead one recovers. Dunning
- * can leave a subscription `unpaid` forever without ever emitting `deleted`,
- * which would otherwise leave a failed card holding permanent access — and
- * paying that invoice revives it, which must not leave the buyer locked out.
+ * `customer.subscription.updated` -> refresh the recorded period, follow a
+ * Customer Portal plan switch (the price id is the only evidence of it), re-arm
+ * a renewal the customer un-cancelled in the Portal, and map status: canceled
+ * when the subscription has reached a dead status, back to paid when a dead one
+ * recovers. Dunning can leave a subscription `unpaid` forever without ever
+ * emitting `deleted`, which would otherwise leave a failed card holding
+ * permanent access — and paying that invoice revives it, which must not leave
+ * the buyer locked out.
+ *
+ * `invoice.paid` -> a monthly renewal cleared; refresh the recorded period so
+ * the settings page's "next payment" date follows Stripe.
  *
  * Ops: the Stripe webhook endpoint must have `charge.refunded`,
- * `customer.subscription.deleted` AND `customer.subscription.updated` enabled.
- * Without the last one, a subscription that dies by dunning rather than by
- * cancellation keeps its `paid` row and its entitlement.
+ * `customer.subscription.deleted`, `customer.subscription.updated` AND
+ * `invoice.paid` enabled. Without the third, a subscription that dies by
+ * dunning rather than by cancellation keeps its `paid` row and its entitlement.
  */
 export async function POST(request: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -85,8 +95,133 @@ export async function POST(request: Request) {
   if (event.type === 'customer.subscription.updated') {
     return handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
   }
+  if (event.type === 'invoice.paid') {
+    return handleInvoicePaid(event.data.object as Stripe.Invoice);
+  }
 
   return NextResponse.json({ received: true, ignored: event.type });
+}
+
+/** The billing period behind a subscription, as ISO strings. */
+interface AccessPeriod {
+  startsAt: string | null;
+  endsAt: string | null;
+}
+
+/** Stripe timestamps are seconds; the DB columns are timestamptz. */
+function isoFromUnix(seconds: number | null | undefined): string | null {
+  return typeof seconds === 'number' && Number.isFinite(seconds)
+    ? new Date(seconds * 1000).toISOString()
+    : null;
+}
+
+/**
+ * Read the current billing period off a subscription.
+ *
+ * `current_period_start` / `current_period_end` moved from the Subscription to
+ * the SubscriptionItem in API 2025-03-31.basil, and this SDK pins
+ * 2026-06-24.dahlia — but a webhook payload is rendered at the ENDPOINT's API
+ * version, which may still be older and still carry the top-level fields. Read
+ * the item first, fall back to the legacy shape.
+ */
+function readAccessPeriod(subscription: Stripe.Subscription): AccessPeriod {
+  const item = subscription.items?.data?.[0];
+  const legacy = subscription as unknown as {
+    current_period_start?: number;
+    current_period_end?: number;
+  };
+  return {
+    startsAt: isoFromUnix(item?.current_period_start ?? legacy.current_period_start),
+    endsAt: isoFromUnix(item?.current_period_end ?? legacy.current_period_end),
+  };
+}
+
+/**
+ * Is this subscription already set to stop at the end of its period?
+ *
+ * Under flexible billing mode (the default from 2025-09-30.clover onward, so
+ * ours) Stripe's own guidance is to read `cancel_at`; `cancel_at_period_end` is
+ * the classic-mode signal. Read both so neither mode can make us re-arm a
+ * subscription that is already disarmed — or, worse, leave one armed-looking
+ * and renewing.
+ */
+function isCancelScheduled(subscription: Stripe.Subscription): boolean {
+  return subscription.cancel_at !== null || subscription.cancel_at_period_end === true;
+}
+
+/** The plan a subscription currently sells, from its first item's price id. */
+function planFromSubscription(subscription: Stripe.Subscription): string | null {
+  const price = subscription.items?.data?.[0]?.price;
+  const priceId = typeof price === 'string' ? price : (price?.id ?? null);
+  const plan = planForStripePriceId(priceId);
+  if (!plan && priceId) {
+    // Loud: a price we do not recognise means either a rotated Price id or a
+    // Portal configuration listing something we do not sell. Either way the
+    // row's plan is left alone rather than rewritten to a guess.
+    console.error('[stripe-webhook] unknown price id on subscription — plan left unchanged', {
+      subscriptionId: subscription.id,
+      priceId,
+    });
+  }
+  return plan;
+}
+
+/**
+ * Fixed-term plans are sold as "one payment, three months, nothing renews", and
+ * Stripe Checkout cannot express that: `subscription_data` has no `cancel_at`
+ * or `cancel_at_period_end` in API 2026-06-24.dahlia. So the flag is set here,
+ * the moment the subscription exists.
+ *
+ * Idempotent by inspection — an already-disarmed subscription is left alone, so
+ * a Stripe retry costs one read and no write. Returns false only when the call
+ * itself failed, which is a money bug (the customer would be charged again in
+ * three months) and is therefore worth a webhook 500 and Stripe's retries.
+ */
+async function armFixedTermCancellation(subscription: Stripe.Subscription): Promise<boolean> {
+  if (isCancelScheduled(subscription)) return true;
+  try {
+    await getStripe().subscriptions.update(subscription.id, { cancel_at_period_end: true });
+    return true;
+  } catch (error: unknown) {
+    console.error('[stripe-webhook] CRITICAL: could not disarm renewal on a fixed-term plan', {
+      subscriptionId: subscription.id,
+      error,
+    });
+    return false;
+  }
+}
+
+/**
+ * Write the subscription's period (and, when it changed, its plan) onto the
+ * matching pre-order row.
+ *
+ * Keyed on `stripe_subscription_id`, not on the session, because everything
+ * after checkout — renewals, Portal plan switches, cancellations — arrives with
+ * the subscription and nothing else. Refunded rows are excluded: a refund is a
+ * decision about the order, and a late subscription event must not undo it.
+ */
+async function writeSubscriptionState(
+  supabase: SupabaseAdmin,
+  subscriptionId: string,
+  values: { period?: AccessPeriod; plan?: string | null },
+): Promise<'ok' | 'failed'> {
+  const patch: Record<string, string> = {};
+  if (values.period?.startsAt) patch.access_starts_at = values.period.startsAt;
+  if (values.period?.endsAt) patch.access_ends_at = values.period.endsAt;
+  if (values.plan) patch.plan = values.plan;
+  if (Object.keys(patch).length === 0) return 'ok';
+
+  const { error } = await supabase
+    .from('preorders')
+    .update(patch)
+    .eq('stripe_subscription_id', subscriptionId)
+    .neq('status', 'refunded');
+
+  if (error) {
+    console.error('[stripe-webhook] subscription state write failed', { subscriptionId, error });
+    return 'failed';
+  }
+  return 'ok';
 }
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin: string) {
@@ -305,7 +440,53 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
     });
   }
 
+  // The subscription half of the sale. Deliberately last: it is the one step
+  // that can legitimately ask Stripe to retry the whole delivery, and by here
+  // everything above has already run (and is idempotent, so the retry is free).
+  const subscriptionId =
+    typeof session.subscription === 'string'
+      ? session.subscription
+      : (session.subscription?.id ?? null);
+  if (subscriptionId) {
+    const synced = await syncCheckoutSubscription(supabase, subscriptionId, plan);
+    if (synced === 'failed') {
+      return NextResponse.json({ error: 'Failed to finalise subscription' }, { status: 500 });
+    }
+  } else {
+    console.error('[stripe-webhook] paid session carried no subscription', { sessionId: session.id });
+  }
+
   return NextResponse.json({ received: true, recorded: !insertError, preorderId });
+}
+
+/**
+ * Finish a completed checkout on the Stripe side: stop a fixed-term plan
+ * renewing, and record the billing period the access window is derived from.
+ *
+ * Returns 'failed' — and so a webhook 500 — when Stripe could not be reached or
+ * the renewal could not be disarmed. Both are worth retrying: the alternative
+ * to a retry is a customer charged £299 again in three months.
+ */
+async function syncCheckoutSubscription(
+  supabase: SupabaseAdmin,
+  subscriptionId: string,
+  plan: string,
+): Promise<'ok' | 'failed'> {
+  let subscription: Stripe.Subscription;
+  try {
+    subscription = await getStripe().subscriptions.retrieve(subscriptionId);
+  } catch (error: unknown) {
+    console.error('[stripe-webhook] subscription retrieve failed', { subscriptionId, error });
+    return 'failed';
+  }
+
+  if (isFixedTermPlan(plan) && !(await armFixedTermCancellation(subscription))) {
+    return 'failed';
+  }
+
+  return writeSubscriptionState(supabase, subscriptionId, {
+    period: readAccessPeriod(subscription),
+  });
 }
 
 /**
@@ -387,20 +568,30 @@ async function handleSubscriptionRecovered(subscription: Stripe.Subscription) {
 }
 
 /**
- * Subscription changed. Two transitions matter, in both directions.
+ * Subscription changed. Three things matter.
  *
- * Downwards: depending on the dunning settings, a subscription whose card keeps
- * failing can end up `unpaid` and simply stay there — `customer.subscription
- * .deleted` never fires, and the row would keep its `paid` status (and
- * therefore full access) forever.
+ * 1. The period and the plan. A Customer Portal upgrade swaps the subscription's
+ *    Price in place, and this event carries NO session metadata — the price id
+ *    is the only evidence that a Self-Study customer is now on Complete. The
+ *    row's plan is updated in place, so the entitlement fold sees one purchase
+ *    rather than two competing ones.
+ * 2. The renewal flag. The Portal shows a "don't cancel" affordance on a
+ *    subscription scheduled to end, and there is no configuration flag to hide
+ *    it. If a fixed-term customer clicks it, re-arm — "nothing renews" is a
+ *    promise the product makes on the pricing page.
+ * 3. Status, in both directions. Downwards: depending on the dunning settings, a
+ *    subscription whose card keeps failing can end up `unpaid` and simply stay
+ *    there — `customer.subscription.deleted` never fires, and the row would keep
+ *    its `paid` status (and therefore full access) forever. Upwards: that same
+ *    `unpaid` subscription becomes `active` again the moment the invoice is
+ *    paid, and the row has to follow it back.
  *
- * Upwards: that same `unpaid` subscription becomes `active` again the moment
- * the invoice is paid, and the row has to follow it back.
- *
- * Everything in between (`past_due`, `incomplete`) is left alone: the buyer's
- * access is unchanged while Stripe works it out.
+ * Everything in between (`past_due`, `incomplete`) leaves status alone: the
+ * buyer's access is unchanged while Stripe works it out.
  */
 async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
+  await syncSubscription(subscription);
+
   if (DEAD_SUBSCRIPTION_STATUSES.has(subscription.status)) {
     return handleSubscriptionDeleted(subscription);
   }
@@ -408,6 +599,81 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     return handleSubscriptionRecovered(subscription);
   }
   return NextResponse.json({ received: true, ignored: subscription.status });
+}
+
+/**
+ * Bring the pre-order row back in line with the subscription: current period,
+ * current plan, and (for a fixed-term plan) the renewal still disarmed.
+ *
+ * Best-effort by design. It runs alongside handlers whose own success or
+ * failure decides the response — a period that is one event stale is a display
+ * bug, not an access one, and the next event corrects it.
+ */
+async function syncSubscription(subscription: Stripe.Subscription): Promise<void> {
+  const plan = planFromSubscription(subscription);
+
+  // A live fixed-term subscription must stay disarmed. Skip dead ones: there is
+  // nothing left to cancel, and Stripe rejects the update.
+  if (plan && isFixedTermPlan(plan) && LIVE_SUBSCRIPTION_STATUSES.has(subscription.status)) {
+    if (!isCancelScheduled(subscription)) {
+      console.warn('[stripe-webhook] fixed-term subscription had its renewal re-armed — disarming', {
+        subscriptionId: subscription.id,
+        plan,
+      });
+      await armFixedTermCancellation(subscription);
+    }
+  }
+
+  await writeSubscriptionState(getSupabaseAdmin(), subscription.id, {
+    period: readAccessPeriod(subscription),
+    plan,
+  });
+}
+
+/**
+ * An invoice cleared. For the rolling plan this is a renewal, and the only
+ * event that moves the period on — `customer.subscription.updated` fires for it
+ * too, but relying on that alone would leave the next-payment date wrong
+ * whenever Stripe emits only the invoice event.
+ *
+ * The subscription is re-read rather than trusted from the invoice: the invoice
+ * carries the subscription id, not its current period.
+ */
+async function handleInvoicePaid(invoice: Stripe.Invoice) {
+  const subscriptionId = subscriptionIdFromInvoice(invoice);
+  if (!subscriptionId) {
+    // A one-off invoice with no subscription behind it — nothing of ours.
+    return NextResponse.json({ received: true, ignored: 'no_subscription' });
+  }
+
+  try {
+    const subscription = await getStripe().subscriptions.retrieve(subscriptionId);
+    await syncSubscription(subscription);
+  } catch (error: unknown) {
+    console.error('[stripe-webhook] invoice.paid period refresh failed (non-fatal)', {
+      subscriptionId,
+      error,
+    });
+  }
+
+  return NextResponse.json({ received: true, refreshed: subscriptionId });
+}
+
+/**
+ * The subscription behind an invoice.
+ *
+ * In API 2026-06-24.dahlia this lives at `parent.subscription_details
+ * .subscription`; the flat `invoice.subscription` was removed from the object.
+ * Webhook payloads render at the ENDPOINT's API version, though, so the legacy
+ * shape is read as a fallback.
+ */
+function subscriptionIdFromInvoice(invoice: Stripe.Invoice): string | null {
+  const parent = invoice.parent?.subscription_details?.subscription ?? null;
+  if (parent) return typeof parent === 'string' ? parent : parent.id;
+
+  const legacy = (invoice as unknown as { subscription?: string | { id: string } }).subscription;
+  if (!legacy) return null;
+  return typeof legacy === 'string' ? legacy : legacy.id;
 }
 
 interface RecordReferralArgs {
