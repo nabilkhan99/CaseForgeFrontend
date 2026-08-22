@@ -27,6 +27,14 @@ import type { SessionHistoryItem } from '@/lib/supabase/queries/dashboard';
 import type { SubscriptionResponse } from '@/app/api/subscription/route';
 import { formatRelativeDate } from '@/lib/utils';
 import { ACCESS_OPENS_LABEL } from '@/lib/commerce/plans';
+import { TONE_COLOUR, passMarkCaption } from '@/lib/clinical-master/scoring';
+
+/**
+ * Completed consultations needed before the trend report can say anything.
+ * Mirrors MIN_CASES_FOR_TREND in app/api/clinical-master/trend/route.ts — below
+ * it the page can only answer "not enough cases yet", so we don't offer it.
+ */
+const MIN_CASES_FOR_TREND = 3;
 
 const defaultStats: UserStats = {
   currentStreak: 0,
@@ -184,6 +192,11 @@ function DashboardContent() {
               Passed {stats.passedStations} of {stats.totalStations} stations
             </motion.span>
           )}
+          {stats.passedStations !== null && stats.completedStations > 0 && stats.totalStations > 0 && (
+            <span className="text-[11px] text-muted">
+              A station counts as passed at {passMarkCaption()}
+            </span>
+          )}
           {stats.examCountdownDays > 0 && (
             <span
               className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-semibold font-mono"
@@ -193,6 +206,18 @@ function DashboardContent() {
             </span>
           )}
         </div>
+        {/* The cross-case trend report answers "am I getting better?", which is
+            the whole reason someone pays for month two — and until now nothing
+            in the product linked to it. Offered only once it has enough cases
+            to say something. */}
+        {stats.completedStations >= MIN_CASES_FOR_TREND && (
+          <Link
+            href="/dashboard/trend"
+            className="inline-block mt-3 text-[13px] font-medium text-primary hover:underline"
+          >
+            Your development picture &rarr;
+          </Link>
+        )}
       </div>
 
       {/* Plan state. Expiry is read-only, not a lockout: the loud banner says so,
@@ -396,7 +421,9 @@ function DashboardContent() {
             <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em]">
               Recent Sessions
             </div>
-            <span className="text-[11px] text-muted">Scored out of 10.5, the SCA weighted total</span>
+            <span className="text-[11px] text-muted">
+              Scored out of 10.5, the SCA weighted total &middot; {passMarkCaption()}
+            </span>
           </div>
           <div className="divide-y divide-black/[0.06]">
             {recentSessions.map((session, i) => (
@@ -422,7 +449,7 @@ function DashboardContent() {
                       <>
                         <span
                           className="text-[11px] font-semibold uppercase"
-                          style={{ color: session.passed ? '#16A34A' : '#DC2626' }}
+                          style={{ color: session.passed ? TONE_COLOUR.pass : TONE_COLOUR.fail }}
                         >
                           {session.verdict}
                         </span>
@@ -430,9 +457,20 @@ function DashboardContent() {
                           {session.weightedScore.toFixed(1)}/{session.maxScore.toFixed(1)}
                         </span>
                       </>
+                    ) : session.outcome === 'marking' ? (
+                      <span className="text-[11px] font-semibold text-primary">
+                        Marking… usually 1&ndash;2 minutes
+                      </span>
+                    ) : session.outcome === 'stalled' ? (
+                      <span
+                        className="text-[11px] font-semibold"
+                        style={{ color: TONE_COLOUR.borderline }}
+                      >
+                        Marking didn&apos;t finish
+                      </span>
                     ) : (
                       <span className="text-[11px] font-medium text-muted">
-                        {session.marking ? 'Marking…' : 'No feedback available'}
+                        No feedback available
                       </span>
                     )}
                   </div>
