@@ -1,12 +1,16 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import Container from '@/components/ui/Container';
 import { TrendReport, TrendTheme } from '@/lib/clinical-master/trendTypes';
+import { formatRelativeDate } from '@/lib/utils';
 
 const MAX_RETRIES = 20;
+/** How long to wait for a rebuild before handing the old report back. */
+const REFRESH_MAX_POLLS = 40;
+const POLL_MS = 3000;
 
 function ThemeBlock({ t, technique }: { t: TrendTheme; technique?: boolean }) {
   return (
@@ -36,7 +40,65 @@ export default function TrendPage() {
   const [report, setReport] = useState<TrendReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [empty, setEmpty] = useState(false);
+  /** True while a rebuild triggered from this page is still running. */
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshNote, setRefreshNote] = useState<string | null>(null);
   const retry = useRef(0);
+
+  /**
+   * Rebuild the report from the latest cases.
+   *
+   * The route has always accepted `{ refresh: true }`; the page only ever sent
+   * `{}`, and `if (haveReport && !refresh) return ready` then served the FIRST
+   * report an account ever generated for the rest of its life — so the one
+   * screen meant to show improvement could never show any. A rebuild returns
+   * 'generating', and the old row keeps being served until the new one lands,
+   * so we wait for created_at to actually change before swapping it in.
+   */
+  const refresh = useCallback(async () => {
+    if (refreshing) return;
+    const previousCreatedAt = report?.created_at ?? null;
+    setRefreshing(true);
+    setRefreshNote(null);
+
+    try {
+      await fetch('/api/clinical-master/trend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh: true }),
+      });
+    } catch {
+      setRefreshing(false);
+      setRefreshNote('Could not start a rebuild. Try again in a moment.');
+      return;
+    }
+
+    for (let attempt = 0; attempt < REFRESH_MAX_POLLS; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+      try {
+        const res = await fetch('/api/clinical-master/trend', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const data = await res.json();
+        if (data.status === 'ready' && data.report) {
+          const fresh = data.report as TrendReport;
+          if ((fresh.created_at ?? null) !== previousCreatedAt) {
+            setReport(fresh);
+            setRefreshing(false);
+            setRefreshNote('Updated from your latest cases.');
+            return;
+          }
+        }
+      } catch {
+        /* keep waiting — a dropped poll isn't a failed rebuild */
+      }
+    }
+
+    setRefreshing(false);
+    setRefreshNote('Still rebuilding. Check back in a minute.');
+  }, [refreshing, report]);
 
   useEffect(() => {
     let cancelled = false;
@@ -119,8 +181,26 @@ export default function TrendPage() {
       <h1 className="text-[22px] font-bold text-heading mb-1">
         Trajectory: {report.overall_trajectory}
       </h1>
-      {report.window && (
-        <p className="text-[12px] text-muted mb-4">Across {report.window.cases_included} cases</p>
+      <div className="flex flex-wrap items-baseline justify-between gap-3 mb-4">
+        <p className="text-[12px] text-muted">
+          {report.window ? `Across ${report.window.cases_included} cases` : 'Across your recent cases'}
+          {report.created_at ? ` \u00B7 built ${formatRelativeDate(report.created_at).toLowerCase()}` : ''}
+        </p>
+        <button
+          type="button"
+          onClick={refresh}
+          disabled={refreshing}
+          className="min-h-[36px] rounded-full border border-black/[0.08] px-3.5 text-[12px] font-semibold text-primary transition hover:bg-primary/[0.06] disabled:cursor-default disabled:text-muted disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+        >
+          {refreshing ? 'Rebuilding\u2026' : 'Refresh from my latest cases'}
+        </button>
+      </div>
+      {(refreshing || refreshNote) && (
+        <p className="text-[12px] text-muted mb-4">
+          {refreshing
+            ? 'Rebuilding from every case you have completed. This takes a minute or two \u2014 you can leave this page open.'
+            : refreshNote}
+        </p>
       )}
       {report.confidence === 'low' && (
         <div className="mb-6 p-3 rounded-lg text-[12px] text-amber-700" style={{ background: 'rgba(217,119,6,0.08)' }}>

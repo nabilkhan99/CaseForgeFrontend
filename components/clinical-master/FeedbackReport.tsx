@@ -13,6 +13,21 @@ import {
   PASSING_VERDICTS,
   Verdict,
 } from '@/lib/clinical-master/types';
+import {
+  TONE_BAR_CLASS,
+  fmtMark,
+  gradeTone,
+  passMarkCaption,
+  passMarkFor,
+  passMarkPercent,
+  passMarkSentence,
+  verdictTone,
+} from '@/lib/clinical-master/scoring';
+import {
+  formatTimestamp,
+  normaliseTranscript,
+  type TranscriptLine,
+} from '@/lib/clinical-master/transcript';
 
 /** Poll interval, ms. */
 const POLL_INTERVAL_MS = 3000;
@@ -27,21 +42,26 @@ const MAX_RETRIES = 100;
 const DOMAIN_NAV: DomainKey[] = ['data_gathering', 'clinical_management', 'relating_to_others'];
 type ReportTab = 'overview' | DomainKey;
 
+/**
+ * Per-domain identity only. Bars and pills are coloured from the GRADE
+ * (see TONE_BAR_CLASS + gradeTone): a domain-coloured bar meant an amber bar
+ * next to "PASS" for data gathering and a red one next to "CLEAR PASS" for
+ * clinical management, i.e. colour that contradicted the words beside it.
+ * Domain identity lives in the neutral header tint instead.
+ */
 const DOMAIN_META: Record<DomainKey, {
   label: string;
   shortLabel: string;
   maxPoints: number;
   weightLabel?: string;
   headerClass: string;
-  barClass: string;
   softClass: string;
 }> = {
   data_gathering: {
     label: 'Data gathering',
     shortLabel: 'Data',
     maxPoints: 3,
-    headerClass: 'bg-amber-50/70',
-    barClass: 'bg-primary',
+    headerClass: 'bg-stone-50',
     softClass: 'bg-primary/[0.06] text-primary border-primary/15',
   },
   clinical_management: {
@@ -49,17 +69,15 @@ const DOMAIN_META: Record<DomainKey, {
     shortLabel: 'Management',
     maxPoints: 4.5,
     weightLabel: 'weighted 1.5x',
-    headerClass: 'bg-red-50/60',
-    barClass: 'bg-danger',
-    softClass: 'bg-red-50 text-red-700 border-red-200/70',
+    headerClass: 'bg-stone-100/70',
+    softClass: 'bg-stone-100 text-stone-600 border-stone-200',
   },
   relating_to_others: {
     label: 'Relating to others',
     shortLabel: 'Relating',
     maxPoints: 3,
-    headerClass: 'bg-green-50/60',
-    barClass: 'bg-success',
-    softClass: 'bg-green-50 text-green-700 border-green-200/70',
+    headerClass: 'bg-stone-50',
+    softClass: 'bg-stone-50 text-stone-600 border-stone-200',
   },
 };
 
@@ -131,37 +149,40 @@ function verdictColours(verdict: Verdict): {
   bar: string;
 } {
   const passing = PASSING_VERDICTS.includes(verdict);
+  // Bars use the shared three-tone palette (green pass / amber borderline /
+  // red fail) so the fill means the same thing here as on every domain bar.
+  const bar = TONE_BAR_CLASS[verdictTone(verdict)];
   if (verdict === 'Pass') {
     return {
       text: 'text-green-700',
       badge: 'bg-green-50 text-green-700 border-green-200',
-      bar: 'bg-success',
+      bar,
     };
   }
   if (verdict === 'Bare Pass') {
     return {
       text: 'text-lime-700',
       badge: 'bg-lime-50 text-lime-700 border-lime-200',
-      bar: 'bg-lime-600',
+      bar,
     };
   }
   if (verdict === 'Bare Fail') {
     return {
       text: 'text-primary',
       badge: 'bg-amber-50 text-amber-700 border-amber-200',
-      bar: 'bg-primary',
+      bar,
     };
   }
   return passing
     ? {
       text: 'text-green-700',
       badge: 'bg-green-50 text-green-700 border-green-200',
-      bar: 'bg-success',
+      bar,
     }
     : {
       text: 'text-red-700',
       badge: 'bg-red-50 text-red-700 border-red-200',
-      bar: 'bg-danger',
+      bar,
     };
 }
 
@@ -325,7 +346,10 @@ function DomainMiniRow({ domain }: { domain: DomainFeedback }) {
           )}
         </div>
         <div className="h-1.5 overflow-hidden rounded-full bg-stone-200/80">
-          <div className={`h-full rounded-full ${meta.barClass}`} style={{ width: `${pct}%` }} />
+          <div
+            className={`h-full rounded-full ${TONE_BAR_CLASS[gradeTone(domain.grade)]}`}
+            style={{ width: `${pct}%` }}
+          />
         </div>
       </div>
       <div className="text-right">
@@ -381,8 +405,13 @@ function FocusNext({ feedback }: { feedback: ConsultationFeedback }) {
 function VerdictPanel({ feedback }: { feedback: ConsultationFeedback }) {
   const { overall } = feedback;
   const vc = verdictColours(overall.verdict);
-  const pct = Math.max(0, Math.min(100, (overall.weighted_score / (overall.max_score || 10.5)) * 100));
+  const maxScore = overall.max_score || 10.5;
+  const pct = Math.max(0, Math.min(100, (overall.weighted_score / maxScore) * 100));
   const duration = fmtDuration(feedback.timing?.total_duration_ms);
+  // The pass mark, marked on the bar and stated in words. "Bare Fail" and
+  // "0.5 short of 6.0" are different facts, and only the second one is useful.
+  const passMark = passMarkFor(maxScore);
+  const passPct = passMarkPercent(maxScore);
 
   return (
     <section className="grid gap-5 rounded-[24px] border border-black/[0.06] bg-white/80 p-5 shadow-[0_20px_60px_rgba(180,83,9,0.07),0_2px_4px_rgba(0,0,0,0.04)] md:p-6 lg:grid-cols-[250px_minmax(0,1fr)_240px]">
@@ -393,14 +422,24 @@ function VerdictPanel({ feedback }: { feedback: ConsultationFeedback }) {
           <span className="text-[24px] font-semibold">{overall.weighted_score.toFixed(1)}</span>
           <span className="pb-1 text-[13px] text-stone-400">/ {overall.max_score.toFixed(1)}</span>
         </div>
-        <div className="mt-4 h-2 overflow-hidden rounded-full bg-stone-200">
-          <motion.div
-            className={`h-full rounded-full ${vc.bar}`}
-            initial={{ width: 0 }}
-            animate={{ width: `${pct}%` }}
-            transition={{ duration: 0.8, ease: 'easeOut' }}
+        <div className="relative mt-4 h-2 rounded-full bg-stone-200">
+          <div className="absolute inset-0 overflow-hidden rounded-full">
+            <motion.div
+              className={`h-full rounded-full ${vc.bar}`}
+              initial={{ width: 0 }}
+              animate={{ width: `${pct}%` }}
+              transition={{ duration: 0.8, ease: 'easeOut' }}
+            />
+          </div>
+          <div
+            aria-hidden
+            className="absolute -top-1 -bottom-1 w-[2px] rounded-full bg-heading/40"
+            style={{ left: `${passPct}%` }}
           />
         </div>
+        <p className="mt-3 text-[12px] leading-[1.55] text-stone-600">
+          {passMarkSentence(overall.weighted_score, maxScore)}
+        </p>
       </div>
 
       <div className="flex min-w-0 flex-col justify-center">
@@ -443,6 +482,17 @@ function VerdictPanel({ feedback }: { feedback: ConsultationFeedback }) {
             <span>Relating</span>
             <span className="font-mono font-semibold text-heading">/3</span>
           </div>
+          <div className="flex items-center justify-between gap-3 border-t border-black/[0.06] pt-2.5">
+            <span className="font-semibold text-heading">Pass mark</span>
+            <span className="font-mono font-semibold text-heading">
+              {fmtMark(passMark)} / {fmtMark(maxScore)}
+            </span>
+          </div>
+          <p className="text-[11px] leading-[1.6] text-stone-500">
+            Clinical management counts 1.5x, so it moves the total more than the other
+            two domains and can decide the verdict on its own. That is why the domain
+            grades and the overall verdict can disagree.
+          </p>
         </div>
       </div>
     </section>
@@ -697,7 +747,7 @@ function DomainCard({ domain, index }: { domain: DomainFeedback; index: number }
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-white/80">
               <motion.div
-                className={`h-full rounded-full ${meta.barClass}`}
+                className={`h-full rounded-full ${TONE_BAR_CLASS[gradeTone(domain.grade)]}`}
                 initial={{ width: 0 }}
                 whileInView={{ width: `${pct}%` }}
                 viewport={{ once: true }}
@@ -797,6 +847,114 @@ function DomainCard({ domain, index }: { domain: DomainFeedback; index: number }
   );
 }
 
+/**
+ * Why a report can't be shown. Each one is a different fact with a different
+ * way out; they all used to render "Please try again later" with no button,
+ * which was wrong for every one of them (none of the first three ever resolve
+ * on their own, and the last two need a retry, not patience).
+ */
+type ReportProblem = 'forbidden' | 'no_transcript' | 'stalled' | 'server' | 'timeout';
+
+function ProblemScreen({
+  title,
+  body,
+  isTrial,
+  children,
+}: {
+  title: string;
+  body: React.ReactNode;
+  isTrial: boolean;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className={`bg-surface px-6 ${isTrial ? 'py-12' : 'min-h-[100dvh] py-16'}`}>
+      <div className="mx-auto max-w-md rounded-[22px] border border-black/[0.06] bg-surface-raised p-6 text-center shadow-[0_16px_42px_rgba(180,83,9,0.06)]">
+        <p className="mb-2 text-[16px] font-semibold text-heading">{title}</p>
+        <p className="mb-6 text-sm leading-[1.65] text-muted">{body}</p>
+        <div className="flex flex-col items-center gap-3">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function TranscriptPanel({ lines }: { lines: TranscriptLine[] }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <section className="mt-10 border-t border-black/[0.06] pt-6">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-controls="consultation-transcript"
+        className="flex min-h-[44px] w-full items-center justify-between gap-4 rounded-xl px-2 text-left transition hover:bg-black/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+      >
+        <span>
+          <span className="block text-[16px] font-semibold text-heading">Transcript</span>
+          <span className="mt-0.5 block text-[13px] text-muted">
+            {lines.length} turn{lines.length === 1 ? '' : 's'} — read what you actually said against the marking above
+          </span>
+        </span>
+        <motion.span
+          aria-hidden
+          animate={{ rotate: open ? 90 : 0 }}
+          transition={{ duration: 0.15 }}
+          className="text-[13px] font-semibold text-primary"
+        >
+          &rsaquo;
+        </motion.span>
+      </button>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            id="consultation-transcript"
+            key="transcript-body"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="mt-4 rounded-[18px] border border-black/[0.06] bg-white/70 px-4 py-4 sm:px-5">
+              <p className="mb-4 text-[12px] leading-[1.6] text-stone-500">
+                Automatic speech-to-text, so wording can be slightly off. Timestamps are
+                minutes and seconds from the start of the consultation.
+              </p>
+              <ol className="space-y-3">
+                {lines.map((line) => (
+                  <li
+                    key={line.key}
+                    className="grid grid-cols-[54px_minmax(0,1fr)] gap-3 border-l-2 pl-3"
+                    style={{
+                      borderColor:
+                        line.speaker === 'candidate' ? 'rgba(180,83,9,0.35)' : 'rgba(0,0,0,0.10)',
+                    }}
+                  >
+                    <span className="font-mono text-[11px] leading-[1.7] text-stone-400">
+                      {formatTimestamp(line.timestampMs)}
+                    </span>
+                    <span className="min-w-0">
+                      <span
+                        className={`mr-2 text-[12px] font-semibold uppercase tracking-[0.06em] ${
+                          line.speaker === 'candidate' ? 'text-primary' : 'text-stone-500'
+                        }`}
+                      >
+                        {line.label}
+                      </span>
+                      <span className="text-[13px] leading-[1.7] text-stone-700">{line.text}</span>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </section>
+  );
+}
+
 export interface FeedbackReportProps {
   sessionId: string;
   /** 'app' renders dashboard chrome; 'trial' strips it for the free-station funnel. */
@@ -809,18 +967,27 @@ export default function FeedbackReport({ sessionId, variant = 'app', from = null
   const isTrial = variant === 'trial';
 
   const [feedback, setFeedback] = useState<ConsultationFeedback | null>(null);
+  const [transcript, setTranscript] = useState<TranscriptLine[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const [timedOut, setTimedOut] = useState(false);
+  const [problem, setProblem] = useState<ReportProblem | null>(null);
+  /** Station behind a session we never got a report for, so retries have a target. */
+  const [failedStationId, setFailedStationId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ReportTab>('overview');
   const retryCount = useRef(0);
+  /**
+   * After an explicit retry the session is still older than the stall
+   * threshold, so re-reporting "stalled" on the first poll would bounce the
+   * user straight back to the same screen while their retry was running.
+   * Ignore the flag for the rest of that polling run and wait it out instead.
+   */
+  const ignoreStalled = useRef(false);
   /** Bumped by "Check again" to restart polling in place — no page refresh. */
   const [pollAttempt, setPollAttempt] = useState(0);
 
   const checkAgain = () => {
     retryCount.current = 0;
-    setTimedOut(false);
-    setError(false);
+    ignoreStalled.current = true;
+    setProblem(null);
     setLoading(true);
     setPollAttempt((n) => n + 1);
   };
@@ -837,30 +1004,56 @@ export default function FeedbackReport({ sessionId, variant = 'app', from = null
           body: JSON.stringify({ sessionId, trigger: shouldTrigger }),
         });
         if (cancelled) return;
-        const data = await res.json();
+        const data = await res.json().catch(() => ({} as Record<string, unknown>));
 
-        if (data.status === 'ready' && data.feedback) {
-          setFeedback(data.feedback);
+        if (typeof data.stationId === 'string') setFailedStationId(data.stationId);
+
+        // 403: this session belongs to someone else. Polling can never fix it.
+        if (res.status === 403) {
+          setProblem('forbidden');
           setLoading(false);
           return;
         }
+
+        if (data.status === 'ready' && data.feedback) {
+          setFeedback(data.feedback);
+          setTranscript(normaliseTranscript(data.transcript));
+          setLoading(false);
+          return;
+        }
+
+        // The consultation captured nothing, so there is nothing to mark — the
+        // route computes this precisely so the page can stop polling and say so.
+        if (data.status === 'no_transcript') {
+          setProblem('no_transcript');
+          setLoading(false);
+          return;
+        }
+
         if (data.status === 'generating' || res.status === 404) {
+          // Terminal session, transcript present, over an hour old: the marking
+          // run died. Offer a retry rather than another five minutes of spinner.
+          if (data.stalled && !ignoreStalled.current) {
+            setProblem('stalled');
+            setLoading(false);
+            return;
+          }
           retryCount.current += 1;
           if (retryCount.current >= MAX_RETRIES) {
-            setTimedOut(true);
+            setProblem('timeout');
             setLoading(false);
             return;
           }
           setTimeout(poll, POLL_INTERVAL_MS);
           return;
         }
-        setError(true);
+        setProblem('server');
         setLoading(false);
       } catch {
         if (cancelled) return;
         retryCount.current += 1;
         if (retryCount.current >= MAX_RETRIES) {
-          setTimedOut(true);
+          setProblem('timeout');
           setLoading(false);
           return;
         }
@@ -884,47 +1077,113 @@ export default function FeedbackReport({ sessionId, variant = 'app', from = null
 
   if (loading) return <LoadingState compact={isTrial} />;
 
-  if (timedOut) {
-    return (
-      <div className={`bg-surface px-6 ${isTrial ? 'py-12' : 'min-h-[100dvh] py-16'}`}>
-        <div className="mx-auto max-w-md rounded-[22px] border border-black/[0.06] bg-surface-raised p-6 text-center shadow-[0_16px_42px_rgba(180,83,9,0.06)]">
-          <p className="mb-2 text-[16px] font-semibold text-heading">Feedback is taking longer than usual</p>
-          <p className="mb-6 text-sm leading-[1.65] text-muted">
-            It may still be finishing in the background. No need to reload the page —
-            just check again.
-          </p>
+  if (problem || !feedback) {
+    const retryHref = failedStationId
+      ? `/clinical-master/station/${failedStationId}${from ? `?from=${from}` : ''}`
+      : null;
+    const retryButton = (
+      <button
+        type="button"
+        onClick={checkAgain}
+        className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+      >
+        {problem === 'timeout' ? 'Check again' : 'Try again'}
+      </button>
+    );
+    const historyLink = !isTrial && (
+      <Link href="/dashboard/history" className="text-sm font-semibold text-primary hover:underline">
+        Go to my history
+      </Link>
+    );
+    const dashboardLink = !isTrial && (
+      <Link href="/dashboard" className="text-sm font-semibold text-muted hover:text-heading hover:underline">
+        Back to dashboard
+      </Link>
+    );
+
+    if (problem === 'forbidden') {
+      return (
+        <ProblemScreen
+          isTrial={isTrial}
+          title="This feedback isn't on this account"
+          body="The consultation was run on a different account, so we can't show its report here. Everything you have practised is listed in your own history."
+        >
+          {historyLink}
+          {dashboardLink}
+        </ProblemScreen>
+      );
+    }
+
+    if (problem === 'no_transcript') {
+      return (
+        <ProblemScreen
+          isTrial={isTrial}
+          title="This consultation wasn't recorded"
+          body="Nothing was captured from your microphone, so there is nothing to mark. That usually means mic access was blocked, or the connection dropped before the consultation got going. Marking this one isn't possible, but the case is still there to practise."
+        >
+          {retryHref && (
+            <Link
+              href={retryHref}
+              className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+            >
+              Practise this case again
+            </Link>
+          )}
+          {historyLink}
+        </ProblemScreen>
+      );
+    }
+
+    if (problem === 'stalled') {
+      return (
+        <ProblemScreen
+          isTrial={isTrial}
+          title="Marking didn't finish"
+          body="Marking normally takes a minute or two, and this consultation has been waiting far longer — so the run failed rather than being slow. Your transcript is safe; starting marking again is usually all it takes."
+        >
           <button
             type="button"
             onClick={checkAgain}
-            className="inline-flex items-center justify-center rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           >
-            Check again
+            Start marking again
           </button>
-          {!isTrial && (
-            <div className="mt-4">
-              <Link href="/dashboard" className="text-sm font-semibold text-primary hover:underline">
-                Back to dashboard
-              </Link>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
+          {historyLink}
+        </ProblemScreen>
+      );
+    }
 
-  if (error || !feedback) {
+    if (problem === 'timeout') {
+      return (
+        <ProblemScreen
+          isTrial={isTrial}
+          title="Feedback is taking longer than usual"
+          body="It may still be finishing in the background. No need to reload the page — just check again."
+        >
+          {retryButton}
+          {dashboardLink}
+        </ProblemScreen>
+      );
+    }
+
     return (
-      <div className={`bg-surface px-6 ${isTrial ? 'py-12' : 'min-h-[100dvh] py-16'}`}>
-        <div className="mx-auto max-w-md rounded-[22px] border border-black/[0.06] bg-surface-raised p-6 text-center shadow-[0_16px_42px_rgba(180,83,9,0.06)]">
-          <p className="mb-2 text-[16px] font-semibold text-heading">Unable to load feedback</p>
-          <p className="mb-6 text-sm leading-[1.65] text-muted">Please try again later.</p>
-          {!isTrial && (
-            <Link href="/dashboard" className="text-sm font-semibold text-primary hover:underline">
-              Return to dashboard
-            </Link>
-          )}
-        </div>
-      </div>
+      <ProblemScreen
+        isTrial={isTrial}
+        title="Something went wrong loading this feedback"
+        body={
+          <>
+            This one is on us, and nothing about your consultation has been lost. Try again,
+            and if it keeps happening email{' '}
+            <a href="mailto:hello@fourteenfisherman.com" className="font-semibold text-primary hover:underline">
+              hello@fourteenfisherman.com
+            </a>{' '}
+            and we&apos;ll mark it by hand.
+          </>
+        }
+      >
+        {retryButton}
+        {historyLink}
+      </ProblemScreen>
     );
   }
 
@@ -955,7 +1214,9 @@ export default function FeedbackReport({ sessionId, variant = 'app', from = null
             </div>
             <div className="flex flex-wrap gap-2 text-[12px] text-stone-500">
               <span className="rounded-full border border-black/[0.06] bg-white/70 px-3 py-1.5">Audio consultation</span>
-              <span className="rounded-full border border-black/[0.06] bg-white/70 px-3 py-1.5">Total / 10.5</span>
+              <span className="rounded-full border border-black/[0.06] bg-white/70 px-3 py-1.5">
+                {passMarkCaption(feedback.overall.max_score)}
+              </span>
             </div>
           </div>
         </motion.header>
@@ -999,6 +1260,8 @@ export default function FeedbackReport({ sessionId, variant = 'app', from = null
             </AnimatePresence>
           </div>
         </section>
+
+        {transcript.length > 0 && <TranscriptPanel lines={transcript} />}
 
         {!isTrial && (
           <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">

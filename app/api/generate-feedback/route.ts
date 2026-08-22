@@ -16,6 +16,21 @@ export const maxDuration = 60;
 
 const inFlightMarkingSessions = new Set<string>();
 
+/**
+ * Past this age a session that still has no result is stuck, not slow. Marking
+ * takes 80 to 90 seconds; there are production sessions that have sat in
+ * 'processing' for two days because the trigger failed and nothing retried it.
+ * The page needs to be able to tell "still working" from "this run died".
+ */
+const STALLED_AFTER_MINUTES = 60;
+
+function minutesSince(iso: string | null | undefined): number | null {
+    if (!iso) return null;
+    const started = new Date(iso).getTime();
+    if (!Number.isFinite(started)) return null;
+    return Math.max(0, Math.round((Date.now() - started) / 60000));
+}
+
 interface SessionResultRow {
     verdict: string;
     weighted_score: number | string | null;
@@ -126,23 +141,35 @@ export async function POST(request: NextRequest) {
         // 2. Need a transcript before we can mark.
         const { data: session, error: sessionError } = await supabase
             .from('clinical_sessions')
-            .select('id, transcript, status')
+            .select('id, transcript, status, started_at, completed_at, station_id, stations(title)')
             .eq('id', sessionId)
             .single();
 
         if (sessionError || !session) {
             return NextResponse.json({ error: 'Session not found' }, { status: 404 });
         }
+
+        // 'processing' rows never carry completed_at (it is stamped when the
+        // result row lands), so age has to fall back to started_at.
+        const ageMinutes = minutesSince(session.completed_at ?? session.started_at);
+        const terminal = session.status !== 'reading' && session.status !== 'live';
+        // Station details so the page can offer "practise this case again"
+        // rather than a dead end when the run can never produce feedback.
+        const stationId = (session.station_id as string | null) ?? undefined;
+        const stationTitle = (session.stations as { title?: string } | null)?.title;
+
         if (
             !session.transcript ||
             (Array.isArray(session.transcript) && session.transcript.length === 0)
         ) {
             // A session past the live stage with no transcript will never produce
             // feedback (mic failure / abandoned call) — tell the page to stop polling.
-            const terminal = session.status !== 'reading' && session.status !== 'live';
             return NextResponse.json({
                 status: terminal ? 'no_transcript' : 'generating',
                 triggerQueued: false,
+                ageMinutes,
+                stationId,
+                stationTitle,
             });
         }
 
@@ -190,6 +217,12 @@ export async function POST(request: NextRequest) {
             status: 'generating',
             triggerQueued: trigger,
             alreadyInFlight: inFlightMarkingSessions.has(sessionId),
+            ageMinutes,
+            // A transcript exists and the session is terminal, so marking should
+            // have finished long ago. Say so instead of polling into silence.
+            stalled: terminal && ageMinutes !== null && ageMinutes >= STALLED_AFTER_MINUTES,
+            stationId,
+            stationTitle,
         });
     } catch (error) {
         console.error('Feedback route error:', error);

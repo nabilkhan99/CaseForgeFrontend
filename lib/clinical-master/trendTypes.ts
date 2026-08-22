@@ -31,6 +31,8 @@ export interface TrendStrength {
 
 export interface TrendReport {
   candidate_id: string;
+  /** Set by Postgres when the row is inserted — how old this picture is. */
+  created_at?: string | null;
   window?: { from?: string | null; to?: string | null; cases_included: number } | null;
   confidence: 'low' | 'medium' | 'high';
   overall_trajectory: 'improving' | 'static' | 'declining';
