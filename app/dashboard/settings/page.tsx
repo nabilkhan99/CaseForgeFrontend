@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import type { User } from '@supabase/supabase-js';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { ACCESS_OPENS_LABEL } from '@/lib/commerce/plans';
+import { ACCESS_OPENS_LABEL, COMPLETE_UPGRADE_PRICE_LABEL } from '@/lib/commerce/plans';
 import Container from '@/components/ui/Container';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import SecondaryButton from '@/components/ui/SecondaryButton';
@@ -33,6 +33,10 @@ export default function SettingsPage() {
 
   const [fullName, setFullName] = useState('');
   const [examDate, setExamDate] = useState('');
+  // Stripe's Customer Portal is a redirect, not a page of ours — the only
+  // local state it needs is "we've asked" and "it didn't work".
+  const [portalBusy, setPortalBusy] = useState(false);
+  const [portalError, setPortalError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -85,6 +89,30 @@ export default function SettingsPage() {
     }
   };
 
+  /**
+   * Hand the buyer to Stripe's Customer Portal to cancel or re-card. Kept a
+   * POST + redirect rather than a link: the portal session is short-lived and
+   * has to be minted per visit.
+   */
+  const handleManageBilling = async () => {
+    if (portalBusy) return;
+    setPortalBusy(true);
+    setPortalError(null);
+    try {
+      const res = await fetch('/api/billing/portal', { method: 'POST' });
+      const data = (await res.json()) as { url?: string; message?: string; error?: string };
+      if (!res.ok || !data.url) {
+        setPortalError(data.message ?? data.error ?? 'Could not open billing — please try again.');
+        setPortalBusy(false);
+        return;
+      }
+      window.location.assign(data.url);
+    } catch {
+      setPortalError('Could not open billing — please try again.');
+      setPortalBusy(false);
+    }
+  };
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.push('/');
@@ -133,6 +161,10 @@ export default function SettingsPage() {
               access.state === 'active' ? 'active' : access.state === 'read_only' ? 'ended' : 'pending';
             const ended = phase === 'ended';
             const pending = phase === 'pending';
+            // Self-Study, still live (active or bought-and-waiting). A lapsed
+            // plan is a renewal, not an upgrade, and Complete has nothing above it.
+            const canUpgrade =
+              !ended && (access.plan === 'self_study' || access.plan === 'self_study_monthly');
             const expiry = access.expiresAt ? new Date(access.expiresAt) : null;
             // Monthly has no expiry to count down to — it runs until canceled.
             const daysRemaining = expiry
@@ -183,12 +215,54 @@ export default function SettingsPage() {
                     />
                   </div>
                 )}
-                <Link
-                  href={ended ? '/pricing?renew=true' : pending ? '/dashboard/library' : '/pricing'}
-                  className="text-[13px] text-primary font-medium hover:underline"
-                >
-                  {ended ? 'Renew your access' : pending ? 'Browse the case library' : 'Extend or upgrade'} &rarr;
-                </Link>
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                  {/* The generic /pricing link is suppressed once a specific
+                      upgrade link is showing: "Extend or upgrade" next to
+                      "Upgrade to Complete — £300" is the same offer twice, and
+                      the vaguer one costs £599. A pending buyer still gets the
+                      library link, which is a different destination entirely. */}
+                  {(!canUpgrade || pending) && (
+                    <Link
+                      href={ended ? '/pricing?renew=true' : pending ? '/dashboard/library' : '/pricing'}
+                      className="text-[13px] text-primary font-medium hover:underline"
+                    >
+                      {ended ? 'Renew your access' : pending ? 'Browse the case library' : 'Extend or upgrade'} &rarr;
+                    </Link>
+                  )}
+                  {/* One of the three sanctioned upgrade slots (lectures hero,
+                      here, and nowhere on the dashboard home). It points at the
+                      in-app upgrade, priced at the difference — /pricing would
+                      charge this customer the full £599 for what they part-own. */}
+                  {canUpgrade && (
+                    <Link
+                      href="/dashboard/upgrade"
+                      className="text-[13px] text-primary font-medium hover:underline"
+                    >
+                      Upgrade to Complete &mdash; {COMPLETE_UPGRADE_PRICE_LABEL} &rarr;
+                    </Link>
+                  )}
+                  {/* "Cancel any time" needs a mechanism behind it. */}
+                  {access.isMonthly && (
+                    <button
+                      type="button"
+                      onClick={handleManageBilling}
+                      disabled={portalBusy}
+                      className="text-[13px] text-primary font-medium hover:underline disabled:opacity-60"
+                    >
+                      {portalBusy ? 'Opening billing…' : 'Manage billing'} &rarr;
+                    </button>
+                  )}
+                </div>
+                {access.isMonthly && (
+                  <p className="text-[12px] text-muted mt-2">
+                    Cancel or update your card in Stripe&rsquo;s secure billing portal.
+                  </p>
+                )}
+                {portalError && (
+                  <p role="alert" className="text-[12px] text-danger mt-2">
+                    {portalError}
+                  </p>
+                )}
               </div>
             );
           })() : (

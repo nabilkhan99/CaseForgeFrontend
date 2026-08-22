@@ -4,13 +4,17 @@ import { getStripe } from '@/lib/commerce/stripe';
 import {
   getPlan,
   isSubscriptionPlan,
+  stripeCompleteUpgradePriceId,
   stripePriceIdFor,
   stripeRefereeCouponIdFor,
+  COMPLETE_UPGRADE_PRICE_LABEL,
   type CoachingDayAvailability,
   type PlanKey,
 } from '@/lib/commerce/plans';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { REFERRAL_COOKIE, normalizeCode } from '@/lib/commerce/referrals';
+import { REFERRAL_COOKIE, normalizeCode, normalizeEmail } from '@/lib/commerce/referrals';
+import { getServerEntitlement } from '@/lib/commerce/serverEntitlement';
+import { COMPLETE_UPGRADE_PLAN, canUpgradeToComplete } from '@/lib/commerce/upgrade';
 
 interface CheckoutBody {
   plan?: string;
@@ -54,21 +58,59 @@ async function resolveReferralCode(): Promise<string | null> {
 
 /**
  * Creates a Stripe Checkout session for a pre-order.
- * Body: { plan: 'self_study' | 'self_study_monthly' | 'complete', coachingDay?: 'YYYY-MM-DD' }
- * Complete requires a coaching day (unit of scarcity, max class of 6) and
- * soft-holds the place for 10 minutes while the buyer pays.
+ * Body: { plan: 'self_study' | 'self_study_monthly' | 'complete' | 'complete_upgrade',
+ *         coachingDay?: 'YYYY-MM-DD' }
+ * Complete (and the upgrade) require a coaching day (unit of scarcity, max class
+ * of 6) and soft-hold the place for 10 minutes while the buyer pays.
  * `self_study_monthly` opens a subscription session instead of a one-off payment.
+ * `complete_upgrade` sells Complete at the £300 difference and is refused unless
+ * the SERVER-side entitlement says the caller holds Self-Study.
+ * A signed-in buyer's account email is pre-filled and locked on Stripe's page.
  * Returns: { url } to redirect the buyer to Stripe's hosted checkout.
  */
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as CheckoutBody;
-    const plan = getPlan(body.plan ?? '');
+
+    // `complete_upgrade` is not a plan (see lib/commerce/upgrade.ts) — it is
+    // Complete, bought at the difference by someone who already owns
+    // Self-Study. Everything downstream treats it as Complete; only the Price
+    // and the server-side gate differ.
+    const isUpgrade = (body.plan ?? '') === COMPLETE_UPGRADE_PLAN;
+    const plan = getPlan(isUpgrade ? 'complete' : body.plan ?? '');
 
     if (!plan || plan.cta !== 'checkout') {
       return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
     }
 
+    // Who is buying. Purchases are matched to accounts BY EMAIL, so a signed-in
+    // buyer's account address is stamped onto the session (and pre-filled +
+    // locked on Stripe's page) — otherwise a different address at checkout buys
+    // access that attaches to no account. Signed-out buyers are unaffected.
+    const { user, entitlement, failedOpen } = await getServerEntitlement();
+    const accountEmail = user?.email ? normalizeEmail(user.email) : null;
+
+    if (isUpgrade) {
+      if (!user) {
+        return NextResponse.json({ error: 'Please sign in to upgrade' }, { status: 401 });
+      }
+      // A fail-open entitlement lookup means we do not KNOW what they hold, and
+      // this endpoint sells Complete at half price. Refuse rather than guess.
+      if (failedOpen) {
+        return NextResponse.json(
+          { error: "We couldn't check your current plan — please try again in a moment" },
+          { status: 503 },
+        );
+      }
+      if (!canUpgradeToComplete(entitlement)) {
+        return NextResponse.json(
+          { error: 'The upgrade price is for Self-Study customers — see the plans for your options' },
+          { status: 403 },
+        );
+      }
+    }
+
+    // The upgrade buys the coaching day too, so it goes through the same picker.
     const needsCoachingDay = plan.key === 'complete';
     let coachingDay: CoachingDayAvailability | null = null;
 
@@ -107,7 +149,10 @@ export async function POST(request: Request) {
     // Attribution (cookie-only, v1): if a valid, still-active referral code was
     // dropped by /r/[code], carry it into the session metadata. Invalid or absent
     // codes degrade silently — checkout must never fail on a bad referral.
-    const referralCode = await resolveReferralCode();
+    // Upgrades are deliberately excluded from referral attribution: the buyer
+    // is an existing customer, not a referred new one, and a £300 top-up would
+    // fail the qualifying-spend floor anyway.
+    const referralCode = isUpgrade ? null : await resolveReferralCode();
 
     // Two-sided referral: a valid code also buys the *referee* a discount. Stripe
     // rejects `discounts` and `allow_promotion_codes` on the same session, so a
@@ -118,17 +163,29 @@ export async function POST(request: Request) {
     const refereeCoupon = referralCode ? stripeRefereeCouponIdFor(plan.key as PlanKey) : null;
 
     const origin = new URL(request.url).origin;
-    const subscription = isSubscriptionPlan(plan.key);
+    const subscription = !isUpgrade && isSubscriptionPlan(plan.key);
+    const productLine = isUpgrade
+      ? `Upgrade to Complete (${COMPLETE_UPGRADE_PRICE_LABEL} difference from ${entitlement.plan === 'self_study_monthly' ? 'Self-Study monthly' : 'Self-Study'})`
+      : `${plan.name} (pre-order; AI practice & lectures start 1 September 2026)`;
     const description = coachingDay
-      ? `Fourteen Fisherman — ${plan.name} (pre-order; AI practice & lectures start 1 September 2026), coaching day ${coachingDay.label}`
-      : `Fourteen Fisherman — ${plan.name} (pre-order; AI practice & lectures start 1 September 2026)`;
+      ? `Fourteen Fisherman — ${productLine}, coaching day ${coachingDay.label}`
+      : `Fourteen Fisherman — ${productLine}`;
 
     // The metadata block is the contract with the webhook: it reads plan (and
     // referral_code) off the session to record the order. Subscriptions repeat it
     // on `subscription_data` because renewal invoices arrive with the
     // subscription, long after the checkout session is out of reach.
+    // Note `plan` is 'complete' even for an upgrade: the webhook derives the
+    // preorder's plan straight from this field, and the row has to read
+    // `complete` for the entitlement fold to grant lectures. `upgrade_from`
+    // records what it was bought against, so a £300 order is never mistaken
+    // for a £599 one in the ledger.
     const metadata = {
       plan: plan.key,
+      ...(isUpgrade ? { upgrade_from: entitlement.plan ?? '' } : {}),
+      // The account the buyer was signed into. The webhook files the purchase
+      // under this address, whatever they typed on Stripe's page.
+      ...(accountEmail ? { account_email: accountEmail } : {}),
       ...(coachingDay
         ? { coaching_day: coachingDay.day, coaching_day_label: coachingDay.label }
         : {}),
@@ -138,9 +195,19 @@ export async function POST(request: Request) {
     const stripe = getStripe();
     const session = await stripe.checkout.sessions.create({
       mode: subscription ? 'subscription' : 'payment',
-      line_items: [{ price: stripePriceIdFor(plan.key as PlanKey), quantity: 1 }],
+      line_items: [
+        { price: isUpgrade ? stripeCompleteUpgradePriceId() : stripePriceIdFor(plan.key as PlanKey), quantity: 1 },
+      ],
       success_url: `${origin}/thanks?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: coachingDay ? `${origin}/coaching-day` : `${origin}/#pricing`,
+      cancel_url: isUpgrade
+        ? `${origin}/dashboard/upgrade`
+        : coachingDay
+          ? `${origin}/coaching-day`
+          : `${origin}/#pricing`,
+      // Stripe locks the email field when it is pre-filled, so a signed-in
+      // buyer cannot pay under an address their account will never match.
+      ...(accountEmail ? { customer_email: accountEmail } : {}),
+      ...(user ? { client_reference_id: user.id } : {}),
       ...(refereeCoupon
         ? { discounts: [{ coupon: refereeCoupon }] }
         : { allow_promotion_codes: true }),

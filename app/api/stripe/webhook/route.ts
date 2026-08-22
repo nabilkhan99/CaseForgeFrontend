@@ -12,6 +12,7 @@ import {
   parseMinSpendOverride,
   referralUrl,
 } from '@/lib/commerce/referrals';
+import { resolvePurchaseEmail } from '@/lib/commerce/buyerEmail';
 import { sendReferralEmail } from '@/lib/email/referralEmail';
 import { sendPurchaseEmail } from '@/lib/email/purchaseEmail';
 import { pushPreorderContactToBrevo } from '@/lib/marketing/preorderContact';
@@ -95,7 +96,27 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
     return NextResponse.json({ received: true, deferred: session.id });
   }
 
-  const email = session.customer_details?.email ?? session.customer_email;
+  // Which account this purchase belongs to. Entitlements match by email, so
+  // this is the single field that decides whether the buyer can use what they
+  // paid for. A signed-in checkout stamps `account_email` on the session;
+  // whatever Stripe collected on its own page loses to it (case-only
+  // differences are just normalised — see lib/commerce/buyerEmail.ts).
+  const resolvedEmail = resolvePurchaseEmail({
+    stripeEmail: session.customer_details?.email ?? session.customer_email,
+    accountEmail: session.metadata?.account_email,
+  });
+  if (resolvedEmail.mismatch) {
+    // Loud on purpose: the buyer paid under an address that is not the account
+    // they were signed into. We file it under the account (never strand them),
+    // but somebody should know the Stripe receipt and the access disagree.
+    console.error('[stripe-webhook] checkout email differs from the signed-in account', {
+      sessionId: session.id,
+      stripeEmail: session.customer_details?.email ?? session.customer_email,
+      accountEmail: session.metadata?.account_email,
+      recordedAs: resolvedEmail.email,
+    });
+  }
+  const email = resolvedEmail.email;
   const plan = session.metadata?.plan;
   const coachingDay = session.metadata?.coaching_day ?? null;
   const intakeMonth = session.metadata?.intake_month ?? null; // legacy sessions
@@ -125,7 +146,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
     console.error('[stripe-webhook] hold release failed (non-fatal)', { sessionId: session.id, error: holdError });
   }
 
-  const buyerEmail = normalizeEmail(email);
+  const buyerEmail = email; // already normalized by resolvePurchaseEmail
   const buyerName = session.customer_details?.name ?? null;
   const referralCode = session.metadata?.referral_code
     ? normalizeCode(session.metadata.referral_code)

@@ -123,6 +123,35 @@ export function stripeRefereeCouponIdFor(key: PlanKey): string | null {
   return trimmed ? trimmed : null
 }
 
+/**
+ * List prices in pence, for the one place a price has to be arithmetic rather
+ * than copy: the Self-Study -> Complete upgrade, which is sold at the
+ * difference. Keeping both operands here means the £300 headline cannot drift
+ * away from the two prices it is derived from.
+ */
+export const SELF_STUDY_PRICE_PENCE = 29_900
+export const COMPLETE_PRICE_PENCE = 59_900
+
+/** What a Self-Study customer pays to move up to Complete: the difference. */
+export const COMPLETE_UPGRADE_PRICE_PENCE = COMPLETE_PRICE_PENCE - SELF_STUDY_PRICE_PENCE
+
+/** "£300" — display copy, derived so it follows the prices above. */
+export const COMPLETE_UPGRADE_PRICE_LABEL = `£${COMPLETE_UPGRADE_PRICE_PENCE / 100}`
+
+/**
+ * Server-only: the Stripe Price id for the upgrade difference.
+ *
+ * Deliberately NOT part of {@link stripePriceIdFor}: `complete_upgrade` is not a
+ * plan. Nothing is ever provisioned as one — the upgrade lands in `preorders`
+ * as a `complete` purchase so {@link PLANS} and the entitlement fold stay
+ * unaware it exists. Only the Price is separate.
+ */
+export function stripeCompleteUpgradePriceId(): string {
+  const id = process.env.STRIPE_PRICE_COMPLETE_UPGRADE?.trim()
+  if (!id) throw new Error('STRIPE_PRICE_COMPLETE_UPGRADE is not set')
+  return id
+}
+
 /** Intensive booking link. */
 export const BOOK_A_CALL_URL = 'https://calendly.com/hello-fourteenfisherman/30min'
 
