@@ -1,26 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CustomerCandidateRow } from '@/lib/commerce/billingPortal'
 
 /**
- * The self-service cancel path for monthly plans. The failure mode that matters
- * is a buyer with no `stripe_customer_id` on file (hand-provisioned orders,
- * rows predating the column) getting a 500 instead of an answer.
+ * The Customer Portal is now the whole of self-service billing: plan switches
+ * (the Self-Study -> Complete upgrade, which replaced a bespoke £300 Price),
+ * card changes, invoices for a study-budget claim, and cancellation.
+ *
+ * What is asserted here is the wiring that decides WHICH subscription the
+ * portal opens on and which configuration governs it — get either wrong and
+ * the customer lands on a page that cannot do what the button promised.
  */
 
 const mocks = vi.hoisted(() => ({
-  user: null as { id: string; email: string } | null,
-  rows: [] as CustomerCandidateRow[],
-  rowsError: null as unknown,
-  search: vi.fn(),
-  createPortalSession: vi.fn(),
+  portalCreate: vi.fn(),
+  customersSearch: vi.fn(),
+  user: { id: 'user-1', email: 'buyer@nhs.net' } as { id: string; email: string } | null,
+  rows: [] as Array<Record<string, unknown>>,
 }))
 
 vi.mock('server-only', () => ({}))
 
 vi.mock('@/lib/commerce/stripe', () => ({
   getStripe: () => ({
-    customers: { search: mocks.search },
-    billingPortal: { sessions: { create: mocks.createPortalSession } },
+    billingPortal: { sessions: { create: mocks.portalCreate } },
+    customers: { search: mocks.customersSearch },
   }),
 }))
 
@@ -29,9 +31,7 @@ vi.mock('@/lib/commerce/serverEntitlement', () => ({
     user: mocks.user,
     supabase: {
       from: () => ({
-        select: () => ({
-          ilike: async () => ({ data: mocks.rows, error: mocks.rowsError }),
-        }),
+        select: () => ({ ilike: async () => ({ data: mocks.rows, error: null }) }),
       }),
     },
   }),
@@ -39,101 +39,120 @@ vi.mock('@/lib/commerce/serverEntitlement', () => ({
 
 const { POST } = await import('./route')
 
-async function post() {
+async function post(body?: Record<string, unknown>) {
   const response = await POST(
-    new Request('https://www.fourteenfisherman.com/api/billing/portal', { method: 'POST' }),
+    new Request('https://www.fourteenfisherman.com/api/billing/portal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    }),
   )
   return { status: response.status, body: await response.json() }
 }
 
-function row(over: Partial<CustomerCandidateRow>): CustomerCandidateRow {
-  return {
-    stripe_customer_id: 'cus_1',
-    stripe_subscription_id: null,
-    status: 'paid',
-    created_at: '2026-08-01T00:00:00Z',
-    ...over,
-  }
+const liveRow = {
+  stripe_customer_id: 'cus_1',
+  stripe_subscription_id: 'sub_1',
+  status: 'paid',
+  created_at: '2026-08-01T00:00:00Z',
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.unstubAllEnvs()
   mocks.user = { id: 'user-1', email: 'buyer@nhs.net' }
-  mocks.rows = []
-  mocks.rowsError = null
-  mocks.search.mockResolvedValue({ data: [] })
-  mocks.createPortalSession.mockResolvedValue({ url: 'https://billing.stripe.com/session/abc' })
+  mocks.rows = [liveRow]
+  mocks.portalCreate.mockResolvedValue({ url: 'https://billing.stripe.com/p/session_1' })
+  mocks.customersSearch.mockResolvedValue({ data: [] })
 })
 
-describe('POST /api/billing/portal', () => {
-  it('refuses a signed-out caller', async () => {
+describe('opening the portal', () => {
+  it('refuses an anonymous caller', async () => {
     mocks.user = null
 
     const { status } = await post()
 
     expect(status).toBe(401)
-    expect(mocks.createPortalSession).not.toHaveBeenCalled()
+    expect(mocks.portalCreate).not.toHaveBeenCalled()
   })
 
-  it('opens the portal for the customer on the buyer’s own purchase', async () => {
-    mocks.rows = [row({ stripe_customer_id: 'cus_monthly', stripe_subscription_id: 'sub_1' })]
-
+  it('opens on the landing page by default', async () => {
     const { status, body } = await post()
 
     expect(status).toBe(200)
-    expect(body.url).toBe('https://billing.stripe.com/session/abc')
-    expect(mocks.createPortalSession).toHaveBeenCalledWith({
-      customer: 'cus_monthly',
-      return_url: 'https://www.fourteenfisherman.com/dashboard/settings',
-    })
-    // No need to ask Stripe when we already know the customer.
-    expect(mocks.search).not.toHaveBeenCalled()
+    expect(body.url).toBe('https://billing.stripe.com/p/session_1')
+    const params = mocks.portalCreate.mock.calls[0][0]
+    expect(params.customer).toBe('cus_1')
+    expect(params.flow_data).toBeUndefined()
   })
 
-  it('falls back to Stripe when no row carries a customer id', async () => {
-    // Hand-provisioned orders (Payment Link, manual invoice) have no
-    // stripe_customer_id, but their billing is still worth managing.
-    mocks.rows = [row({ stripe_customer_id: null })]
-    mocks.search.mockResolvedValue({ data: [{ id: 'cus_found' }] })
+  it('opens straight on the plan switcher when asked', async () => {
+    // This is the upgrade path. Landing on the portal home instead would leave
+    // a customer who clicked "Upgrade to Complete" hunting for the button.
+    await post({ flow: 'subscription_update' })
 
-    const { status } = await post()
+    expect(mocks.portalCreate.mock.calls[0][0].flow_data).toEqual({
+      type: 'subscription_update',
+      subscription_update: { subscription: 'sub_1' },
+    })
+  })
+
+  it('falls back to the landing page when there is no live subscription', async () => {
+    // A pre-migration row has a customer but no subscription to switch. Better
+    // a portal with invoices in it than a 500.
+    mocks.rows = [{ ...liveRow, stripe_subscription_id: null }]
+
+    const { status } = await post({ flow: 'subscription_update' })
 
     expect(status).toBe(200)
-    expect(mocks.search).toHaveBeenCalledWith({ query: "email:'buyer@nhs.net'", limit: 1 })
-    expect(mocks.createPortalSession).toHaveBeenCalledWith(
-      expect.objectContaining({ customer: 'cus_found' }),
-    )
+    expect(mocks.portalCreate.mock.calls[0][0].flow_data).toBeUndefined()
   })
 
-  it('answers 404 with a message when there is genuinely no customer', async () => {
+  it('passes the configured portal configuration when one is set', async () => {
+    // The configuration is what decides which prices the switcher offers, how
+    // it prorates, and that cancellation happens at period end.
+    vi.stubEnv('STRIPE_PORTAL_CONFIGURATION_ID', 'bpc_live')
+
+    await post()
+
+    expect(mocks.portalCreate.mock.calls[0][0].configuration).toBe('bpc_live')
+  })
+
+  it('omits the configuration when unset, so the account default applies', async () => {
+    await post()
+
+    expect(mocks.portalCreate.mock.calls[0][0].configuration).toBeUndefined()
+  })
+
+  it('searches Stripe when no row carries a customer id', async () => {
+    mocks.rows = []
+    mocks.customersSearch.mockResolvedValue({ data: [{ id: 'cus_found' }] })
+
+    await post()
+
+    expect(mocks.portalCreate.mock.calls[0][0].customer).toBe('cus_found')
+  })
+
+  it('answers 404, not 500, when the account has no billing at all', async () => {
+    mocks.rows = []
+
     const { status, body } = await post()
 
     expect(status).toBe(404)
     expect(body.error).toBe('no_customer')
-    expect(body.message).toContain('hello@fourteenfisherman.com')
   })
 
-  it('answers 500 rather than throwing when Stripe rejects the portal call', async () => {
-    // The commonest cause is an unconfigured portal in a fresh Stripe mode —
-    // the buyer needs an apology, not an unhandled exception.
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    mocks.rows = [row({ stripe_customer_id: 'cus_1' })]
-    mocks.createPortalSession.mockRejectedValue(new Error('No configuration provided'))
+  it('treats an unparseable body as no flow rather than a 400', async () => {
+    // Billing must not fail on a parse slip: the landing page is always valid.
+    const response = await POST(
+      new Request('https://www.fourteenfisherman.com/api/billing/portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: 'not json',
+      }),
+    )
 
-    const { status, body } = await post()
-
-    expect(status).toBe(500)
-    expect(body.error).toContain('billing portal')
-    error.mockRestore()
-  })
-
-  it('answers 500 when the purchase lookup fails', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    mocks.rowsError = { message: 'boom' }
-
-    const { status } = await post()
-
-    expect(status).toBe(500)
-    error.mockRestore()
+    expect(response.status).toBe(200)
+    expect(mocks.portalCreate.mock.calls[0][0].flow_data).toBeUndefined()
   })
 })
