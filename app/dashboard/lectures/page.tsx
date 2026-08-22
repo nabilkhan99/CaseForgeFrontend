@@ -61,8 +61,11 @@ function totalMinutes(lectures: LectureSummary[]): number {
  */
 function UpgradeHero({ lectures }: { lectures: LectureSummary[] }) {
   const mins = totalMinutes(lectures);
-  const hours = mins >= 60 ? `${Math.round(mins / 60)} hour${Math.round(mins / 60) === 1 ? '' : 's'}` : mins > 0 ? `${mins} minutes` : null;
   const n = lectures.length;
+  // Only quantify once there is something to quantify — "18 minutes of
+  // teaching" undersells a course that is still being published.
+  const substantial = n >= MIN_ROWS_FOR_LOCKED_LIST && mins >= 120;
+  const hours = substantial ? `${Math.round(mins / 60)} hours` : null;
   return (
     <motion.div
       className="mb-8 rounded-[20px] px-6 py-6 sm:px-8 sm:py-7"
@@ -82,9 +85,9 @@ function UpgradeHero({ lectures }: { lectures: LectureSummary[] }) {
         {hours ? `${hours} of on-demand SCA teaching` : 'The on-demand SCA lecture course'}
       </h2>
       <p className="text-[14px] leading-[1.65] text-muted max-w-xl mb-5">
-        {n > 0 ? `${n} lecture${n === 1 ? '' : 's'} across the three SCA domains` : 'Lectures across the three SCA domains'}
-        , taught against the marking framework your consultations are scored on — watch as often as you like for
-        the length of your plan. Complete also adds a coaching day.
+        {substantial ? `${n} lectures across the three SCA domains` : 'Lectures across the three SCA domains'}, taught
+        against the marking framework your consultations are scored on &mdash; watch as often as you like for the
+        length of your plan. Complete also adds a coaching day.
       </p>
       <Link
         href="/pricing?want=lectures"
