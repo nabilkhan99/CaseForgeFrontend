@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   // `state` rides along so the caller can pick renew-vs-buy without guessing.
   if (!allowed) {
     return NextResponse.json(
-      { error: 'no_active_plan', state: entitlement.state },
+      { error: 'no_active_plan', state: entitlement.state, pending: entitlement.state === 'none' && Boolean(entitlement.plan) },
       { status: 403 },
     );
   }

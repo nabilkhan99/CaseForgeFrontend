@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   // prompt the middleware would have chosen, rather than guessing.
   if (!allowed) {
     return NextResponse.json(
-      { error: 'no_active_plan', state: entitlement.state },
+      { error: 'no_active_plan', state: entitlement.state, pending: entitlement.state === 'none' && Boolean(entitlement.plan) },
       { status: 403 },
     );
   }

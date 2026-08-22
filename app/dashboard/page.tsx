@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import Link from 'next/link';
@@ -64,7 +65,7 @@ function daysUntil(iso: string): number {
   return Math.ceil((new Date(iso).getTime() - Date.now()) / DAY_MS);
 }
 
-export default function DashboardPage() {
+function DashboardContent() {
   const supabase = createClient();
   // `undefined` = auth not resolved yet; `null` = resolved, signed out. The
   // two used to share `null`, so the first render treated "not loaded" as
@@ -80,6 +81,9 @@ export default function DashboardPage() {
   // answer may drive a "you have no plan" message.
   const [access, setAccess] = useState<SubscriptionResponse | null | undefined>(undefined);
   const [loading, setLoading] = useState(true);
+  // Set by the middleware / station page when a pending buyer tried to start
+  // a case before their window opened.
+  const bouncedPending = useSearchParams()?.get('access') === 'pending';
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -209,8 +213,9 @@ export default function DashboardPage() {
           animate={{ opacity: 1, y: 0 }}
         >
           <p className="text-[13px] text-heading">
-            You&apos;re in{access.planName ? ` — ${access.planName}` : ''}. Your access opens on{' '}
+            {bouncedPending ? 'Not long now — that case opens on ' : <>You&apos;re in{access.planName ? ` — ${access.planName}` : ''}. Your access opens on </>}
             <span className="font-semibold">{ACCESS_OPENS_LABEL}</span>.
+            {bouncedPending && ' Your plan is ready; consultations start then.'}
           </p>
         </motion.div>
       )}
@@ -490,5 +495,14 @@ export default function DashboardPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/** useSearchParams needs a Suspense boundary for static prerendering. */
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={null}>
+      <DashboardContent />
+    </Suspense>
   );
 }

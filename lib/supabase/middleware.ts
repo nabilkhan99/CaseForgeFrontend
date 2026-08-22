@@ -135,6 +135,10 @@ export async function updateSession(request: NextRequest) {
                     if (entitlement.state === 'none' && entitlement.plan) {
                         url.pathname = '/dashboard';
                         url.search = '';
+                        // Carry the reason, so the dashboard can say why the
+                        // page they asked for came back here instead of
+                        // reloading under them with no explanation.
+                        url.searchParams.set('access', 'pending');
                     } else {
                         url.pathname = '/pricing';
                         url.searchParams.set(entitlement.state === 'read_only' ? 'renew' : 'upgrade', 'true');
