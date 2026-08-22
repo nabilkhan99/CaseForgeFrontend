@@ -1,27 +1,21 @@
 /**
- * Station Library queries for Supabase
- * 
- * Functions to fetch domains & stations from the database
+ * Station Library queries for Supabase.
+ *
+ * Every library surface reads stations through here. Domain roll-ups are no
+ * longer a separate query — they are reduced from the station array by
+ * summariseDomains() in lib/stations/librarySearch.ts, so the index page and
+ * the domain page can never report different totals for the same bank.
  */
 
 import { createClient } from '@/lib/supabase/client';
 import { visibleStationStates } from '@/lib/stations/visibility';
+import { extractPresentingComplaint } from '@/lib/stations/presentingComplaint';
 import {
     reduceStationPassMap,
     type StationAttemptRow,
     type StationPassState,
 } from '@/lib/supabase/queries/passTracking';
 import type { Verdict } from '@/lib/clinical-master/types';
-
-export interface Domain {
-    id: string;
-    name: string;
-    description: string;
-    station_count: number;
-    completed_count: number;
-    /** Distinct stations in this domain whose best attempt passed. */
-    passed_count: number;
-}
 
 export interface CompletedAttempt {
     sessionId: string;
@@ -38,6 +32,12 @@ export interface Station {
     consultation_duration_seconds: number;
     difficulty: string;
     is_active: boolean;
+    /**
+     * The "Reason for Encounter" sentence from the candidate brief. Not a
+     * column — see lib/stations/presentingComplaint.ts. Empty when the brief
+     * doesn't carry one.
+     */
+    presenting_complaint: string;
     // User-specific data (from clinical_sessions)
     status: 'not-started' | 'in-progress' | 'completed';
     score?: number;
@@ -56,94 +56,152 @@ export interface Station {
 }
 
 /**
- * Fetch all domains with station counts and user progress
+ * The station columns every library surface needs, including the brief the
+ * presenting complaint is parsed out of. Kept in one place so the domain page
+ * and the flat index can never drift into fetching different shapes.
  */
-export async function getDomains(userId?: string): Promise<Domain[]> {
+const STATION_COLUMNS =
+    'id, title, patient_name, domain_id, consultation_duration_seconds, difficulty, is_active, candidate_instructions';
+
+interface StationRow {
+    id: string;
+    title: string;
+    patient_name: string;
+    domain_id: string;
+    consultation_duration_seconds: number;
+    difficulty: string;
+    is_active: boolean;
+    candidate_instructions: string | null;
+}
+
+interface SessionInfo {
+    id: string;
+    status: string;
+    overall_score: number | null;
+    started_at: string;
+    completed_at: string | null;
+}
+
+interface UserStationProgress {
+    /** Most recent completed session per station, else the most recent of any status. */
+    latestByStation: Record<string, SessionInfo>;
+    attemptsByStation: Record<string, CompletedAttempt[]>;
+    passMap: Map<string, StationPassState>;
+}
+
+const EMPTY_PROGRESS: UserStationProgress = {
+    latestByStation: {},
+    attemptsByStation: {},
+    passMap: new Map(),
+};
+
+/**
+ * One user's attempt history, shaped for the library.
+ *
+ * `stationIds` narrows the query to a single domain; omit it for the flat
+ * index, where filtering by 200 ids would build a URL longer than the answer.
+ */
+async function fetchUserStationProgress(
+    userId: string,
+    stationIds?: string[],
+): Promise<UserStationProgress> {
     const supabase = createClient();
 
-    // Get all domains
-    const { data: domains, error: domainsError } = await supabase
-        .from('domains')
-        .select('id, name, description')
-        .order('name');
+    // session_results rides along on the same query — the pass badge must not
+    // cost the library page a second round trip. max_score comes with it so
+    // the score denominator matches the feedback report for the same session.
+    let query = supabase
+        .from('clinical_sessions')
+        .select('id, station_id, status, overall_score, started_at, completed_at, session_results(verdict, weighted_score, max_score)')
+        .eq('user_id', userId);
 
-    if (domainsError || !domains) {
-        console.error('Error fetching domains:', domainsError);
-        return [];
+    if (stationIds) {
+        if (stationIds.length === 0) return EMPTY_PROGRESS;
+        query = query.in('station_id', stationIds);
     }
 
-    // Get station counts per domain
-    const { data: stationCounts } = await supabase
-        .from('stations')
-        .select('domain_id')
-        .in('is_active', visibleStationStates());
+    const { data: sessions } = await query.order('started_at', { ascending: false });
 
-    // Count stations per domain
-    const countByDomain: Record<string, number> = {};
-    stationCounts?.forEach(s => {
-        countByDomain[s.domain_id] = (countByDomain[s.domain_id] || 0) + 1;
-    });
-
-    // Get user's completed sessions per domain if logged in. Count distinct
-    // stations, not sessions — repeat attempts at the same case must not push
-    // completion above the number of stations in the domain.
-    const completedByDomain: Record<string, number> = {};
-    const passedByDomain: Record<string, number> = {};
-    if (userId) {
-        // The visibility filter must match the station-count denominator above:
-        // a pass at a station the library does not list would otherwise print
-        // "2 of 1 passed" here while the domain detail page says "1 of 1".
-        const { data: sessions } = await supabase
-            .from('clinical_sessions')
-            .select('station_id, stations!inner(domain_id, is_active), session_results(verdict, weighted_score)')
-            .eq('user_id', userId)
-            .eq('status', 'completed')
-            .in('stations.is_active', visibleStationStates());
-
-        // Pass state is per station across every attempt, so reduce first and
-        // then count the passed stations back into their domains.
-        const passMap = reduceStationPassMap(
-            (sessions ?? []).map((s) => {
+    // Only completed sessions carry a mark; an in-progress row would count
+    // as an attempt it hasn't earned.
+    const passMap = reduceStationPassMap(
+        (sessions ?? [])
+            .filter(s => s.status === 'completed')
+            .map(s => {
                 const result = s.session_results as unknown as {
                     verdict: string | null;
                     weighted_score: number | string | null;
+                    max_score: number | string | null;
                 } | null;
                 return {
                     station_id: s.station_id,
                     verdict: result?.verdict ?? null,
                     weighted_score: result?.weighted_score ?? null,
+                    max_score: result?.max_score ?? null,
                 } satisfies StationAttemptRow;
             }),
-        );
+    );
 
-        const stationsByDomain: Record<string, Set<string>> = {};
-        const passedStationsByDomain: Record<string, Set<string>> = {};
-        sessions?.forEach((s) => {
-            const domainId = (s.stations as unknown as { domain_id: string }).domain_id;
-            if (!s.station_id) return;
-            if (!stationsByDomain[domainId]) stationsByDomain[domainId] = new Set();
-            stationsByDomain[domainId].add(s.station_id);
-            if (passMap.get(s.station_id)?.passed) {
-                if (!passedStationsByDomain[domainId]) passedStationsByDomain[domainId] = new Set();
-                passedStationsByDomain[domainId].add(s.station_id);
+    const latestByStation: Record<string, SessionInfo> = {};
+    const attemptsByStation: Record<string, CompletedAttempt[]> = {};
+
+    sessions?.forEach(session => {
+        // Collect all completed attempts
+        if (session.status === 'completed') {
+            if (!attemptsByStation[session.station_id]) {
+                attemptsByStation[session.station_id] = [];
             }
-        });
-        Object.entries(stationsByDomain).forEach(([domainId, stationIds]) => {
-            completedByDomain[domainId] = stationIds.size;
-        });
-        Object.entries(passedStationsByDomain).forEach(([domainId, stationIds]) => {
-            passedByDomain[domainId] = stationIds.size;
-        });
+            attemptsByStation[session.station_id].push({
+                sessionId: session.id,
+                score: session.overall_score,
+                completedAt: session.completed_at || session.started_at,
+            });
+        }
+
+        // Pick the best display session: most recent completed wins
+        const existing = latestByStation[session.station_id];
+        if (!existing) {
+            latestByStation[session.station_id] = session;
+        } else if (session.status === 'completed' && existing.status !== 'completed') {
+            latestByStation[session.station_id] = session;
+        }
+    });
+
+    return { latestByStation, attemptsByStation, passMap };
+}
+
+function toStation(row: StationRow, domainName: string, progress: UserStationProgress): Station {
+    const session = progress.latestByStation[row.id];
+    const attempts = progress.attemptsByStation[row.id] || [];
+    let status: 'not-started' | 'in-progress' | 'completed' = 'not-started';
+    if (session) {
+        status = session.status === 'completed' ? 'completed' : 'in-progress';
     }
 
-    return domains.map(d => ({
-        id: d.id,
-        name: d.name,
-        description: d.description,
-        station_count: countByDomain[d.id] || 0,
-        completed_count: completedByDomain[d.id] || 0,
-        passed_count: passedByDomain[d.id] || 0,
-    }));
+    // Use the most recent completed attempt for score display
+    const latestCompleted = attempts.length > 0 ? attempts[0] : null;
+    const passState = progress.passMap.get(row.id);
+
+    return {
+        id: row.id,
+        title: row.title,
+        patient_name: row.patient_name,
+        domain_id: row.domain_id,
+        domain_name: domainName,
+        consultation_duration_seconds: row.consultation_duration_seconds,
+        difficulty: row.difficulty,
+        is_active: row.is_active,
+        presenting_complaint: extractPresentingComplaint(row.candidate_instructions),
+        status,
+        score: latestCompleted?.score ?? undefined,
+        sessionId: latestCompleted?.sessionId ?? session?.id,
+        last_attempted: session?.started_at,
+        attempts,
+        passed: passState?.passed ?? false,
+        bestVerdict: passState?.bestVerdict ?? null,
+        bestScore: passState?.bestScore ?? null,
+        bestMaxScore: passState?.bestMaxScore ?? null,
+    };
 }
 
 /**
@@ -155,10 +213,11 @@ export async function getStationsForDomain(domainId: string, userId?: string): P
     // Fetch stations for domain
     const { data: stations, error } = await supabase
         .from('stations')
-        .select('id, title, patient_name, domain_id, consultation_duration_seconds, difficulty, is_active')
+        .select(STATION_COLUMNS)
         .eq('domain_id', domainId)
         .in('is_active', visibleStationStates())
-        .order('title');
+        .order('title')
+        .overrideTypes<StationRow[]>();
 
     if (error) {
         console.error('Error fetching stations:', error.message, error.details, error.hint);
@@ -178,106 +237,49 @@ export async function getStationsForDomain(domainId: string, userId?: string): P
 
     const domainName = domain?.name || 'Unknown';
 
-    // Get user's sessions for each station if logged in
-    // We track: the "display" session (most recent completed, else most recent any),
-    // plus the full list of completed attempts.
-    interface SessionInfo {
-        id: string;
-        status: string;
-        overall_score: number | null;
-        started_at: string;
-        completed_at: string | null;
-    }
-    const latestByStation: Record<string, SessionInfo> = {};
-    const attemptsByStation: Record<string, CompletedAttempt[]> = {};
-    let passMap = new Map<string, StationPassState>();
+    const progress = userId
+        ? await fetchUserStationProgress(userId, stations.map(s => s.id))
+        : EMPTY_PROGRESS;
 
-    if (userId && stations.length > 0) {
-        // session_results rides along on the same query — the pass badge must not
-        // cost the library page a second round trip. max_score comes with it so
-        // the score denominator matches the feedback report for the same session.
-        const { data: sessions } = await supabase
-            .from('clinical_sessions')
-            .select('id, station_id, status, overall_score, started_at, completed_at, session_results(verdict, weighted_score, max_score)')
-            .eq('user_id', userId)
-            .in('station_id', stations.map(s => s.id))
-            .order('started_at', { ascending: false });
+    return stations.map(s => toStation(s, domainName, progress));
+}
 
-        // Only completed sessions carry a mark; an in-progress row would count
-        // as an attempt it hasn't earned.
-        passMap = reduceStationPassMap(
-            (sessions ?? [])
-                .filter(s => s.status === 'completed')
-                .map(s => {
-                    const result = s.session_results as unknown as {
-                        verdict: string | null;
-                        weighted_score: number | string | null;
-                        max_score: number | string | null;
-                    } | null;
-                    return {
-                        station_id: s.station_id,
-                        verdict: result?.verdict ?? null,
-                        weighted_score: result?.weighted_score ?? null,
-                        max_score: result?.max_score ?? null,
-                    } satisfies StationAttemptRow;
-                }),
-        );
+/**
+ * Every visible station, flat, with the current user's progress on each.
+ *
+ * The library's only way in used to be 29 domain folders, so finding "the
+ * chest pain one" meant guessing which folder it lived in. Search needs the
+ * whole bank in one array; 200 rows is small enough to filter in the browser
+ * and avoids a debounced query per keystroke on a phone.
+ */
+export async function getStationIndex(userId?: string): Promise<Station[]> {
+    const supabase = createClient();
 
-        sessions?.forEach(session => {
-            // Collect all completed attempts
-            if (session.status === 'completed') {
-                if (!attemptsByStation[session.station_id]) {
-                    attemptsByStation[session.station_id] = [];
-                }
-                attemptsByStation[session.station_id].push({
-                    sessionId: session.id,
-                    score: session.overall_score,
-                    completedAt: session.completed_at || session.started_at,
-                });
-            }
+    const { data: stations, error } = await supabase
+        .from('stations')
+        .select(STATION_COLUMNS)
+        .in('is_active', visibleStationStates())
+        .order('title')
+        .overrideTypes<StationRow[]>();
 
-            // Pick the best display session: most recent completed wins
-            const existing = latestByStation[session.station_id];
-            if (!existing) {
-                latestByStation[session.station_id] = session;
-            } else if (session.status === 'completed' && existing.status !== 'completed') {
-                latestByStation[session.station_id] = session;
-            }
-        });
+    if (error) {
+        console.error('Error fetching station index:', error.message, error.details, error.hint);
+        return [];
     }
 
-    return stations.map(s => {
-        const session = latestByStation[s.id];
-        const attempts = attemptsByStation[s.id] || [];
-        let status: 'not-started' | 'in-progress' | 'completed' = 'not-started';
-        if (session) {
-            status = session.status === 'completed' ? 'completed' : 'in-progress';
-        }
+    if (!stations || stations.length === 0) {
+        return [];
+    }
 
-        // Use the most recent completed attempt for score display
-        const latestCompleted = attempts.length > 0 ? attempts[0] : null;
-        const passState = passMap.get(s.id);
-
-        return {
-            id: s.id,
-            title: s.title,
-            patient_name: s.patient_name,
-            domain_id: s.domain_id,
-            domain_name: domainName,
-            consultation_duration_seconds: s.consultation_duration_seconds,
-            difficulty: s.difficulty,
-            is_active: s.is_active,
-            status,
-            score: latestCompleted?.score ?? undefined,
-            sessionId: latestCompleted?.sessionId ?? session?.id,
-            last_attempted: session?.started_at,
-            attempts,
-            passed: passState?.passed ?? false,
-            bestVerdict: passState?.bestVerdict ?? null,
-            bestScore: passState?.bestScore ?? null,
-            bestMaxScore: passState?.bestMaxScore ?? null,
-        };
+    const { data: domains } = await supabase.from('domains').select('id, name');
+    const domainNames: Record<string, string> = {};
+    domains?.forEach(d => {
+        domainNames[d.id] = d.name;
     });
+
+    const progress = userId ? await fetchUserStationProgress(userId) : EMPTY_PROGRESS;
+
+    return stations.map(s => toStation(s, domainNames[s.domain_id] || 'Unknown', progress));
 }
 
 /**
@@ -323,6 +325,9 @@ export async function getAllStations(): Promise<Station[]> {
         consultation_duration_seconds: s.consultation_duration_seconds,
         difficulty: s.difficulty,
         is_active: s.is_active,
+        // Deliberately not parsed here: this feeds the dashboard's random pick,
+        // which never searches, and the briefs would triple the payload.
+        presenting_complaint: '',
         status: 'not-started' as const,
         attempts: [],
         passed: false,

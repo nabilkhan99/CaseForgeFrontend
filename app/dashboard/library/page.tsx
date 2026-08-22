@@ -1,130 +1,238 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
-import type { User } from '@supabase/supabase-js';
-import { getDomains, type Domain } from '@/lib/supabase/queries/station-library';
+import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import type { User } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/client';
+import { getStationIndex, type Station } from '@/lib/supabase/queries/station-library';
 import PageHeader from '@/components/ui/PageHeader';
 import { getDomainColor } from '@/lib/constants/domains';
+import LibraryFilters from '@/components/library/LibraryFilters';
+import NextForYou from '@/components/library/NextForYou';
+import StationRow from '@/components/library/StationRow';
+import { useLibraryFilters } from '@/components/library/useLibraryFilters';
+import { shouldShowDifficulty } from '@/lib/stations/difficulty';
+import {
+  dailySeed,
+  filterStations,
+  isFilterActive,
+  pickNextForYou,
+  summariseDomains,
+} from '@/lib/stations/librarySearch';
 
-export default function StationLibraryPage() {
-  const [domains, setDomains] = useState<Domain[]>([]);
+function LibrarySpinner() {
+  return (
+    <div className="flex items-center justify-center py-16">
+      <motion.div
+        className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent"
+        animate={{ rotate: 360 }}
+        transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+      />
+    </div>
+  );
+}
+
+function StationLibraryContent() {
+  const router = useRouter();
+  const [stations, setStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<User | null>(null);
+  // `undefined` = auth hasn't answered yet, `null` = genuinely signed out. The
+  // data fetch waits for the difference: firing it on the initial null renders
+  // a returning user's whole library as "Not started" before the progress
+  // arrives a second later.
+  const [user, setUser] = useState<User | null | undefined>(undefined);
+
+  const { filters, setQuery, setStatus, setDomainId, clear } = useLibraryFilters();
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user);
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user ?? null);
     });
   }, []);
 
   useEffect(() => {
-    async function fetchDomains() {
+    if (user === undefined) return;
+    let cancelled = false;
+
+    async function fetchStations() {
       setLoading(true);
-      const data = await getDomains(user?.id);
-      setDomains(data);
+      const data = await getStationIndex(user?.id);
+      if (cancelled) return;
+      setStations(data);
       setLoading(false);
     }
-    fetchDomains();
+
+    fetchStations();
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
-  const totalStations = domains.reduce((sum, d) => sum + d.station_count, 0);
-  const domainCount = domains.filter(d => d.station_count > 0).length;
+  const domains = useMemo(() => summariseDomains(stations), [stations]);
+  const filtering = isFilterActive(filters);
+  const results = useMemo(
+    () => (filtering ? filterStations(stations, filters) : []),
+    [filtering, stations, filters],
+  );
+
+  // Computed across the whole bank, not the current results, so pills don't
+  // appear and vanish as someone types.
+  const showDifficulty = useMemo(
+    () => shouldShowDifficulty(stations.map(s => s.difficulty)),
+    [stations],
+  );
+
+  const nextForYou = useMemo(
+    () => pickNextForYou(stations, dailySeed(new Date(), user?.id ?? '')),
+    [stations, user],
+  );
+
+  const surpriseMe = () => {
+    if (stations.length === 0) return;
+    const station = stations[Math.floor(Math.random() * stations.length)];
+    router.push(`/clinical-master/station/${station.id}?from=${station.domain_id}`);
+  };
 
   return (
     <div>
       <PageHeader
-        title="Station Library"
+        title="Case Library"
         subtitle={
-          totalStations > 0
-            ? `${totalStations} stations across ${domainCount} domains`
-            : 'No stations available yet'
+          stations.length > 0
+            ? `${stations.length} cases across ${domains.length} domains`
+            : 'No cases available yet'
         }
       />
 
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <motion.div
-            className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent"
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-          />
-        </div>
+        <LibrarySpinner />
       ) : (
-        <div className="divide-y divide-black/[0.06]">
-          {domains
-            .filter(d => d.station_count > 0)
-            .map((domain, index) => {
-              const colors = getDomainColor(domain.name, index);
-              // Compute average score from completed count (we only have count, so show completion)
-              const hasCompleted = domain.completed_count > 0;
+        <>
+          {!filtering && nextForYou && (
+            <NextForYou station={nextForYou} onSurpriseMe={surpriseMe} />
+          )}
 
-              return (
-                <motion.div
-                  key={domain.id}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.04 }}
+          <LibraryFilters
+            query={filters.query}
+            onQueryChange={setQuery}
+            status={filters.status}
+            onStatusChange={setStatus}
+            domains={domains}
+            domainId={filters.domainId}
+            onDomainChange={setDomainId}
+            resultLabel={
+              filtering ? `${results.length} case${results.length !== 1 ? 's' : ''}` : undefined
+            }
+          />
+
+          {filtering ? (
+            results.length === 0 ? (
+              <div className="py-12 text-center">
+                <p className="text-[15px] text-muted">No cases match that.</p>
+                <button
+                  type="button"
+                  onClick={clear}
+                  className="mt-3 text-[13px] font-semibold text-primary hover:underline focus-visible-ring"
                 >
-                  <Link
-                    href={`/dashboard/library/${domain.id}`}
-                    className="flex items-center gap-4 py-4 px-2 -mx-2 rounded-lg hover:bg-black/[0.02] transition-colors group"
+                  Clear filters
+                </button>
+              </div>
+            ) : (
+              <div>
+                {results.map(station => (
+                  <StationRow
+                    key={station.id}
+                    station={station}
+                    showDifficulty={showDifficulty}
+                    showDomain
+                  />
+                ))}
+              </div>
+            )
+          ) : (
+            <div className="divide-y divide-black/[0.06]">
+              {domains.map((domain, index) => {
+                const colors = getDomainColor(domain.name, index);
+                const hasCompleted = domain.completed_count > 0;
+
+                return (
+                  <motion.div
+                    key={domain.id}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: Math.min(index, 12) * 0.04 }}
                   >
-                    {/* Domain color indicator */}
-                    <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center text-[14px] font-bold flex-shrink-0"
-                      style={{ background: colors.bg, color: colors.text }}
+                    <Link
+                      href={`/dashboard/library/${domain.id}`}
+                      className="group -mx-2 flex items-center gap-4 rounded-lg px-2 py-4 transition-colors hover:bg-black/[0.02] focus-visible-ring"
                     >
-                      {domain.name.charAt(0)}
-                    </div>
-
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[15px] font-semibold text-heading truncate group-hover:text-primary transition-colors">
-                        {domain.name}
+                      {/* Domain color indicator */}
+                      <div
+                        className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-[14px] font-bold"
+                        style={{ background: colors.bg, color: colors.text }}
+                      >
+                        {domain.name.charAt(0)}
                       </div>
-                      <div className="text-[12px] text-muted mt-0.5">
-                        {domain.station_count} station{domain.station_count !== 1 ? 's' : ''}
-                        {hasCompleted && ` \u00B7 ${domain.completed_count} completed`}
-                        {/* Zero passes stays unsaid, matching the dashboard rule
-                            that "Passed 0 of N" is a poor thing to greet someone
-                            with. Attempts are already shown above. */}
-                        {domain.passed_count > 0 && (
-                          <span className="ml-1 font-semibold" style={{ color: '#15803D' }}>
-                            {`\u00B7 ${domain.passed_count} of ${domain.station_count} passed`}
-                          </span>
-                        )}
+
+                      {/* Content */}
+                      <div className="min-w-0 flex-1">
+                        <div className="line-clamp-2 text-[15px] font-semibold leading-snug text-heading transition-colors group-hover:text-primary">
+                          {domain.name}
+                        </div>
+                        <div className="mt-0.5 text-[12px] text-muted">
+                          {domain.station_count} case{domain.station_count !== 1 ? 's' : ''}
+                          {hasCompleted && ` · ${domain.completed_count} attempted`}
+                          {/* Zero passes stays unsaid, matching the dashboard rule
+                              that "Passed 0 of N" is a poor thing to greet someone
+                              with. Attempts are already shown above. */}
+                          {domain.passed_count > 0 && (
+                            <span className="ml-1 font-semibold" style={{ color: '#15803D' }}>
+                              {`· ${domain.passed_count} of ${domain.station_count} passed`}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Coverage, not a grade. This used to feed completed/total
-                        into ScoreBadge, whose Pass/Borderline/Refer thresholds
-                        turned "3 of 9 done" into a red "33% Refer". */}
-                    {hasCompleted && (
-                      <span className="text-[11px] font-semibold text-muted tabular-nums flex-shrink-0">
-                        {domain.completed_count}/{domain.station_count}
-                      </span>
-                    )}
+                      {/* Coverage, not a grade. This used to feed completed/total
+                          into ScoreBadge, whose Pass/Borderline/Refer thresholds
+                          turned "3 of 9 done" into a red "33% Refer". */}
+                      {hasCompleted && (
+                        <span className="flex-shrink-0 text-[11px] font-semibold tabular-nums text-muted">
+                          {domain.completed_count}/{domain.station_count}
+                        </span>
+                      )}
 
-                    {/* Chevron */}
-                    <svg
-                      className="w-4 h-4 text-muted group-hover:text-primary transition-colors flex-shrink-0"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </Link>
-                </motion.div>
-              );
-            })}
-        </div>
+                      {/* Chevron */}
+                      <svg
+                        className="h-4 w-4 flex-shrink-0 text-muted transition-colors group-hover:text-primary"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </Link>
+                  </motion.div>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
     </div>
+  );
+}
+
+export default function StationLibraryPage() {
+  // useSearchParams (via useLibraryFilters) needs a boundary for the build's
+  // prerender pass.
+  return (
+    <Suspense fallback={<LibrarySpinner />}>
+      <StationLibraryContent />
+    </Suspense>
   );
 }
