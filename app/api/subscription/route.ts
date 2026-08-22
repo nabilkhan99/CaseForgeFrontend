@@ -23,6 +23,11 @@ export interface SubscriptionResponse {
   allowed: boolean;
   /** ISO date access ends; null for monthly, which runs until it is canceled. */
   expiresAt: string | null;
+  /**
+   * Monthly only: ISO date Stripe next charges. Display copy — a rolling plan
+   * has no end date, so this must never be treated as an expiry.
+   */
+  renewsAt: string | null;
   isMonthly: boolean;
   /** Lectures are Complete-only; true for an active Complete plan or a bypass. */
   hasLectures: boolean;
@@ -57,6 +62,7 @@ export async function GET() {
     bypass: bypass || failedOpen,
     allowed,
     expiresAt: entitlement.expiresAt?.toISOString() ?? null,
+    renewsAt: entitlement.renewsAt?.toISOString() ?? null,
     isMonthly: plan ? isMonthlyPlan(plan) : false,
     hasLectures: (entitlement.hasLectures && allowed) || bypass,
     coachingDay: entitlement.coachingDay ?? null,

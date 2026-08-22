@@ -5,6 +5,8 @@ import {
   accessWindow,
   computeEntitlement,
   decideAccess,
+  preLaunchShiftMs,
+  stripeAccessWindow,
   type AccessContext,
   type EntitlementRow,
 } from './entitlements'
@@ -19,6 +21,14 @@ const row = (over: Partial<EntitlementRow>): EntitlementRow => ({
 })
 
 const DURING = new Date('2026-09-20T00:00:00Z')
+
+/** The end `accessWindow`'s day transform produces for a raw instant. */
+function accessWindowEndFor(instant: string): string {
+  const day = new Date(instant)
+  day.setUTCDate(day.getUTCDate() - 1)
+  day.setUTCHours(23, 59, 59, 999)
+  return day.toISOString()
+}
 const AFTER_PREORDER_WINDOW = new Date('2026-12-15T00:00:00Z')
 
 afterEach(() => {
@@ -322,6 +332,162 @@ describe('computeEntitlement', () => {
     expect(e).toMatchObject({ state: 'active', hasLectures: true, coachingDay: '2026-09-20' })
   })
 
+})
+
+// ── The Stripe billing period, and the pre-launch shift ──
+//
+// Stripe cannot charge today and start the period on 1 September (see
+// stripe-research.md §1c). So a pre-launch buyer's Stripe period starts the day
+// they pay while their ACCESS starts at launch — and without a correction they
+// simply lose the days in between, off a course they paid three months for.
+
+describe('stripeAccessWindow', () => {
+  it('shifts a pre-launch purchase so it keeps its full term', () => {
+    // The worked example: bought 22 Aug 2026, Stripe period 22 Aug -> 22 Nov.
+    // Access must run 1 Sept -> the last instant of 1 Dec, not 22 Nov.
+    const { start, end } = stripeAccessWindow(
+      '2026-08-22T00:00:00Z',
+      '2026-11-22T00:00:00Z',
+    )
+    expect(start.toISOString()).toBe('2026-09-01T00:00:00.000Z')
+    expect(end.toISOString()).toBe('2026-12-01T23:59:59.999Z')
+  })
+
+  it('gives the shifted window the same length as the one Stripe billed', () => {
+    // 10 days were bought before launch; 10 days are added to the end. The
+    // customer is never short-changed for pre-ordering early.
+    const shift = preLaunchShiftMs('2026-08-22T00:00:00Z', ACCESS_LAUNCH_DATE)
+    expect(shift).toBe(10 * 86_400_000)
+    const { end } = stripeAccessWindow('2026-08-22T00:00:00Z', '2026-11-22T00:00:00Z')
+    // Unshifted, the same transform would have ended access on 21 Nov.
+    expect(accessWindowEndFor('2026-11-22T00:00:00Z')).toBe('2026-11-21T23:59:59.999Z')
+    expect(end.toISOString()).toBe('2026-12-01T23:59:59.999Z')
+  })
+
+  it('shifts nothing once launch has passed', () => {
+    expect(preLaunchShiftMs('2026-09-05T10:00:00Z', ACCESS_LAUNCH_DATE)).toBe(0)
+    expect(preLaunchShiftMs(ACCESS_LAUNCH_DATE.toISOString(), ACCESS_LAUNCH_DATE)).toBe(0)
+  })
+
+  it('agrees exactly with the calendar fallback for a post-launch buy', () => {
+    // Bought 5 Sept, Stripe period ends 5 Dec. Both paths must land on the same
+    // instant, or two customers who bought a day apart get different rules.
+    const stripeEnd = stripeAccessWindow('2026-09-05T10:00:00Z', '2026-12-05T10:00:00Z').end
+    expect(stripeEnd.toISOString()).toBe(accessWindow('2026-09-05T10:00:00Z').end.toISOString())
+  })
+
+  it('honours a brought-forward launch date', () => {
+    const early = new Date('2026-08-22T00:00:00Z')
+    const { start, end } = stripeAccessWindow(
+      '2026-08-22T00:00:00Z',
+      '2026-11-22T00:00:00Z',
+      early,
+    )
+    expect(start.toISOString()).toBe('2026-08-22T00:00:00.000Z')
+    expect(end.toISOString()).toBe('2026-11-21T23:59:59.999Z')
+  })
+})
+
+describe('computeEntitlement with a recorded Stripe period', () => {
+  const preLaunchStripeRow = (over: Partial<EntitlementRow> = {}): EntitlementRow => ({
+    plan: 'self_study',
+    status: 'paid',
+    created_at: '2026-08-22T00:00:00Z',
+    access_starts_at: '2026-08-22T00:00:00Z',
+    access_ends_at: '2026-11-22T00:00:00Z',
+    ...over,
+  })
+
+  it('grants a 22 August pre-order 1 September to 1 December', () => {
+    const e = computeEntitlement([preLaunchStripeRow()], new Date('2026-09-10T00:00:00Z'))
+    expect(e.state).toBe('active')
+    expect(e.expiresAt?.toISOString()).toBe('2026-12-01T23:59:59.999Z')
+  })
+
+  it('still grants nothing before launch day', () => {
+    // Money moved on 22 August; the course does not open until 1 September.
+    const e = computeEntitlement([preLaunchStripeRow()], new Date('2026-08-25T00:00:00Z'))
+    expect(e.state).toBe('none')
+    expect(e.plan).toBe('self_study')
+    expect(e.expiresAt?.toISOString()).toBe('2026-12-01T23:59:59.999Z')
+  })
+
+  it('lapses to read-only the instant the shifted window closes', () => {
+    const end = new Date('2026-12-01T23:59:59.999Z')
+    expect(computeEntitlement([preLaunchStripeRow()], end).state).toBe('active')
+    expect(computeEntitlement([preLaunchStripeRow()], new Date(end.getTime() + 1)).state).toBe(
+      'read_only',
+    )
+  })
+
+  it('falls back to calendar months for a legacy row with no period', () => {
+    // Sarah, Phyo and Pavi: hand-provisioned before the columns existed. They
+    // must keep the window they were sold.
+    const e = computeEntitlement(
+      [{ plan: 'complete', status: 'paid', created_at: '2026-07-28T09:00:00Z' }],
+      DURING,
+    )
+    expect(e.expiresAt?.toISOString()).toBe('2026-11-30T23:59:59.999Z')
+  })
+
+  it('ignores an unparseable period rather than granting a NaN window', () => {
+    const e = computeEntitlement([preLaunchStripeRow({ access_ends_at: 'not-a-date' })], DURING)
+    expect(e.state).toBe('active')
+    expect(e.expiresAt?.toISOString()).toBe('2026-11-30T23:59:59.999Z')
+  })
+
+  it('reports the rolling plan’s next payment without giving it an expiry', () => {
+    // A live rolling plan must keep outranking a fixed term in the fold, which
+    // it does only while it has no end date. The renewal date is display copy.
+    const e = computeEntitlement(
+      [
+        {
+          plan: 'self_study_monthly',
+          status: 'paid',
+          created_at: '2026-09-01T00:00:00Z',
+          access_ends_at: '2026-10-01T00:00:00Z',
+        },
+      ],
+      DURING,
+    )
+    expect(e.state).toBe('active')
+    expect(e.expiresAt).toBeUndefined()
+    expect(e.renewsAt?.toISOString()).toBe('2026-10-01T00:00:00.000Z')
+  })
+
+  it('still ranks a live rolling plan above a fixed term that ends', () => {
+    const monthly: EntitlementRow = {
+      plan: 'self_study_monthly',
+      status: 'paid',
+      created_at: '2026-09-01T00:00:00Z',
+      access_ends_at: '2026-10-01T00:00:00Z',
+    }
+    const term: EntitlementRow = {
+      plan: 'self_study',
+      status: 'paid',
+      created_at: '2026-09-01T00:00:00Z',
+      access_ends_at: '2026-12-01T00:00:00Z',
+    }
+    expect(computeEntitlement([monthly, term], DURING).plan).toBe('self_study_monthly')
+    expect(computeEntitlement([term, monthly], DURING).plan).toBe('self_study_monthly')
+  })
+
+  it('surfaces the coaching day on a pre-launch Complete, so it can be booked', () => {
+    // A Portal upgrade lands a `complete` row with no coaching day. The prompt
+    // to book one has to appear before the course opens, not after.
+    const withDay = computeEntitlement(
+      [preLaunchStripeRow({ plan: 'complete', coaching_day: '2026-09-12' })],
+      new Date('2026-08-25T00:00:00Z'),
+    )
+    expect(withDay.state).toBe('none')
+    expect(withDay.coachingDay).toBe('2026-09-12')
+
+    const without = computeEntitlement(
+      [preLaunchStripeRow({ plan: 'complete' })],
+      new Date('2026-08-25T00:00:00Z'),
+    )
+    expect(without.coachingDay).toBeNull()
+  })
 })
 
 describe('decideAccess', () => {

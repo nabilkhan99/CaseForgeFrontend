@@ -1,4 +1,4 @@
-import { ACCESS_OPENS, PLANS, isSubscriptionPlan } from './plans'
+import { ACCESS_OPENS, PLANS, isRollingPlan } from './plans'
 
 /**
  * What a user's purchases entitle them to, and until when.
@@ -8,14 +8,19 @@ import { ACCESS_OPENS, PLANS, isSubscriptionPlan } from './plans'
  * decision), so provisioning, tier gating and expiry all hang off
  * `computeEntitlement`.
  *
- * Access model (locked 2026-08-20):
- * - One-off plans run 3 calendar months from purchase, except preorder-era
- *   purchases, whose clock starts at launch (1 Sept 2026). Access is not live
- *   before the window starts: a preorder bought today is `none` until launch.
+ * Access model (locked 2026-08-20, Stripe periods added 2026-08-22):
+ * - Fixed-term plans run for the length of the Stripe subscription period
+ *   recorded on the row (`access_starts_at` / `access_ends_at`), shifted
+ *   forward so a pre-launch buyer loses none of it — see
+ *   {@link stripeAccessWindow}. Rows written before those columns existed fall
+ *   back to the calendar-month arithmetic in {@link accessWindow}.
+ * - Access is not live before the window starts: a preorder bought today is
+ *   `none` until launch.
  * - Monthly runs while the subscription lives; Stripe ends it at period end
  *   (`customer.subscription.deleted` / a `canceled|unpaid|incomplete_expired`
  *   `customer.subscription.updated` → webhook flips status to `canceled`), so a
- *   `canceled` row means access has already lapsed.
+ *   `canceled` row means access has already lapsed. `access_ends_at` on a
+ *   rolling row is the NEXT renewal date, and is display-only.
  * - Lapsed access is read-only: history and feedback stay visible, stations
  *   and lectures lock behind a renew prompt.
  * - Lectures and coaching days belong to Complete only.
@@ -37,6 +42,19 @@ export interface EntitlementRow {
   status: string
   created_at: string
   coaching_day?: string | null
+  /**
+   * Start of the Stripe billing period behind this row. Optional: rows written
+   * before the subscription migration (Sarah, Phyo, Pavi and the test rows)
+   * have neither column, and fall back to calendar arithmetic on `created_at`.
+   */
+  access_starts_at?: string | null
+  /**
+   * End of the Stripe billing period behind this row (item-level
+   * `current_period_end`). On a fixed-term plan this is when access ends, once
+   * shifted for a pre-launch purchase. On the rolling plan it is the next
+   * renewal date and is display-only.
+   */
+  access_ends_at?: string | null
 }
 
 export interface Entitlement {
@@ -46,8 +64,14 @@ export interface Entitlement {
   /** Complete-tier extras: lectures, coaching day. Active state only. */
   hasLectures: boolean
   coachingDay?: string | null
-  /** One-off plans only; undefined for monthly (runs until canceled). */
+  /** Fixed-term plans only; undefined for the rolling plan (runs until canceled). */
   expiresAt?: Date
+  /**
+   * Rolling plan only: when Stripe next charges. Display copy — deliberately
+   * NOT `expiresAt`, because a live rolling plan has no end and must keep
+   * outranking a fixed term in the precedence fold.
+   */
+  renewsAt?: Date
 }
 
 /**
@@ -63,8 +87,12 @@ const KNOWN_PLANS: ReadonlySet<string> = new Set(PLANS.map((p) => p.key))
  * Hardcoding `plan === 'self_study_monthly'` here would mean a second rolling
  * plan silently became a 90-day one-off: active for 90 days from purchase
  * whether or not the subscription was still alive.
+ *
+ * Now bound to `isRollingPlan`, not `isSubscriptionPlan`: since the migration
+ * every checkout plan IS a Stripe subscription, so "is a subscription" no
+ * longer distinguishes anything. Renewal does.
  */
-export const isMonthlyPlan = isSubscriptionPlan
+export const isMonthlyPlan = isRollingPlan
 
 /** Same day-of-month `months` later, clamped to the last day of a shorter month. */
 function addCalendarMonthsUtc(date: Date, months: number): Date {
@@ -109,6 +137,70 @@ export function accessWindow(
   return { start, end: endOfUtcDay(previousUtcDay(sameDayThreeMonthsOn)) }
 }
 
+/**
+ * How far a pre-launch purchase's access has to be pushed back, in ms.
+ *
+ * Stripe cannot charge today and start the billing period on 1 September (see
+ * stripe-research.md §1c: `billing_cycle_anchor` prorates, `trial_end` defers
+ * the money). So a buyer on 22 August gets a Stripe period of 22 Aug → 22 Nov
+ * while their *access* only opens on 1 September. Left alone that silently
+ * eats 10 days of a three-month course.
+ *
+ * Zero once launch has passed, so post-launch buyers are unaffected.
+ */
+export function preLaunchShiftMs(createdAt: string, launchDate: Date): number {
+  const purchased = new Date(createdAt)
+  if (Number.isNaN(purchased.getTime()) || purchased >= launchDate) return 0
+  return launchDate.getTime() - purchased.getTime()
+}
+
+/**
+ * Access window of a fixed-term purchase whose Stripe period we recorded.
+ *
+ * Start: the launch floor, exactly as before — money changing hands early does
+ * not open the course early.
+ *
+ * End: Stripe's period end plus {@link preLaunchShiftMs}, so the customer gets
+ * the full length they paid for however early they bought. The end is then
+ * squared to the last instant of the *previous* UTC day, the same transform
+ * {@link accessWindow} applies — which makes the two agree exactly for a
+ * post-launch purchase (a 5 Sept buy ends 4 Dec 23:59:59.999 either way) and
+ * turns the worked pre-launch example into 1 Sept → the last instant of 1 Dec.
+ */
+export function stripeAccessWindow(
+  createdAt: string,
+  accessEndsAt: string,
+  launchDate: Date = ACCESS_LAUNCH_DATE,
+): { start: Date; end: Date } {
+  const purchased = new Date(createdAt)
+  const start = purchased < launchDate ? launchDate : purchased
+  const periodEnd = new Date(accessEndsAt)
+  const shifted = new Date(periodEnd.getTime() + preLaunchShiftMs(createdAt, launchDate))
+  return { start, end: endOfUtcDay(previousUtcDay(shifted)) }
+}
+
+/** A timestamp string that actually parses, or null. */
+function parseDate(value: string | null | undefined): Date | null {
+  if (!value) return null
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+/**
+ * The access window for a fixed-term row: Stripe's period when we have it,
+ * calendar months from `created_at` when we do not.
+ *
+ * The fallback is not dead code — it covers the three hand-provisioned
+ * pre-launch rows and every order taken before this migration, none of which
+ * carry `access_ends_at`.
+ */
+function fixedTermWindow(row: EntitlementRow, launchDate: Date): { start: Date; end: Date } {
+  const recorded = parseDate(row.access_ends_at)
+  return recorded
+    ? stripeAccessWindow(row.created_at, recorded.toISOString(), launchDate)
+    : accessWindow(row.created_at, launchDate)
+}
+
 function entitlementOf(row: EntitlementRow, now: Date, launchDate: Date): Entitlement | null {
   if (row.status === 'refunded') return null
 
@@ -131,18 +223,32 @@ function entitlementOf(row: EntitlementRow, now: Date, launchDate: Date): Entitl
     // Status is checked BEFORE the launch floor: a canceled subscription is
     // dead whatever the date, and must never read as a pending plan.
     if (row.status !== 'paid') return { state: 'read_only', plan: row.plan, hasLectures: false }
-    if (now < launchDate) return { state: 'none', plan: row.plan, hasLectures: false }
-    return { state: 'active', plan: row.plan, hasLectures: false }
+    // `renewsAt` is display only — see the Entitlement doc comment. Access on a
+    // rolling plan is decided by status, because Stripe is the thing that ends
+    // it, and a payment that fails mid-period must not leave a stale end date
+    // granting access.
+    const renewsAt = parseDate(row.access_ends_at) ?? undefined
+    if (now < launchDate) return { state: 'none', plan: row.plan, hasLectures: false, renewsAt }
+    return { state: 'active', plan: row.plan, hasLectures: false, renewsAt }
   }
 
   if (row.status !== 'paid') return null
-  const { start, end } = accessWindow(row.created_at, launchDate)
+  const { start, end } = fixedTermWindow(row, launchDate)
   const complete = row.plan === 'complete' || row.plan === 'intensive'
 
   // Before the window opens (preorder-era buys, whose clock starts at launch)
   // the purchase exists but grants nothing yet. `expiresAt` is still populated
-  // so callers can say when access begins and ends.
-  if (now < start) return { state: 'none', plan: row.plan, hasLectures: false, expiresAt: end }
+  // so callers can say when access begins and ends, and the coaching day comes
+  // with it: "you have not booked your day" is true — and worth prompting —
+  // well before the course opens.
+  if (now < start)
+    return {
+      state: 'none',
+      plan: row.plan,
+      hasLectures: false,
+      coachingDay: complete ? row.coaching_day ?? null : undefined,
+      expiresAt: end,
+    }
   if (now > end) return { state: 'read_only', plan: row.plan, hasLectures: false, expiresAt: end }
   return {
     state: 'active',
