@@ -286,12 +286,31 @@ export async function getLastStation(userId: string): Promise<LastStation | null
 /**
  * Fetch session history for the history page
  */
+/**
+ * What actually happened to a session, as one word the UI can switch on.
+ *
+ * 'unfinished' is the important addition: roughly half of every real user's
+ * sessions are abandoned, and History used to show none of them, so a trainee
+ * who bailed at minute six saw no trace of it anywhere in the product.
+ */
+export type SessionOutcome = 'scored' | 'marking' | 'stalled' | 'unfinished' | 'unscored';
+
+/** Past this age, a session still waiting on marking is stuck rather than slow. */
+const MARKING_STALLED_MS = 60 * 60 * 1000;
+
 export interface SessionHistoryItem {
     id: string;
     stationId: string;
     stationTitle: string;
     domainName: string;
+    /** completed_at when there is one, else started_at — abandoned rows never get one. */
     completedAt: string;
+    startedAt: string;
+    /** Raw clinical_sessions.status, for surfaces that need more than the outcome. */
+    status: string;
+    outcome: SessionOutcome;
+    /** How far into the consultation the user got, in ms. Unfinished rows only. */
+    elapsedMs: number | null;
     verdict: string | null;
     weightedScore: number;
     maxScore: number;
@@ -302,19 +321,60 @@ export interface SessionHistoryItem {
     marking: boolean;
 }
 
+/**
+ * Shape of one history row as PostgREST returns it. Declared by hand because
+ * the supabase-js select parser can't type the `transcript->-1->>start_ms`
+ * JSON path, and the alternative (fetching whole transcripts) would pull tens
+ * of kilobytes per row into a list view.
+ */
+interface SessionHistoryRow {
+    id: string;
+    status: string | null;
+    started_at: string | null;
+    completed_at: string | null;
+    lastTurnMs: string | number | null;
+    stations: { id: string; title: string; domains: { name: string } | null } | null;
+    session_results: {
+        verdict: string | null;
+        weighted_score: number | null;
+        max_score: number | null;
+    } | null;
+}
+
+export interface SessionHistoryOptions {
+    /**
+     * Include sessions the user walked out of. History wants them (they are
+     * half the story); the dashboard's three-row recap does not, so completed
+     * work stays the thing it leads with.
+     */
+    includeUnfinished?: boolean;
+}
+
 export async function getSessionHistory(
     userId: string,
     limit: number = 20,
-    offset: number = 0
+    offset: number = 0,
+    options: SessionHistoryOptions = {}
 ): Promise<SessionHistoryItem[]> {
     const supabase = createClient();
 
-    const { data: sessions } = await supabase
+    const statuses = options.includeUnfinished
+        ? ['completed', 'processing', 'abandoned']
+        : ['completed', 'processing'];
+
+    // `lastTurnMs` is the start_ms of the final transcript turn — how far into
+    // the consultation the user got. Selecting the JSON path rather than the
+    // whole transcript keeps a 20-row page small.
+    // Ordered by started_at because 'processing' and 'abandoned' rows have no
+    // completed_at at all, and a NULL sorts first on a descending completed_at.
+    const response = await supabase
         .from('clinical_sessions')
         .select(`
             id,
             status,
+            started_at,
             completed_at,
+            lastTurnMs:transcript->-1->>start_ms,
             stations (
                 id,
                 title,
@@ -327,43 +387,51 @@ export async function getSessionHistory(
             )
         `)
         .eq('user_id', userId)
-        .in('status', ['completed', 'processing'])
-        .order('completed_at', { ascending: false })
+        .in('status', statuses)
+        .order('started_at', { ascending: false })
         .range(offset, offset + limit - 1);
 
+    const sessions = response.data as unknown as SessionHistoryRow[] | null;
     if (!sessions) return [];
 
     return sessions.map(session => {
-        const station = session.stations as unknown as {
-            id: string;
-            title: string;
-            domains: { name: string } | null;
-        } | null;
-
+        const station = session.stations;
         // session_results is a single object (not an array) due to unique constraint on session_id
-        const result = session.session_results as unknown as {
-            verdict: string | null;
-            weighted_score: number | null;
-            max_score: number | null;
-        } | null;
+        const result = session.session_results;
 
         // A verdict with a 0.0 weighted score is a legacy artefact (the engine
         // marking an empty pre-engine transcript), not a real consultation mark —
         // render those neutrally rather than as a red FAIL row.
         const scored = Boolean(result?.verdict) && Number(result?.weighted_score ?? 0) > 0;
-        // A 'processing' session from the last hour may still get results; anything
-        // older without a verdict is a legacy/unmarked session that never will.
-        const ageMs = session.completed_at
-            ? Date.now() - new Date(session.completed_at).getTime()
-            : Number.POSITIVE_INFINITY;
-        const marking = !scored && session.status === 'processing' && ageMs < 60 * 60 * 1000;
+        // 'processing' rows carry no completed_at (it is stamped when the result
+        // lands), so age has to fall back to started_at — reading it off
+        // completed_at alone made every processing row look instantly stale.
+        const endedAt = session.completed_at || session.started_at || '';
+        const ageMs = endedAt ? Date.now() - new Date(endedAt).getTime() : Number.POSITIVE_INFINITY;
+        const awaitingMarking = !scored && session.status === 'processing';
+        const marking = awaitingMarking && ageMs < MARKING_STALLED_MS;
+        const elapsedMs = session.lastTurnMs == null ? null : Number(session.lastTurnMs);
+
+        const outcome: SessionOutcome = session.status === 'abandoned'
+            ? 'unfinished'
+            : scored
+                ? 'scored'
+                : marking
+                    ? 'marking'
+                    : awaitingMarking
+                        ? 'stalled'
+                        : 'unscored';
 
         return {
             id: session.id,
             stationId: station?.id || '',
             stationTitle: station?.title || 'Unknown Station',
             domainName: station?.domains?.name || 'General Practice',
-            completedAt: session.completed_at || '',
+            completedAt: endedAt,
+            startedAt: session.started_at || '',
+            status: session.status || '',
+            outcome,
+            elapsedMs: elapsedMs != null && Number.isFinite(elapsedMs) ? elapsedMs : null,
             verdict: result?.verdict ?? null,
             weightedScore: Number(result?.weighted_score ?? 0),
             maxScore: Number(result?.max_score ?? MAX_WEIGHTED),
