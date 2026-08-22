@@ -230,7 +230,10 @@ export async function getBlueprintDomains(userId: string): Promise<BlueprintDoma
 export async function getLastStation(userId: string): Promise<LastStation | null> {
     const supabase = createClient();
 
-    // Get most recent session that's not completed, abandoned, or processing
+    // Most recent session the user hasn't finished. Sessions older than a day
+    // are crashes or closed tabs that never got marked abandoned — not
+    // something to resume.
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: session } = await supabase
         .from('clinical_sessions')
         .select(`
@@ -249,9 +252,10 @@ export async function getLastStation(userId: string): Promise<LastStation | null
         .neq('status', 'completed')
         .neq('status', 'abandoned')
         .neq('status', 'processing')
+        .gte('started_at', dayAgo)
         .order('started_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
     if (!session || !session.stations) {
         return null;

@@ -95,11 +95,30 @@ function LiveConsultationContent() {
     setMicMuted(newMuted);
   };
 
-  // Abandon: tear down without saving or generating feedback.
+  // Abandon: tear down without saving or generating feedback, and record it —
+  // otherwise the row stays 'live' and haunts the dashboard as "Unfinished".
+  const markAbandoned = useCallback(() => {
+    if (isEndingRef.current) return;
+    const body = JSON.stringify({ sessionId });
+    if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+      navigator.sendBeacon('/api/clinical-master/abandon-session', new Blob([body], { type: 'text/plain' }));
+    } else {
+      fetch('/api/clinical-master/abandon-session', { method: 'POST', body, keepalive: true }).catch(() => {});
+    }
+  }, [sessionId]);
+
   const handleLeaveWithoutFinishing = useCallback(() => {
     disconnect();
+    markAbandoned();
     router.push('/dashboard/library');
-  }, [disconnect, router]);
+  }, [disconnect, markAbandoned, router]);
+
+  // Closing the tab or navigating away mid-consultation is also an abandon.
+  useEffect(() => {
+    const onHide = () => { if (!isEndingRef.current && !isProcessing) markAbandoned(); };
+    window.addEventListener('pagehide', onHide);
+    return () => window.removeEventListener('pagehide', onHide);
+  }, [markAbandoned, isProcessing]);
 
   const patientInitials = station
     ? station.patient_name.split(' ').map(n => n[0]).join('').slice(0, 2)
@@ -197,9 +216,9 @@ function LiveConsultationContent() {
             Headphones help. The patient speaks first; the clock starts when they do.
           </p>
         </div>
-        <Link href="/dashboard/library" className="text-[13px] font-semibold text-primary hover:underline">
+        <button onClick={handleLeaveWithoutFinishing} className="text-[13px] font-semibold text-primary hover:underline cursor-pointer">
           Cancel
-        </Link>
+        </button>
       </div>
     );
   }

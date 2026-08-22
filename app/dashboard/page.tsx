@@ -376,7 +376,9 @@ function DashboardContent() {
                     </span>
                   </div>
                 </div>
-                <Link href={`/clinical-master/session/${lastStation.sessionId}?stationId=${lastStation.id}`} className="sm:w-auto">
+                {/* Back through the brief and reading time — a restart that
+                    drops straight into a live consultation skips both. */}
+                <Link href={`/clinical-master/station/${lastStation.id}`} className="sm:w-auto">
                   <SecondaryButton size="sm" fullWidth>Restart case</SecondaryButton>
                 </Link>
               </div>
