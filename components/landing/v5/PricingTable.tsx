@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowRight, Info } from 'lucide-react';
@@ -161,7 +161,7 @@ function BillingToggle({ billing, onChange }: BillingToggleProps) {
                 onChange(option.key);
                 trackEvent('pricing_billing_toggled', { billing: option.key });
               }}
-              className={`relative isolate rounded-full px-4 py-2 text-[13px] font-semibold transition-colors sm:text-sm ${
+              className={`relative isolate inline-flex min-h-[44px] items-center rounded-full px-4 py-2 text-[13px] font-semibold transition-colors sm:text-sm ${
                 active ? 'text-heading' : 'text-muted hover:text-heading'
               }`}
             >
@@ -190,27 +190,58 @@ function BillingToggle({ billing, onChange }: BillingToggleProps) {
   );
 }
 
+/**
+ * The £500 guarantee's material condition, reachable on a phone.
+ *
+ * This was a hover popover plus a `title` attribute on a 14x14 button with no
+ * click handler — so on touch, where most of the traffic is, the one condition
+ * attached to a £500 promise ("you must first pass all 200 AI stations") could
+ * not be read at all. It is now a real disclosure: tap or Enter toggles it,
+ * `aria-expanded` describes it, and the trigger is a 44px target.
+ */
 function GuaranteeInfo({ align = 'left' }: { align?: 'left' | 'right' }) {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+
   return (
-    <div className="group relative inline-flex items-center gap-1">
+    <div className="relative inline-flex items-center gap-1">
       <p className="text-[11px] font-medium text-[#27500A] sm:text-sm">SCA Guarantee</p>
       <button
         type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-controls={panelId}
         aria-label="About the SCA Guarantee: conditional on passing all 200 AI stations"
-        title="Conditional guarantee: to qualify you must first pass all 200 AI stations."
-        className="inline-flex shrink-0 items-center justify-center rounded-full text-[#27500A]/70 transition-colors hover:text-[#27500A] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#27500A]/40"
+        // -m-2 keeps the 44px target from shifting the line it sits on.
+        className="-m-2 inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full p-2 text-[#27500A]/70 transition-colors hover:text-[#27500A]"
       >
         <Info className="h-3.5 w-3.5" aria-hidden="true" />
       </button>
-      <div
-        role="tooltip"
-        className={`pointer-events-none absolute top-full z-20 mt-1 w-52 rounded-lg border border-heading/10 bg-white p-2.5 text-left text-[10px] leading-snug text-body opacity-0 shadow-elevation-3 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 sm:text-[11px] ${
-          align === 'right' ? 'right-0' : 'left-0'
-        }`}
-      >
-        This is a <span className="font-medium text-[#27500A]">conditional</span> guarantee — to qualify
-        you must first pass all 200 AI stations.
-      </div>
+      {open && (
+        <>
+          {/* Tapping anywhere else dismisses it rather than activating whatever
+              is underneath — the same rule as every other menu in the product. */}
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-10 cursor-default"
+          />
+          <motion.div
+            id={panelId}
+            role="note"
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.15 }}
+            className={`absolute top-full z-20 mt-1 w-52 rounded-lg border border-heading/10 bg-white p-2.5 text-left text-[11px] leading-snug text-body shadow-elevation-3 sm:text-[11px] ${
+              align === 'right' ? 'right-0' : 'left-0'
+            }`}
+          >
+            This is a <span className="font-medium text-[#27500A]">conditional</span> guarantee &mdash; to
+            qualify you must first pass all 200 AI stations.
+          </motion.div>
+        </>
+      )}
     </div>
   );
 }

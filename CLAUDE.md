@@ -62,7 +62,6 @@ Local React state only. Supabase is source of truth; the WebRTC realtime connect
 
 - **Font:** Plus Jakarta Sans (body), JetBrains Mono (code)
 - **Palette:** Warm amber/stone — primary `#B45309`, surfaces `#FAFAF7`/`#FFFCF8`/`#F5F0EB`, heading `#1C1917`, body `#44403C`
-- **Legacy:** `medical-blue: #0EA5E9` kept for portfolio tool compat
 - **Shadows:** `elevation-1` through `elevation-4` in tailwind config
 - **Animations:** Framer Motion required for all UI work. Custom keyframes for marquee, shimmer, border-beam in tailwind config.
 - **Style:** Typography-driven flowing layouts, NOT boxy card grids. Only box things that earn a container. Features as numbered rows, stats as big type between rules, testimonials as big quote text. No purple (too "AI"). Warm earth tones.
