@@ -3,7 +3,10 @@ import type Stripe from 'stripe';
 import { getStripe } from '@/lib/commerce/stripe';
 import { getServerEntitlement } from '@/lib/commerce/serverEntitlement';
 import { exactEmailPattern } from '@/lib/commerce/emailFilter';
-import { stripePortalConfigurationId } from '@/lib/commerce/plans';
+import {
+  stripePortalConfigurationId,
+  stripePortalNoSwitchConfigurationId,
+} from '@/lib/commerce/plans';
 import { customerSearchQuery, pickPortalTarget } from '@/lib/commerce/billingPortal';
 
 interface PortalBody {
@@ -30,15 +33,24 @@ interface PortalBody {
  * answers 404 with a message the UI can show, not a 500.
  *
  * What the Portal is *allowed* to do — which prices it offers, whether it
- * prorates, how it cancels — is Dashboard configuration, selected here with
- * `STRIPE_PORTAL_CONFIGURATION_ID` when one is set.
+ * prorates, how it cancels — is Dashboard configuration, and WHICH
+ * configuration is a decision about this customer: see {@link portalConfigFor}.
  */
 export async function POST(request: Request) {
-  const { user, supabase } = await getServerEntitlement();
+  const { user, supabase, entitlement, failedOpen } = await getServerEntitlement();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  // Complete is the top plan: there is nothing above it to switch to, and the
+  // Portal's switcher is symmetric, so a configuration that could sell them an
+  // upgrade can only offer them a DOWNGRADE. `failedOpen` counts as "treat them
+  // as Complete": when the entitlement lookup broke we do not know what they
+  // hold, and the safe unknown is the configuration that cannot change a plan.
+  // They keep their card, their invoices and cancellation either way.
+  const holdsTopPlan =
+    failedOpen || entitlement?.plan === 'complete' || entitlement?.plan === 'intensive';
 
   // A malformed or absent body is simply "no flow" — the Portal landing page is
   // always a valid destination, and billing must not 400 on a parse slip.
@@ -48,6 +60,22 @@ export async function POST(request: Request) {
     if (body?.flow === 'subscription_update') flow = 'subscription_update';
   } catch {
     flow = undefined;
+  }
+
+  // Asking for the plan switcher from a plan with nothing above it. The UI does
+  // not offer this (canSwitchPlan refuses Complete), so it means a stale page
+  // or a hand-made request — answer with something a human can read rather than
+  // opening a Portal whose configuration would refuse the flow with a 500.
+  if (flow === 'subscription_update' && holdsTopPlan) {
+    return NextResponse.json(
+      {
+        error: 'no_upgrade_available',
+        message: failedOpen
+          ? "We couldn't check your current plan just now — please reload and try again."
+          : 'Complete already includes everything, so there is no plan to switch to. Use “Manage billing” for invoices, your card, or to cancel.',
+      },
+      { status: 400 },
+    );
   }
 
   try {
@@ -85,7 +113,7 @@ export async function POST(request: Request) {
     }
 
     const origin = new URL(request.url).origin;
-    const configuration = stripePortalConfigurationId();
+    const configuration = portalConfigFor(holdsTopPlan);
     // The plan switcher needs a subscription to switch. Without one we fall
     // back to the landing page rather than failing: a customer whose row
     // predates the subscription migration can still manage their billing.
@@ -112,4 +140,21 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+}
+
+/**
+ * Which Portal configuration this customer gets.
+ *
+ * Complete holders get the one with `subscription_update` disabled, so the
+ * only plan move the Portal can offer them — down — is not offered at all.
+ * Everyone else gets the switching configuration, which is the upgrade path.
+ *
+ * Both fall back: an unset `STRIPE_PORTAL_CONFIGURATION_ID_NO_SWITCH` degrades
+ * to the switching configuration, and an unset switching id degrades to the
+ * account default. Billing must keep working while the Dashboard catches up.
+ */
+function portalConfigFor(holdsTopPlan: boolean): string | null {
+  const switching = stripePortalConfigurationId();
+  if (!holdsTopPlan) return switching;
+  return stripePortalNoSwitchConfigurationId() ?? switching;
 }

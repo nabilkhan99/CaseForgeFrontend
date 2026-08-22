@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   customersSearch: vi.fn(),
   user: { id: 'user-1', email: 'buyer@nhs.net' } as { id: string; email: string } | null,
   rows: [] as Array<Record<string, unknown>>,
+  entitlement: { plan: 'self_study', hasLectures: false } as Record<string, unknown> | undefined,
+  failedOpen: false,
 }))
 
 vi.mock('server-only', () => ({}))
@@ -29,6 +31,8 @@ vi.mock('@/lib/commerce/stripe', () => ({
 vi.mock('@/lib/commerce/serverEntitlement', () => ({
   getServerEntitlement: async () => ({
     user: mocks.user,
+    entitlement: mocks.entitlement,
+    failedOpen: mocks.failedOpen,
     supabase: {
       from: () => ({
         select: () => ({ ilike: async () => ({ data: mocks.rows, error: null }) }),
@@ -61,6 +65,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.unstubAllEnvs()
   mocks.user = { id: 'user-1', email: 'buyer@nhs.net' }
+  mocks.entitlement = { plan: 'self_study', hasLectures: false }
+  mocks.failedOpen = false
   mocks.rows = [liveRow]
   mocks.portalCreate.mockResolvedValue({ url: 'https://billing.stripe.com/p/session_1' })
   mocks.customersSearch.mockResolvedValue({ data: [] })
@@ -154,5 +160,86 @@ describe('opening the portal', () => {
 
     expect(response.status).toBe(200)
     expect(mocks.portalCreate.mock.calls[0][0].flow_data).toBeUndefined()
+  })
+
+  // ── Which configuration, and therefore which moves the Portal allows ──
+  //
+  // Stripe has no "upgrades only" flag: `subscription_update.products` is a
+  // flat allow-list and the switcher is symmetric over it. A configuration
+  // that sells Complete to a Self-Study customer will equally sell Self-Study
+  // to a Complete one — and on a non-renewing term that downgrade pays out as
+  // a customer-balance CREDIT no future invoice will ever consume. Picking the
+  // configuration per customer is the only thing that prevents it.
+
+  it('opens Complete holders on the configuration that cannot switch plan', async () => {
+    vi.stubEnv('STRIPE_PORTAL_CONFIGURATION_ID', 'bpc_switching')
+    vi.stubEnv('STRIPE_PORTAL_CONFIGURATION_ID_NO_SWITCH', 'bpc_no_switch')
+    mocks.entitlement = { plan: 'complete', hasLectures: true }
+
+    await post()
+
+    expect(mocks.portalCreate.mock.calls[0][0].configuration).toBe('bpc_no_switch')
+  })
+
+  it('treats Intensive the same way — it holds everything Complete does', async () => {
+    vi.stubEnv('STRIPE_PORTAL_CONFIGURATION_ID', 'bpc_switching')
+    vi.stubEnv('STRIPE_PORTAL_CONFIGURATION_ID_NO_SWITCH', 'bpc_no_switch')
+    mocks.entitlement = { plan: 'intensive', hasLectures: true }
+
+    await post()
+
+    expect(mocks.portalCreate.mock.calls[0][0].configuration).toBe('bpc_no_switch')
+  })
+
+  it('opens Self-Study on the switching configuration, in either shape', async () => {
+    vi.stubEnv('STRIPE_PORTAL_CONFIGURATION_ID', 'bpc_switching')
+    vi.stubEnv('STRIPE_PORTAL_CONFIGURATION_ID_NO_SWITCH', 'bpc_no_switch')
+
+    for (const plan of ['self_study', 'self_study_monthly']) {
+      mocks.portalCreate.mockClear()
+      mocks.entitlement = { plan, hasLectures: false }
+      await post()
+      expect(mocks.portalCreate.mock.calls[0][0].configuration).toBe('bpc_switching')
+    }
+  })
+
+  it('falls back to the switching configuration when no-switch is unset', async () => {
+    // Billing keeps working while the Dashboard catches up: worse to 500 a
+    // Complete holder out of their invoices than to leave a downgrade open.
+    vi.stubEnv('STRIPE_PORTAL_CONFIGURATION_ID', 'bpc_switching')
+    mocks.entitlement = { plan: 'complete', hasLectures: true }
+
+    await post()
+
+    expect(mocks.portalCreate.mock.calls[0][0].configuration).toBe('bpc_switching')
+  })
+
+  it('refuses the plan switcher to someone already on the top plan', async () => {
+    // The UI never offers this (canSwitchPlan refuses Complete), so it means a
+    // stale page. A readable 400 beats a Portal that 500s because its
+    // configuration has subscription_update turned off.
+    mocks.entitlement = { plan: 'complete', hasLectures: true }
+
+    const { status, body } = await post({ flow: 'subscription_update' })
+
+    expect(status).toBe(400)
+    expect(body.error).toBe('no_upgrade_available')
+    expect(body.message).toContain('Complete already includes everything')
+    expect(mocks.portalCreate).not.toHaveBeenCalled()
+  })
+
+  it('treats a broken entitlement lookup as "cannot switch"', async () => {
+    // fail-open hands out access, but it must not hand out a plan CHANGE: we
+    // do not know what they hold. Card, invoices and cancel still work.
+    vi.stubEnv('STRIPE_PORTAL_CONFIGURATION_ID', 'bpc_switching')
+    vi.stubEnv('STRIPE_PORTAL_CONFIGURATION_ID_NO_SWITCH', 'bpc_no_switch')
+    mocks.failedOpen = true
+    mocks.entitlement = undefined
+
+    const switcher = await post({ flow: 'subscription_update' })
+    expect(switcher.status).toBe(400)
+
+    await post()
+    expect(mocks.portalCreate.mock.calls[0][0].configuration).toBe('bpc_no_switch')
   })
 })

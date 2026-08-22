@@ -204,9 +204,34 @@ export function stripeRefereeCouponIdFor(key: PlanKey): string | null {
  * Optional on purpose — the portal works without it — but a configuration is
  * how plan switching, the proration behaviour and the cancel mode are set, so
  * production is expected to have one.
+ *
+ * This is the SWITCHING configuration: it lists both course prices, so the
+ * customer it is opened for can move between them.
  */
 export function stripePortalConfigurationId(): string | null {
   const id = process.env.STRIPE_PORTAL_CONFIGURATION_ID?.trim()
+  return id ? id : null
+}
+
+/**
+ * Server-only: the Customer Portal configuration with plan switching turned
+ * OFF, for customers who already hold the top plan.
+ *
+ * Stripe has no "upgrades only" flag — `subscription_update.products` is a flat
+ * allow-list and the switcher is symmetric over whatever it contains, so any
+ * configuration that can sell Complete to a Self-Study customer can also sell
+ * Self-Study to a Complete one. On a non-renewing term that downgrade is a
+ * genuine loss for both sides: the customer's lectures and coaching day vanish
+ * and Stripe issues a customer-balance CREDIT rather than a refund (negative
+ * prorations are never refunded automatically), which nothing on a plan with no
+ * next invoice will ever consume. The only mechanism that prevents it is
+ * opening a different configuration per customer.
+ *
+ * Falls back to null so an unset env degrades to the switching configuration
+ * rather than breaking billing — the founder can create Config B after launch.
+ */
+export function stripePortalNoSwitchConfigurationId(): string | null {
+  const id = process.env.STRIPE_PORTAL_CONFIGURATION_ID_NO_SWITCH?.trim()
   return id ? id : null
 }
 
