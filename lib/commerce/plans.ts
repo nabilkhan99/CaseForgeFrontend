@@ -6,12 +6,39 @@
 export type PlanKey = 'self_study' | 'self_study_monthly' | 'complete' | 'intensive'
 
 /**
- * How a plan is billed. `three_month` is the pre-order shape everything launched
- * with: one payment, three months' access, and — critically for study-budget
- * claims — a *course* rather than a subscription. `monthly` is the rolling
- * alternative, and deliberately applies to Self-Study only.
+ * How a plan bills, in the shape Stripe expresses it.
+ *
+ * Every checkout plan is now a Stripe **subscription** — the two course plans
+ * are fixed-term subscriptions (one charge, three months, `renews: false`), the
+ * rolling plan renews monthly. Nothing is sold in `payment` mode any more.
+ *
+ * `renews: false` is not something Stripe Checkout can express (there is no
+ * `cancel_at` / `cancel_at_period_end` on `subscription_data` in API
+ * 2026-06-24.dahlia), so the webhook arms `cancel_at_period_end: true` the
+ * moment the session completes. This flag is what tells it which sales need it.
  */
-export type BillingPeriod = 'three_month' | 'monthly'
+export interface PlanBilling {
+  /** Stripe `recurring.interval`. Everything we sell bills in months. */
+  interval: 'month'
+  /** Stripe `recurring.interval_count`: 3 for a course term, 1 for rolling. */
+  intervalCount: number
+  /** True only for the rolling plan. False = one charge, then it stops. */
+  renews: boolean
+}
+
+/** £299 / £599 course plans: one charge, three months, no renewal. */
+export const FIXED_THREE_MONTH_TERM: PlanBilling = {
+  interval: 'month',
+  intervalCount: 3,
+  renews: false,
+}
+
+/** The rolling Self-Study plan: £129 a month until it is cancelled. */
+export const ROLLING_MONTHLY: PlanBilling = {
+  interval: 'month',
+  intervalCount: 1,
+  renews: true,
+}
 
 export interface Plan {
   key: PlanKey
@@ -23,8 +50,8 @@ export interface Plan {
   cta: 'checkout' | 'call'
   ctaLabel: string
   highlighted: boolean
-  /** Billing shape. Drives Stripe checkout `mode` via {@link isSubscriptionPlan}. */
-  billing: BillingPeriod
+  /** Billing shape. See {@link isFixedTermPlan} / {@link isRollingPlan}. */
+  billing: PlanBilling
 }
 
 export const PLANS: readonly Plan[] = [
@@ -32,12 +59,12 @@ export const PLANS: readonly Plan[] = [
     key: 'self_study',
     name: 'Self-Study',
     displayPrice: '£299',
-    priceSuffix: 'one-off',
-    tagline: "3 months' access",
+    priceSuffix: '/ 3 months',
+    tagline: "One payment · 3 months' access",
     cta: 'checkout',
     ctaLabel: 'Pre-order now',
     highlighted: false,
-    billing: 'three_month',
+    billing: FIXED_THREE_MONTH_TERM,
   },
   {
     key: 'self_study_monthly',
@@ -48,18 +75,18 @@ export const PLANS: readonly Plan[] = [
     cta: 'checkout',
     ctaLabel: 'Start monthly',
     highlighted: false,
-    billing: 'monthly',
+    billing: ROLLING_MONTHLY,
   },
   {
     key: 'complete',
     name: 'Complete',
     displayPrice: '£599',
-    priceSuffix: 'one-off',
-    tagline: "3 months' access",
+    priceSuffix: '/ 3 months',
+    tagline: "One payment · 3 months' access",
     cta: 'checkout',
     ctaLabel: 'Choose your coaching day',
     highlighted: true,
-    billing: 'three_month',
+    billing: FIXED_THREE_MONTH_TERM,
   },
   {
     key: 'intensive',
@@ -70,7 +97,7 @@ export const PLANS: readonly Plan[] = [
     cta: 'call',
     ctaLabel: 'Book a call',
     highlighted: false,
-    billing: 'three_month',
+    billing: FIXED_THREE_MONTH_TERM,
   },
 ] as const
 
@@ -79,17 +106,42 @@ export function getPlan(key: string): Plan | undefined {
 }
 
 /**
- * True when the plan is a rolling subscription rather than a one-off purchase.
- * Drives Stripe Checkout `mode` — and nothing else branches on billing shape, so
- * a second subscription plan needs no new conditionals.
+ * True when the plan is bought through Stripe Checkout — which now means, for
+ * every one of them, `mode: 'subscription'`.
+ *
+ * Kept as a named helper rather than inlined because it is the thing the
+ * checkout route branches on, and "which plans are subscriptions" is exactly
+ * the fact that changed. Intensive is excluded: it is sold on a call.
  */
 export function isSubscriptionPlan(key: string): boolean {
-  return PLANS.find((p) => p.key === key)?.billing === 'monthly'
+  return getPlan(key)?.cta === 'checkout'
+}
+
+/**
+ * A fixed-term subscription: charged once, three months of access, then it
+ * stops. The webhook arms `cancel_at_period_end` for exactly these.
+ */
+export function isFixedTermPlan(key: string): boolean {
+  const plan = getPlan(key)
+  return plan?.cta === 'checkout' && !plan.billing.renews
+}
+
+/** The rolling plan: renews until cancelled. */
+export function isRollingPlan(key: string): boolean {
+  const plan = getPlan(key)
+  return plan?.cta === 'checkout' && plan.billing.renews
 }
 
 /** Server-only: map a checkout-able plan to its Stripe Price id. */
 export function stripePriceIdFor(key: PlanKey): string {
-  const id =
+  const id = stripePriceEnvFor(key)
+  if (!id) throw new Error(`No Stripe price configured for plan "${key}"`)
+  return id
+}
+
+/** The raw env value behind a plan's Price, or undefined when unset. */
+function stripePriceEnvFor(key: PlanKey): string | undefined {
+  const raw =
     key === 'self_study'
       ? process.env.STRIPE_PRICE_SELF_STUDY
       : key === 'self_study_monthly'
@@ -97,8 +149,30 @@ export function stripePriceIdFor(key: PlanKey): string {
         : key === 'complete'
           ? process.env.STRIPE_PRICE_COMPLETE
           : undefined
-  if (!id) throw new Error(`No Stripe price configured for plan "${key}"`)
-  return id
+  const trimmed = raw?.trim()
+  return trimmed ? trimmed : undefined
+}
+
+/** The plans that have a Stripe Price, i.e. everything except Intensive. */
+const PRICED_PLANS: readonly PlanKey[] = ['self_study', 'self_study_monthly', 'complete']
+
+/**
+ * Server-only: the inverse of {@link stripePriceIdFor}.
+ *
+ * The Customer Portal changes a subscription by swapping its Price, and the
+ * resulting `customer.subscription.updated` carries no session metadata — the
+ * price id is the only evidence of what the customer now holds. Returns null
+ * for an unrecognised id so the caller can log loudly rather than silently
+ * rewriting a row to the wrong plan.
+ *
+ * Read from env on every call, not memoised at module load: the env is not
+ * populated at import time in tests, and three string reads are free next to
+ * the Stripe round-trip that produced the id.
+ */
+export function planForStripePriceId(priceId: string | null | undefined): PlanKey | null {
+  const wanted = priceId?.trim()
+  if (!wanted) return null
+  return PRICED_PLANS.find((key) => stripePriceEnvFor(key) === wanted) ?? null
 }
 
 /**
@@ -124,32 +198,16 @@ export function stripeRefereeCouponIdFor(key: PlanKey): string | null {
 }
 
 /**
- * List prices in pence, for the one place a price has to be arithmetic rather
- * than copy: the Self-Study -> Complete upgrade, which is sold at the
- * difference. Keeping both operands here means the £300 headline cannot drift
- * away from the two prices it is derived from.
- */
-export const SELF_STUDY_PRICE_PENCE = 29_900
-export const COMPLETE_PRICE_PENCE = 59_900
-
-/** What a Self-Study customer pays to move up to Complete: the difference. */
-export const COMPLETE_UPGRADE_PRICE_PENCE = COMPLETE_PRICE_PENCE - SELF_STUDY_PRICE_PENCE
-
-/** "£300" — display copy, derived so it follows the prices above. */
-export const COMPLETE_UPGRADE_PRICE_LABEL = `£${COMPLETE_UPGRADE_PRICE_PENCE / 100}`
-
-/**
- * Server-only: the Stripe Price id for the upgrade difference.
+ * Server-only: an explicit Customer Portal configuration to open sessions
+ * against, or null to use the account's default configuration.
  *
- * Deliberately NOT part of {@link stripePriceIdFor}: `complete_upgrade` is not a
- * plan. Nothing is ever provisioned as one — the upgrade lands in `preorders`
- * as a `complete` purchase so {@link PLANS} and the entitlement fold stay
- * unaware it exists. Only the Price is separate.
+ * Optional on purpose — the portal works without it — but a configuration is
+ * how plan switching, the proration behaviour and the cancel mode are set, so
+ * production is expected to have one.
  */
-export function stripeCompleteUpgradePriceId(): string {
-  const id = process.env.STRIPE_PRICE_COMPLETE_UPGRADE?.trim()
-  if (!id) throw new Error('STRIPE_PRICE_COMPLETE_UPGRADE is not set')
-  return id
+export function stripePortalConfigurationId(): string | null {
+  const id = process.env.STRIPE_PORTAL_CONFIGURATION_ID?.trim()
+  return id ? id : null
 }
 
 /** Intensive booking link. */
