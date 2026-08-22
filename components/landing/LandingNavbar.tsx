@@ -34,7 +34,7 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
   const navBg = useTransform(
     scrollYProgress,
     [0, 0.08],
-    ['rgba(255,250,238,0.78)', 'rgba(255,250,238,0.94)']
+    ['rgba(255,250,238,0.92)', 'rgba(255,250,238,0.97)']
   );
   const navShadow = useTransform(
     scrollYProgress,
