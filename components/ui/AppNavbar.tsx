@@ -76,6 +76,25 @@ export default function AppNavbar() {
 
   const initial = user?.name?.charAt(0).toUpperCase() || '?';
 
+  // A tap on a nav row navigates but leaves the panel mounted otherwise, and
+  // the browser back button doesn't unmount it either — close on every route
+  // change rather than relying on each link's own onClick.
+  useEffect(() => {
+    setMobileOpen(false);
+    setDropdownOpen(false);
+  }, [pathname]);
+
+  // Lock the page behind the open menu. Without this the page scrolls under the
+  // panel on a phone, so closing the menu drops you somewhere you didn't choose.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [mobileOpen]);
+
   function isActive(href: string, exact?: boolean) {
     if (exact) return pathname === href;
     return pathname?.startsWith(href);
@@ -88,7 +107,10 @@ export default function AppNavbar() {
   }
 
   return (
-    <div className="fixed top-4 left-0 right-0 z-50 flex justify-center px-4">
+    // The page sets viewportFit: 'cover', so on a notched phone the wordmark and
+    // hamburger would sit under the sensor housing in landscape and under the
+    // status bar in a home-screen launch without these insets.
+    <div className="fixed top-[max(1rem,env(safe-area-inset-top))] left-0 right-0 z-50 flex justify-center pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
       <motion.nav
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         style={{ maxWidth: 'min(92%, 1200px)', backgroundColor: navBg, boxShadow: navShadow } as any}
@@ -135,6 +157,14 @@ export default function AppNavbar() {
           {/* Dropdown */}
           <AnimatePresence>
             {dropdownOpen && (
+              <>
+              {/* Same click-catcher as the mobile menu: clicking anywhere else
+                  should dismiss the menu, not activate what's underneath. */}
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setDropdownOpen(false)}
+                aria-hidden="true"
+              />
               <motion.div
                 initial={{ opacity: 0, y: -4, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -160,6 +190,7 @@ export default function AppNavbar() {
                   Sign out
                 </button>
               </motion.div>
+              </>
             )}
           </AnimatePresence>
         </div>
@@ -168,7 +199,9 @@ export default function AppNavbar() {
         <motion.button
           className="md:hidden min-w-[44px] min-h-[44px] flex flex-col items-center justify-center gap-[5px] cursor-pointer"
           onClick={() => setMobileOpen((o) => !o)}
-          aria-label="Toggle menu"
+          aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={mobileOpen}
+          aria-controls="app-mobile-menu"
         >
           <motion.span
             className="block w-5 h-[1.5px] bg-heading rounded-full origin-center"
@@ -191,13 +224,32 @@ export default function AppNavbar() {
       {/* Mobile menu */}
       <AnimatePresence>
         {mobileOpen && (
+          <>
+            {/* Full-screen backdrop. Tapping outside a menu is the universal
+                "close this" gesture on a phone; without an element to catch it
+                the tap fell through and fired whatever row was underneath, so
+                you ended up on a page you never chose with the menu still open. */}
+            <motion.button
+              type="button"
+              aria-label="Close menu"
+              onClick={() => setMobileOpen(false)}
+              className="fixed inset-0 z-40 md:hidden cursor-default"
+              style={{ background: 'rgba(28,25,23,0.18)' }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+            />
           <motion.div
+            id="app-mobile-menu"
             initial={{ opacity: 0, y: -8, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 260, damping: 26 }}
-            className="absolute top-14 left-0 right-0 mx-4 glass-panel rounded-2xl p-4 flex flex-col gap-1"
-            style={{ maxWidth: 'min(92%, 1200px)', margin: '0 auto' }}
+            // Not `glass-panel`: at 0.65 alpha the page text read straight
+            // through the menu rows. Blur is a finish, not a legibility device.
+            className="absolute top-14 left-0 right-0 mx-4 z-50 rounded-2xl p-4 flex flex-col gap-1 border border-black/[0.06] shadow-elevation-3 backdrop-blur-2xl"
+            style={{ maxWidth: 'min(92%, 1200px)', margin: '0 auto', background: 'rgba(255,252,248,0.97)' }}
           >
             {NAV_LINKS.map((link) => (
               <Link
@@ -229,6 +281,7 @@ export default function AppNavbar() {
               Sign out
             </button>
           </motion.div>
+          </>
         )}
       </AnimatePresence>
     </div>
