@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { MicError, classifyMicError, type SessionErrorKind } from '@/lib/clinical-master/micErrors';
 import { TranscriptItem } from '@/lib/clinical-master/types';
 import { unreliableEchoCancellation } from '@/lib/clinical-master/echoCancellation';
 import { isIncompleteDoctorTurn } from '@/lib/clinical-master/doctorTurn';
@@ -289,6 +290,7 @@ export function useRealtimeSession({
 }: UseRealtimeSessionProps) {
     const [transcript, setTranscript] = useState<TranscriptItem[]>([]);
     const [error, setError] = useState<string | null>(null);
+    const [errorKind, setErrorKind] = useState<SessionErrorKind | null>(null);
     const [status, setStatus] = useState<SessionStatus>('disconnected');
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [isMuted, setIsMuted] = useState(false);
@@ -1557,6 +1559,7 @@ export function useRealtimeSession({
         try {
             setStatus('connecting');
             setError(null);
+            setErrorKind(null);
             endedRef.current = false;
             debugEnabledRef.current =
                 typeof window !== 'undefined' && window.location.search.includes('voicedebug');
@@ -1579,10 +1582,19 @@ export function useRealtimeSession({
             }
             const { ephemeralKey, callsUrl, durationSeconds }: TokenResponse = await res.json();
 
-            // 2. Microphone
-            const micStream = await navigator.mediaDevices.getUserMedia({
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-            });
+            // 2. Microphone — classified separately so a denied mic gets
+            // recovery instructions rather than "Connection problem".
+            let micStream: MediaStream;
+            try {
+                if (!navigator.mediaDevices?.getUserMedia) {
+                    throw new MicError('mic_unsupported', 'This browser cannot capture audio here.');
+                }
+                micStream = await navigator.mediaDevices.getUserMedia({
+                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+                });
+            } catch (micErr) {
+                throw micErr instanceof MicError ? micErr : classifyMicError(micErr);
+            }
             micStreamRef.current = micStream;
             micTrackRef.current = micStream.getAudioTracks()[0] ?? null;
             startDoubleTalkDetector();
@@ -1762,6 +1774,7 @@ export function useRealtimeSession({
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to connect';
             setError(message);
+            setErrorKind(err instanceof MicError ? err.kind : 'connection');
             teardown();
             onError?.(message);
         }
@@ -1823,6 +1836,7 @@ export function useRealtimeSession({
         disconnect,
         setMicMuted,
         error,
+        errorKind,
         status,
     };
 }
