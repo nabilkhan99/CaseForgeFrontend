@@ -49,9 +49,6 @@ function lockNotice(state: EntitlementState, unavailable: boolean): LockNotice {
   };
 }
 
-/** Below this many published lectures a greyed running order sells nothing. */
-const MIN_ROWS_FOR_LOCKED_LIST = 6;
-
 function totalMinutes(lectures: LectureSummary[]): number {
   return Math.round(lectures.reduce((sum, l) => sum + (l.durationSeconds ?? 0), 0) / 60);
 }
@@ -70,7 +67,7 @@ function UpgradeHero({ lectures, canSwitch }: { lectures: LectureSummary[]; canS
   const n = lectures.length;
   // Only quantify once there is something to quantify — "18 minutes of
   // teaching" undersells a course that is still being published.
-  const substantial = n >= MIN_ROWS_FOR_LOCKED_LIST && mins >= 120;
+  const substantial = n >= 6 && mins >= 120;
   const hours = substantial ? `${Math.round(mins / 60)} hours` : null;
   return (
     <motion.div
@@ -328,10 +325,6 @@ export default function LecturesPage() {
       ) : lectures.length === 0 && !error ? (
         <p className="py-8 text-[13px] text-muted">
           No lectures published yet. They&apos;ll appear here as they go live.
-        </p>
-      ) : locked && !unavailable && state !== 'read_only' && lectures.length < MIN_ROWS_FOR_LOCKED_LIST ? (
-        <p className="text-[13px] text-muted">
-          The course is being published lecture by lecture &mdash; {lectures.length} live so far, more landing through September.
         </p>
       ) : (
         <div className="divide-y divide-black/[0.06]">

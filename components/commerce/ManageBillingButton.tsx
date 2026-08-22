@@ -53,6 +53,14 @@ export default function ManageBillingButton({
       });
       const data = (await res.json()) as { url?: string; message?: string; error?: string };
       if (!res.ok || !data.url) {
+        // No Stripe billing record = a beta or hand-provisioned buyer whose
+        // purchase predates subscriptions. The Portal can't help them, but the
+        // pricing page can — a red apology here reads as "the product is
+        // broken" to someone who simply bought early.
+        if (data.error === 'no_customer') {
+          window.location.assign('/pricing?want=lectures');
+          return;
+        }
         setError(data.message ?? data.error ?? 'Could not open billing — please try again.');
         setBusy(false);
         return;
