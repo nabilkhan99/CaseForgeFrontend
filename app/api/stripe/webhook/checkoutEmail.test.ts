@@ -120,6 +120,12 @@ beforeEach(() => {
         },
       ],
     },
+    // A subscription session has no payment_intent of its own; the id a refund
+    // matches on is read off the first invoice.
+    latest_invoice: {
+      id: 'in_1',
+      payments: { data: [{ is_default: true, payment: { payment_intent: 'pi_1' } }] },
+    },
   })
   mocks.subscriptionsUpdate.mockResolvedValue({})
 })

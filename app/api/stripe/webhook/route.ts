@@ -137,6 +137,39 @@ function readAccessPeriod(subscription: Stripe.Subscription): AccessPeriod {
 }
 
 /**
+ * The PaymentIntent that actually paid for this subscription's first invoice.
+ *
+ * `charge.refunded` is matched to a pre-order on `stripe_payment_intent_id`,
+ * and that column used to be filled straight from the checkout session. It
+ * cannot be any more: `Session.payment_intent` is documented as "the ID of the
+ * PaymentIntent for Checkout Sessions in `payment` mode" and is null in
+ * `subscription` mode — which, since the migration, is every sale. Left null,
+ * a refund matches nothing: the buyer keeps their access and the referral
+ * reward behind the refunded purchase is never voided.
+ *
+ * So the id is read back off the subscription's latest invoice (requested with
+ * `expand: ['latest_invoice.payments']`). The invoice's DEFAULT payment is the
+ * one Stripe keeps in step with the amount due; a retry after a decline adds
+ * another, and matching the first charge is what a refund needs.
+ */
+function readInvoicePaymentIntentId(subscription: Stripe.Subscription): string | null {
+  const invoice = subscription.latest_invoice;
+  if (!invoice || typeof invoice === 'string') return null;
+
+  const payments = invoice.payments?.data ?? [];
+  const chosen = payments.find((p) => p.is_default) ?? payments[0];
+  const intent = chosen?.payment?.payment_intent;
+  if (intent) return typeof intent === 'string' ? intent : intent.id;
+
+  // Webhook payloads render at the ENDPOINT's API version, which may predate
+  // the move of the payment off the Invoice and onto InvoicePayment.
+  const legacy = (invoice as unknown as { payment_intent?: string | { id: string } })
+    .payment_intent;
+  if (!legacy) return null;
+  return typeof legacy === 'string' ? legacy : legacy.id;
+}
+
+/**
  * Is this subscription already set to stop at the end of its period?
  *
  * Under flexible billing mode (the default from 2025-09-30.clover onward, so
@@ -203,12 +236,13 @@ async function armFixedTermCancellation(subscription: Stripe.Subscription): Prom
 async function writeSubscriptionState(
   supabase: SupabaseAdmin,
   subscriptionId: string,
-  values: { period?: AccessPeriod; plan?: string | null },
+  values: { period?: AccessPeriod; plan?: string | null; paymentIntentId?: string | null },
 ): Promise<'ok' | 'failed'> {
   const patch: Record<string, string> = {};
   if (values.period?.startsAt) patch.access_starts_at = values.period.startsAt;
   if (values.period?.endsAt) patch.access_ends_at = values.period.endsAt;
   if (values.plan) patch.plan = values.plan;
+  if (values.paymentIntentId) patch.stripe_payment_intent_id = values.paymentIntentId;
   if (Object.keys(patch).length === 0) return 'ok';
 
   const { error } = await supabase
@@ -305,8 +339,9 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
         typeof session.payment_intent === 'string'
           ? session.payment_intent
           : (session.payment_intent?.id ?? null),
-      // Set only for rolling plans. Renewal invoices arrive attached to the
-      // subscription, not the checkout session, so this is the handle back here.
+      // Set for every plan now. Renewal, cancellation and plan-change events
+      // arrive attached to the subscription, not the checkout session, so this
+      // is the handle back here.
       stripe_subscription_id:
         typeof session.subscription === 'string'
           ? session.subscription
@@ -369,9 +404,15 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
   // Stripe only emails a card receipt when the PaymentIntent carries a
   // receipt_email. Checkout collects the address on Stripe's own page, so it
   // cannot be set when the session is created — it is set here, once the
-  // address is known. Without this no receipt is sent, while our confirmation
-  // email tells the buyer "your card receipt comes separately from Stripe".
-  // Gated on isNewPreorder so a webhook retry cannot trigger a second receipt.
+  // address is known. Gated on isNewPreorder so a webhook retry cannot trigger
+  // a second receipt.
+  //
+  // In `subscription` mode the session carries no payment_intent, so this is
+  // now a no-op for our own plans and the receipt comes from the INVOICE
+  // instead (Dashboard -> Emails -> "Successful payments" must be on, or the
+  // confirmation email's "your card receipt comes separately from Stripe" is
+  // a promise nothing keeps). Kept for any legacy `payment`-mode session still
+  // in flight.
   if (isNewPreorder) {
     const paymentIntentId =
       typeof session.payment_intent === 'string'
@@ -474,7 +515,12 @@ async function syncCheckoutSubscription(
 ): Promise<'ok' | 'failed'> {
   let subscription: Stripe.Subscription;
   try {
-    subscription = await getStripe().subscriptions.retrieve(subscriptionId);
+    // The invoice comes back with it because the PaymentIntent that paid it is
+    // the only handle a later `charge.refunded` has on this order — see
+    // readInvoicePaymentIntentId.
+    subscription = await getStripe().subscriptions.retrieve(subscriptionId, {
+      expand: ['latest_invoice.payments'],
+    });
   } catch (error: unknown) {
     console.error('[stripe-webhook] subscription retrieve failed', { subscriptionId, error });
     return 'failed';
@@ -484,8 +530,18 @@ async function syncCheckoutSubscription(
     return 'failed';
   }
 
+  const paymentIntentId = readInvoicePaymentIntentId(subscription);
+  if (!paymentIntentId) {
+    // Not fatal — the period, and so the entitlement, is still recorded. But a
+    // refund of this order will not find it, so somebody should know.
+    console.error('[stripe-webhook] no payment intent on the first invoice — a refund of this order will not match', {
+      subscriptionId,
+    });
+  }
+
   return writeSubscriptionState(supabase, subscriptionId, {
     period: readAccessPeriod(subscription),
+    paymentIntentId,
   });
 }
 
@@ -861,6 +917,10 @@ async function mintAdvocateAndInvite(supabase: SupabaseAdmin, args: MintArgs): P
  * 500 so Stripe retries — the update is idempotent.
  */
 async function handleChargeRefunded(charge: Stripe.Charge) {
+  // Matched on the PaymentIntent. Since every plan became a subscription that
+  // id no longer comes from the checkout session (which has none in
+  // `subscription` mode) — it is read off the first invoice and written by
+  // syncCheckoutSubscription.
   const paymentIntentId =
     typeof charge.payment_intent === 'string' ? charge.payment_intent : (charge.payment_intent?.id ?? null);
   if (!paymentIntentId) {

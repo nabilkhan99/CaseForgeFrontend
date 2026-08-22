@@ -87,6 +87,10 @@ function subscription(over: Record<string, unknown> = {}, priceId = 'price_self_
         },
       ],
     },
+    latest_invoice: {
+      id: 'in_1',
+      payments: { data: [{ is_default: true, payment: { payment_intent: 'pi_1' } }] },
+    },
     ...over,
   }
 }
@@ -151,6 +155,7 @@ describe('checkout.session.completed — fixed-term plans', () => {
     expect(lastUpdate()).toEqual({
       access_starts_at: '2026-08-22T00:00:00.000Z',
       access_ends_at: '2026-11-22T00:00:00.000Z',
+      stripe_payment_intent_id: 'pi_1',
     })
   })
 
@@ -214,6 +219,67 @@ describe('checkout.session.completed — fixed-term plans', () => {
       expect.objectContaining({ subscriptionId: 'sub_123' }),
     )
     error.mockRestore()
+  })
+
+  it('records the payment intent behind the first invoice, so a refund can be matched', async () => {
+    // `checkout.session.completed` carries a payment_intent only in `payment`
+    // mode (Stripe: "The ID of the PaymentIntent for Checkout Sessions in
+    // `payment` mode"), so since every plan became a subscription the session
+    // has none — and `charge.refunded` matches a pre-order on exactly that
+    // column. Without this the row's id stays null, a refund matches nothing,
+    // the buyer keeps their access and the referral is never voided.
+    await deliver(completedSession('self_study'))
+
+    expect(mocks.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ stripe_payment_intent_id: null }),
+    )
+    expect(mocks.subscriptionsRetrieve).toHaveBeenCalledWith('sub_123', {
+      expand: ['latest_invoice.payments'],
+    })
+    expect(lastUpdate()).toMatchObject({ stripe_payment_intent_id: 'pi_1' })
+  })
+
+  it('prefers the invoice’s default payment over any later one', async () => {
+    mocks.subscriptionsRetrieve.mockResolvedValue(
+      subscription({
+        latest_invoice: {
+          id: 'in_1',
+          payments: {
+            data: [
+              { is_default: false, payment: { payment_intent: 'pi_retry' } },
+              { is_default: true, payment: { payment_intent: 'pi_first' } },
+            ],
+          },
+        },
+      }),
+    )
+
+    await deliver(completedSession('self_study'))
+
+    expect(lastUpdate()).toMatchObject({ stripe_payment_intent_id: 'pi_first' })
+  })
+
+  it('reads the legacy flat invoice payment_intent, for an older webhook API version', async () => {
+    mocks.subscriptionsRetrieve.mockResolvedValue(
+      subscription({ latest_invoice: { id: 'in_1', payment_intent: 'pi_legacy' } }),
+    )
+
+    await deliver(completedSession('self_study'))
+
+    expect(lastUpdate()).toMatchObject({ stripe_payment_intent_id: 'pi_legacy' })
+  })
+
+  it('records the period anyway when no payment intent can be read', async () => {
+    // A missing id is a refund-matching problem, not an access one: never let
+    // it cost the buyer the period that decides their entitlement.
+    mocks.subscriptionsRetrieve.mockResolvedValue(subscription({ latest_invoice: null }))
+
+    await deliver(completedSession('self_study'))
+
+    expect(lastUpdate()).toEqual({
+      access_starts_at: '2026-08-22T00:00:00.000Z',
+      access_ends_at: '2026-11-22T00:00:00.000Z',
+    })
   })
 
   it('still records the order before it asks for a retry', async () => {
