@@ -1,16 +1,30 @@
-'use client';
-
 import { Suspense } from 'react';
+import AppNavbar from '@/components/ui/AppNavbar';
 import LandingNavbar from '@/components/landing/LandingNavbar';
 import LandingFooter from '@/components/landing/LandingFooter';
 import { AccessNotice, Faq, GuaranteeCard, NhsBanner } from '@/components/landing/v5';
 import PricingTable from '@/components/landing/v5/PricingTable';
 import { ACCESS_OPENS_LABEL } from '@/lib/commerce/plans';
+import { getServerEntitlement } from '@/lib/commerce/serverEntitlement';
+import { canUpgradeToComplete } from '@/lib/commerce/upgrade';
 
-export default function PricingPage() {
+export const dynamic = 'force-dynamic';
+
+/**
+ * The plans page, for strangers and for customers.
+ *
+ * Server-rendered rather than client-fetched so a signed-in customer never sees
+ * the logged-out marketing nav flash before their own: the nav, the "Your plan"
+ * badge and the inert CTA all arrive with the HTML, decided by the same
+ * entitlement the gate uses.
+ */
+export default async function PricingPage() {
+  const { user, entitlement } = await getServerEntitlement();
+  const signedIn = Boolean(user);
+
   return (
     <div className="min-h-[100dvh] bg-[#F7F2E7] font-sans">
-      <LandingNavbar user={null} />
+      {signedIn ? <AppNavbar /> : <LandingNavbar user={null} />}
       <main className="flex flex-col gap-14 pb-20 pt-32 sm:gap-20 sm:pt-40">
         <header className="px-5 text-center sm:px-8">
           <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.08em] text-[#854F0B] sm:text-xs">
@@ -33,7 +47,11 @@ export default function PricingPage() {
           <AccessNotice />
         </Suspense>
         <NhsBanner />
-        <PricingTable />
+        <PricingTable
+          ownedPlan={entitlement.plan ?? null}
+          accountEmail={user?.email ?? null}
+          canUpgrade={canUpgradeToComplete(entitlement)}
+        />
         <GuaranteeCard />
         <Faq />
       </main>

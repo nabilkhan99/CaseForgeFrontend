@@ -7,6 +7,7 @@ import { ArrowRight, Info } from 'lucide-react';
 import {
   ACCESS_OPENS_LABEL,
   BOOK_A_CALL_URL,
+  COMPLETE_UPGRADE_PRICE_LABEL,
   type BillingPeriod,
   type PlanKey,
 } from '@/lib/commerce/plans';
@@ -52,6 +53,49 @@ const FEATURE_ROWS: readonly FeatureRow[] = [
 
 /** The warm tint behind the highlighted (Complete) column. */
 const HIGHLIGHT_BG = 'bg-[#FDF6E7]';
+
+/** Which column, if any, the signed-in visitor already owns. */
+type OwnedColumn = 'self_study' | 'complete' | 'intensive' | null;
+
+/**
+ * Both Self-Study billing shapes are the same *column*: someone on the rolling
+ * plan owns Self-Study, whichever way the toggle is set, and must not be sold
+ * it again.
+ */
+function ownedColumnFor(plan: string | null | undefined): OwnedColumn {
+  if (plan === 'self_study' || plan === 'self_study_monthly') return 'self_study';
+  if (plan === 'complete') return 'complete';
+  if (plan === 'intensive') return 'intensive';
+  return null;
+}
+
+export interface PricingTableProps {
+  /**
+   * The plan the signed-in visitor holds, if any. Drives the "Your plan" badge
+   * and makes that column's CTA inert — a paying customer being invited to
+   * "Pre-order now" the thing they already bought reads as a broken product.
+   */
+  ownedPlan?: string | null;
+  /**
+   * The account a purchase would attach to. Stated plainly, because
+   * entitlements match by email and buying under another address is the one
+   * mistake a buyer cannot undo themselves.
+   */
+  accountEmail?: string | null;
+  /** Server-decided: this visitor may buy Complete at the difference. */
+  canUpgrade?: boolean;
+}
+
+/** The "Your plan" marker, in the same slot the "Most popular" badge uses. */
+function OwnedBadge({ className = '' }: { className?: string }) {
+  return (
+    <span
+      className={`whitespace-nowrap rounded-full bg-heading px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white sm:text-[10px] ${className}`}
+    >
+      Your plan
+    </span>
+  );
+}
 
 /**
  * Kicks off Stripe checkout for whichever Self-Study plan the billing toggle has
@@ -220,9 +264,38 @@ interface CtaButtonsProps {
   variant: 'self_study' | 'complete' | 'intensive';
   /** Which Self-Study plan the billing toggle currently has selected. */
   selfStudyPlan: PlanKey;
+  owned?: OwnedColumn;
+  canUpgrade?: boolean;
 }
 
-function PlanCta({ selfStudy, variant, selfStudyPlan }: CtaButtonsProps) {
+/** An owned plan's CTA: present, legible, and deliberately not clickable. */
+function OwnedCta() {
+  return (
+    <button
+      type="button"
+      disabled
+      className="w-full cursor-default rounded-full border border-heading/10 bg-transparent px-2 py-3 text-[13px] font-semibold text-muted sm:py-2.5 sm:text-sm"
+    >
+      Your current plan
+    </button>
+  );
+}
+
+function PlanCta({ selfStudy, variant, selfStudyPlan, owned, canUpgrade }: CtaButtonsProps) {
+  if (owned === variant) return <OwnedCta />;
+  if (variant === 'complete' && canUpgrade) {
+    // A Self-Study customer pays the difference, in the app, on an account we
+    // can already name. Sending them through /coaching-day would charge £599.
+    return (
+      <Link
+        href="/dashboard/upgrade"
+        onClick={() => trackEvent('checkout_clicked', { plan: 'complete_upgrade' })}
+        className="cta-button w-full gap-1.5 !rounded-full px-2 py-3.5 text-[13px] sm:py-3 sm:text-sm"
+      >
+        Upgrade &mdash; {COMPLETE_UPGRADE_PRICE_LABEL} <ArrowRight className="h-3.5 w-3.5" />
+      </Link>
+    );
+  }
   if (variant === 'self_study') {
     const monthly = selfStudyPlan === 'self_study_monthly';
     return (
@@ -275,10 +348,12 @@ function PlanName({ children }: { children: React.ReactNode }) {
 interface MobileCardsProps {
   selfStudy: ReturnType<typeof useSelfStudyCheckout>;
   billing: BillingPeriod;
+  owned: OwnedColumn;
+  canUpgrade: boolean;
 }
 
 /** Mobile: one full-width card per plan, same content as its desktop column. */
-function MobileCards({ selfStudy, billing }: MobileCardsProps) {
+function MobileCards({ selfStudy, billing, owned, canUpgrade }: MobileCardsProps) {
   const selfStudyPlan = selfStudyPlanFor(billing);
   const selfStudyPrice = SELF_STUDY_PRICING[billing];
   const cards = [
@@ -336,10 +411,14 @@ function MobileCards({ selfStudy, billing }: MobileCardsProps) {
           }`}
         >
           <div className="relative px-5 pb-4 pt-7 text-center">
-            {card.badge && (
-              <span className="absolute left-1/2 top-2 -translate-x-1/2 whitespace-nowrap rounded-full bg-primary px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white">
-                {card.badge}
-              </span>
+            {owned === card.key ? (
+              <OwnedBadge className="absolute left-1/2 top-2 -translate-x-1/2" />
+            ) : (
+              card.badge && (
+                <span className="absolute left-1/2 top-2 -translate-x-1/2 whitespace-nowrap rounded-full bg-primary px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white">
+                  {card.badge}
+                </span>
+              )
             )}
             <PlanName>{card.name}</PlanName>
             <motion.div
@@ -397,7 +476,13 @@ function MobileCards({ selfStudy, billing }: MobileCardsProps) {
           </div>
 
           <div className="p-3">
-            <PlanCta selfStudy={selfStudy} variant={card.key} selfStudyPlan={selfStudyPlan} />
+            <PlanCta
+              selfStudy={selfStudy}
+              variant={card.key}
+              selfStudyPlan={selfStudyPlan}
+              owned={owned}
+              canUpgrade={canUpgrade}
+            />
           </div>
         </div>
       ))}
@@ -406,8 +491,9 @@ function MobileCards({ selfStudy, billing }: MobileCardsProps) {
 }
 
 /** The three-tier pricing table: matrix on desktop, stacked cards on mobile. */
-export default function PricingTable() {
+export default function PricingTable({ ownedPlan, accountEmail, canUpgrade = false }: PricingTableProps = {}) {
   const selfStudy = useSelfStudyCheckout();
+  const owned = ownedColumnFor(ownedPlan);
   // Three-month is the default: it is the better deal (£299 vs 3 × £129) and the
   // one a study budget will reimburse, so monthly is the deliberate opt-out.
   const [billing, setBilling] = useState<BillingPeriod>('three_month');
@@ -437,13 +523,16 @@ export default function PricingTable() {
 
           <BillingToggle billing={billing} onChange={setBilling} />
 
-          <MobileCards selfStudy={selfStudy} billing={billing} />
+          <MobileCards selfStudy={selfStudy} billing={billing} owned={owned} canUpgrade={canUpgrade} />
 
           <div className="hidden overflow-hidden rounded-3xl border border-heading/[0.06] bg-white/80 shadow-elevation-2 backdrop-blur sm:block">
             <div className="grid grid-cols-[minmax(84px,170px)_repeat(3,minmax(0,1fr))]">
               {/* Plan headers */}
               <div />
-              <div className="px-3 pb-5 pt-9 text-center">
+              <div className="relative px-3 pb-5 pt-9 text-center">
+                {owned === 'self_study' && (
+                  <OwnedBadge className="absolute left-1/2 top-3 -translate-x-1/2" />
+                )}
                 <PlanName>Self-Study</PlanName>
                 {/* On 3 months the charge is still one £299 payment — the monthly
                     figure is framing, and the .66 is deliberately small and faint,
@@ -469,9 +558,13 @@ export default function PricingTable() {
                 </motion.div>
               </div>
               <div className={`relative ${HIGHLIGHT_BG} px-3 pb-5 pt-9 text-center`}>
-                <span className="absolute left-1/2 top-3 -translate-x-1/2 whitespace-nowrap rounded-full bg-primary px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white sm:text-[10px]">
-                  Most popular
-                </span>
+                {owned === 'complete' ? (
+                  <OwnedBadge className="absolute left-1/2 top-3 -translate-x-1/2" />
+                ) : (
+                  <span className="absolute left-1/2 top-3 -translate-x-1/2 whitespace-nowrap rounded-full bg-primary px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white sm:text-[10px]">
+                    Most popular
+                  </span>
+                )}
                 <PlanName>Complete SCA Course</PlanName>
                 <p className="mt-2.5 text-lg font-medium tracking-tight text-heading sm:text-3xl">
                   £599 <span className="text-[10px] font-normal text-muted sm:text-xs">one-off</span>
@@ -481,7 +574,10 @@ export default function PricingTable() {
                   <span className="line-through">£1,497 value</span>
                 </p>
               </div>
-              <div className="px-3 pb-5 pt-9 text-center">
+              <div className="relative px-3 pb-5 pt-9 text-center">
+                {owned === 'intensive' && (
+                  <OwnedBadge className="absolute left-1/2 top-3 -translate-x-1/2" />
+                )}
                 <PlanName>Intensive</PlanName>
                 <p className="mt-2.5 text-base font-medium tracking-tight text-heading sm:text-2xl">
                   From £2,999
@@ -529,13 +625,13 @@ export default function PricingTable() {
               {/* CTA row */}
               <div className="border-t border-heading/[0.06]" />
               <div className="border-t border-heading/[0.06] px-4 py-4">
-                <PlanCta selfStudy={selfStudy} variant="self_study" selfStudyPlan={selfStudyPlan} />
+                <PlanCta selfStudy={selfStudy} variant="self_study" selfStudyPlan={selfStudyPlan} owned={owned} canUpgrade={canUpgrade} />
               </div>
               <div className={`border-t border-heading/[0.06] ${HIGHLIGHT_BG} px-4 py-4`}>
-                <PlanCta selfStudy={selfStudy} variant="complete" selfStudyPlan={selfStudyPlan} />
+                <PlanCta selfStudy={selfStudy} variant="complete" selfStudyPlan={selfStudyPlan} owned={owned} canUpgrade={canUpgrade} />
               </div>
               <div className="border-t border-heading/[0.06] px-4 py-4">
-                <PlanCta selfStudy={selfStudy} variant="intensive" selfStudyPlan={selfStudyPlan} />
+                <PlanCta selfStudy={selfStudy} variant="intensive" selfStudyPlan={selfStudyPlan} owned={owned} canUpgrade={canUpgrade} />
               </div>
 
               {/* One guarantee strip for the whole table */}
@@ -550,6 +646,13 @@ export default function PricingTable() {
 
           {selfStudy.error && (
             <p className="mt-3 text-center text-sm font-medium text-danger">{selfStudy.error}</p>
+          )}
+
+          {accountEmail && (
+            <p className="mt-4 text-center text-[12px] text-muted sm:text-[13px]">
+              This purchase will be linked to{' '}
+              <span className="font-medium text-heading">{accountEmail}</span>.
+            </p>
           )}
 
           <PaymentMethodsRow />

@@ -6,6 +6,8 @@ import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import type { LecturesResponse, LectureSummary } from '@/app/api/lectures/route';
 import type { EntitlementState } from '@/lib/commerce/entitlements';
+import type { SubscriptionResponse } from '@/app/api/subscription/route';
+import { COMPLETE_UPGRADE_PRICE_LABEL } from '@/lib/commerce/plans';
 
 /**
  * The lecture course. Locked users see the same list, greyed — the running
@@ -59,7 +61,7 @@ function totalMinutes(lectures: LectureSummary[]): number {
  * Self-Study lacks, shown as something worth having. One card, house style —
  * the list underneath stays as bare rows between rules.
  */
-function UpgradeHero({ lectures }: { lectures: LectureSummary[] }) {
+function UpgradeHero({ lectures, upgradeHref }: { lectures: LectureSummary[]; upgradeHref: string }) {
   const mins = totalMinutes(lectures);
   const n = lectures.length;
   // Only quantify once there is something to quantify — "18 minutes of
@@ -90,11 +92,13 @@ function UpgradeHero({ lectures }: { lectures: LectureSummary[] }) {
         length of your plan. Complete also adds a coaching day.
       </p>
       <Link
-        href="/pricing?want=lectures"
+        href={upgradeHref}
         className="inline-flex items-center min-h-[44px] px-5 rounded-xl text-[14px] font-semibold text-white"
         style={{ background: 'linear-gradient(135deg, #B45309, #D97706)', boxShadow: '0 4px 12px rgba(180,83,9,0.2)' }}
       >
-        See what Complete adds &rarr;
+        {upgradeHref.startsWith('/dashboard')
+          ? `Upgrade to Complete — ${COMPLETE_UPGRADE_PRICE_LABEL} →`
+          : 'See what Complete adds →'}
       </Link>
     </motion.div>
   );
@@ -209,6 +213,25 @@ export default function LecturesPage() {
   const [unavailable, setUnavailable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Where "what Complete adds" should send them. Defaults to the acquisition
+  // page — the safe answer for anyone without a plan — and is upgraded to the
+  // in-app, price-the-difference flow once we know they hold Self-Study.
+  const [upgradeHref, setUpgradeHref] = useState('/pricing?want=lectures');
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/subscription')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: SubscriptionResponse | null) => {
+        if (cancelled || !data) return;
+        const selfStudy = data.plan === 'self_study' || data.plan === 'self_study_monthly';
+        if (selfStudy && data.state !== 'read_only') setUpgradeHref('/dashboard/upgrade');
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -250,7 +273,7 @@ export default function LecturesPage() {
       <PageHeader title="Lectures" subtitle={subtitle} />
 
       {locked && !loading && !unavailable && state !== 'read_only' && (
-        <UpgradeHero lectures={lectures} />
+        <UpgradeHero lectures={lectures} upgradeHref={upgradeHref} />
       )}
 
       {locked && !loading && (unavailable || state === 'read_only') && (
