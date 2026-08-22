@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { decideAccess } from '@/lib/commerce/entitlements';
 import { exactEmailPattern } from '@/lib/commerce/emailFilter';
-import { isStagedDeployment } from '@/lib/stations/visibility';
+import { effectiveLaunchDate } from '@/lib/commerce/launchDate';
 import { parseAdminEmails } from '@/lib/admin/guard';
 import { NextResponse, type NextRequest } from 'next/server';
 
@@ -123,7 +123,7 @@ export async function updateSession(request: NextRequest) {
             } else {
                 const { entitlement, allowed } = decideAccess(purchases ?? [], {
                     email: user.email,
-                    staged: isStagedDeployment(),
+                    launchDate: effectiveLaunchDate(),
                     admins: parseAdminEmails(process.env.ADMIN_EMAILS),
                 });
                 if (!allowed) {

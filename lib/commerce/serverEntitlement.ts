@@ -1,7 +1,7 @@
 import type { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { parseAdminEmails } from '@/lib/admin/guard'
-import { isStagedDeployment } from '@/lib/stations/visibility'
+import { effectiveLaunchDate } from '@/lib/commerce/launchDate'
 import { decideAccess, NO_ENTITLEMENT, type AccessDecision } from './entitlements'
 import { exactEmailPattern } from './emailFilter'
 
@@ -12,8 +12,8 @@ export interface ServerEntitlement extends AccessDecision {
   user: User | null
   /**
    * The lookup failed and access was granted anyway. Kept separate from
-   * `bypass` (which means access was deliberately waived, for an admin or a
-   * staged deployment) so nothing downstream can mistake a broken gate for a
+   * `bypass` (which means access was deliberately waived for an admin) so
+   * nothing downstream can mistake a broken gate for a
    * granted one — a fail-open must be able to say so.
    */
   failedOpen: boolean
@@ -67,7 +67,7 @@ export async function getServerEntitlement(): Promise<ServerEntitlement> {
       failedOpen: false,
       ...decideAccess(purchases ?? [], {
         email: user.email,
-        staged: isStagedDeployment(),
+        launchDate: effectiveLaunchDate(),
         admins: parseAdminEmails(process.env.ADMIN_EMAILS),
       }),
     }
