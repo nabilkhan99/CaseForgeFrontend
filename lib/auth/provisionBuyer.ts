@@ -1,5 +1,6 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { claimTrialSessionsForUser } from './claimTrialSessions';
 import { provisionAccountForPurchase, sendSetPasswordLink } from './provisioning';
 
 /**
@@ -168,6 +169,30 @@ async function createAccountAndSend(
     });
   } else if (result.error) {
     console.error('[stripe-webhook] account provisioning failed', { sessionId, preorderId, result });
+  }
+
+  // The moment an account exists is the only moment we can be sure the buyer's
+  // free mock and their new account are the same person: the purchase, the
+  // verified trial lead and the auth user all key off the same address. Run on
+  // BOTH paths — a repeat buyer (`alreadyExisted`) is exactly the person most
+  // likely to have sat the free station first.
+  //
+  // Deliberately after the send and deliberately swallowed: a buyer's account
+  // and their set-password email are what this function owes them, and neither
+  // may be put at risk by a nice-to-have that reattaches an old consultation.
+  if (result.userId) {
+    try {
+      const claimed = await claimTrialSessionsForUser(supabase, result.userId, email);
+      if (claimed > 0) {
+        console.info('[stripe-webhook] claimed guest trial sessions for new account', {
+          sessionId,
+          preorderId,
+          claimed,
+        });
+      }
+    } catch (error: unknown) {
+      console.error('[stripe-webhook] trial claim threw', { sessionId, preorderId, error });
+    }
   }
 
   const stamps: { provisioned_at?: string; set_password_sent_at?: string } = {};

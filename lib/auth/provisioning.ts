@@ -1,6 +1,7 @@
 import 'server-only';
 import { createClient } from '@supabase/supabase-js';
 import { sendSetPasswordEmail } from '@/lib/email/accountEmail';
+import { exactEmailPattern } from '@/lib/commerce/emailFilter';
 import { SITE_URL } from '@/lib/seo/site';
 
 /**
@@ -38,6 +39,17 @@ export interface ProvisionResult {
    */
   alreadyExisted: boolean;
   emailSent: boolean;
+  /**
+   * The auth user this purchase now belongs to, on both the created and the
+   * already-existed path — so the caller can attach anything the buyer did
+   * BEFORE they had an account (their guest free mock; see
+   * {@link ../auth/claimTrialSessions}).
+   *
+   * Null only when we genuinely don't know: a create that failed for a real
+   * reason, or an existing account with no `profiles` row to look the id up
+   * from. Callers must treat null as "skip", never as an error.
+   */
+  userId: string | null;
   error?: string;
 }
 
@@ -86,6 +98,37 @@ export async function sendSetPasswordLink(args: {
   return sent.sent ? { sent: true } : { sent: false, error: sent.skipped };
 }
 
+/**
+ * The auth user id behind an address, for the account that already existed.
+ *
+ * `admin.createUser` hands back the new user on the create path, but says
+ * nothing useful when the account is already there, and the GoTrue admin API
+ * has no "get user by email". `public.profiles` is the map: a trigger on
+ * `auth.users` inserts one row per account carrying `id` and `email`, so it is
+ * complete by construction. Case-insensitive for the same reason every other
+ * email match in this codebase is.
+ *
+ * Best-effort. A miss returns null and the caller skips whatever it wanted the
+ * id for — this is a nice-to-have on top of provisioning, never a reason to
+ * fail a purchase.
+ */
+async function findUserIdByEmail(
+  supabase: ReturnType<typeof getAdminAuthClient>,
+  email: string,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id')
+    .ilike('email', exactEmailPattern(email))
+    .maybeSingle();
+
+  if (error) {
+    console.error('[provisioning] profile lookup failed', { error });
+    return null;
+  }
+  return (data as { id?: string } | null)?.id ?? null;
+}
+
 export async function provisionAccountForPurchase(args: {
   email: string;
   fullName?: string | null;
@@ -93,7 +136,7 @@ export async function provisionAccountForPurchase(args: {
   const supabase = getAdminAuthClient();
   const email = args.email.toLowerCase().trim();
 
-  const { error: createError } = await supabase.auth.admin.createUser({
+  const { data: created, error: createError } = await supabase.auth.admin.createUser({
     email,
     email_confirm: true,
     user_metadata: args.fullName ? { full_name: args.fullName } : undefined,
@@ -110,12 +153,25 @@ export async function provisionAccountForPurchase(args: {
         created: false,
         alreadyExisted: true,
         emailSent: false,
+        userId: await findUserIdByEmail(supabase, email),
         error: 'account_already_exists',
       };
     }
-    return { created: false, alreadyExisted: false, emailSent: false, error: createError.message };
+    return {
+      created: false,
+      alreadyExisted: false,
+      emailSent: false,
+      userId: null,
+      error: createError.message,
+    };
   }
 
   const result = await sendSetPasswordLink({ email, fullName: args.fullName });
-  return { created: true, alreadyExisted: false, emailSent: result.sent, error: result.error };
+  return {
+    created: true,
+    alreadyExisted: false,
+    emailSent: result.sent,
+    userId: created?.user?.id ?? null,
+    error: result.error,
+  };
 }

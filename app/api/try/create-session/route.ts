@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { rejectIfSignedIn } from '@/lib/trial/guestOnly';
 
 export async function POST(req: NextRequest) {
+  // Guests only. A signed-in caller would otherwise create a consultation
+  // owned by nobody, outside their own entitlement and invisible from their
+  // dashboard.
+  const signedIn = await rejectIfSignedIn();
+  if (signedIn) return signedIn;
+
   const { sessionId, stationId, knownEmail } = await req.json();
 
   if (!sessionId || !stationId) {

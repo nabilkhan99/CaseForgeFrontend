@@ -14,6 +14,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   provisionAccountForPurchase: vi.fn(),
   sendSetPasswordLink: vi.fn(),
+  claimTrialSessionsForUser: vi.fn(),
 }))
 
 vi.mock('server-only', () => ({}))
@@ -21,6 +22,10 @@ vi.mock('server-only', () => ({}))
 vi.mock('./provisioning', () => ({
   provisionAccountForPurchase: mocks.provisionAccountForPurchase,
   sendSetPasswordLink: mocks.sendSetPasswordLink,
+}))
+
+vi.mock('./claimTrialSessions', () => ({
+  claimTrialSessionsForUser: mocks.claimTrialSessionsForUser,
 }))
 
 const { provisionBuyerAccount } = await import('./provisionBuyer')
@@ -92,12 +97,15 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.spyOn(console, 'error').mockImplementation(() => {})
   vi.spyOn(console, 'warn').mockImplementation(() => {})
+  vi.spyOn(console, 'info').mockImplementation(() => {})
   mocks.provisionAccountForPurchase.mockResolvedValue({
     created: true,
     alreadyExisted: false,
     emailSent: true,
+    userId: 'user-1',
   })
   mocks.sendSetPasswordLink.mockResolvedValue({ sent: true })
+  mocks.claimTrialSessionsForUser.mockResolvedValue(1)
 })
 
 describe('provisionBuyerAccount — first attempt (no stamps yet)', () => {
@@ -122,6 +130,7 @@ describe('provisionBuyerAccount — first attempt (no stamps yet)', () => {
       created: true,
       alreadyExisted: false,
       emailSent: false,
+      userId: 'user-1',
       error: 'brevo_error',
     })
     const { store, writes } = makeStore({ read: { data: PAID, error: null } })
@@ -141,6 +150,7 @@ describe('provisionBuyerAccount — first attempt (no stamps yet)', () => {
       created: false,
       alreadyExisted: true,
       emailSent: false,
+      userId: 'user-1',
       error: 'account_already_exists',
     })
     const { store, writes } = makeStore({ read: { data: PAID, error: null } })
@@ -156,6 +166,7 @@ describe('provisionBuyerAccount — first attempt (no stamps yet)', () => {
       created: false,
       alreadyExisted: false,
       emailSent: false,
+      userId: null,
       error: 'fetch failed',
     })
     const { store, writes } = makeStore({ read: { data: PAID, error: null } })
@@ -163,6 +174,68 @@ describe('provisionBuyerAccount — first attempt (no stamps yet)', () => {
     await provisionBuyerAccount(store, ARGS)
 
     expect(writes).toEqual([])
+  })
+})
+
+describe('provisionBuyerAccount — attaching the buyer\'s free mock', () => {
+  /**
+   * The free station is anonymous, so the consultation that convinced somebody
+   * to buy belongs to nobody until an account exists. The moment it does is the
+   * one moment we can prove they are the same person — same address on the
+   * purchase, the verified trial lead and the auth user.
+   */
+
+  it('claims the guest sessions for a newly created account', async () => {
+    const { store } = makeStore({ read: { data: PAID, error: null } })
+
+    await provisionBuyerAccount(store, ARGS)
+
+    expect(mocks.claimTrialSessionsForUser).toHaveBeenCalledWith(store, 'user-1', 'buyer@x.com')
+  })
+
+  it('claims them for a repeat buyer whose account already existed', async () => {
+    // The likeliest free-station sitter of all, and the path that returns no
+    // new user — so it has to look the id up rather than skip.
+    mocks.provisionAccountForPurchase.mockResolvedValue({
+      created: false,
+      alreadyExisted: true,
+      emailSent: false,
+      userId: 'user-1',
+      error: 'account_already_exists',
+    })
+    const { store } = makeStore({ read: { data: PAID, error: null } })
+
+    await provisionBuyerAccount(store, ARGS)
+
+    expect(mocks.claimTrialSessionsForUser).toHaveBeenCalledWith(store, 'user-1', 'buyer@x.com')
+  })
+
+  it('claims nothing when provisioning could not produce a user id', async () => {
+    mocks.provisionAccountForPurchase.mockResolvedValue({
+      created: false,
+      alreadyExisted: false,
+      emailSent: false,
+      userId: null,
+      error: 'fetch failed',
+    })
+    const { store } = makeStore({ read: { data: PAID, error: null } })
+
+    await provisionBuyerAccount(store, ARGS)
+
+    expect(mocks.claimTrialSessionsForUser).not.toHaveBeenCalled()
+  })
+
+  it('still stamps the row when the claim throws', async () => {
+    // The account and the set-password email are what this function owes the
+    // buyer. Reattaching an old consultation is a bonus and must never cost
+    // them either one.
+    mocks.claimTrialSessionsForUser.mockRejectedValue(new Error('boom'))
+    const { store, writes } = makeStore({ read: { data: PAID, error: null } })
+
+    await provisionBuyerAccount(store, ARGS)
+
+    expect(writes).toHaveLength(1)
+    expect(Object.keys(writes[0].values).sort()).toEqual(['provisioned_at', 'set_password_sent_at'])
   })
 })
 

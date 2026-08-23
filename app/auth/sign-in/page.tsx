@@ -125,11 +125,15 @@ function SignInForm() {
                     </Link>
                 </div>
 
-                {/* Sign Up Link */}
-                <div className="mt-6 text-center text-muted text-sm flex items-center justify-center gap-1">
-                    <span>Don&apos;t have an account?</span>
-                    <Link href="/auth/sign-up" className="inline-flex items-center min-h-[44px] text-primary hover:text-primary-light font-medium transition-colors">
-                        Sign Up
+                {/* The way back in for a buyer whose set-password link died.
+                    This used to be "Don't have an account? Sign Up" — a dead
+                    end: middleware bounces /auth/sign-up to the landing page,
+                    because accounts are created by purchase, not registration.
+                    The person actually stuck here has already paid. */}
+                <div className="mt-6 text-center text-muted text-sm flex flex-wrap items-center justify-center gap-1">
+                    <span>Bought a plan but can&apos;t get in?</span>
+                    <Link href="/auth/resend" className="inline-flex items-center min-h-[44px] text-primary hover:text-primary-light font-medium transition-colors">
+                        Resend your set-up link
                     </Link>
                 </div>
             </AuthCard>
