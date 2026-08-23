@@ -26,6 +26,7 @@ import type {
 import type { SessionHistoryItem } from '@/lib/supabase/queries/dashboard';
 import type { SubscriptionResponse } from '@/app/api/subscription/route';
 import { formatRelativeDate } from '@/lib/utils';
+import { claimTrialSessionsOnce } from '@/lib/trial/claimOnce';
 import { ACCESS_OPENS_LABEL } from '@/lib/commerce/plans';
 import { TONE_COLOUR, fmtMark, passMarkFor } from '@/lib/clinical-master/scoring';
 import { MAX_WEIGHTED_SCORE } from '@/lib/clinical-master/types';
@@ -111,6 +112,13 @@ function DashboardContent() {
       }
 
       try {
+        // Before the stats, not after: a claimed guest free mock has to be
+        // counted in the "you've completed N sessions" line and appear in the
+        // recent list, or the page tells them their work still isn't here.
+        // Once per browser session, one indexed lookup, and it swallows its own
+        // failures — see lib/trial/claimOnce.
+        await claimTrialSessionsOnce();
+
         const [statsData, metricsData, lastStationData, recentData, randomStationData, accessRes] = await Promise.all([
           getUserStats(user.id),
           getPerformanceMetrics(user.id),

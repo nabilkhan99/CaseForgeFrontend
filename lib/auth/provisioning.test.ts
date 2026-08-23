@@ -11,6 +11,10 @@ const mocks = vi.hoisted(() => ({
   createUser: vi.fn(),
   generateLink: vi.fn(),
   sendSetPasswordEmail: vi.fn(),
+  /** `profiles` row returned for the already-existed id lookup. */
+  profileLookup: vi.fn(),
+  /** Every pattern handed to `.ilike('email', …)` on `profiles`. */
+  profilePatterns: [] as string[],
 }))
 
 vi.mock('server-only', () => ({}))
@@ -18,6 +22,16 @@ vi.mock('server-only', () => ({}))
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({
     auth: { admin: { createUser: mocks.createUser, generateLink: mocks.generateLink } },
+    // `profiles` is how an ALREADY-EXISTING account's id is recovered — the
+    // GoTrue admin API has no "get user by email".
+    from: () => ({
+      select: () => ({
+        ilike: (_column: string, pattern: string) => {
+          mocks.profilePatterns.push(pattern)
+          return { maybeSingle: mocks.profileLookup }
+        },
+      }),
+    }),
   }),
 }))
 
@@ -37,6 +51,8 @@ beforeEach(() => {
     error: null,
   })
   mocks.sendSetPasswordEmail.mockResolvedValue({ sent: true })
+  mocks.profileLookup.mockResolvedValue({ data: { id: 'existing-user' }, error: null })
+  mocks.profilePatterns.length = 0
 })
 
 describe('provisionAccountForPurchase', () => {
@@ -50,7 +66,7 @@ describe('provisionAccountForPurchase', () => {
       user_metadata: { full_name: 'Jane Doe' },
     })
     expect(mocks.generateLink).toHaveBeenCalledWith({ type: 'recovery', email: 'buyer@x.com' })
-    expect(result).toEqual({ created: true, alreadyExisted: false, emailSent: true, error: undefined })
+    expect(result).toEqual({ created: true, alreadyExisted: false, emailSent: true, userId: 'u1', error: undefined })
   })
 
   it('lowercases and trims the buying email before creating the account', async () => {
@@ -99,7 +115,7 @@ describe('provisionAccountForPurchase', () => {
 
     expect(mocks.generateLink).not.toHaveBeenCalled()
     expect(mocks.sendSetPasswordEmail).not.toHaveBeenCalled()
-    expect(result).toEqual({ created: false, alreadyExisted: true, emailSent: false, error: 'account_already_exists' })
+    expect(result).toEqual({ created: false, alreadyExisted: true, emailSent: false, userId: 'existing-user', error: 'account_already_exists' })
   })
 
   it('reports an unrelated createUser failure and sends nothing', async () => {
@@ -107,7 +123,7 @@ describe('provisionAccountForPurchase', () => {
 
     const result = await provisionAccountForPurchase({ email: 'buyer@x.com' })
 
-    expect(result).toEqual({ created: false, alreadyExisted: false, emailSent: false, error: 'fetch failed' })
+    expect(result).toEqual({ created: false, alreadyExisted: false, emailSent: false, userId: null, error: 'fetch failed' })
     expect(mocks.sendSetPasswordEmail).not.toHaveBeenCalled()
   })
 
@@ -116,7 +132,7 @@ describe('provisionAccountForPurchase', () => {
 
     const result = await provisionAccountForPurchase({ email: 'buyer@x.com' })
 
-    expect(result).toEqual({ created: true, alreadyExisted: false, emailSent: false, error: 'link boom' })
+    expect(result).toEqual({ created: true, alreadyExisted: false, emailSent: false, userId: 'u1', error: 'link boom' })
     expect(mocks.sendSetPasswordEmail).not.toHaveBeenCalled()
   })
 
@@ -125,7 +141,7 @@ describe('provisionAccountForPurchase', () => {
 
     const result = await provisionAccountForPurchase({ email: 'buyer@x.com' })
 
-    expect(result).toEqual({ created: true, alreadyExisted: false, emailSent: false, error: 'no token in link' })
+    expect(result).toEqual({ created: true, alreadyExisted: false, emailSent: false, userId: 'u1', error: 'no token in link' })
   })
 
   it('reports a Brevo send failure', async () => {
@@ -133,7 +149,7 @@ describe('provisionAccountForPurchase', () => {
 
     const result = await provisionAccountForPurchase({ email: 'buyer@x.com' })
 
-    expect(result).toEqual({ created: true, alreadyExisted: false, emailSent: false, error: 'brevo_error' })
+    expect(result).toEqual({ created: true, alreadyExisted: false, emailSent: false, userId: 'u1', error: 'brevo_error' })
   })
 
   it('emails exactly once when a second call races in behind the first', async () => {
@@ -149,6 +165,31 @@ describe('provisionAccountForPurchase', () => {
     expect(mocks.sendSetPasswordEmail).toHaveBeenCalledTimes(1)
     expect(first.created).toBe(true)
     expect(second.created).toBe(false)
+  })
+
+  it('hands back the auth user id on BOTH paths so the caller can claim their free mock', async () => {
+    // A repeat buyer is the person most likely to have sat the free station
+    // first, so the already-existed path has to report an id too — and the
+    // only place to get one is the `profiles` row the auth trigger writes.
+    expect((await provisionAccountForPurchase({ email: 'buyer@x.com' })).userId).toBe('u1')
+
+    mocks.createUser.mockResolvedValue({ data: null, error: { code: 'email_exists', message: 'x' } })
+    const existing = await provisionAccountForPurchase({ email: '  Buyer@X.com ' })
+
+    expect(existing.userId).toBe('existing-user')
+    // Matched case-insensitively, with ilike wildcards escaped, exactly as
+    // entitlements match a purchase to an account.
+    expect(mocks.profilePatterns).toEqual(['buyer@x.com'])
+  })
+
+  it('reports no user id rather than failing when the profile lookup misses', async () => {
+    mocks.createUser.mockResolvedValue({ data: null, error: { code: 'email_exists', message: 'x' } })
+    mocks.profileLookup.mockResolvedValue({ data: null, error: null })
+
+    const result = await provisionAccountForPurchase({ email: 'buyer@x.com' })
+
+    expect(result.alreadyExisted).toBe(true)
+    expect(result.userId).toBeNull()
   })
 })
 
