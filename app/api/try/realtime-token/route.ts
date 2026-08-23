@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { mintEphemeralKey, unreliableEchoCancellation } from '@/lib/clinical-master/realtimeToken';
 import { voiceForStation } from '@/lib/clinical-master/realtimeSession';
+import { rejectIfSignedIn } from '@/lib/trial/guestOnly';
 
 /**
  * Mint an Azure gpt-realtime ephemeral key for a guest (free-trial) consultation.
@@ -10,6 +11,11 @@ import { voiceForStation } from '@/lib/clinical-master/realtimeSession';
  * the ephemeral key + WebRTC calls URL.
  */
 export async function POST(req: NextRequest) {
+  // Guests only — this is the route that actually spends money. Signed-in
+  // callers have /api/realtime-token, which checks their entitlement.
+  const signedIn = await rejectIfSignedIn();
+  if (signedIn) return signedIn;
+
   const { sessionId, stationId } = await req.json();
   if (!sessionId || !stationId) {
     return NextResponse.json({ error: 'sessionId and stationId are required' }, { status: 400 });
