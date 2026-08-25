@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Copy, Share2 } from 'lucide-react';
+import { Check, Share2 } from 'lucide-react';
 
 interface ShareCardProps {
   /** The sharer's own /r/CODE link. */
@@ -20,12 +20,12 @@ interface ShareCardProps {
  * WhatsApp" dead end. The native share sheet (navigator.share) has no such
  * problem and offers every app they actually use, not just WhatsApp.
  *
- * Where a native share sheet exists it is the only button, because it already
- * offers Copy among its targets and a second button would be the same action
- * twice (Ishaq, 2026-08-21). Where it does not — desktop, and most in-app email
- * browsers — that left no way to share at all, so those get an explicit WhatsApp
- * link plus Copy. The raw link is rendered above regardless, so there is always
- * something to select by hand.
+ * A single "Share my link" button on every device (Nabil, 2026-08-21). Behind it
+ * the behaviour adapts: the native share sheet where one exists, clipboard copy
+ * where it doesn't (desktop, and the in-app browsers email clients open links
+ * in). Offering a WhatsApp button and a Copy button side by side made the reader
+ * choose between two things that amount to the same act. The raw link is
+ * rendered above regardless, so there is always something to select by hand.
  */
 export default function ShareCard({ url, message }: ShareCardProps) {
   // navigator.share is missing on most desktop browsers, and referencing it
@@ -42,6 +42,20 @@ export default function ShareCard({ url, message }: ShareCardProps) {
     const t = setTimeout(() => setCopied(false), 2200);
     return () => clearTimeout(t);
   }, [copied]);
+
+  /**
+   * One button, one label, everywhere. It opens the native share sheet where
+   * there is one and copies the message where there isn't, rather than making
+   * the reader choose between a WhatsApp button and a Copy button that do
+   * roughly the same thing. The helper line below says which happened.
+   */
+  async function handleShare() {
+    if (canShare) {
+      await share();
+      return;
+    }
+    await copy();
+  }
 
   async function share() {
     try {
@@ -88,54 +102,28 @@ export default function ShareCard({ url, message }: ShareCardProps) {
 
       <p className="mt-3 break-all font-mono text-sm text-heading sm:text-base">{url}</p>
 
-      <div className="mt-7 flex flex-col gap-3">
-        {canShare ? (
-          <button type="button" onClick={share} className="cta-button w-full px-6 py-4 text-[15px]">
-            <Share2 className="h-4 w-4" aria-hidden="true" />
-            Share my link
-          </button>
-        ) : (
-          <>
-            {/* No native sheet here (desktop, and most in-app email browsers), so
-                name the one app this audience actually shares in. A wa.me link
-                from a real page opens WhatsApp Web or the app; the dead end we
-                hit before was wa.me opened from inside an email client. */}
-            <a
-              href={`https://wa.me/?text=${encodeURIComponent(message)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="cta-button w-full px-6 py-4 text-[15px]"
-            >
+      <div className="mt-7">
+        <button type="button" onClick={handleShare} className="cta-button w-full px-6 py-4 text-[15px]">
+          {copied ? (
+            <>
+              <Check className="h-4 w-4" aria-hidden="true" />
+              Copied
+            </>
+          ) : (
+            <>
               <Share2 className="h-4 w-4" aria-hidden="true" />
-              Share on WhatsApp
-            </a>
-            <button
-              type="button"
-              onClick={copy}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-heading/15 bg-white px-6 py-4 text-[15px] font-semibold text-heading transition-colors hover:bg-surface-warm"
-            >
-              {copied ? (
-                <>
-                  <Check className="h-4 w-4" aria-hidden="true" />
-                  Copied
-                </>
-              ) : (
-                <>
-                  <Copy className="h-4 w-4" aria-hidden="true" />
-                  Copy message
-                </>
-              )}
-            </button>
-          </>
-        )}
+              Share my link
+            </>
+          )}
+        </button>
       </div>
 
       <p className="mt-5 text-[13px] leading-relaxed text-muted">
         {copied
-          ? 'Paste it into WhatsApp, or wherever your mates are.'
+          ? 'Message copied. Paste it into WhatsApp, or wherever your mates are.'
           : canShare
             ? 'Opens your share sheet with the message ready to send.'
-            : 'Sends a ready-written message with your link in it.'}
+            : 'Copies a ready-written message with your link in it.'}
       </p>
     </motion.div>
   );
