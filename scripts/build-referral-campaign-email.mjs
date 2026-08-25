@@ -61,19 +61,19 @@ const html = `<!doctype html>
                 <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">We see they signed up through your link, and we send you your &pound;100 by bank transfer too.</p>
                 <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">Other plans pay too: Self-Study is <strong style="color:#1C1917;">&pound;50 each</strong> (even on the monthly plan).</p>
                 <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">Your link is live until <strong style="color:#1C1917;">20 September</strong>, then it stops working.</p>
-                <p style="margin:0 0 12px 0;font-size:14px;line-height:1.5;color:#78716C;">Your personal link:</p>
+                <p style="margin:0 0 12px 0;font-size:14px;line-height:1.5;color:#78716C;">Your referral page:</p>
               </td>
             </tr>
             <tr>
               <td style="padding:0 40px 8px 40px;">
                 <a href="${WA_HREF}" style="display:inline-block;background-color:#B45309;color:#FFFCF8;font-size:15px;font-weight:600;text-decoration:none;padding:14px 26px;border-radius:10px;letter-spacing:-0.005em;mso-padding-alt:0;">
-                  Share my link
+                  Open my referral page
                 </a>
               </td>
             </tr>
             <tr>
               <td style="padding:4px 40px 0 40px;">
-                <p style="margin:0;font-size:13px;line-height:1.5;color:#78716C;">Your link, and how it&rsquo;s doing, live on that page. Or copy it straight from here: <span style="color:#B45309;">{{ contact.REFERRAL_URL }}</span></p>
+                <p style="margin:0;font-size:13px;line-height:1.5;color:#78716C;">Opens your own page, where you can send your link straight to WhatsApp and watch the clicks, signups and payments come in.</p>
               </td>
             </tr>
             <tr>
