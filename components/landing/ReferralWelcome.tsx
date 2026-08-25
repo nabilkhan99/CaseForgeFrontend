@@ -67,7 +67,7 @@ export default function ReferralWelcome() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 16 }}
           transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: 0.4 }}
-          className="fixed bottom-5 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 sm:bottom-6"
+          className="fixed inset-x-4 bottom-5 z-50 mx-auto max-w-md sm:bottom-6"
         >
           {/* Floating pill (not an inline banner): /r/CODE lands visitors at
               #pricing, so anything anchored to the page top is never seen. */}
