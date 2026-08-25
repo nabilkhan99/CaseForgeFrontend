@@ -24,7 +24,7 @@ const HERO = 'https://www.fourteenfisherman.com/email/referral-hero.jpg';
 // interstitial cannot hand off to the app from inside an email client's
 // in-app browser, so it dead-ends on "install WhatsApp". The page offers the
 // native share sheet instead, with clipboard copy as the fallback.
-const WA_HREF = 'https://www.fourteenfisherman.com/share/{{ contact.REFERRAL_CODE }}';
+const WA_HREF = '{{ contact.REFERRAL_SHARE_URL }}';
 
 const html = `<!doctype html>
 <html lang="en">
@@ -73,7 +73,7 @@ const html = `<!doctype html>
             </tr>
             <tr>
               <td style="padding:4px 40px 0 40px;">
-                <p style="margin:0;font-size:13px;line-height:1.5;color:#78716C;">Sharing somewhere else? Copy your link: <span style="color:#B45309;">{{ contact.REFERRAL_URL }}</span></p>
+                <p style="margin:0;font-size:13px;line-height:1.5;color:#78716C;">Your link, and how it&rsquo;s doing, live on that page. Or copy it straight from here: <span style="color:#B45309;">{{ contact.REFERRAL_URL }}</span></p>
               </td>
             </tr>
             <tr>
