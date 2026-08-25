@@ -7,6 +7,7 @@ import type { User } from '@supabase/supabase-js';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import DomainTag from '@/components/ui/DomainTag';
+import SessionOutcome from '@/components/ui/SessionOutcome';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import SecondaryButton from '@/components/ui/SecondaryButton';
 import Container from '@/components/ui/Container';
@@ -14,8 +15,8 @@ import {
   getSessionHistory,
   type SessionHistoryItem,
 } from '@/lib/supabase/queries/dashboard';
-import { formatElapsedSince, formatMinutesShort, formatRelativeDate } from '@/lib/utils';
-import { TONE_COLOUR, passMarkCaption } from '@/lib/clinical-master/scoring';
+import { formatRelativeDate } from '@/lib/utils';
+import { passMarkCaption } from '@/lib/clinical-master/scoring';
 
 /** Statuses this page lists — the same set getSessionHistory is asked for. */
 const LISTED_STATUSES = ['completed', 'processing', 'abandoned'];
@@ -46,86 +47,6 @@ function matchesFilters(
   return (
     session.stationTitle.toLowerCase().includes(q) ||
     (session.domainName ?? '').toLowerCase().includes(q)
-  );
-}
-
-/**
- * The right-hand cluster of a history row.
- *
- * Every outcome says something specific. Sessions the user walked out of are
- * half of all real activity and used to appear nowhere in the product; a
- * session still being marked used to flip to "No feedback available" the
- * instant it started, because its age was read off a completed_at that is null
- * until marking finishes.
- */
-function OutcomeCluster({ session, now }: { session: SessionHistoryItem; now: number }) {
-  if (session.outcome === 'scored') {
-    return (
-      <div
-        className="flex items-baseline justify-end gap-1.5"
-        title={`${session.verdict} · ${passMarkCaption(session.maxScore)}`}
-      >
-        {/* A tick, not the word FAIL on every other row. Passing is the notable
-            event and gets a mark; not passing is simply its absence. The tick
-            also carries the meaning without relying on colour. */}
-        {session.passed && (
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke={TONE_COLOUR.pass}
-            strokeWidth={3}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-            className="self-center"
-          >
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-        )}
-        <span
-          className={`text-[15px] font-mono font-bold tabular-nums ${session.passed ? '' : 'text-heading'}`}
-          style={session.passed ? { color: TONE_COLOUR.pass } : undefined}
-        >
-          {session.weightedScore.toFixed(1)}
-        </span>
-        <span className="text-[11px] font-mono text-muted">/{session.maxScore.toFixed(1)}</span>
-        <span className="sr-only">{session.verdict}</span>
-      </div>
-    );
-  }
-
-  /* Everything that is not a score shares one quiet treatment, so the column
-     reads as a column rather than five competing designs. */
-  let label: string;
-  let hint: string | null = null;
-
-  if (session.outcome === 'marking') {
-    const elapsed = formatElapsedSince(session.startedAt, now);
-    label = 'Marking…';
-    hint = `Usually 1–2 minutes${elapsed ? ` · started ${elapsed}` : ''}`;
-  } else if (session.outcome === 'stalled') {
-    label = 'Marking stopped';
-    hint = 'Open to try again';
-  } else if (session.outcome === 'unfinished') {
-    const elapsed = formatMinutesShort(session.elapsedMs);
-    label = `Left early${elapsed ? ` · ${elapsed}` : ''}`;
-  } else {
-    label = 'Not marked';
-  }
-
-  return (
-    <div className="text-right" title={hint ?? undefined}>
-      <span
-        className={`text-[12px] font-mono ${
-          session.outcome === 'marking' ? 'text-primary' : 'text-muted'
-        }`}
-      >
-        {label}
-      </span>
-      {hint && <span className="block text-[10px] text-muted">{hint}</span>}
-    </div>
   );
 }
 
@@ -339,7 +260,7 @@ export default function HistoryPage() {
 
                   {/* Outcome cluster — flex-shrink-0 so it never gets clipped */}
                   <div className="flex-shrink-0">
-                    <OutcomeCluster session={session} now={now} />
+                    <SessionOutcome session={session} now={now} />
                   </div>
                 </Link>
               </motion.div>

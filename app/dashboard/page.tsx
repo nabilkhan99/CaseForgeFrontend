@@ -10,6 +10,7 @@ import Container from '@/components/ui/Container';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import SecondaryButton from '@/components/ui/SecondaryButton';
 import DomainTag from '@/components/ui/DomainTag';
+import SessionOutcome from '@/components/ui/SessionOutcome';
 import {
   getUserStats,
   getPerformanceMetrics,
@@ -28,7 +29,7 @@ import type { SubscriptionResponse } from '@/app/api/subscription/route';
 import { formatRelativeDate } from '@/lib/utils';
 import { claimTrialSessionsOnce } from '@/lib/trial/claimOnce';
 import { ACCESS_OPENS_LABEL } from '@/lib/commerce/plans';
-import { TONE_COLOUR, fmtMark, passMarkFor } from '@/lib/clinical-master/scoring';
+import { fmtMark, passMarkFor } from '@/lib/clinical-master/scoring';
 import { MAX_WEIGHTED_SCORE } from '@/lib/clinical-master/types';
 
 /**
@@ -146,6 +147,20 @@ function DashboardContent() {
 
   const firstName = user?.user_metadata?.full_name?.split(' ')[0] || 'there';
 
+  /**
+   * Whether to frame the passed-station count as guarantee progress.
+   *
+   * The guarantee opens with "Join any of our plans", so it does not apply to
+   * someone browsing without one — promising them £500 would be wrong. A null
+   * count means the pass query failed, and a guarantee tracker reading 0 would
+   * be a fabricated fact about money. Both cases fall back to the plain stat.
+   */
+  const showGuarantee =
+    Boolean(access?.plan) &&
+    stats.passedStations !== null &&
+    stats.completedStations > 0 &&
+    stats.totalStations > 0;
+
   const greeting = (() => {
     const hour = new Date().getHours();
     if (hour < 12) return 'Good morning';
@@ -188,7 +203,10 @@ function DashboardContent() {
               Hidden until the first session — "Passed 0 of 78" is a poor greeting —
               and hidden again when the pass query failed (passedStations === null),
               because a confident zero would be a fabricated fact. */}
-          {stats.passedStations !== null && stats.completedStations > 0 && stats.totalStations > 0 && (
+          {/* S2: with a plan, this count is progress toward the £500 guarantee
+              and moves into its own block below. Without one, the guarantee does
+              not apply ("Join any of our plans"), so it stays a plain stat. */}
+          {!showGuarantee && stats.passedStations !== null && stats.completedStations > 0 && stats.totalStations > 0 && (
             <motion.span
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
@@ -203,7 +221,7 @@ function DashboardContent() {
               Passed {stats.passedStations} of {stats.totalStations} stations
             </motion.span>
           )}
-          {stats.passedStations !== null && stats.completedStations > 0 && stats.totalStations > 0 && (
+          {!showGuarantee && stats.passedStations !== null && stats.completedStations > 0 && stats.totalStations > 0 && (
             <span className="text-[11px] text-muted">
               Passed means {fmtMark(passMarkFor())} / {fmtMark(MAX_WEIGHTED_SCORE)} or better
             </span>
@@ -228,6 +246,53 @@ function DashboardContent() {
           >
             Your development picture &rarr;
           </Link>
+        )}
+
+        {/* S2 — the guarantee tracker.
+            "Passed 0 of 200 stations" was the first fact the dashboard gave you,
+            and with nothing attached it read as a tally of what you had not done.
+            It is in fact the only view a customer has of a £500 cash promise, so
+            it keeps its prominence and gets its meaning back.
+            Wording follows the FAQ ("pass all 200 mock stations first, not just
+            attempt them… unlimited tries… £500 within 5 working days"); the
+            count is best-attempt, matching "unlimited tries", because
+            passedStationIds() counts distinct stations with any passing attempt. */}
+        {showGuarantee && (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: 'easeOut' }}
+            className="mt-5 rounded-xl border border-black/[0.07] bg-surface-raised px-4 py-3.5"
+          >
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.13em] text-primary">
+                Your £500 guarantee
+              </span>
+              <span className="font-mono text-[13px] font-bold tabular-nums text-heading">
+                {stats.passedStations}
+                <span className="font-normal text-muted"> / {stats.totalStations}</span>
+              </span>
+            </div>
+            <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-black/[0.05]">
+              <motion.div
+                className="h-full rounded-full bg-primary"
+                initial={{ width: 0 }}
+                animate={{
+                  width: `${Math.min(100, ((stats.passedStations ?? 0) / stats.totalStations) * 100)}%`,
+                }}
+                transition={{ duration: 0.9, ease: [0.16, 0.84, 0.36, 1] }}
+              />
+            </div>
+            <p className="mt-2.5 text-[11.5px] leading-[1.5] text-muted">
+              Pass all {stats.totalStations} stations, sit your SCA, and if you don&apos;t pass we
+              send you <span className="font-semibold text-body">£500 in cash</span> within 5 working
+              days. Unlimited attempts — a station counts once you score{' '}
+              {fmtMark(passMarkFor())} / {fmtMark(MAX_WEIGHTED_SCORE)} or better.{' '}
+              <Link href="/pricing" className="font-medium text-primary hover:underline">
+                How it works
+              </Link>
+            </p>
+          </motion.div>
         )}
       </div>
 
@@ -464,35 +529,11 @@ function DashboardContent() {
                       <span className="text-[11px] text-muted">{formatRelativeDate(session.completedAt)}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {session.scored ? (
-                      <>
-                        <span
-                          className="text-[11px] font-semibold uppercase"
-                          style={{ color: session.passed ? TONE_COLOUR.pass : TONE_COLOUR.fail }}
-                        >
-                          {session.verdict}
-                        </span>
-                        <span className="text-[12px] font-mono text-muted">
-                          {session.weightedScore.toFixed(1)}/{session.maxScore.toFixed(1)}
-                        </span>
-                      </>
-                    ) : session.outcome === 'marking' ? (
-                      <span className="text-[11px] font-semibold text-primary">
-                        Marking… usually 1&ndash;2 minutes
-                      </span>
-                    ) : session.outcome === 'stalled' ? (
-                      <span
-                        className="text-[11px] font-semibold"
-                        style={{ color: TONE_COLOUR.borderline }}
-                      >
-                        Marking didn&apos;t finish
-                      </span>
-                    ) : (
-                      <span className="text-[11px] font-medium text-muted">
-                        No feedback available
-                      </span>
-                    )}
+                  {/* S4: shared with the history page so the two can't drift
+                      apart again — they had already grown different wording for
+                      the same state. */}
+                  <div className="flex-shrink-0">
+                    <SessionOutcome session={session} />
                   </div>
                 </Link>
               </motion.div>
