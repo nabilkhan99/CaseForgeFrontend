@@ -26,8 +26,10 @@ const brevoKey = process.env.BREVO_API_KEY;
 if (!secret) { console.error('REFERRAL_SHARE_SECRET not set'); process.exit(1); }
 if (!brevoKey) { console.error('BREVO_API_KEY not set'); process.exit(1); }
 
+// Token in the path, not a query string: Brevo rewrites every campaign link for
+// click tracking, and the rewritten form of a `?t=...` URL came back 404.
 const shareUrl = (code) =>
-  `${ORIGIN}/share/${code}?t=${createHmac('sha256', secret).update(code).digest('hex').slice(0, 32)}`;
+  `${ORIGIN}/share/${code}/${createHmac('sha256', secret).update(code).digest('hex').slice(0, 32)}`;
 
 const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const { data: codes, error } = await sb

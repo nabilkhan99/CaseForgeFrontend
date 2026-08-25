@@ -14,7 +14,15 @@ export const metadata: Metadata = {
 };
 
 interface PageProps {
-  params: Promise<{ code: string }>;
+  /**
+   * `/share/CODE` (no tracker) or `/share/CODE/TOKEN` (with it).
+   *
+   * The token sits in the PATH rather than a query string because Brevo rewrites
+   * every link for click tracking, and a rewritten URL carrying `?t=...` came
+   * back 404 — a path-only URL gives its rewriter nothing to mangle.
+   */
+  params: Promise<{ slug?: string[] }>;
+  /** Legacy `?t=` form, still honoured so older links keep working. */
   searchParams: Promise<{ t?: string }>;
 }
 
@@ -71,12 +79,14 @@ const REWARD = `£${REWARD_BY_PLAN.complete / 100}`;
  * round-trip here would buy nothing and could fail the page for a working link.
  */
 export default async function SharePage({ params, searchParams }: PageProps) {
-  const { code: rawCode } = await params;
+  const { slug } = await params;
   const { t } = await searchParams;
+  const [rawCode, pathToken] = slug ?? [];
+  const token = pathToken ?? t;
   const code = normalizeCode(rawCode ?? '');
   // The tracker is for the code's owner only. Everyone else — including anyone
   // who received /r/CODE and guessed their way here — gets the share half alone.
-  const progress = verifyShareToken(code, t) ? await loadProgress(code) : null;
+  const progress = verifyShareToken(code, token) ? await loadProgress(code) : null;
   const url = referralUrl(ORIGIN, code);
   const message = `If you're prepping for the SCA, join through my link and you get ${REWARD} back on the Complete course: ${url}`;
 

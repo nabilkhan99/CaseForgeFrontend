@@ -48,8 +48,13 @@ export function verifyShareToken(code: string, token: string | undefined | null)
   return a.length === b.length && timingSafeEqual(a, b)
 }
 
-/** The full tracker URL for a code, or the plain share URL when unsigned. */
+/**
+ * The full tracker URL for a code, or the plain share URL when unsigned.
+ *
+ * The token goes in the path, not a query string: Brevo rewrites every link in a
+ * campaign for click tracking, and the rewritten form of a `?t=...` URL 404s.
+ */
 export function shareUrlFor(origin: string, code: string): string {
   const token = signShareToken(code)
-  return token ? `${origin}/share/${code}?t=${token}` : `${origin}/share/${code}`
+  return token ? `${origin}/share/${code}/${token}` : `${origin}/share/${code}`
 }
