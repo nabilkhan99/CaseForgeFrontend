@@ -1,0 +1,113 @@
+/**
+ * Builds the referral-programme campaign email (Brevo campaign 6).
+ *
+ *   node scripts/build-referral-campaign-email.mjs <outdir>
+ *
+ * Writes:
+ *   <outdir>/referral-email-campaign.html — Brevo merge tags intact, hero from
+ *     the hosted URL. This is what goes into the campaign via the API.
+ *   <outdir>/referral-email-filled.html — tags filled with a real example
+ *     (Ishaq's code) for eyeballing in a browser.
+ *
+ * Copy is Nabil's own wording (2026-08-21) — plain, not salesy. The button
+ * opens WhatsApp with the share message pre-written because a mailto/native
+ * share isn't possible from email, and WhatsApp is where this audience shares;
+ * a plain link to the sharer's own page would just refer them to themselves.
+ */
+import { writeFileSync } from 'node:fs';
+
+const outdir = process.argv[2] ?? '.';
+const HERO = 'https://www.fourteenfisherman.com/email/referral-hero.jpg';
+
+// The share message, percent-encoded around the merge tag. Brevo substitutes
+// {{ contact.REFERRAL_URL }} after encoding, which wa.me tolerates.
+const WA_HREF =
+  'https://wa.me/?text=If%20you%27re%20prepping%20for%20the%20SCA%20%E2%80%94%20join%20through%20my%20link%20and%20you%20get%20%C2%A3100%20back%20on%20the%20Complete%20course%3A%20{{ contact.REFERRAL_URL }}';
+
+const html = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <meta name="supported-color-schemes" content="light">
+    <title>£100 for you. £100 for them</title>
+  </head>
+  <body style="margin:0;padding:0;background-color:#F5F0EB;font-family:-apple-system,BlinkMacSystemFont,'Plus Jakarta Sans','Segoe UI',Roboto,sans-serif;color:#1C1917;-webkit-font-smoothing:antialiased;">
+    <div style="display:none;font-size:1px;color:#F5F0EB;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">Your personal link is inside — £100 for you, £100 for them.</div>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#F5F0EB;">
+      <tr>
+        <td align="center" style="padding:40px 16px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:560px;background-color:#FFFCF8;border-radius:18px;border:1px solid rgba(28,25,23,0.06);box-shadow:0 1px 2px rgba(28,25,23,0.04);">
+            <tr>
+              <td style="padding:36px 40px 20px 40px;">
+                <img src="https://www.fourteenfisherman.com/fourteenfishermann-dark.png" alt="Fourteen Fisherman" width="200" height="30" style="display:block;border:0;outline:none;text-decoration:none;">
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 20px;">
+                <img src="${HERO}" alt="£100 for you, £100 for them." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;outline:none;text-decoration:none;border-radius:12px;">
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:26px 40px 0 40px;">
+                <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">{% if contact.FIRSTNAME %}Hi {{ contact.FIRSTNAME }},{% else %}Hi there,{% endif %}</p>
+                <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">See your personal referral link below.</p>
+                <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">Send it to another GP trainee sweating the SCA and you both get paid: <strong style="color:#1C1917;">&pound;100 for you, and &pound;100 for them</strong> when they join the Complete SCA Course.</p>
+                <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">They sign up through your link and their &pound;100 comes back to them by bank transfer after they join &mdash; so the course itself is still a full-price course on a full-price receipt, which matters if they&rsquo;re claiming it on their study budget.</p>
+                <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">We see they signed up through your link, and we send you your &pound;100 by bank transfer too.</p>
+                <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">Other plans pay too: Self-Study is <strong style="color:#1C1917;">&pound;50 each</strong> (even on the monthly plan).</p>
+                <p style="margin:0 0 12px 0;font-size:14px;line-height:1.5;color:#78716C;">Your personal link:</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 40px 8px 40px;">
+                <a href="${WA_HREF}" style="display:inline-block;background-color:#B45309;color:#FFFCF8;font-size:15px;font-weight:600;text-decoration:none;padding:14px 26px;border-radius:10px;letter-spacing:-0.005em;mso-padding-alt:0;">
+                  Share on WhatsApp
+                </a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:4px 40px 0 40px;">
+                <p style="margin:0;font-size:13px;line-height:1.5;color:#78716C;">Sharing somewhere else? Copy your link: <span style="color:#B45309;">{{ contact.REFERRAL_URL }}</span></p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:28px 40px 0 40px;">
+                <div style="height:1px;line-height:1px;font-size:1px;background-color:rgba(28,25,23,0.08);">&nbsp;</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:20px 40px 0 40px;">
+                <p style="margin:0 0 10px 0;font-size:13px;line-height:1.6;color:#78716C;">There&rsquo;s no cap &mdash; every friend who joins through your link pays out again. Transfers go out from 1 September once the order is confirmed; we&rsquo;ll email you to arrange yours.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:18px 40px 36px 40px;">
+                <p style="margin:0 0 4px 0;font-size:15px;line-height:1.5;color:#44403C;">Speak soon,</p>
+                <p style="margin:0;font-size:15px;line-height:1.5;font-weight:600;color:#1C1917;">The Fourteen Fisherman Team</p>
+              </td>
+            </tr>
+          </table>
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:560px;">
+            <tr>
+              <td style="padding:20px 8px 0 8px;text-align:center;">
+                <p style="margin:0;font-size:12px;line-height:1.5;color:#78716C;">Fourteen Fisherman &middot; The gold standard for SCA prep<br><a href="https://www.fourteenfisherman.com" style="color:#78716C;text-decoration:underline;">fourteenfisherman.com</a> &middot; <a href="{{ unsubscribe }}" style="color:#78716C;text-decoration:underline;">Unsubscribe</a></p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
+writeFileSync(`${outdir}/referral-email-campaign.html`, html);
+writeFileSync(
+  `${outdir}/referral-email-filled.html`,
+  html
+    .replace('{% if contact.FIRSTNAME %}Hi {{ contact.FIRSTNAME }},{% else %}Hi there,{% endif %}', 'Hi Ishaq,')
+    .replaceAll('{{ contact.REFERRAL_URL }}', 'https://www.fourteenfisherman.com/r/SHAQ2A8Z')
+    .replace('{{ unsubscribe }}', '#'),
+);
+console.log('built campaign + filled');
