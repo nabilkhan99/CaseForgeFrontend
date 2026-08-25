@@ -19,9 +19,11 @@ import { writeFileSync } from 'node:fs';
 const outdir = process.argv[2] ?? '.';
 const HERO = 'https://www.fourteenfisherman.com/email/referral-hero.jpg';
 
-// Our own bounce route (app/share/[code]) builds the WhatsApp URL server-side
-// and redirects into it. Linking wa.me directly broke: Brevo's click-tracker
-// re-encodes wrapped links and mangles the embedded message.
+// Our own share page (app/share/[code]). Linking wa.me directly broke twice
+// over: Brevo's click-tracker re-encodes wrapped links, and wa.me's web
+// interstitial cannot hand off to the app from inside an email client's
+// in-app browser, so it dead-ends on "install WhatsApp". The page offers the
+// native share sheet instead, with clipboard copy as the fallback.
 const WA_HREF = 'https://www.fourteenfisherman.com/share/{{ contact.REFERRAL_CODE }}';
 
 const html = `<!doctype html>
@@ -65,7 +67,7 @@ const html = `<!doctype html>
             <tr>
               <td style="padding:0 40px 8px 40px;">
                 <a href="${WA_HREF}" style="display:inline-block;background-color:#B45309;color:#FFFCF8;font-size:15px;font-weight:600;text-decoration:none;padding:14px 26px;border-radius:10px;letter-spacing:-0.005em;mso-padding-alt:0;">
-                  Share on WhatsApp
+                  Share my link
                 </a>
               </td>
             </tr>
