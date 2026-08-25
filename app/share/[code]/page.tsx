@@ -1,6 +1,10 @@
 import type { Metadata } from 'next';
 import { normalizeCode, referralUrl, REWARD_BY_PLAN } from '@/lib/commerce/referrals';
+import { verifyShareToken } from '@/lib/commerce/shareToken';
+import { buildAdvocateProgress, type AdvocateReferralRow } from '@/lib/commerce/advocateProgress';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import ShareCard from '@/components/referrals/ShareCard';
+import ProgressPanel from '@/components/referrals/ProgressPanel';
 
 export const metadata: Metadata = {
   title: 'Share your referral link — Fourteen Fisherman',
@@ -11,6 +15,34 @@ export const metadata: Metadata = {
 
 interface PageProps {
   params: Promise<{ code: string }>;
+  searchParams: Promise<{ t?: string }>;
+}
+
+/**
+ * Fetch a code's click count and its referrals, for the tracker. Returns null on
+ * any failure so the share half of the page still renders: an advocate who came
+ * here to send their link must never be blocked by a stats query.
+ */
+async function loadProgress(code: string) {
+  try {
+    const supabase = getSupabaseAdmin();
+    const [{ data: codeRow, error: codeError }, { data: referrals, error: refError }] = await Promise.all([
+      supabase.from('referral_codes').select('click_count').eq('code', code).maybeSingle(),
+      supabase
+        .from('referrals')
+        .select('referee_email, plan, reward_amount, status, created_at, paid_at')
+        .eq('referral_code', code),
+    ]);
+    if (codeError || refError) {
+      console.error('[share-page] progress lookup failed', { code, codeError, refError });
+      return null;
+    }
+    if (!codeRow) return null;
+    return buildAdvocateProgress(codeRow.click_count ?? 0, (referrals ?? []) as AdvocateReferralRow[]);
+  } catch (error: unknown) {
+    console.error('[share-page] progress unexpected error', { code, error });
+    return null;
+  }
 }
 
 const ORIGIN = 'https://www.fourteenfisherman.com';
@@ -38,9 +70,13 @@ const REWARD = `£${REWARD_BY_PLAN.complete / 100}`;
  * degrades to a plain redirect when the code isn't live. Adding a database
  * round-trip here would buy nothing and could fail the page for a working link.
  */
-export default async function SharePage({ params }: PageProps) {
+export default async function SharePage({ params, searchParams }: PageProps) {
   const { code: rawCode } = await params;
+  const { t } = await searchParams;
   const code = normalizeCode(rawCode ?? '');
+  // The tracker is for the code's owner only. Everyone else — including anyone
+  // who received /r/CODE and guessed their way here — gets the share half alone.
+  const progress = verifyShareToken(code, t) ? await loadProgress(code) : null;
   const url = referralUrl(ORIGIN, code);
   const message = `If you're prepping for the SCA, join through my link and you get ${REWARD} back on the Complete course: ${url}`;
 
@@ -58,6 +94,12 @@ export default async function SharePage({ params }: PageProps) {
         <div className="mt-8 border-t border-heading/[0.08] pt-7">
           <ShareCard url={url} message={message} />
         </div>
+
+        {progress && (
+          <div className="mt-9 border-t border-heading/[0.08] pt-7">
+            <ProgressPanel progress={progress} />
+          </div>
+        )}
 
         <div className="mt-9 border-t border-heading/[0.08] pt-7">
           <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted">How it works</p>
