@@ -24,6 +24,15 @@ const HERO = 'https://www.fourteenfisherman.com/email/referral-hero.jpg';
 // interstitial cannot hand off to the app from inside an email client's
 // in-app browser, so it dead-ends on "install WhatsApp". The page offers the
 // native share sheet instead, with clipboard copy as the fallback.
+/** Same five steps the share page lists, so the two never drift apart. */
+const HOW_IT_WORKS = [
+  'Share your link with your friends.',
+  'They sign up through your link.',
+  'We verify which course they joined.',
+  'We email you both to arrange payment.',
+  'You both get paid.',
+];
+
 const WA_HREF = '{{ contact.REFERRAL_SHARE_URL }}';
 
 const html = `<!doctype html>
@@ -82,7 +91,24 @@ const html = `<!doctype html>
               </td>
             </tr>
             <tr>
-              <td style="padding:20px 40px 0 40px;">
+              <td style="padding:22px 40px 0 40px;">
+                <p style="margin:0 0 14px 0;font-family:'JetBrains Mono',Consolas,monospace;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#78716C;">How it works</p>
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                  ${HOW_IT_WORKS.map(
+                    (step, i) => `<tr>
+                    <td valign="top" width="26" style="padding:0 0 10px 0;">
+                      <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+                        <td align="center" valign="middle" width="20" height="20" style="width:20px;height:20px;background-color:#F5F0EB;border-radius:10px;font-family:'JetBrains Mono',Consolas,monospace;font-size:10px;font-weight:600;color:#B45309;line-height:20px;">${i + 1}</td>
+                      </tr></table>
+                    </td>
+                    <td valign="top" style="padding:0 0 10px 0;font-size:14px;line-height:1.5;color:#44403C;">${step}</td>
+                  </tr>`,
+                  ).join('')}
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:18px 40px 0 40px;">
                 <p style="margin:0 0 10px 0;font-size:13px;line-height:1.6;color:#78716C;">There&rsquo;s no cap: every friend who joins through your link pays out again. Transfers go out once the order is confirmed, and we&rsquo;ll email you to arrange yours.</p>
               </td>
             </tr>
