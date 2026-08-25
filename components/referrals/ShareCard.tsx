@@ -20,9 +20,11 @@ interface ShareCardProps {
  * WhatsApp" dead end. The native share sheet (navigator.share) has no such
  * problem and offers every app they actually use, not just WhatsApp.
  *
- * Three tiers, because share-sheet support is not universal: native share where
- * it exists, clipboard copy everywhere else, and the raw link rendered on the
- * page so there is always something to select by hand.
+ * One button, chosen by capability: the native share sheet where it exists,
+ * clipboard copy where it doesn't. Never both, because on a phone they are the
+ * same action twice over (the share sheet already offers Copy among its
+ * targets). The raw link is rendered above regardless, so there is always
+ * something to select by hand.
  */
 export default function ShareCard({ url, message }: ShareCardProps) {
   // navigator.share is missing on most desktop browsers, and referencing it
@@ -85,41 +87,39 @@ export default function ShareCard({ url, message }: ShareCardProps) {
 
       <p className="mt-3 break-all font-mono text-sm text-heading sm:text-base">{url}</p>
 
-      <div className="mt-7 flex flex-col gap-3">
-        {canShare && (
+      <div className="mt-7">
+        {canShare ? (
           <button type="button" onClick={share} className="cta-button w-full px-6 py-4 text-[15px]">
             <Share2 className="h-4 w-4" aria-hidden="true" />
             Share my link
           </button>
+        ) : (
+          <button
+            type="button"
+            onClick={copy}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-transparent bg-primary px-6 py-4 text-[15px] font-semibold text-white transition-colors hover:bg-primary/90"
+          >
+            {copied ? (
+              <>
+                <Check className="h-4 w-4" aria-hidden="true" />
+                Copied
+              </>
+            ) : (
+              <>
+                <Copy className="h-4 w-4" aria-hidden="true" />
+                Copy message
+              </>
+            )}
+          </button>
         )}
-
-        <button
-          type="button"
-          onClick={copy}
-          className={`inline-flex w-full items-center justify-center gap-2 rounded-full border px-6 py-4 text-[15px] font-semibold transition-colors ${
-            canShare
-              ? 'border-heading/15 bg-white text-heading hover:bg-surface-warm'
-              : 'border-transparent bg-primary text-white hover:bg-primary/90'
-          }`}
-        >
-          {copied ? (
-            <>
-              <Check className="h-4 w-4" aria-hidden="true" />
-              Copied
-            </>
-          ) : (
-            <>
-              <Copy className="h-4 w-4" aria-hidden="true" />
-              Copy message
-            </>
-          )}
-        </button>
       </div>
 
       <p className="mt-5 text-[13px] leading-relaxed text-muted">
         {copied
           ? 'Paste it into WhatsApp, or wherever your mates are.'
-          : 'Copies a ready-written message with your link in it.'}
+          : canShare
+            ? 'Opens your share sheet with the message ready to send.'
+            : 'Copies a ready-written message with your link in it.'}
       </p>
     </motion.div>
   );

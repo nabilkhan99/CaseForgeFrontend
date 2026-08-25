@@ -14,6 +14,20 @@ interface PageProps {
 }
 
 const ORIGIN = 'https://www.fourteenfisherman.com';
+
+/**
+ * The five steps between sharing and being paid (Ishaq, 2026-08-21). Spelling
+ * out step 4 in particular is the point: an unexplained "£100" from a company
+ * someone has barely used reads as a gimmick until they can see how the money
+ * is actually supposed to reach them.
+ */
+const HOW_IT_WORKS = [
+  'Share your link with your friends.',
+  'They sign up through your link.',
+  'We verify which course they joined.',
+  'We email you both to arrange payment.',
+  'You both get paid.',
+] as const;
 const REWARD = `£${REWARD_BY_PLAN.complete / 100}`;
 
 /**
@@ -43,6 +57,23 @@ export default async function SharePage({ params }: PageProps) {
 
         <div className="mt-8 border-t border-heading/[0.08] pt-7">
           <ShareCard url={url} message={message} />
+        </div>
+
+        <div className="mt-9 border-t border-heading/[0.08] pt-7">
+          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted">How it works</p>
+          <ol className="mt-4 space-y-3">
+            {HOW_IT_WORKS.map((step, i) => (
+              <li key={step} className="flex gap-3 text-[14px] leading-relaxed text-body">
+                <span
+                  aria-hidden="true"
+                  className="mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface-warm font-mono text-[10px] font-semibold text-primary"
+                >
+                  {i + 1}
+                </span>
+                {step}
+              </li>
+            ))}
+          </ol>
         </div>
       </div>
     </main>
