@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import DomainTag from '@/components/ui/DomainTag';
 import SessionOutcome from '@/components/ui/SessionOutcome';
+import ScoreTrend from '@/components/ui/ScoreTrend';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import SecondaryButton from '@/components/ui/SecondaryButton';
 import Container from '@/components/ui/Container';
@@ -184,6 +185,9 @@ export default function HistoryPage() {
         </Container>
       ) : (
         <div>
+          {/* M4 — the shape of the list, which the list itself cannot show. */}
+          <ScoreTrend sessions={sessions} />
+
           {/* S7 — the Case Library's search + chips, so history can be narrowed too. */}
           <div className="mb-4">
             <label htmlFor="history-search" className="sr-only">

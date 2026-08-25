@@ -13,6 +13,7 @@ import {
   PASSING_VERDICTS,
   Verdict,
 } from '@/lib/clinical-master/types';
+import PassCelebration from '@/components/clinical-master/PassCelebration';
 import {
   TONE_BAR_CLASS,
   fmtMark,
@@ -402,9 +403,10 @@ function FocusNext({ feedback }: { feedback: ConsultationFeedback }) {
   );
 }
 
-function VerdictPanel({ feedback }: { feedback: ConsultationFeedback }) {
+function VerdictPanel({ feedback, sessionId }: { feedback: ConsultationFeedback; sessionId: string }) {
   const { overall } = feedback;
   const vc = verdictColours(overall.verdict);
+  const isPass = (PASSING_VERDICTS as readonly string[]).includes(overall.verdict);
   const maxScore = overall.max_score || 10.5;
   const pct = Math.max(0, Math.min(100, (overall.weighted_score / maxScore) * 100));
   const duration = fmtDuration(feedback.timing?.total_duration_ms);
@@ -415,13 +417,18 @@ function VerdictPanel({ feedback }: { feedback: ConsultationFeedback }) {
 
   return (
     <section className="grid gap-5 rounded-[24px] border border-black/[0.06] bg-white/80 p-5 shadow-[0_20px_60px_rgba(180,83,9,0.07),0_2px_4px_rgba(0,0,0,0.04)] md:p-6 lg:grid-cols-[250px_minmax(0,1fr)_240px]">
-      <div className="rounded-[18px] bg-surface px-5 py-4">
-        <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Final verdict</div>
-        <div className={`font-serif text-[40px] leading-none ${vc.text}`}>{overall.verdict}</div>
-        <div className="mt-3 flex items-end gap-2 font-mono text-heading">
-          <span className="text-[24px] font-semibold">{overall.weighted_score.toFixed(1)}</span>
-          <span className="pb-1 text-[13px] text-stone-400">/ {overall.max_score.toFixed(1)}</span>
-        </div>
+      {/* M1 + M3 live inside this tile, so the bloom is anchored on the score
+          rather than on the page. relative + overflow-hidden keeps both inside
+          the rounded corners. */}
+      <div className="relative overflow-hidden rounded-[18px] bg-surface px-5 py-4">
+        <PassCelebration passed={isPass} sessionId={sessionId} />
+        <div className="relative z-20">
+          <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Final verdict</div>
+          <div className={`font-serif text-[40px] leading-none ${vc.text}`}>{overall.verdict}</div>
+          <div className="mt-3 flex items-end gap-2 font-mono text-heading">
+            <span className="text-[24px] font-semibold">{overall.weighted_score.toFixed(1)}</span>
+            <span className="pb-1 text-[13px] text-stone-400">/ {overall.max_score.toFixed(1)}</span>
+          </div>
         <div className="relative mt-4 h-2 rounded-full bg-stone-200">
           <div className="absolute inset-0 overflow-hidden rounded-full">
             <motion.div
@@ -437,9 +444,10 @@ function VerdictPanel({ feedback }: { feedback: ConsultationFeedback }) {
             style={{ left: `${passPct}%` }}
           />
         </div>
-        <p className="mt-3 text-[12px] leading-[1.55] text-stone-600">
-          {passMarkSentence(overall.weighted_score, maxScore)}
-        </p>
+          <p className="mt-3 text-[12px] leading-[1.55] text-stone-600">
+            {passMarkSentence(overall.weighted_score, maxScore)}
+          </p>
+        </div>
       </div>
 
       <div className="flex min-w-0 flex-col justify-center">
@@ -1216,7 +1224,7 @@ export default function FeedbackReport({ sessionId, variant = 'app', from = null
           </div>
         </motion.header>
 
-        <VerdictPanel feedback={feedback} />
+        <VerdictPanel feedback={feedback} sessionId={sessionId} />
 
         {feedback.confidence && feedback.confidence.transcript_quality !== 'high' && (
           <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-[1.6] text-amber-800">
