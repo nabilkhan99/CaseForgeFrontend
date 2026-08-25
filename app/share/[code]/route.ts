@@ -23,6 +23,6 @@ export async function GET(_request: Request, { params }: RouteContext) {
   const code = normalizeCode(rawCode ?? '')
   const link = referralUrl('https://www.fourteenfisherman.com', code || 'SHARE')
 
-  const message = `If you're prepping for the SCA — join through my link and you get £100 back on the Complete course: ${link}`
+  const message = `If you're prepping for the SCA, join through my link and you get £100 back on the Complete course: ${link}`
   return NextResponse.redirect(`https://wa.me/?text=${encodeURIComponent(message)}`, 307)
 }
