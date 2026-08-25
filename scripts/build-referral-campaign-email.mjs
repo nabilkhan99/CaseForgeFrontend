@@ -53,12 +53,12 @@ const html = `<!doctype html>
               <td style="padding:26px 40px 0 40px;">
                 <h1 style="margin:0 0 18px 0;font-size:26px;line-height:1.2;font-weight:700;letter-spacing:-0.02em;color:#1C1917;">Split &pound;200 with your mates.</h1>
                 <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">{% if contact.FIRSTNAME %}Hi {{ contact.FIRSTNAME }},{% else %}Hi there,{% endif %}</p>
-                <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">You were one of our earliest supporters, so you get this first: we&rsquo;ve just launched a referral programme, and we&rsquo;ve made it a generous one.</p>
+                <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">You found us early, so you get this first: we&rsquo;ve just launched a referral programme, and we&rsquo;ve made it a generous one.</p>
                 <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">Send your personal link to another GP trainee sweating the SCA and you both get paid: <strong style="color:#1C1917;">&pound;100 for you, and &pound;100 for them</strong> when they join the Complete SCA Course.</p>
                 <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">They sign up through your link and their &pound;100 comes back to them by bank transfer after they join. The course itself stays a full-price course on a full-price receipt, which matters if they&rsquo;re claiming it on their study budget.</p>
                 <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">We see they signed up through your link, and we send you your &pound;100 by bank transfer too.</p>
                 <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">Other plans pay too: Self-Study is <strong style="color:#1C1917;">&pound;50 each</strong> (even on the monthly plan).</p>
-                <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">Your link is live until <strong style="color:#1C1917;">20 September</strong>, then it stops working. Purchases made through it before then still pay out as normal.</p>
+                <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">Your link is live until <strong style="color:#1C1917;">20 September</strong>, then it stops working.</p>
                 <p style="margin:0 0 12px 0;font-size:14px;line-height:1.5;color:#78716C;">Your personal link:</p>
               </td>
             </tr>
@@ -81,7 +81,7 @@ const html = `<!doctype html>
             </tr>
             <tr>
               <td style="padding:20px 40px 0 40px;">
-                <p style="margin:0 0 10px 0;font-size:13px;line-height:1.6;color:#78716C;">There&rsquo;s no cap: every friend who joins through your link pays out again. Transfers go out from 1 September once the order is confirmed, and we&rsquo;ll email you to arrange yours.</p>
+                <p style="margin:0 0 10px 0;font-size:13px;line-height:1.6;color:#78716C;">There&rsquo;s no cap: every friend who joins through your link pays out again. Transfers go out once the order is confirmed, and we&rsquo;ll email you to arrange yours.</p>
               </td>
             </tr>
             <tr>
