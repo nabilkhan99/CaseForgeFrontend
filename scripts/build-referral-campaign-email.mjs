@@ -19,10 +19,10 @@ import { writeFileSync } from 'node:fs';
 const outdir = process.argv[2] ?? '.';
 const HERO = 'https://www.fourteenfisherman.com/email/referral-hero.jpg';
 
-// The share message, percent-encoded around the merge tag. Brevo substitutes
-// {{ contact.REFERRAL_URL }} after encoding, which wa.me tolerates.
-const WA_HREF =
-  'https://wa.me/?text=If%20you%27re%20prepping%20for%20the%20SCA%20%E2%80%94%20join%20through%20my%20link%20and%20you%20get%20%C2%A3100%20back%20on%20the%20Complete%20course%3A%20{{ contact.REFERRAL_URL }}';
+// Our own bounce route (app/share/[code]) builds the WhatsApp URL server-side
+// and redirects into it. Linking wa.me directly broke: Brevo's click-tracker
+// re-encodes wrapped links and mangles the embedded message.
+const WA_HREF = 'https://www.fourteenfisherman.com/share/{{ contact.REFERRAL_CODE }}';
 
 const html = `<!doctype html>
 <html lang="en">
@@ -110,6 +110,7 @@ writeFileSync(
   html
     .replace('{% if contact.FIRSTNAME %}Hi {{ contact.FIRSTNAME }},{% else %}Hi there,{% endif %}', 'Hi Ishaq,')
     .replaceAll('{{ contact.REFERRAL_URL }}', 'https://www.fourteenfisherman.com/r/SHAQ2A8Z')
+    .replaceAll('{{ contact.REFERRAL_CODE }}', 'SHAQ2A8Z')
     .replace('{{ unsubscribe }}', '#'),
 );
 console.log('built campaign + filled');
