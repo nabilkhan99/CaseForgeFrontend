@@ -13,12 +13,14 @@ const STAGE_LABEL: Record<ProgressStage, string> = {
   confirming: 'Confirming',
   ready: 'Ready to pay',
   paid: 'Paid',
+  void: 'Didn\u2019t qualify', // overridden per-row by voidLabel
 };
 
 const STAGE_CLASS: Record<ProgressStage, string> = {
   confirming: 'bg-surface-warm text-muted',
   ready: 'bg-[#FAEEDA] text-[#854F0B]',
   paid: 'bg-[#EAF3DE] text-[#27500A]',
+  void: 'bg-surface-warm text-muted',
 };
 
 function Stat({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
@@ -43,7 +45,7 @@ function Stat({ icon, value, label }: { icon: React.ReactNode; value: string; la
  * whole reason the tracker ships before the campaign rather than after it.
  */
 export default function ProgressPanel({ progress }: { progress: AdvocateProgress }) {
-  const { clicks, signups, outstandingPence, paidPence, items, didNotQualify } = progress;
+  const { clicks, signups, outstandingPence, paidPence, items } = progress;
   const nothingYet = clicks === 0 && signups === 0;
 
   return (
@@ -61,7 +63,7 @@ export default function ProgressPanel({ progress }: { progress: AdvocateProgress
           No clicks yet. Share your link and this page will show you every click, every friend who
           joins, and what you&rsquo;re owed.
         </p>
-      ) : signups === 0 ? (
+      ) : items.length === 0 ? (
         <p className="mt-5 text-[14px] leading-relaxed text-muted">
           {clicks === 1 ? 'One person has' : `${clicks} people have`} opened your link. You&rsquo;ll see
           them here the moment anyone joins.
@@ -71,19 +73,30 @@ export default function ProgressPanel({ progress }: { progress: AdvocateProgress
           {items.map((item) => (
             <li key={`${item.who}-${item.joinedAt}`} className="flex items-center justify-between gap-3 py-3">
               <div className="min-w-0">
-                <p className="truncate text-[14px] font-medium text-heading">{item.who}</p>
+                <p
+                  className={`truncate text-[14px] font-medium ${item.stage === 'void' ? 'text-muted' : 'text-heading'}`}
+                >
+                  {item.who}
+                </p>
                 <p className="mt-0.5 text-[12px] text-muted">
                   {item.what} &middot; {fmtDate(item.joinedAt)}
                 </p>
               </div>
               <div className="shrink-0 text-right">
-                <p className="font-mono text-[14px] font-semibold text-heading tabular-nums">
+                {/* A void referral's reward is struck through rather than hidden:
+                    the advocate can see what it would have been worth, which is
+                    the honest version of "this one fell through". */}
+                <p
+                  className={`font-mono text-[14px] font-semibold tabular-nums ${
+                    item.stage === 'void' ? 'text-muted line-through' : 'text-heading'
+                  }`}
+                >
                   {gbp(item.amount)}
                 </p>
                 <span
                   className={`mt-1 inline-block rounded-full px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.1em] ${STAGE_CLASS[item.stage]}`}
                 >
-                  {STAGE_LABEL[item.stage]}
+                  {item.voidLabel ?? STAGE_LABEL[item.stage]}
                 </span>
               </div>
             </li>
@@ -99,12 +112,7 @@ export default function ProgressPanel({ progress }: { progress: AdvocateProgress
         </p>
       )}
 
-      {didNotQualify > 0 && (
-        <p className="mt-3 text-[12px] leading-relaxed text-muted">
-          {didNotQualify === 1 ? '1 referral' : `${didNotQualify} referrals`} didn&rsquo;t qualify
-          (cancelled or refunded).
-        </p>
-      )}
+
     </div>
   );
 }

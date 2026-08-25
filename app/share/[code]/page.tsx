@@ -30,7 +30,7 @@ async function loadProgress(code: string) {
       supabase.from('referral_codes').select('click_count').eq('code', code).maybeSingle(),
       supabase
         .from('referrals')
-        .select('referee_email, plan, reward_amount, status, created_at, paid_at')
+        .select('referee_email, plan, reward_amount, status, void_reason, created_at, paid_at')
         .eq('referral_code', code),
     ]);
     if (codeError || refError) {

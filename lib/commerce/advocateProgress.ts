@@ -11,26 +11,29 @@
 
 import { payableFrom } from './referrals'
 
-/** One attributed purchase, as much of it as an advocate may see. */
+/** One attributed purchase, as the advocate's own tracker shows it. */
 export interface AdvocateReferralRow {
   referee_email: string
   plan: string
   reward_amount: number
   status: 'pending' | 'qualified' | 'paid' | 'void'
+  void_reason: string | null
   created_at: string
   paid_at: string | null
 }
 
 /** Where one referral has got to, in the advocate's language. */
-export type ProgressStage = 'confirming' | 'ready' | 'paid'
+export type ProgressStage = 'confirming' | 'ready' | 'paid' | 'void'
 
 export interface ProgressItem {
-  /** Masked referee address: enough for the advocate, opaque to a stranger. */
+  /** Referee address in full: the tracker is private to its own advocate. */
   who: string
   /** Human plan name. */
   what: string
   amount: number
   stage: ProgressStage
+  /** Why a void referral fell through, in plain words. Null unless void. */
+  voidLabel: string | null
   /** ISO date this becomes payable — null once it already is (or is paid). */
   payableFrom: string | null
   joinedAt: string
@@ -47,7 +50,7 @@ export interface AdvocateProgress {
   /** Earned but not yet sent. */
   outstandingPence: number
   items: readonly ProgressItem[]
-  /** Void referrals are surfaced as a count only, never itemised. */
+  /** How many of `items` are void. They count towards no money figure. */
   didNotQualify: number
 }
 
@@ -58,18 +61,19 @@ const PLAN_LABELS: Record<string, string> = {
 }
 
 /**
- * Mask an email to first character + domain: `alex@nhs.net` -> `a••@nhs.net`.
- * The advocate knows who they referred, so a hint is enough to tell two apart;
- * anyone who came by the link some other way learns nothing usable.
+ * Why a referral fell through, in words an advocate can act on. A refund is the
+ * one an advocate genuinely needs to see: their friend bought and changed their
+ * mind, which explains the money disappearing far better than silence does.
+ * The fraud reasons are deliberately not spelled out.
  */
-export function maskEmail(email: string): string {
-  const at = email.indexOf('@')
-  if (at <= 0) return '••'
-  return `${email[0]}••${email.slice(at)}`
+const VOID_LABELS: Record<string, string> = {
+  refunded: 'Refunded',
+  self_referral: 'Not eligible',
+  below_min_spend: 'Not eligible',
 }
 
-/** Stage for a row. Void rows never reach here — they are filtered out first. */
 function stageFor(status: AdvocateReferralRow['status']): ProgressStage {
+  if (status === 'void') return 'void'
   if (status === 'paid') return 'paid'
   if (status === 'qualified') return 'ready'
   return 'confirming'
@@ -87,14 +91,17 @@ export function buildAdvocateProgress(
   referrals: readonly AdvocateReferralRow[],
 ): AdvocateProgress {
   const live = referrals.filter((r) => r.status !== 'void')
-  const items = live
+  // Void referrals ARE listed (founder decision 2026-08-21: a refund vanishing
+  // without explanation is worse than seeing it), but they count towards nothing.
+  const items = referrals
     .map((r) => {
       const stage = stageFor(r.status)
       return {
-        who: maskEmail(r.referee_email),
+        who: r.referee_email,
         what: PLAN_LABELS[r.plan] ?? r.plan,
         amount: r.reward_amount,
         stage,
+        voidLabel: stage === 'void' ? (VOID_LABELS[r.void_reason ?? ''] ?? 'Didn\u2019t qualify') : null,
         payableFrom: stage === 'confirming' ? payableFrom(new Date(r.created_at)).toISOString() : null,
         joinedAt: r.created_at,
       }

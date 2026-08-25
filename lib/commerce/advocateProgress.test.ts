@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildAdvocateProgress, maskEmail, type AdvocateReferralRow } from './advocateProgress'
+import { buildAdvocateProgress, type AdvocateReferralRow } from './advocateProgress'
 import { PAYOUT_FLOOR_DATE } from './referrals'
 
 const row = (over: Partial<AdvocateReferralRow> = {}): AdvocateReferralRow => ({
@@ -7,22 +7,10 @@ const row = (over: Partial<AdvocateReferralRow> = {}): AdvocateReferralRow => ({
   plan: 'complete',
   reward_amount: 10000,
   status: 'pending',
+  void_reason: null,
   created_at: '2026-09-10T09:00:00.000Z',
   paid_at: null,
   ...over,
-})
-
-describe('maskEmail', () => {
-  it('keeps the first character and the domain', () => {
-    expect(maskEmail('alex@nhs.net')).toBe('a••@nhs.net')
-    expect(maskEmail('z@gmail.com')).toBe('z••@gmail.com')
-  })
-
-  it('never leaks anything from a malformed address', () => {
-    expect(maskEmail('nonsense')).toBe('••')
-    expect(maskEmail('@nodomain.com')).toBe('••')
-    expect(maskEmail('')).toBe('••')
-  })
 })
 
 describe('buildAdvocateProgress', () => {
@@ -73,21 +61,35 @@ describe('buildAdvocateProgress', () => {
     expect(p.items[0].payableFrom).toBe(PAYOUT_FLOOR_DATE.toISOString())
   })
 
-  it('excludes void referrals from every figure, counting them separately', () => {
+  it('lists void referrals but counts them towards nothing', () => {
     const p = buildAdvocateProgress(5, [
       row({ status: 'qualified', reward_amount: 10000 }),
-      row({ status: 'void', reward_amount: 10000 }),
-      row({ status: 'void', reward_amount: 5000 }),
+      row({ status: 'void', reward_amount: 10000, void_reason: 'refunded' }),
+      row({ status: 'void', reward_amount: 5000, void_reason: 'refunded' }),
     ])
     expect(p.signups).toBe(1)
     expect(p.earnedPence).toBe(10000)
-    expect(p.items).toHaveLength(1)
+    expect(p.items).toHaveLength(3) // all visible
     expect(p.didNotQualify).toBe(2)
   })
 
-  it('never itemises a void referral, so no refunded friend is named', () => {
-    const p = buildAdvocateProgress(0, [row({ status: 'void', referee_email: 'refunded@example.com' })])
-    expect(JSON.stringify(p.items)).not.toContain('refunded')
+  it('says WHY a referral fell through, so a refund is not a silent vanishing', () => {
+    const p = buildAdvocateProgress(0, [
+      row({ status: 'void', void_reason: 'refunded' }),
+      row({ status: 'void', void_reason: 'self_referral', created_at: '2026-09-09T00:00:00.000Z' }),
+      row({ status: 'void', void_reason: null, created_at: '2026-09-08T00:00:00.000Z' }),
+    ])
+    expect(p.items.map((i) => i.voidLabel)).toEqual(['Refunded', 'Not eligible', 'Didn\u2019t qualify'])
+  })
+
+  it('leaves voidLabel null on referrals that are still alive', () => {
+    const p = buildAdvocateProgress(0, [row({ status: 'qualified' })])
+    expect(p.items[0].voidLabel).toBeNull()
+  })
+
+  it('shows the referee in full, since the tracker is private to its advocate', () => {
+    const p = buildAdvocateProgress(0, [row({ referee_email: 'sarah.jones@nhs.net' })])
+    expect(p.items[0].who).toBe('sarah.jones@nhs.net')
   })
 
   it('names plans the way the site does, and passes unknown ones through', () => {
@@ -105,9 +107,5 @@ describe('buildAdvocateProgress', () => {
     ])
   })
 
-  it('masks every referee it shows', () => {
-    const p = buildAdvocateProgress(0, [row({ referee_email: 'sarah.jones@nhs.net' })])
-    expect(p.items[0].who).toBe('s••@nhs.net')
-    expect(JSON.stringify(p.items)).not.toContain('sarah.jones')
-  })
+
 })
