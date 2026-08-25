@@ -7,10 +7,30 @@ import Container from '@/components/ui/Container';
 import { TrendReport, TrendTheme } from '@/lib/clinical-master/trendTypes';
 import { formatRelativeDate } from '@/lib/utils';
 
-const MAX_RETRIES = 20;
+/**
+ * First-load poll budget. The trend engine takes 1–2 minutes (see the comment on
+ * IN_FLIGHT_TTL_MS in app/api/clinical-master/trend/route.ts), so anything at or
+ * below that is a timeout dressed up as an answer. 100 × 3s = 5 minutes, matching
+ * the budget FeedbackReport.tsx settled on for the same reason.
+ */
+const MAX_RETRIES = 100;
 /** How long to wait for a rebuild before handing the old report back. */
 const REFRESH_MAX_POLLS = 40;
 const POLL_MS = 3000;
+
+/**
+ * Named stages for the wait. The engine doesn't report progress, so these are
+ * paced rather than driven — but they name work it genuinely does, and a named
+ * stage that takes 30s reads as progress where a bare spinner reads as a hang.
+ */
+const BUILD_STAGES = [
+    'Collecting your marked consultations',
+    'Scoring data gathering',
+    'Scoring clinical management',
+    'Scoring relating to others',
+    'Finding your patterns',
+] as const;
+const STAGE_MS = 14000;
 
 function ThemeBlock({ t, technique }: { t: TrendTheme; technique?: boolean }) {
   return (
@@ -40,6 +60,14 @@ export default function TrendPage() {
   const [report, setReport] = useState<TrendReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [empty, setEmpty] = useState(false);
+  /**
+   * Distinct from `empty`. The report is still being built and we stopped
+   * waiting — which is not the same thing as there being nothing to show, and
+   * must never be reported as "not enough cases yet".
+   */
+  const [timedOut, setTimedOut] = useState(false);
+  /** Index into BUILD_STAGES while the first build is in flight. */
+  const [stage, setStage] = useState(0);
   /** True while a rebuild triggered from this page is still running. */
   const [refreshing, setRefreshing] = useState(false);
   const [refreshNote, setRefreshNote] = useState<string | null>(null);
@@ -123,20 +151,20 @@ export default function TrendPage() {
         }
         retry.current += 1;
         if (retry.current >= MAX_RETRIES) {
-          setEmpty(true);
+          setTimedOut(true);
           setLoading(false);
           return;
         }
-        setTimeout(poll, 3000);
+        setTimeout(poll, POLL_MS);
       } catch {
         if (cancelled) return;
         retry.current += 1;
         if (retry.current >= MAX_RETRIES) {
-          setEmpty(true);
+          setTimedOut(true);
           setLoading(false);
           return;
         }
-        setTimeout(poll, 3000);
+        setTimeout(poll, POLL_MS);
       }
     };
     const t = setTimeout(poll, 800);
@@ -146,15 +174,81 @@ export default function TrendPage() {
     };
   }, []);
 
+  /** Advance the named stages while the first build runs. Stops on the last one. */
+  useEffect(() => {
+    if (!loading) return;
+    const id = setInterval(() => {
+      setStage((s) => (s < BUILD_STAGES.length - 1 ? s + 1 : s));
+    }, STAGE_MS);
+    return () => clearInterval(id);
+  }, [loading]);
+
   if (loading) {
     return (
-      <div className="min-h-[60dvh] flex flex-col items-center justify-center gap-4">
-        <motion.div
-          className="w-10 h-10 rounded-full border-2 border-primary border-t-transparent"
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-        />
-        <p className="text-muted text-sm animate-pulse">Building your development picture...</p>
+      <div className="min-h-[60dvh] flex items-center justify-center px-6">
+        <div className="w-full max-w-sm">
+          <p className="text-[11px] font-mono uppercase tracking-[0.15em] text-muted mb-1.5">
+            Building your development picture
+          </p>
+          <p className="text-heading font-bold text-[17px] mb-5">Reading across your cases</p>
+
+          <ol className="space-y-0.5">
+            {BUILD_STAGES.map((label, i) => {
+              const done = i < stage;
+              const live = i === stage;
+              return (
+                <li
+                  key={label}
+                  className={`flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] transition-colors duration-300 ${
+                    live ? 'bg-primary/[0.07] text-heading font-semibold' : done ? 'text-body' : 'text-muted'
+                  }`}
+                >
+                  <span
+                    className={`flex-none grid place-items-center w-[15px] h-[15px] rounded-full border-2 transition-colors duration-300 ${
+                      done ? 'border-success bg-success' : live ? 'border-primary' : 'border-black/15'
+                    }`}
+                  >
+                    {done ? (
+                      <svg viewBox="0 0 10 10" className="w-[7px] h-[7px]" aria-hidden="true">
+                        <path d="M1 5.2 3.6 7.8 9 2.4" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    ) : live ? (
+                      <motion.span
+                        className="w-[5px] h-[5px] rounded-full bg-primary"
+                        animate={{ opacity: [1, 0.25, 1] }}
+                        transition={{ duration: 1.1, repeat: Infinity, ease: 'easeInOut' }}
+                      />
+                    ) : null}
+                  </span>
+                  <span>{label}</span>
+                </li>
+              );
+            })}
+          </ol>
+
+          <p className="text-muted text-[12px] mt-5">This usually takes a minute or two.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (timedOut && !report) {
+    return (
+      <div className="min-h-[60dvh] flex items-center justify-center">
+        <div className="text-center max-w-md px-6">
+          <p className="text-heading font-medium mb-2">Still building your picture.</p>
+          <p className="text-muted text-sm mb-6">
+            This one is taking longer than usual. It carries on in the background — reload in a
+            minute and it should be waiting for you.
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="text-primary hover:underline text-sm font-medium"
+          >
+            Check again
+          </button>
+        </div>
       </div>
     );
   }

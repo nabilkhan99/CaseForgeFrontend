@@ -8,7 +8,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { ACCESS_OPENS_LABEL } from '@/lib/commerce/plans';
 import ManageBillingButton from '@/components/commerce/ManageBillingButton';
-import Container from '@/components/ui/Container';
+import SettingRow from '@/components/ui/SettingRow';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import SecondaryButton from '@/components/ui/SecondaryButton';
 import PageHeader from '@/components/ui/PageHeader';
@@ -104,8 +104,6 @@ export default function SettingsPage() {
     );
   }
 
-  const initial = fullName?.charAt(0)?.toUpperCase() || '?';
-
   return (
     <div>
       <PageHeader
@@ -113,16 +111,13 @@ export default function SettingsPage() {
         subtitle="Manage your account preferences"
       />
 
-      {/* Plan Section */}
+      {/* Plan */}
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 80, damping: 20 }}
       >
-        <Container className="mb-6">
-          <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-5">
-            Plan
-          </div>
+        <SettingRow label="Plan">
           {access === undefined ? (
             <div className="h-16 rounded-xl bg-black/[0.03] animate-pulse" />
           ) : access?.plan ? (() => {
@@ -276,84 +271,70 @@ export default function SettingsPage() {
               Team access &mdash; you can practise regardless of this plan&apos;s state.
             </p>
           )}
-        </Container>
+        </SettingRow>
       </motion.div>
 
-      {/* Profile Section */}
+      {/* Email — read-only, so it is a fact rather than a field */}
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.06 }}
       >
-        <Container className="mb-6">
-          <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-5">
-            Profile
-          </div>
-
-          {/* Avatar + Email */}
-          <div className="flex items-center gap-4 pb-5 mb-5 border-b border-black/[0.06]">
-            <div
-              className="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-[20px] font-semibold flex-shrink-0"
-              style={{
-                background: 'linear-gradient(135deg, #F59E0B, #B45309)',
-                boxShadow: '0 4px 16px rgba(180,83,9,0.2)',
-              }}
-            >
-              {initial}
-            </div>
-            <div>
-              <p className="text-[15px] font-semibold text-heading">{fullName || 'User'}</p>
-              <p className="text-[13px] text-muted">{user?.email}</p>
-            </div>
-          </div>
-
-          {/* Full Name */}
-          <div>
-            <label className="block text-[11px] font-semibold text-muted uppercase tracking-[0.08em] mb-2">
-              Full Name
-            </label>
-            <input
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl bg-white/70 border border-black/[0.06] text-heading placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-base md:text-[14px]"
-              placeholder="Your full name"
-            />
-          </div>
-        </Container>
+        <SettingRow label="Email">
+          <p className="text-[15px] font-medium text-heading">{user?.email}</p>
+          <p className="text-[12px] text-muted mt-1">
+            This is the address your account and receipts are tied to.
+          </p>
+        </SettingRow>
       </motion.div>
 
-      {/* Exam Section */}
+      {/* Name */}
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.12 }}
+        transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.1 }}
       >
-        <Container className="mb-6">
-          <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-5">
-            Exam Preparation
-          </div>
+        <SettingRow label="Name">
+          <label htmlFor="setting-full-name" className="sr-only">
+            Full name
+          </label>
+          <input
+            id="setting-full-name"
+            type="text"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            className="w-full max-w-sm px-4 py-3 rounded-xl bg-white/70 border border-black/[0.06] text-heading placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-base md:text-[14px]"
+            placeholder="Your full name"
+          />
+        </SettingRow>
+      </motion.div>
 
-          <div>
-            <label className="block text-[11px] font-semibold text-muted uppercase tracking-[0.08em] mb-2">
-              SCA Exam Date
-            </label>
-            <input
-              type="date"
-              value={examDate}
-              onChange={(e) => setExamDate(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl bg-white/70 border border-black/[0.06] text-heading placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-base md:text-[14px]"
-            />
-            <p className="text-[12px] text-muted mt-2">
-              Set your exam date to see a countdown on your dashboard.
-            </p>
-          </div>
-        </Container>
+      {/* Exam date */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.14 }}
+      >
+        <SettingRow label="Exam date">
+          <label htmlFor="setting-exam-date" className="sr-only">
+            SCA exam date
+          </label>
+          <input
+            id="setting-exam-date"
+            type="date"
+            value={examDate}
+            onChange={(e) => setExamDate(e.target.value)}
+            className="w-full max-w-sm px-4 py-3 rounded-xl bg-white/70 border border-black/[0.06] text-heading placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-base md:text-[14px]"
+          />
+          <p className="text-[12px] text-muted mt-2">
+            Sets the countdown on your dashboard.
+          </p>
+        </SettingRow>
       </motion.div>
 
       {/* Save Button */}
       <motion.div
-        className="flex items-center gap-4 mb-8"
+        className="flex items-center gap-4 mt-8 mb-8"
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.18 }}
@@ -391,14 +372,11 @@ export default function SettingsPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.24 }}
       >
-        <Container className="mb-8">
-          <div className="text-[10px] font-semibold text-danger uppercase tracking-[0.1em] mb-4">
-            Account
-          </div>
+        <SettingRow label="Account" tone="danger" className="mb-8">
           <SecondaryButton variant="danger" onClick={handleSignOut}>
             Sign Out
           </SecondaryButton>
-        </Container>
+        </SettingRow>
       </motion.div>
     </div>
   );

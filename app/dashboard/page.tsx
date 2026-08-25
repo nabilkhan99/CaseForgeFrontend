@@ -255,21 +255,10 @@ function DashboardContent() {
           </p>
         </motion.div>
       )}
-      {access && !access.bypass && access.state === 'none' && !access.plan && (
-        <motion.div
-          className="mb-6 px-4 py-3 rounded-xl flex items-center justify-between gap-3"
-          style={{ background: 'rgba(180,83,9,0.04)', border: '1px solid rgba(180,83,9,0.08)' }}
-          initial={{ opacity: 0, y: -4 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <p className="text-[13px] text-heading">
-            You don&apos;t have a plan yet &mdash;{' '}
-            <Link href="/pricing" className="text-primary font-semibold hover:underline">
-              see what&apos;s included
-            </Link>
-          </p>
-        </motion.div>
-      )}
+      {/* S1: the "you don't have a plan yet" strip used to live here, as a
+          13px link, above a dashed box announcing a start date. The quick-start
+          block below now carries that as the page's primary action, so saying it
+          twice — quietly first — only competed with itself. */}
       {access?.state === 'read_only' && !access.bypass && (
         <motion.div
           className="mb-6 px-4 py-3 rounded-xl flex items-center justify-between gap-3"
@@ -354,7 +343,26 @@ function DashboardContent() {
           browse the library but not start — say so here rather than letting
           the button bounce them back to this page with no explanation. */}
       <div className="mb-8">
-        {access && !access.allowed ? (
+        {access && !access.allowed && !access.plan && !access.bypass ? (
+          /* S1: no plan at all is a different situation from a plan that hasn't
+             opened yet, and it used to render as the latter — telling someone
+             who has bought nothing that "practice opens 1 September", while the
+             one action they can actually take sat in a 13px link further up. */
+          <>
+            <Link href="/pricing">
+              <PrimaryButton size="lg" fullWidth>
+                See plans
+              </PrimaryButton>
+            </Link>
+            <p className="text-center mt-2 text-[13px] text-muted">
+              Or{' '}
+              <Link href="/dashboard/library" className="text-primary hover:underline">
+                browse the case library
+              </Link>{' '}
+              free while you decide.
+            </p>
+          </>
+        ) : access && !access.allowed ? (
           <div
             className="px-5 py-4 rounded-xl text-center"
             style={{ background: 'rgba(180,83,9,0.04)', border: '1px dashed rgba(180,83,9,0.25)' }}

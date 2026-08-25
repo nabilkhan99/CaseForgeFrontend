@@ -22,6 +22,33 @@ const LISTED_STATUSES = ['completed', 'processing', 'abandoned'];
 /** How often the "marking, N min ago" caption re-renders while you watch it. */
 const TICK_MS = 30_000;
 
+type HistoryFilter = 'all' | 'passed' | 'failed' | 'unfinished';
+
+const HISTORY_FILTERS: ReadonlyArray<{ id: HistoryFilter; label: string }> = [
+  { id: 'all', label: 'All' },
+  { id: 'passed', label: 'Passed' },
+  { id: 'failed', label: 'Not yet passed' },
+  { id: 'unfinished', label: 'Left early' },
+];
+
+/** Filters the rows already loaded. Paging is unchanged — see the caption below the list. */
+function matchesFilters(
+  session: SessionHistoryItem,
+  query: string,
+  filter: HistoryFilter,
+): boolean {
+  if (filter === 'passed' && !(session.outcome === 'scored' && session.passed)) return false;
+  if (filter === 'failed' && !(session.outcome === 'scored' && !session.passed)) return false;
+  if (filter === 'unfinished' && session.outcome !== 'unfinished') return false;
+
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return (
+    session.stationTitle.toLowerCase().includes(q) ||
+    (session.domainName ?? '').toLowerCase().includes(q)
+  );
+}
+
 /**
  * The right-hand cluster of a history row.
  *
@@ -34,53 +61,72 @@ const TICK_MS = 30_000;
 function OutcomeCluster({ session, now }: { session: SessionHistoryItem; now: number }) {
   if (session.outcome === 'scored') {
     return (
-      <div className="flex items-center gap-2" title={passMarkCaption(session.maxScore)}>
+      <div
+        className="flex items-baseline justify-end gap-1.5"
+        title={`${session.verdict} · ${passMarkCaption(session.maxScore)}`}
+      >
+        {/* A tick, not the word FAIL on every other row. Passing is the notable
+            event and gets a mark; not passing is simply its absence. The tick
+            also carries the meaning without relying on colour. */}
+        {session.passed && (
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke={TONE_COLOUR.pass}
+            strokeWidth={3}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            className="self-center"
+          >
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        )}
         <span
-          className="text-[11px] font-semibold uppercase"
-          style={{ color: session.passed ? TONE_COLOUR.pass : TONE_COLOUR.fail }}
+          className={`text-[15px] font-mono font-bold tabular-nums ${session.passed ? '' : 'text-heading'}`}
+          style={session.passed ? { color: TONE_COLOUR.pass } : undefined}
         >
-          {session.verdict}
+          {session.weightedScore.toFixed(1)}
         </span>
-        <span className="text-[12px] font-mono text-muted">
-          {session.weightedScore.toFixed(1)}/{session.maxScore.toFixed(1)}
-        </span>
+        <span className="text-[11px] font-mono text-muted">/{session.maxScore.toFixed(1)}</span>
+        <span className="sr-only">{session.verdict}</span>
       </div>
     );
   }
+
+  /* Everything that is not a score shares one quiet treatment, so the column
+     reads as a column rather than five competing designs. */
+  let label: string;
+  let hint: string | null = null;
 
   if (session.outcome === 'marking') {
     const elapsed = formatElapsedSince(session.startedAt, now);
-    return (
-      <div className="text-right">
-        <span className="text-[11px] font-semibold text-primary">Marking…</span>
-        <span className="block text-[10px] text-muted">
-          Usually 1&ndash;2 minutes{elapsed ? ` · started ${elapsed}` : ''}
-        </span>
-      </div>
-    );
-  }
-
-  if (session.outcome === 'stalled') {
-    return (
-      <div className="text-right">
-        <span className="text-[11px] font-semibold" style={{ color: TONE_COLOUR.borderline }}>
-          Marking didn&apos;t finish
-        </span>
-        <span className="block text-[10px] text-muted">Open to try again</span>
-      </div>
-    );
-  }
-
-  if (session.outcome === 'unfinished') {
+    label = 'Marking…';
+    hint = `Usually 1–2 minutes${elapsed ? ` · started ${elapsed}` : ''}`;
+  } else if (session.outcome === 'stalled') {
+    label = 'Marking stopped';
+    hint = 'Open to try again';
+  } else if (session.outcome === 'unfinished') {
     const elapsed = formatMinutesShort(session.elapsedMs);
-    return (
-      <span className="text-[11px] font-medium text-muted">
-        Left early{elapsed ? ` · ${elapsed}` : ''}
-      </span>
-    );
+    label = `Left early${elapsed ? ` · ${elapsed}` : ''}`;
+  } else {
+    label = 'Not marked';
   }
 
-  return <span className="text-[11px] font-medium text-muted">No feedback available</span>;
+  return (
+    <div className="text-right" title={hint ?? undefined}>
+      <span
+        className={`text-[12px] font-mono ${
+          session.outcome === 'marking' ? 'text-primary' : 'text-muted'
+        }`}
+      >
+        {label}
+      </span>
+      {hint && <span className="block text-[10px] text-muted">{hint}</span>}
+    </div>
+  );
 }
 
 export default function HistoryPage() {
@@ -94,6 +140,9 @@ export default function HistoryPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   /** Re-render on a timer so "started 4 min ago" stays true while you watch. */
   const [now, setNow] = useState(() => Date.now());
+  /** S7: the Case Library's controls, brought across. Both filter what is loaded. */
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<HistoryFilter>('all');
 
   const ITEMS_PER_PAGE = 20;
 
@@ -102,6 +151,11 @@ export default function HistoryPage() {
       setUser(user);
     });
   }, [supabase.auth]);
+
+  const isFiltering = query.trim() !== '' || filter !== 'all';
+  const visibleSessions = isFiltering
+    ? sessions.filter((s) => matchesFilters(s, query, filter))
+    : sessions;
 
   const hasMarking = sessions.some((session) => session.outcome === 'marking');
   useEffect(() => {
@@ -209,8 +263,45 @@ export default function HistoryPage() {
         </Container>
       ) : (
         <div>
+          {/* S7 — the Case Library's search + chips, so history can be narrowed too. */}
+          <div className="mb-4">
+            <label htmlFor="history-search" className="sr-only">
+              Search your cases
+            </label>
+            <input
+              id="history-search"
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search your cases, patients or symptoms"
+              className="w-full rounded-xl border border-black/[0.08] bg-white/70 px-4 py-2.5 text-base text-heading transition-all placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 md:text-[14px]"
+            />
+            <div className="mt-3 flex flex-wrap gap-2">
+              {HISTORY_FILTERS.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setFilter(f.id)}
+                  aria-pressed={filter === f.id}
+                  className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors ${
+                    filter === f.id
+                      ? 'bg-primary/10 text-primary'
+                      : 'bg-black/[0.04] text-muted hover:text-heading'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="divide-y divide-black/[0.06]">
-            {sessions.map((session, i) => (
+            {visibleSessions.length === 0 && (
+              <p className="py-10 text-center text-[14px] text-muted">
+                Nothing here matches. {hasMore ? 'Older sessions may not be loaded yet.' : ''}
+              </p>
+            )}
+            {visibleSessions.map((session, i) => (
               <motion.div
                 key={session.id}
                 initial={{ opacity: 0, y: 6 }}
@@ -256,10 +347,17 @@ export default function HistoryPage() {
           </div>
 
           {hasMore && (
-            <div className="flex justify-center py-6">
+            <div className="flex flex-col items-center gap-2 py-6">
               <SecondaryButton onClick={loadMore} disabled={loadingMore}>
                 {loadingMore ? 'Loading...' : `Load More (${sessions.length} of ${totalCount})`}
               </SecondaryButton>
+              {/* Search and the chips only see what has been loaded. Saying so
+                  beats letting someone conclude a case isn't there. */}
+              {isFiltering && (
+                <p className="text-[11px] text-muted">
+                  Searching the {sessions.length} loaded so far — load more to search the rest.
+                </p>
+              )}
             </div>
           )}
         </div>

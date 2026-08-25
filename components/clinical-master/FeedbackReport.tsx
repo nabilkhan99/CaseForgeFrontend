@@ -330,7 +330,6 @@ function DomainMiniRow({ domain }: { domain: DomainFeedback }) {
   const score = domainScore(domain);
   const maxPoints = domainMaxPoints(domain);
   const pct = Math.max(0, Math.min(100, (score / maxPoints) * 100));
-  const gc = gradeColours(domain.grade);
 
   return (
     <div
@@ -352,13 +351,14 @@ function DomainMiniRow({ domain }: { domain: DomainFeedback }) {
           />
         </div>
       </div>
+      {/* S3: a score is information; a per-domain verdict badge alongside the
+          overall verdict was the same judgement said four times. The bar is
+          already grade-toned, and the grade stays available to screen readers. */}
       <div className="text-right">
-        <div className="font-mono text-[13px] font-semibold text-heading">
-          {fmtScore(score)}<span className="text-stone-400">/{fmtScore(maxPoints)}</span>
+        <div className="font-mono text-[15px] font-semibold tabular-nums text-heading">
+          {fmtScore(score)}<span className="text-[12px] text-stone-400">/{fmtScore(maxPoints)}</span>
         </div>
-        <span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${gc.badge}`}>
-          {GRADE_LABELS[domain.grade]}
-        </span>
+        <span className="sr-only">{GRADE_LABELS[domain.grade]}</span>
       </div>
     </div>
   );
@@ -444,10 +444,9 @@ function VerdictPanel({ feedback }: { feedback: ConsultationFeedback }) {
 
       <div className="flex min-w-0 flex-col justify-center">
         <div>
+          {/* S3: the verdict is already stated at full size to the left. Repeating
+              it here as a badge added no information and doubled the volume. */}
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] ${vc.badge}`}>
-              {overall.verdict}
-            </span>
             {duration && (
               <span className="inline-flex rounded-full border border-black/[0.06] bg-stone-50 px-3 py-1 text-[11px] font-medium text-stone-500">
                 {duration} total
@@ -532,14 +531,10 @@ function ReportTabs({
                 : 'text-stone-600 hover:bg-primary/[0.06] hover:text-primary'
             }`}
           >
+            {/* S3: tabs are navigation. Stamping the grade on each one put the
+                verdict on screen three more times before you had read anything. */}
             <span>{tab.label}</span>
-            {tab.grade && (
-              <span className={`ml-2 rounded-full border px-1.5 py-0.5 text-[9px] uppercase ${
-                active ? 'border-white/25 text-white/80' : gradeColours(tab.grade).badge
-              }`}>
-                {GRADE_LABELS[tab.grade]}
-              </span>
-            )}
+            {tab.grade && <span className="sr-only"> — {GRADE_LABELS[tab.grade]}</span>}
           </button>
         );
       })}
