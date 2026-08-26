@@ -11,9 +11,12 @@ import { isTrendReportV2 } from '@/lib/clinical-master/trendTypes';
  * trend_reports is a new table; the generated Supabase types do not include it
  * until the 0003 migration + type regen at go-live, so access is cast.
  */
-// The after() callback awaits the full generate-trend round trip (~1-2 min),
-// and after() is bound by the route's maxDuration.
-export const maxDuration = 300;
+// Hobby-plan ceiling: Vercel rejects anything above 60 at deploy time. The
+// after() callback awaits the ~1-2 min generate-trend round trip, so it is
+// severed at 60s — Azure still finishes the build and writes trend_reports;
+// a late failure just leaves the claim to expire via its TTL. Raise this if
+// the project moves to Fluid Compute / Pro (300s).
+export const maxDuration = 60;
 
 /** Mirrors MIN_CASES_FOR_PATTERNS in CaseForgeAzure/app/services/trend_service.py. */
 const MIN_CASES_FOR_TREND = 3;

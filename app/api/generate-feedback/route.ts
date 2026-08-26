@@ -12,9 +12,13 @@ import type { ConsultationFeedback } from '@/lib/clinical-master/types';
  * been retired; marking now runs on Azure (GPT-5.x), guarded by a shared secret.
  */
 
-// The after() callback awaits the full mark-consultation round trip (~80-90s),
-// and after() is bound by the route's maxDuration — 60 killed the run mid-flight.
-export const maxDuration = 300;
+// Hobby-plan ceiling: Vercel rejects anything above 60 at deploy time. The
+// after() callback awaits the ~80-90s mark-consultation round trip, so it is
+// severed at 60s — Azure still finishes the run and writes session_results;
+// we just can't see a late failure to release the claim, which is what the
+// stale-claim TTL below covers. Raise this if the project moves to Fluid
+// Compute / Pro (300s), which also restores active failure handling.
+export const maxDuration = 60;
 
 /**
  * A marking claim (clinical_sessions.marking_started_at) older than this is
