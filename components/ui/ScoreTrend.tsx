@@ -65,7 +65,7 @@ export default function ScoreTrend({ sessions }: ScoreTrendProps) {
   const rising = delta >= 0.3;
 
   return (
-    <div className="mb-5 rounded-xl border border-black/[0.07] bg-surface-raised px-4 py-3.5">
+    <div className="mb-5 rounded-xl border border-hairline bg-surface-raised px-4 py-3.5">
       <div className="mb-3 flex items-baseline justify-between gap-3">
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-[0.13em] text-muted">

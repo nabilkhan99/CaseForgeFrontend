@@ -262,7 +262,7 @@ function DashboardContent() {
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, ease: 'easeOut' }}
-            className="mt-5 rounded-xl border border-black/[0.07] bg-surface-raised px-4 py-3.5"
+            className="mt-5 rounded-xl border border-hairline bg-surface-raised px-4 py-3.5"
           >
             <div className="flex items-baseline justify-between gap-3">
               <span className="text-[10px] font-semibold uppercase tracking-[0.13em] text-primary">
@@ -378,7 +378,7 @@ function DashboardContent() {
 
       {/* Getting started onboarding for new users */}
       {stats.completedStations === 0 && (
-        <div className="mb-8 rounded-[20px] bg-surface-raised border border-black/[0.06] p-6" style={{ boxShadow: '0 24px 64px rgba(180,83,9,0.06), 0 2px 4px rgba(0,0,0,0.04)' }}>
+        <div className="mb-8 rounded-[20px] bg-surface-raised border border-hairline p-6" style={{ boxShadow: '0 24px 64px rgba(180,83,9,0.06), 0 2px 4px rgba(0,0,0,0.04)' }}>
           <div className="text-[10px] font-semibold text-primary uppercase tracking-[0.1em] mb-4">
             How it works
           </div>
@@ -510,7 +510,7 @@ function DashboardContent() {
               {fmtMark(passMarkFor())} or above passes
             </span>
           </div>
-          <div className="divide-y divide-black/[0.06]">
+          <div className="divide-y divide-hairline">
             {recentSessions.map((session, i) => (
               <motion.div
                 key={session.id}

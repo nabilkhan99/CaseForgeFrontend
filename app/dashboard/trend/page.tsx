@@ -284,7 +284,7 @@ export default function TrendPage() {
           type="button"
           onClick={refresh}
           disabled={refreshing}
-          className="min-h-[36px] rounded-full border border-black/[0.08] px-3.5 text-[12px] font-medium text-primary transition hover:bg-primary/[0.06] disabled:cursor-default disabled:text-muted disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+          className="min-h-[36px] rounded-full border border-defined px-3.5 text-[12px] font-medium text-primary transition hover:bg-primary/[0.06] disabled:cursor-default disabled:text-muted disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
         >
           {refreshing ? 'Rebuilding\u2026' : 'Refresh from my latest cases'}
         </button>

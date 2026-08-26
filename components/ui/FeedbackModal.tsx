@@ -81,7 +81,7 @@ export default function FeedbackModal({ isOpen, onClose, sourceType, sourceId }:
               onClick={e => e.stopPropagation()}
             >
               {/* Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-black/[0.06]">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-hairline">
                 <h3 className="text-base font-semibold text-heading">Send Feedback</h3>
                 <button
                   onClick={onClose}
@@ -108,7 +108,7 @@ export default function FeedbackModal({ isOpen, onClose, sourceType, sourceId }:
                       id="fb-comment"
                       required
                       rows={4}
-                      className="w-full rounded-xl border border-black/[0.08] focus:border-primary/30 focus:ring-2 focus:ring-primary/20 text-sm p-3 text-heading placeholder:text-muted resize-none transition-all"
+                      className="w-full rounded-xl border border-defined focus:border-primary/30 focus:ring-2 focus:ring-primary/20 text-sm p-3 text-heading placeholder:text-muted resize-none transition-all"
                       placeholder="Spotted a mistake or have a suggestion to improve this case?"
                       value={comment}
                       onChange={e => setComment(e.target.value)}
@@ -121,7 +121,7 @@ export default function FeedbackModal({ isOpen, onClose, sourceType, sourceId }:
                     <input
                       type="email"
                       id="fb-email"
-                      className="w-full rounded-xl border border-black/[0.08] focus:border-primary/30 focus:ring-2 focus:ring-primary/20 text-sm p-3 text-heading placeholder:text-muted transition-all"
+                      className="w-full rounded-xl border border-defined focus:border-primary/30 focus:ring-2 focus:ring-primary/20 text-sm p-3 text-heading placeholder:text-muted transition-all"
                       placeholder="you@example.com"
                       value={email}
                       onChange={e => setEmail(e.target.value)}

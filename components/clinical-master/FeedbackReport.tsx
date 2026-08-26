@@ -223,7 +223,7 @@ function EvidenceBlock({
         : fallback;
     if (!absenceCopy) return null;
     return (
-      <div className="mt-3 rounded-lg border border-stone-200/80 bg-stone-50/80 px-3 py-2 text-[12px] leading-[1.55] text-stone-500">
+      <div className="mt-3 rounded-lg border border-hairline bg-stone-50/80 px-3 py-2 text-[12px] leading-[1.55] text-stone-500">
         {absenceCopy}
       </div>
     );
@@ -231,14 +231,14 @@ function EvidenceBlock({
 
   if (mode === 'missed' && looksLikeNonEvidenceQuote(evidence.quote)) {
     return (
-      <div className="mt-3 rounded-lg border border-stone-200/80 bg-stone-50/80 px-3 py-2 text-[12px] leading-[1.55] text-stone-500">
+      <div className="mt-3 rounded-lg border border-hairline bg-stone-50/80 px-3 py-2 text-[12px] leading-[1.55] text-stone-500">
         No useful direct quote for this missed item. This is marked from what was not explored.
       </div>
     );
   }
 
   return (
-    <blockquote className="mt-3 rounded-lg border border-stone-200 bg-white/80 px-3 py-2 text-[12px] leading-[1.65] text-stone-600 shadow-[0_1px_2px_rgba(31,26,20,0.04)]">
+    <blockquote className="mt-3 rounded-lg border border-hairline bg-white/80 px-3 py-2 text-[12px] leading-[1.65] text-stone-600 shadow-[0_1px_2px_rgba(31,26,20,0.04)]">
       <div className="mb-1 flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.08em] text-stone-400">
         {evidence.timestamp_ms != null && (
           <span className="font-mono tracking-normal">[{fmtTs(evidence.timestamp_ms)}]</span>
@@ -334,7 +334,7 @@ function DomainMiniRow({ domain }: { domain: DomainFeedback }) {
 
   return (
     <div
-      className="group grid grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-xl border border-black/[0.06] bg-white/70 px-4 py-3 transition hover:border-black/[0.12] hover:bg-white"
+      className="group grid grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-xl border border-hairline bg-white/70 px-4 py-3 transition hover:border-defined hover:bg-white"
     >
       <div className="min-w-0">
         <div className="mb-2 flex items-center gap-2">
@@ -384,7 +384,7 @@ function FocusNext({ feedback }: { feedback: ConsultationFeedback }) {
   if (focusAreas.length === 0) return null;
 
   return (
-    <section className="rounded-[18px] border border-black/[0.06] bg-surface-raised p-5">
+    <section className="rounded-[18px] border border-hairline bg-surface-raised p-5">
       <div className="mb-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Focus next</div>
       <div className="grid gap-4">
         {focusAreas.map((focus) => (
@@ -416,7 +416,7 @@ function VerdictPanel({ feedback, sessionId }: { feedback: ConsultationFeedback;
   const passPct = passMarkPercent(maxScore);
 
   return (
-    <section className="grid gap-5 rounded-[24px] border border-black/[0.06] bg-white/80 p-5 shadow-[0_20px_60px_rgba(180,83,9,0.07),0_2px_4px_rgba(0,0,0,0.04)] md:p-6 lg:grid-cols-[250px_minmax(0,1fr)_240px]">
+    <section className="grid gap-5 rounded-[24px] border border-hairline bg-white/80 p-5 shadow-[0_20px_60px_rgba(180,83,9,0.07),0_2px_4px_rgba(0,0,0,0.04)] md:p-6 lg:grid-cols-[250px_minmax(0,1fr)_240px]">
       {/* M1 + M3 live inside this tile, so the bloom is anchored on the score
           rather than on the page. relative + overflow-hidden keeps both inside
           the rounded corners. */}
@@ -456,7 +456,7 @@ function VerdictPanel({ feedback, sessionId }: { feedback: ConsultationFeedback;
               it here as a badge added no information and doubled the volume. */}
           <div className="mb-3 flex flex-wrap items-center gap-2">
             {duration && (
-              <span className="inline-flex rounded-full border border-black/[0.06] bg-stone-50 px-3 py-1 text-[11px] font-medium text-stone-500">
+              <span className="inline-flex rounded-full border border-hairline bg-stone-50 px-3 py-1 text-[11px] font-medium text-stone-500">
                 {duration} total
               </span>
             )}
@@ -474,7 +474,7 @@ function VerdictPanel({ feedback, sessionId }: { feedback: ConsultationFeedback;
         )}
       </div>
 
-      <div className="rounded-[18px] border border-black/[0.06] bg-stone-50/70 px-4 py-4">
+      <div className="rounded-[18px] border border-hairline bg-stone-50/70 px-4 py-4">
         <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Score key</div>
         <div className="space-y-2.5 text-[12px] text-stone-600">
           <div className="flex items-center justify-between gap-3">
@@ -489,7 +489,7 @@ function VerdictPanel({ feedback, sessionId }: { feedback: ConsultationFeedback;
             <span>Relating</span>
             <span className="font-mono font-medium text-heading">/3</span>
           </div>
-          <div className="flex items-center justify-between gap-3 border-t border-black/[0.06] pt-2.5">
+          <div className="flex items-center justify-between gap-3 border-t border-hairline pt-2.5">
             <span className="font-medium text-heading">Pass mark</span>
             <span className="font-mono font-medium text-heading">
               {fmtMark(passMark)} / {fmtMark(maxScore)}
@@ -525,7 +525,7 @@ function ReportTabs({
   ];
 
   return (
-    <div className="flex flex-wrap gap-2 rounded-[18px] border border-black/[0.06] bg-white/70 p-2">
+    <div className="flex flex-wrap gap-2 rounded-[18px] border border-hairline bg-white/70 p-2">
       {tabs.map((tab) => {
         const active = activeTab === tab.key;
         return (
@@ -569,7 +569,7 @@ function OverviewPanel({
   return (
     <motion.section
       key="overview-panel"
-      className="rounded-[22px] border border-black/[0.06] bg-white/85 p-5 shadow-[0_18px_48px_rgba(180,83,9,0.055),0_1px_3px_rgba(31,26,20,0.04)]"
+      className="rounded-[22px] border border-hairline bg-white/85 p-5 shadow-[0_18px_48px_rgba(180,83,9,0.055),0_1px_3px_rgba(31,26,20,0.04)]"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -6 }}
@@ -582,17 +582,17 @@ function OverviewPanel({
             {feedback.overall.one_line_summary || 'This report summarises the consultation across data gathering, clinical management, and relating to others.'}
           </p>
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border border-black/[0.06] bg-white/70 px-3 py-3">
+            <div className="rounded-xl border border-hairline bg-white/70 px-3 py-3">
               <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">Result</div>
               <div className="mt-1 text-[16px] font-semibold text-heading">{feedback.overall.verdict}</div>
             </div>
-            <div className="rounded-xl border border-black/[0.06] bg-white/70 px-3 py-3">
+            <div className="rounded-xl border border-hairline bg-white/70 px-3 py-3">
               <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">Score</div>
               <div className="mt-1 font-mono text-[16px] font-semibold text-heading">
                 {feedback.overall.weighted_score.toFixed(1)} / {feedback.overall.max_score.toFixed(1)}
               </div>
             </div>
-            <div className="rounded-xl border border-black/[0.06] bg-white/70 px-3 py-3">
+            <div className="rounded-xl border border-hairline bg-white/70 px-3 py-3">
               <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">Domains</div>
               <div className="mt-1 text-[16px] font-semibold text-heading">{passedDomains} / {domains.length} passing</div>
             </div>
@@ -612,7 +612,7 @@ function OverviewPanel({
                 {topMisses.map((missed, index) => {
                   const severity = severityLabel(missed.consequence_tier);
                   return (
-                    <div key={`${missed.domain}-${missed.label}-${index}`} className="rounded-xl border border-black/[0.06] bg-white/70 px-3 py-3">
+                    <div key={`${missed.domain}-${missed.label}-${index}`} className="rounded-xl border border-hairline bg-white/70 px-3 py-3">
                       <div className="mb-1 flex flex-wrap items-center gap-2">
                         <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.04em] ${severity.className}`}>
                           {severity.label}
@@ -689,7 +689,7 @@ function MissedItem({ item }: { item: DomainFeedback['what_you_missed'][number] 
 
 function PracticeItem({ children }: { children: React.ReactNode }) {
   return (
-    <article className="rounded-xl border border-black/[0.06] bg-stone-50/70 px-3 py-3 text-[13px] leading-[1.65] text-stone-600">
+    <article className="rounded-xl border border-hairline bg-stone-50/70 px-3 py-3 text-[13px] leading-[1.65] text-stone-600">
       {children}
     </article>
   );
@@ -720,18 +720,18 @@ function DomainCard({ domain, index }: { domain: DomainFeedback; index: number }
   return (
     <motion.section
       id={domain.domain}
-      className="scroll-mt-24 rounded-[22px] border border-black/[0.06] bg-white/85 shadow-[0_18px_48px_rgba(180,83,9,0.055),0_1px_3px_rgba(31,26,20,0.04)]"
+      className="scroll-mt-24 rounded-[22px] border border-hairline bg-white/85 shadow-[0_18px_48px_rgba(180,83,9,0.055),0_1px_3px_rgba(31,26,20,0.04)]"
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.15 + index * 0.08 }}
     >
-      <header className={`rounded-t-[22px] border-b border-black/[0.06] px-5 py-4 ${meta.headerClass}`}>
+      <header className={`rounded-t-[22px] border-b border-hairline px-5 py-4 ${meta.headerClass}`}>
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <h3 className="text-[20px] font-semibold text-heading">{meta.label}</h3>
               {meta.weightLabel && (
-                <span className="rounded-full border border-black/[0.06] bg-white/70 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-stone-500">
+                <span className="rounded-full border border-hairline bg-white/70 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-stone-500">
                   {meta.weightLabel}
                 </span>
               )}
@@ -767,7 +767,7 @@ function DomainCard({ domain, index }: { domain: DomainFeedback; index: number }
             {domain.anchored_statements.map((statement) => (
               <span
                 key={statement.title}
-                className="rounded-full border border-black/[0.06] bg-stone-50 px-3 py-1 text-[11px] font-medium text-stone-500"
+                className="rounded-full border border-hairline bg-stone-50 px-3 py-1 text-[11px] font-medium text-stone-500"
               >
                 Assessed against: {statement.title}
               </span>
@@ -840,7 +840,7 @@ function DomainCard({ domain, index }: { domain: DomainFeedback; index: number }
           <button
             type="button"
             onClick={() => setExpanded((value) => !value)}
-            className="mt-5 min-h-[44px] rounded-xl border border-black/[0.06] bg-white px-4 text-[13px] font-medium text-primary transition hover:border-primary/25 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            className="mt-5 min-h-[44px] rounded-xl border border-defined bg-white px-4 text-[13px] font-medium text-primary transition hover:border-primary/25 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           >
             {expanded ? 'Show less detail' : `Show ${hiddenCount} more feedback item${hiddenCount === 1 ? '' : 's'}`}
           </button>
@@ -871,7 +871,7 @@ function ProblemScreen({
 }) {
   return (
     <div className={`bg-surface px-6 ${isTrial ? 'py-12' : 'min-h-[100dvh] py-16'}`}>
-      <div className="mx-auto max-w-md rounded-[22px] border border-black/[0.06] bg-surface-raised p-6 text-center shadow-[0_16px_42px_rgba(180,83,9,0.06)]">
+      <div className="mx-auto max-w-md rounded-[22px] border border-hairline bg-surface-raised p-6 text-center shadow-[0_16px_42px_rgba(180,83,9,0.06)]">
         <p className="mb-2 text-[16px] font-semibold text-heading">{title}</p>
         <p className="mb-6 text-sm leading-[1.65] text-muted">{body}</p>
         <div className="flex flex-col items-center gap-3">{children}</div>
@@ -884,7 +884,7 @@ function TranscriptPanel({ lines }: { lines: TranscriptLine[] }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <section className="mt-10 border-t border-black/[0.06] pt-6">
+    <section className="mt-10 border-t border-hairline pt-6">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
@@ -919,7 +919,7 @@ function TranscriptPanel({ lines }: { lines: TranscriptLine[] }) {
             transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            <div className="mt-4 rounded-[18px] border border-black/[0.06] bg-white/70 px-4 py-4 sm:px-5">
+            <div className="mt-4 rounded-[18px] border border-hairline bg-white/70 px-4 py-4 sm:px-5">
               <p className="mb-4 text-[12px] leading-[1.6] text-stone-500">
                 Automatic speech-to-text, so wording can be slightly off. Timestamps are
                 minutes and seconds from the start of the consultation.
@@ -1216,8 +1216,8 @@ export default function FeedbackReport({ sessionId, variant = 'app', from = null
               </h1>
             </div>
             <div className="flex flex-wrap gap-2 text-[12px] text-stone-500">
-              <span className="rounded-full border border-black/[0.06] bg-white/70 px-3 py-1.5">Audio consultation</span>
-              <span className="rounded-full border border-black/[0.06] bg-white/70 px-3 py-1.5">
+              <span className="rounded-full border border-hairline bg-white/70 px-3 py-1.5">Audio consultation</span>
+              <span className="rounded-full border border-hairline bg-white/70 px-3 py-1.5">
                 {passMarkCaption(feedback.overall.max_score)}
               </span>
             </div>

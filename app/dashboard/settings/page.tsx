@@ -267,7 +267,7 @@ export default function SettingsPage() {
               read "Ended" while they can still practise. Say why, rather than
               overwriting the plan's real state with "Active". */}
           {access?.bypass && access.state !== 'active' && (
-            <p className="text-[12px] text-muted mt-4 pt-4 border-t border-black/[0.06]">
+            <p className="text-[12px] text-muted mt-4 pt-4 border-t border-hairline">
               Team access &mdash; you can practise regardless of this plan&apos;s state.
             </p>
           )}
@@ -303,7 +303,7 @@ export default function SettingsPage() {
             type="text"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
-            className="w-full max-w-sm px-4 py-3 rounded-xl bg-white/70 border border-black/[0.06] text-heading placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-base md:text-[14px]"
+            className="w-full max-w-sm px-4 py-3 rounded-xl bg-white/70 border border-defined text-heading placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-base md:text-[14px]"
             placeholder="Your full name"
           />
         </SettingRow>
@@ -324,7 +324,7 @@ export default function SettingsPage() {
             type="date"
             value={examDate}
             onChange={(e) => setExamDate(e.target.value)}
-            className="w-full max-w-sm px-4 py-3 rounded-xl bg-white/70 border border-black/[0.06] text-heading placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-base md:text-[14px]"
+            className="w-full max-w-sm px-4 py-3 rounded-xl bg-white/70 border border-defined text-heading placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-base md:text-[14px]"
           />
           <p className="text-[12px] text-muted mt-2">
             Sets the countdown on your dashboard.

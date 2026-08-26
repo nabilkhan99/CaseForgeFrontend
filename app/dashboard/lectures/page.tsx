@@ -327,7 +327,7 @@ export default function LecturesPage() {
           No lectures published yet. They&apos;ll appear here as they go live.
         </p>
       ) : (
-        <div className="divide-y divide-black/[0.06]">
+        <div className="divide-y divide-hairline">
           {lectures.map((lecture, index) => (
             <LectureRow key={lecture.id} lecture={lecture} index={index} locked={locked} />
           ))}

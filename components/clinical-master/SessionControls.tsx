@@ -33,14 +33,14 @@ export default function SessionControls({
   onEnd,
 }: SessionControlsProps) {
   return (
-    <div className="min-h-[88px] flex items-center justify-center gap-3 sm:gap-4 border-t border-black/[0.06] flex-shrink-0 py-3 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pl-[max(1.5rem,env(safe-area-inset-left))] sm:pr-[max(1.5rem,env(safe-area-inset-right))]">
+    <div className="min-h-[88px] flex items-center justify-center gap-3 sm:gap-4 border-t border-hairline flex-shrink-0 py-3 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pl-[max(1.5rem,env(safe-area-inset-left))] sm:pr-[max(1.5rem,env(safe-area-inset-right))]">
       <button
         onClick={onToggleTranscript}
         aria-label={showTranscript ? 'Show waveform' : 'Show transcript'}
         aria-pressed={showTranscript}
         title={showTranscript ? 'Show waveform' : 'Show transcript'}
         className={`w-11 h-11 rounded-full flex items-center justify-center border cursor-pointer hover:bg-black/[0.02] transition-colors flex-shrink-0 ${
-          showTranscript ? 'border-primary/30 bg-primary/5' : 'border-black/[0.08]'
+          showTranscript ? 'border-primary/30 bg-primary/5' : 'border-defined'
         }`}
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className={showTranscript ? 'text-primary' : 'text-muted'}>

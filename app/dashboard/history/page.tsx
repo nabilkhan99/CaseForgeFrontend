@@ -199,7 +199,7 @@ export default function HistoryPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search your cases, patients or symptoms"
-              className="w-full rounded-xl border border-black/[0.08] bg-white/70 px-4 py-2.5 text-base text-heading transition-all placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 md:text-[14px]"
+              className="w-full rounded-xl border border-defined bg-white/70 px-4 py-2.5 text-base text-heading transition-all placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 md:text-[14px]"
             />
             <div className="mt-3 flex flex-wrap gap-2">
               {HISTORY_FILTERS.map((f) => (
@@ -220,7 +220,7 @@ export default function HistoryPage() {
             </div>
           </div>
 
-          <div className="divide-y divide-black/[0.06]">
+          <div className="divide-y divide-hairline">
             {visibleSessions.length === 0 && (
               <p className="py-10 text-center text-[14px] text-muted">
                 Nothing here matches. {hasMore ? 'Older sessions may not be loaded yet.' : ''}

@@ -37,6 +37,13 @@ module.exports = {
           DEFAULT: 'rgba(0,0,0,0.06)',
           hover: 'rgba(0,0,0,0.10)',
         },
+        // Two neutral edge weights, not six. Flat keys so the utilities read as
+        // `border-hairline` / `divide-hairline` rather than `border-border-*`.
+        // hairline: dividers, section rules and passive card edges.
+        // defined:  interactive edges — inputs, buttons, clickable-card hover.
+        // Tinted off the heading stone (#1C1917) so edges stay warm on cream.
+        hairline: 'rgba(28,25,23,0.06)',
+        defined: 'rgba(28,25,23,0.12)',
         // v4 design tokens (§1.2)
         'bg-page': '#F5EEE3',
         'bg-card': '#FBF7F1',

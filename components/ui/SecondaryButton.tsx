@@ -21,7 +21,7 @@ const sizeMap = {
 };
 
 const variantMap = {
-  outline: 'border border-black/[0.08] text-body hover:border-black/[0.15] hover:bg-black/[0.02]',
+  outline: 'border border-hairline text-body hover:border-defined hover:bg-black/[0.02]',
   ghost: 'text-body hover:bg-black/[0.03]',
   danger: 'border border-red-200 text-danger bg-red-50 hover:bg-red-100',
 };

@@ -154,7 +154,7 @@ function StationLibraryContent() {
               </div>
             )
           ) : (
-            <div className="divide-y divide-black/[0.06]">
+            <div className="divide-y divide-hairline">
               {domains.map((domain, index) => {
                 const colors = getDomainColor(domain.name, index);
                 const hasCompleted = domain.completed_count > 0;

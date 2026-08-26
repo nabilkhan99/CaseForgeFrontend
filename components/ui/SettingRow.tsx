@@ -25,7 +25,7 @@ export default function SettingRow({
 }: SettingRowProps) {
   return (
     <div
-      className={`grid gap-2 border-t border-black/[0.07] py-6 sm:grid-cols-[132px_1fr] sm:gap-8 ${className}`}
+      className={`grid gap-2 border-t border-hairline py-6 sm:grid-cols-[132px_1fr] sm:gap-8 ${className}`}
     >
       <div
         className={`pt-0.5 text-[10px] font-semibold uppercase tracking-[0.13em] ${
