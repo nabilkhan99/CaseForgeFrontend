@@ -7,6 +7,7 @@ import FeedbackReport from '@/components/clinical-master/FeedbackReport';
 import PricingTable from '@/components/landing/v5/PricingTable';
 import { GuaranteeCard } from '@/components/landing/v5';
 import EmailVerificationGate from '@/components/try/EmailVerificationGate';
+import TrialProof from '@/components/try/TrialProof';
 import {
   TRIAL_EMAIL_KEY,
   TRIAL_FEEDBACK_URL_KEY,
@@ -103,6 +104,10 @@ export default function TryFeedbackPage() {
           </h2>
         </div>
       </div>
+
+      {/* Someone else's word for it, before the price rather than after. */}
+      <TrialProof />
+
       <PricingTable />
       <GuaranteeCard />
     </div>
