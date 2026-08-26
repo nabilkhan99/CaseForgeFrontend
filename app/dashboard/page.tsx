@@ -378,7 +378,7 @@ function DashboardContent() {
 
       {/* Getting started onboarding for new users */}
       {stats.completedStations === 0 && (
-        <div className="mb-8 rounded-[20px] bg-surface-raised border border-hairline p-6" style={{ boxShadow: '0 24px 64px rgba(180,83,9,0.06), 0 2px 4px rgba(0,0,0,0.04)' }}>
+        <div className="mb-8 rounded-[20px] bg-surface-raised border border-hairline p-6 shadow-elevation-2">
           <div className="text-[10px] font-semibold text-primary uppercase tracking-[0.1em] mb-4">
             How it works
           </div>

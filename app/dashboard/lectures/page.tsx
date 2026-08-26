@@ -71,11 +71,10 @@ function UpgradeHero({ lectures, canSwitch }: { lectures: LectureSummary[]; canS
   const hours = substantial ? `${Math.round(mins / 60)} hours` : null;
   return (
     <motion.div
-      className="mb-8 rounded-[20px] px-6 py-6 sm:px-8 sm:py-7"
+      className="mb-8 rounded-[20px] px-6 py-6 sm:px-8 sm:py-7 shadow-elevation-2"
       style={{
         background: 'linear-gradient(135deg, rgba(180,83,9,0.05), rgba(180,83,9,0.02))',
         border: '1px solid rgba(180,83,9,0.12)',
-        boxShadow: '0 24px 64px rgba(180,83,9,0.06), 0 2px 4px rgba(0,0,0,0.04)',
       }}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}

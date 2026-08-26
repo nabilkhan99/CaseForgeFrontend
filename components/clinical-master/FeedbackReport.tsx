@@ -238,7 +238,7 @@ function EvidenceBlock({
   }
 
   return (
-    <blockquote className="mt-3 rounded-lg border border-hairline bg-white/80 px-3 py-2 text-[12px] leading-[1.65] text-stone-600 shadow-[0_1px_2px_rgba(31,26,20,0.04)]">
+    <blockquote className="mt-3 rounded-lg border border-hairline bg-white/80 px-3 py-2 text-[12px] leading-[1.65] text-stone-600 shadow-elevation-1">
       <div className="mb-1 flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.08em] text-stone-400">
         {evidence.timestamp_ms != null && (
           <span className="font-mono tracking-normal">[{fmtTs(evidence.timestamp_ms)}]</span>
@@ -416,7 +416,7 @@ function VerdictPanel({ feedback, sessionId }: { feedback: ConsultationFeedback;
   const passPct = passMarkPercent(maxScore);
 
   return (
-    <section className="grid gap-5 rounded-[24px] border border-hairline bg-white/80 p-5 shadow-[0_20px_60px_rgba(180,83,9,0.07),0_2px_4px_rgba(0,0,0,0.04)] md:p-6 lg:grid-cols-[250px_minmax(0,1fr)_240px]">
+    <section className="grid gap-5 rounded-[24px] border border-hairline bg-white/80 p-5 shadow-elevation-2 md:p-6 lg:grid-cols-[250px_minmax(0,1fr)_240px]">
       {/* M1 + M3 live inside this tile, so the bloom is anchored on the score
           rather than on the page. relative + overflow-hidden keeps both inside
           the rounded corners. */}
@@ -535,7 +535,7 @@ function ReportTabs({
             onClick={() => onChange(tab.key)}
             className={`min-h-[44px] rounded-xl px-4 py-2 text-[13px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 ${
               active
-                ? 'bg-heading font-semibold text-white shadow-[0_6px_18px_rgba(31,26,20,0.12)]'
+                ? 'bg-heading font-semibold text-white shadow-elevation-3'
                 : 'font-medium text-stone-600 hover:bg-primary/[0.06] hover:text-primary'
             }`}
           >
@@ -569,7 +569,7 @@ function OverviewPanel({
   return (
     <motion.section
       key="overview-panel"
-      className="rounded-[22px] border border-hairline bg-white/85 p-5 shadow-[0_18px_48px_rgba(180,83,9,0.055),0_1px_3px_rgba(31,26,20,0.04)]"
+      className="rounded-[22px] border border-hairline bg-white/85 p-5 shadow-elevation-2"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -6 }}
@@ -720,7 +720,7 @@ function DomainCard({ domain, index }: { domain: DomainFeedback; index: number }
   return (
     <motion.section
       id={domain.domain}
-      className="scroll-mt-24 rounded-[22px] border border-hairline bg-white/85 shadow-[0_18px_48px_rgba(180,83,9,0.055),0_1px_3px_rgba(31,26,20,0.04)]"
+      className="scroll-mt-24 rounded-[22px] border border-hairline bg-white/85 shadow-elevation-2"
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.15 + index * 0.08 }}
@@ -871,7 +871,7 @@ function ProblemScreen({
 }) {
   return (
     <div className={`bg-surface px-6 ${isTrial ? 'py-12' : 'min-h-[100dvh] py-16'}`}>
-      <div className="mx-auto max-w-md rounded-[22px] border border-hairline bg-surface-raised p-6 text-center shadow-[0_16px_42px_rgba(180,83,9,0.06)]">
+      <div className="mx-auto max-w-md rounded-[22px] border border-hairline bg-surface-raised p-6 text-center shadow-elevation-2">
         <p className="mb-2 text-[16px] font-semibold text-heading">{title}</p>
         <p className="mb-6 text-sm leading-[1.65] text-muted">{body}</p>
         <div className="flex flex-col items-center gap-3">{children}</div>
