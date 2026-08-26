@@ -8,6 +8,8 @@ import PricingTable from '@/components/landing/v5/PricingTable';
 import { GuaranteeCard } from '@/components/landing/v5';
 import EmailVerificationGate from '@/components/try/EmailVerificationGate';
 import TrialProof from '@/components/try/TrialProof';
+import StationsPassedBar from '@/components/progress/StationsPassedBar';
+import { trialStationsPassed, type StationsPassed } from '@/lib/stations/passedProgress';
 import {
   TRIAL_EMAIL_KEY,
   TRIAL_FEEDBACK_URL_KEY,
@@ -26,6 +28,12 @@ export default function TryFeedbackPage() {
 
   const [unlocked, setUnlocked] = useState(false);
   const [checkingGate, setCheckingGate] = useState(true);
+  /**
+   * Filled in by the report once it has been marked, so the bar can say whether
+   * this station was passed rather than only that it was sat. Null until then —
+   * the bar is not rendered on a guess.
+   */
+  const [progress, setProgress] = useState<StationsPassed | null>(null);
 
   // Whether this session is verified is a fact the server holds, not the
   // browser. Checking localStorage alone meant a session verified on a laptop
@@ -91,7 +99,11 @@ export default function TryFeedbackPage() {
 
   return (
     <div className="bg-surface">
-      <FeedbackReport sessionId={sessionId} variant="trial" />
+      <FeedbackReport
+        sessionId={sessionId}
+        variant="trial"
+        onResult={(overall) => setProgress(trialStationsPassed(overall.verdict, overall.weighted_score))}
+      />
 
       {/* The offer, at the moment the product has just proved itself. */}
       <div className="mx-auto max-w-[1180px] px-5 pb-6 sm:px-7 lg:px-10">
@@ -104,6 +116,13 @@ export default function TryFeedbackPage() {
           </h2>
         </div>
       </div>
+
+      {/* One tick of two hundred: the gap is the argument. */}
+      {progress && (
+        <div className="mx-auto max-w-[1180px] px-5 pb-10 sm:px-7 lg:px-10">
+          <StationsPassedBar progress={progress} variant="trial" ground="#FAFAF7" />
+        </div>
+      )}
 
       {/* Someone else's word for it, before the price rather than after. */}
       <TrialProof />

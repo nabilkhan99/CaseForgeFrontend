@@ -10,6 +10,7 @@ import {
   DomainKey,
   Evidence,
   GRADE_LABELS,
+  Overall,
   PASSING_VERDICTS,
   Verdict,
 } from '@/lib/clinical-master/types';
@@ -964,9 +965,20 @@ export interface FeedbackReportProps {
   variant?: 'app' | 'trial';
   /** Library slug the app arrived from (app variant only). */
   from?: string | null;
+  /**
+   * Fires once, when the marked result arrives, so a parent can render
+   * something alongside the report — progress, an offer — without fetching the
+   * same session a second time and risking a second marking run.
+   */
+  onResult?: (overall: Overall) => void;
 }
 
-export default function FeedbackReport({ sessionId, variant = 'app', from = null }: FeedbackReportProps) {
+export default function FeedbackReport({
+  sessionId,
+  variant = 'app',
+  from = null,
+  onResult,
+}: FeedbackReportProps) {
   const isTrial = variant === 'trial';
 
   const [feedback, setFeedback] = useState<ConsultationFeedback | null>(null);
@@ -977,6 +989,14 @@ export default function FeedbackReport({ sessionId, variant = 'app', from = null
   const [failedStationId, setFailedStationId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ReportTab>('overview');
   const retryCount = useRef(0);
+  /**
+   * Held in a ref rather than read from props inside the poll: an inline
+   * callback from the parent would otherwise be a new function every render,
+   * and putting it in the effect's dependencies would restart polling — and
+   * re-trigger marking — on each one.
+   */
+  const onResultRef = useRef(onResult);
+  onResultRef.current = onResult;
   /**
    * After an explicit retry the session is still older than the stall
    * threshold, so re-reporting "stalled" on the first poll would bounce the
@@ -1022,6 +1042,7 @@ export default function FeedbackReport({ sessionId, variant = 'app', from = null
           setFeedback(data.feedback);
           setTranscript(normaliseTranscript(data.transcript));
           setLoading(false);
+          if (data.feedback.overall) onResultRef.current?.(data.feedback.overall);
           return;
         }
 
