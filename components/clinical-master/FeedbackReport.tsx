@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import Link from 'next/link';
+import { BlurFade } from '@/components/magicui/blur-fade';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import {
   ConsultationFeedback,
@@ -29,6 +30,42 @@ import {
   normaliseTranscript,
   type TranscriptLine,
 } from '@/lib/clinical-master/transcript';
+
+/**
+ * Page-load stagger for the report's top-level sections, top to bottom. Kept
+ * tight: someone reading their own mark should not be waiting on a reveal.
+ */
+const REVEAL = {
+  header: 0,
+  verdict: 0.06,
+  domainSummary: 0.12,
+  reportDetail: 0.18,
+} as const;
+
+/**
+ * One entry animation per section, skipped entirely under
+ * prefers-reduced-motion — BlurFade has no reduced-motion handling of its own,
+ * so the gate lives here at the call site and renders the final state.
+ */
+function Reveal({
+  delay,
+  className,
+  children,
+}: {
+  delay: number;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const shouldReduceMotion = useReducedMotion();
+  if (shouldReduceMotion) {
+    return <div className={className}>{children}</div>;
+  }
+  return (
+    <BlurFade delay={delay} className={className}>
+      {children}
+    </BlurFade>
+  );
+}
 
 /** Poll interval, ms. */
 const POLL_INTERVAL_MS = 3000;
@@ -1193,12 +1230,11 @@ export default function FeedbackReport({ sessionId, variant = 'app', from = null
   return (
     <main className="min-h-[100dvh] bg-surface font-sans">
       <div className="mx-auto max-w-[1180px] px-5 py-8 sm:px-7 lg:px-10 lg:py-10">
-        <motion.header
-          className="mb-8"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ type: 'spring', stiffness: 70, damping: 20 }}
-        >
+        {/* The header's own spring entry is replaced by — not stacked on —
+            the BlurFade, so it stays a single animation and now shares one
+            stagger with the sections beneath it. */}
+        <Reveal delay={REVEAL.header}>
+          <header className="mb-8">
           {!isTrial && (
             <nav className="mb-5 flex flex-wrap items-center gap-2 text-[13px] font-medium text-muted">
               <Link href="/dashboard/library" className="hover:text-primary">Cases</Link>
@@ -1222,9 +1258,12 @@ export default function FeedbackReport({ sessionId, variant = 'app', from = null
               </span>
             </div>
           </div>
-        </motion.header>
+          </header>
+        </Reveal>
 
-        <VerdictPanel feedback={feedback} sessionId={sessionId} />
+        <Reveal delay={REVEAL.verdict}>
+          <VerdictPanel feedback={feedback} sessionId={sessionId} />
+        </Reveal>
 
         {feedback.confidence && feedback.confidence.transcript_quality !== 'high' && (
           <div className="mt-5 rounded-[10px] border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-[1.6] text-amber-800">
@@ -1233,15 +1272,18 @@ export default function FeedbackReport({ sessionId, variant = 'app', from = null
           </div>
         )}
 
-        <div className="mt-8">
+        <Reveal delay={REVEAL.domainSummary} className="mt-8">
           <div className="mb-3 flex items-center justify-between gap-4">
             <h2 className="text-[18px] font-semibold text-heading">Domain score summary</h2>
             <p className="hidden text-[13px] text-muted sm:block">Data /3, Management /4.5, Relating /3</p>
           </div>
           <ScoreBreakdown domains={orderedDomains} />
-        </div>
+        </Reveal>
 
-        <section className="mt-8">
+        {/* The tab panels inside keep their own transitions — those fire on tab
+            change, not on load, so they are not a second entry animation. */}
+        <Reveal delay={REVEAL.reportDetail} className="mt-8">
+          <section>
           <div className="mb-4">
             <h2 className="text-[24px] font-semibold text-heading">Report detail</h2>
             <p className="mt-1 max-w-[720px] text-[15px] leading-[1.65] text-stone-600">
@@ -1262,7 +1304,8 @@ export default function FeedbackReport({ sessionId, variant = 'app', from = null
               )}
             </AnimatePresence>
           </div>
-        </section>
+          </section>
+        </Reveal>
 
         {transcript.length > 0 && <TranscriptPanel lines={transcript} />}
 
