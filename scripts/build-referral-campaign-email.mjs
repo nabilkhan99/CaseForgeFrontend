@@ -69,7 +69,7 @@ const html = `<!doctype html>
                 <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">They sign up through your link and their &pound;100 comes back to them by bank transfer after they join. The course itself stays a full-price course on a full-price receipt, which matters if they&rsquo;re claiming it on their study budget.</p>
                 <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">We see they signed up through your link, and we send you your &pound;100 by bank transfer too.</p>
                 <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">Other plans pay too: Self-Study is <strong style="color:#1C1917;">&pound;50 each</strong> (even on the monthly plan).</p>
-                <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">Your link is live until <strong style="color:#1C1917;">20 September</strong>, then it stops working.</p>
+                <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">Your link is live until <strong style="color:#1C1917;">26 September</strong>, then it stops working.</p>
                 <p style="margin:0 0 12px 0;font-size:14px;line-height:1.5;color:#78716C;">Your referral page:</p>
               </td>
             </tr>
