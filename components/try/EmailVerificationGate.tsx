@@ -90,6 +90,26 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
    */
   const isLastStep = stepIndex >= steps.length - 1 && stepReady;
 
+  /**
+   * Record what they have told us so far, without waiting for it.
+   *
+   * Fire and forget on purpose: the row only used to be written when the last
+   * question was answered, so anyone who typed an address and then gave up
+   * halfway left nothing behind. This must never delay the next question or
+   * show an error — if it fails, `send-code` still writes the whole row at the
+   * end, which is exactly the old behaviour.
+   */
+  function saveProgress(current: QuestionnaireAnswers) {
+    if (!current.email) return;
+    void fetch('/api/try/save-lead', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, ...current }),
+    }).catch(() => {
+      // Deliberately silent — see above.
+    });
+  }
+
   /** Changing an earlier answer can invalidate later ones — clear them. */
   function set<K extends keyof QuestionnaireAnswers>(key: K, value: QuestionnaireAnswers[K]) {
     setError(null);
@@ -463,8 +483,14 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
                   session: sessionId,
                   step: currentStep,
                 });
-                if (isLastStep) void requestCode();
-                else setStepIndex((i) => i + 1);
+                // The last step goes straight to send-code, which writes the
+                // whole row itself; saving again first would be a wasted write.
+                if (isLastStep) {
+                  void requestCode();
+                } else {
+                  saveProgress(answers);
+                  setStepIndex((i) => i + 1);
+                }
               }}
               className={`${currentStep === 'identity' ? '' : 'mt-6'} space-y-4 text-left`}
             >

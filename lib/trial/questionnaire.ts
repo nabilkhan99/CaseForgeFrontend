@@ -205,3 +205,70 @@ export function validateAnswers(
 
   return { ok: true, value: out }
 }
+
+/** An answer set captured mid-questionnaire: the email, plus whatever exists. */
+export type PartialAnswers = Partial<QuestionnaireAnswers> & { email: string }
+
+/**
+ * Validate a half-finished answer set, for the save that happens as the visitor
+ * moves through the gate rather than when they finish it.
+ *
+ * Differs from {@link validateAnswers} in what it does with a gap. There, a
+ * missing answer is an error, because the whole set is the point. Here it is
+ * simply an answer not given yet, so anything absent or unrecognised is dropped
+ * and the rest is kept: a lead who has told us three things is worth three
+ * things. The one hard requirement is a usable email, since a row that cannot
+ * be contacted is the thing this save exists to avoid.
+ *
+ * Every value still goes through the same `findOption` allowlists, so a
+ * hand-rolled POST cannot write anything the published options do not contain.
+ */
+export function validatePartialAnswers(
+  input: Record<string, unknown>,
+): { ok: true; value: PartialAnswers } | { ok: false; error: string } {
+  const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
+
+  const email = str(input.email).toLowerCase()
+  if (!EMAIL_RE.test(email)) return { ok: false, error: 'A valid email is required' }
+
+  const out: PartialAnswers = { email }
+
+  const firstName = str(input.firstName).slice(0, 60)
+  if (firstName) out.firstName = firstName
+
+  const phone = normalizePhone(str(input.phone))
+  if (PHONE_RE.test(phone)) out.phone = phone
+
+  const stage = findOption(TRAINING_STAGES, str(input.trainingStage))
+  if (stage) out.trainingStage = stage.value
+
+  const keep = <T extends keyof QuestionnaireAnswers>(
+    key: T,
+    options: Parameters<typeof findOption>[0],
+  ) => {
+    const match = findOption(options, str(input[key]))
+    if (match) out[key] = match.value
+  }
+
+  // Branch-specific answers are kept whenever they are valid in their own
+  // right. Whether the branch applies is settled by the full validator at the
+  // end; a stray value here costs nothing and a dropped one loses a lead's
+  // answer for no reason.
+  keep('trainingStartMonth', MONTHS)
+  keep('trainingStartYear', TRAINING_START_YEARS)
+  keep('aktStatus', EXAM_STATUSES)
+  keep('scaStatus', EXAM_STATUSES)
+  keep('notInTrainingRole', NOT_IN_TRAINING_ROLES)
+  keep('expectedStartMonth', MONTHS)
+  keep('expectedStartYear', EXPECTED_START_YEARS)
+
+  // Sittings are validated against the follow-up list their status implies, so
+  // "October 2026" cannot be recorded as an AKT sitting for someone who has
+  // already passed the AKT.
+  const aktFollow = out.aktStatus ? followUpFor('akt', out.aktStatus) : null
+  if (aktFollow) keep('aktSitting', aktFollow.options)
+  const scaFollow = out.scaStatus ? followUpFor('sca', out.scaStatus) : null
+  if (scaFollow) keep('scaSitting', scaFollow.options)
+
+  return { ok: true, value: out }
+}
