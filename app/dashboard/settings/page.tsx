@@ -119,7 +119,7 @@ export default function SettingsPage() {
       >
         <SettingRow label="Plan">
           {access === undefined ? (
-            <div className="h-16 rounded-xl bg-black/[0.03] animate-pulse" />
+            <div className="h-16 rounded-[10px] bg-black/[0.03] animate-pulse" />
           ) : access?.plan ? (() => {
             // Three phases, not a boolean: `none` WITH a plan is a purchase whose
             // window hasn't opened yet (every pre-launch buyer), which is the
@@ -166,13 +166,13 @@ export default function SettingsPage() {
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <span
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-white"
+                    className="px-2.5 py-1 rounded-md text-[11px] font-semibold text-white"
                     style={{ background: 'linear-gradient(135deg, #B45309, #D97706)' }}
                   >
                     {access.planName || access.plan}
                   </span>
                   <span
-                    className={`text-[12px] font-medium ${ended ? 'text-muted' : pending ? 'text-primary' : 'text-success'}`}
+                    className={`text-[13px] font-medium ${ended ? 'text-muted' : pending ? 'text-primary' : 'text-success'}`}
                   >
                     {ended ? 'Ended' : pending ? `Starts ${ACCESS_OPENS_LABEL}` : 'Active'}
                   </span>
@@ -221,7 +221,7 @@ export default function SettingsPage() {
                       flow="subscription_update"
                       busyLabel="Opening Stripe…"
                       className="text-[13px] text-primary font-medium hover:underline disabled:opacity-60"
-                      errorClassName="text-[12px] text-danger mt-2"
+                      errorClassName="text-[13px] text-danger mt-2"
                     >
                       Upgrade to Complete &rarr;
                     </ManageBillingButton>
@@ -240,12 +240,12 @@ export default function SettingsPage() {
                       — on the rolling plan — cancellation. */}
                   <ManageBillingButton
                     className="text-[13px] text-primary font-medium hover:underline disabled:opacity-60"
-                    errorClassName="text-[12px] text-danger mt-2"
+                    errorClassName="text-[13px] text-danger mt-2"
                   >
                     Manage billing &rarr;
                   </ManageBillingButton>
                 </div>
-                <p className="text-[12px] text-muted mt-2">
+                <p className="text-[13px] text-muted mt-2">
                   {access.isMonthly
                     ? 'Cancel, change plan or update your card in Stripe’s secure billing portal.'
                     : 'Invoices, receipts and your card live in Stripe’s secure billing portal. Nothing renews — your plan simply ends on the date above.'}
@@ -267,7 +267,7 @@ export default function SettingsPage() {
               read "Ended" while they can still practise. Say why, rather than
               overwriting the plan's real state with "Active". */}
           {access?.bypass && access.state !== 'active' && (
-            <p className="text-[12px] text-muted mt-4 pt-4 border-t border-black/[0.06]">
+            <p className="text-[13px] text-muted mt-4 pt-4 border-t border-hairline">
               Team access &mdash; you can practise regardless of this plan&apos;s state.
             </p>
           )}
@@ -282,7 +282,7 @@ export default function SettingsPage() {
       >
         <SettingRow label="Email">
           <p className="text-[15px] font-medium text-heading">{user?.email}</p>
-          <p className="text-[12px] text-muted mt-1">
+          <p className="text-[13px] text-muted mt-1">
             This is the address your account and receipts are tied to.
           </p>
         </SettingRow>
@@ -303,7 +303,7 @@ export default function SettingsPage() {
             type="text"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
-            className="w-full max-w-sm px-4 py-3 rounded-xl bg-white/70 border border-black/[0.06] text-heading placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-base md:text-[14px]"
+            className="w-full max-w-sm px-4 py-3 rounded-[10px] bg-white/70 border border-defined text-heading placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-base md:text-[15px]"
             placeholder="Your full name"
           />
         </SettingRow>
@@ -324,9 +324,9 @@ export default function SettingsPage() {
             type="date"
             value={examDate}
             onChange={(e) => setExamDate(e.target.value)}
-            className="w-full max-w-sm px-4 py-3 rounded-xl bg-white/70 border border-black/[0.06] text-heading placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-base md:text-[14px]"
+            className="w-full max-w-sm px-4 py-3 rounded-[10px] bg-white/70 border border-defined text-heading placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-base md:text-[15px]"
           />
-          <p className="text-[12px] text-muted mt-2">
+          <p className="text-[13px] text-muted mt-2">
             Sets the countdown on your dashboard.
           </p>
         </SettingRow>

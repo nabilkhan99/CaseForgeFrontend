@@ -21,7 +21,7 @@ export default function LiveTranscript({ items, className = '' }: LiveTranscript
   if (items.length === 0) {
     return (
       <div className={`text-center py-6 ${className}`}>
-        <p className="text-[12px] text-muted">Transcript will appear here...</p>
+        <p className="text-[13px] text-muted">Transcript will appear here...</p>
       </div>
     );
   }
@@ -41,7 +41,7 @@ export default function LiveTranscript({ items, className = '' }: LiveTranscript
             className={`flex ${item.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-[85%] px-3 py-2 rounded-2xl text-[13px] leading-[1.5] ${
+              className={`max-w-[85%] px-3 py-2 rounded-[10px] text-[13px] leading-[1.5] ${
                 item.role === 'user'
                   ? 'bg-primary/10 text-heading rounded-br-md'
                   : 'bg-black/[0.04] text-body rounded-bl-md'

@@ -60,7 +60,7 @@ function totalMinutes(lectures: LectureSummary[]): number {
  */
 /** The hero's single primary action, shared by both of its two shapes. */
 const UPGRADE_CTA_CLASS =
-  'inline-flex items-center min-h-[44px] px-5 rounded-xl text-[14px] font-semibold text-white bg-gradient-to-br from-[#B45309] to-[#D97706] shadow-[0_4px_12px_rgba(180,83,9,0.2)] disabled:opacity-60';
+  'inline-flex items-center min-h-[44px] px-5 rounded-[10px] text-[14px] font-semibold text-white bg-gradient-to-br from-[#B45309] to-[#D97706] shadow-[0_4px_12px_rgba(180,83,9,0.2)] disabled:opacity-60';
 
 function UpgradeHero({ lectures, canSwitch }: { lectures: LectureSummary[]; canSwitch: boolean }) {
   const mins = totalMinutes(lectures);
@@ -71,23 +71,22 @@ function UpgradeHero({ lectures, canSwitch }: { lectures: LectureSummary[]; canS
   const hours = substantial ? `${Math.round(mins / 60)} hours` : null;
   return (
     <motion.div
-      className="mb-8 rounded-[20px] px-6 py-6 sm:px-8 sm:py-7"
+      className="mb-8 rounded-[16px] px-6 py-6 sm:px-8 sm:py-7 shadow-elevation-2"
       style={{
         background: 'linear-gradient(135deg, rgba(180,83,9,0.05), rgba(180,83,9,0.02))',
         border: '1px solid rgba(180,83,9,0.12)',
-        boxShadow: '0 24px 64px rgba(180,83,9,0.06), 0 2px 4px rgba(0,0,0,0.04)',
       }}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: 'spring', stiffness: 80, damping: 20 }}
     >
-      <div className="text-[10px] font-semibold text-primary uppercase tracking-[0.1em] mb-3">
+      <div className="text-[11px] font-semibold text-primary uppercase tracking-[0.1em] mb-3">
         Included with Complete
       </div>
-      <h2 className="text-[22px] font-semibold text-heading tracking-[-0.01em] mb-2">
+      <h2 className="text-[24px] font-semibold text-heading tracking-[-0.01em] mb-2">
         {hours ? `${hours} of on-demand SCA teaching` : 'The on-demand SCA lecture course'}
       </h2>
-      <p className="text-[14px] leading-[1.65] text-muted max-w-xl mb-5">
+      <p className="text-[15px] leading-[1.65] text-muted max-w-xl mb-5">
         {substantial ? `${n} lectures across the three SCA domains` : 'Lectures across the three SCA domains'}, taught
         against the marking framework your consultations are scored on &mdash; watch as often as you like for the
         length of your plan. Complete also adds a coaching day.
@@ -104,7 +103,7 @@ function UpgradeHero({ lectures, canSwitch }: { lectures: LectureSummary[]; canS
           >
             Upgrade to Complete &rarr;
           </ManageBillingButton>
-          <p className="text-[12px] text-muted mt-3">
+          <p className="text-[13px] text-muted mt-3">
             You pay only for the time left on your plan.
           </p>
         </>
@@ -126,7 +125,7 @@ function formatDuration(seconds: number | null): string | null {
 function PlayGlyph({ muted }: { muted: boolean }) {
   return (
     <div
-      className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+      className="w-10 h-10 rounded-[10px] flex items-center justify-center flex-shrink-0"
       style={
         muted
           ? { background: 'rgba(0,0,0,0.04)', color: 'rgba(0,0,0,0.28)' }
@@ -171,13 +170,13 @@ function LectureRow({
             locked ? 'text-muted' : 'text-heading group-hover:text-primary'
           }`}
         >
-          <span className="font-mono text-[12px] text-muted mr-2 tabular-nums">
+          <span className="font-mono text-[13px] text-muted mr-2 tabular-nums">
             {String(index + 1).padStart(2, '0')}
           </span>
           {lecture.title}
         </div>
         {(lecture.description || duration) && (
-          <div className="text-[12px] text-muted mt-0.5 truncate">
+          <div className="text-[13px] text-muted mt-0.5 truncate">
             {lecture.description}
             {lecture.description && duration ? ' · ' : ''}
             {duration}
@@ -210,7 +209,7 @@ function LectureRow({
       ) : (
         <Link
           href={`/dashboard/lectures/${lecture.id}`}
-          className="flex items-center gap-4 py-4 px-2 -mx-2 rounded-lg hover:bg-black/[0.02] transition-colors group"
+          className="flex items-center gap-4 py-4 px-2 -mx-2 rounded-[10px] hover:bg-black/[0.02] transition-colors group"
         >
           {inner}
         </Link>
@@ -291,7 +290,7 @@ export default function LecturesPage() {
 
       {locked && !loading && (unavailable || state === 'read_only') && (
         <motion.div
-          className="mb-8 px-4 py-3 rounded-xl"
+          className="mb-8 px-4 py-3 rounded-[10px]"
           style={{ background: 'rgba(180,83,9,0.04)', border: '1px solid rgba(180,83,9,0.08)' }}
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
@@ -327,7 +326,7 @@ export default function LecturesPage() {
           No lectures published yet. They&apos;ll appear here as they go live.
         </p>
       ) : (
-        <div className="divide-y divide-black/[0.06]">
+        <div className="divide-y divide-hairline">
           {lectures.map((lecture, index) => (
             <LectureRow key={lecture.id} lecture={lecture} index={index} locked={locked} />
           ))}

@@ -5,7 +5,9 @@ import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
+import { BlurFade } from '@/components/magicui/blur-fade';
+import { NumberTicker } from '@/components/magicui/number-ticker';
 import Container from '@/components/ui/Container';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import SecondaryButton from '@/components/ui/SecondaryButton';
@@ -77,6 +79,58 @@ function formatAccessDate(iso: string): string {
 function daysUntil(iso: string): number {
   return Math.ceil((new Date(iso).getTime() - Date.now()) / DAY_MS);
 }
+
+/**
+ * Page-load stagger for the dashboard's top-level sections. Small increments
+ * on purpose — this is a tool someone opens dozens of times, so the whole
+ * sequence has to be over before it registers as a reveal.
+ */
+const REVEAL = {
+  welcome: 0,
+  onboarding: 0.06,
+  quickStart: 0.12,
+  recent: 0.18,
+  progress: 0.24,
+} as const;
+
+/**
+ * One entry animation per section. Under prefers-reduced-motion it renders the
+ * final state immediately as a plain div — BlurFade has no reduced-motion
+ * handling of its own, so the gate lives here at the call site.
+ */
+function Reveal({
+  delay,
+  className,
+  children,
+}: {
+  delay: number;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const shouldReduceMotion = useReducedMotion();
+  if (shouldReduceMotion) {
+    return <div className={className}>{children}</div>;
+  }
+  return (
+    <BlurFade delay={delay} className={className}>
+      {children}
+    </BlurFade>
+  );
+}
+
+/**
+ * A counting number. Same reduced-motion gate: the static figure, no spring.
+ * NumberTicker renders the final value as real children, so the number is
+ * correct before any JS runs too.
+ */
+function Tally({ value, className }: { value: number; className?: string }) {
+  const shouldReduceMotion = useReducedMotion();
+  if (shouldReduceMotion) return <>{value}</>;
+  return <NumberTicker value={value} className={className} />;
+}
+
+/** Inherit the surrounding type rather than the ticker's own black/wide default. */
+const TICKER_INLINE = 'text-inherit tracking-normal';
 
 function DashboardContent() {
   const supabase = createClient();
@@ -189,14 +243,27 @@ function DashboardContent() {
   return (
     <div>
       {/* Welcome section */}
-      <div className="mb-8">
-        <h1 className="text-[28px] font-bold text-heading tracking-[-0.02em]">
+      <Reveal delay={REVEAL.welcome} className="mb-8">
+        <h1 className="text-[24px] font-bold text-heading tracking-[-0.02em]">
           {greeting}, {firstName}
         </h1>
-        <p className="text-[14px] text-muted mt-1">
-          {stats.completedStations > 0
-            ? `You've completed ${stats.completedStations} session${stats.completedStations !== 1 ? 's' : ''}${stats.currentStreak >= 2 ? ` \u00B7 ${stats.currentStreak}-day streak` : ''}`
-            : 'Start your first consultation to begin tracking progress'}
+        <p className="text-[13px] text-muted mt-1">
+          {stats.completedStations > 0 ? (
+            <>
+              {/* Only the figures count up \u2014 the sentence around them stays put. */}
+              You&apos;ve completed <Tally value={stats.completedStations} className={TICKER_INLINE} />{' '}
+              session{stats.completedStations !== 1 ? 's' : ''}
+              {stats.currentStreak >= 2 && (
+                <>
+                  {' \u00B7 '}
+                  <Tally value={stats.currentStreak} className={TICKER_INLINE} />
+                  -day streak
+                </>
+              )}
+            </>
+          ) : (
+            'Start your first consultation to begin tracking progress'
+          )}
         </p>
         <div className="flex flex-wrap items-center gap-2 mt-2">
           {/* Passing a station is the goal, so it gets its own headline number.
@@ -207,11 +274,11 @@ function DashboardContent() {
               and moves into its own block below. Without one, the guarantee does
               not apply ("Join any of our plans"), so it stays a plain stat. */}
           {!showGuarantee && stats.passedStations !== null && stats.completedStations > 0 && stats.totalStations > 0 && (
-            <motion.span
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, ease: 'easeOut' }}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-medium font-mono"
+            /* Entry animation removed: the whole welcome block now fades in
+               once via Reveal, and stacking a second fade on a child of it
+               animated the same pixels twice. */
+            <span
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-medium font-mono"
               style={
                 stats.passedStations > 0
                   ? { background: 'rgba(22,163,74,0.08)', color: '#15803D' }
@@ -219,7 +286,7 @@ function DashboardContent() {
               }
             >
               Passed {stats.passedStations} of {stats.totalStations} stations
-            </motion.span>
+            </span>
           )}
           {!showGuarantee && stats.passedStations !== null && stats.completedStations > 0 && stats.totalStations > 0 && (
             <span className="text-[11px] text-muted">
@@ -228,7 +295,7 @@ function DashboardContent() {
           )}
           {stats.examCountdownDays > 0 && (
             <span
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-medium font-mono"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-medium font-mono"
               style={{ background: 'rgba(180,83,9,0.08)', color: '#92400E' }}
             >
               SCA exam in {stats.examCountdownDays} days
@@ -258,18 +325,18 @@ function DashboardContent() {
             count is best-attempt, matching "unlimited tries", because
             passedStationIds() counts distinct stations with any passing attempt. */}
         {showGuarantee && (
-          <motion.div
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, ease: 'easeOut' }}
-            className="mt-5 rounded-xl border border-black/[0.07] bg-surface-raised px-4 py-3.5"
-          >
+          /* Entry animation removed for the same reason as the badge above —
+             the Reveal on the welcome block covers this tile. The progress bar
+             below keeps its fill animation: that is a value being drawn, not a
+             second entrance. */
+          <div className="mt-5 rounded-[10px] border border-hairline bg-surface-raised px-4 py-3.5">
             <div className="flex items-baseline justify-between gap-3">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.13em] text-primary">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.13em] text-primary">
                 Your £500 guarantee
               </span>
               <span className="font-mono text-[13px] font-bold tabular-nums text-heading">
-                {stats.passedStations}
+                {/* Numerator only: the denominator is a fixed fact, not progress. */}
+                <Tally value={stats.passedStations ?? 0} className={TICKER_INLINE} />
                 <span className="font-normal text-muted"> / {stats.totalStations}</span>
               </span>
             </div>
@@ -292,9 +359,9 @@ function DashboardContent() {
                 How it works
               </Link>
             </p>
-          </motion.div>
+          </div>
         )}
-      </div>
+      </Reveal>
 
       {/* Plan state. Expiry is read-only, not a lockout: the loud banner says so,
           because the history and feedback below it still work.
@@ -308,7 +375,7 @@ function DashboardContent() {
           They paid; the one message that must never appear is "upgrade". */}
       {access?.state === 'none' && access.plan && !access.bypass && (
         <motion.div
-          className="mb-6 px-4 py-3 rounded-xl flex items-center justify-between gap-3"
+          className="mb-6 px-4 py-3 rounded-[10px] flex items-center justify-between gap-3"
           style={{ background: 'rgba(180,83,9,0.06)', border: '1px solid rgba(180,83,9,0.12)' }}
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
@@ -326,7 +393,7 @@ function DashboardContent() {
           twice — quietly first — only competed with itself. */}
       {access?.state === 'read_only' && !access.bypass && (
         <motion.div
-          className="mb-6 px-4 py-3 rounded-xl flex items-center justify-between gap-3"
+          className="mb-6 px-4 py-3 rounded-[10px] flex items-center justify-between gap-3"
           style={{ background: 'rgba(180,83,9,0.08)', border: '1px solid rgba(180,83,9,0.18)' }}
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
@@ -347,7 +414,7 @@ function DashboardContent() {
         if (daysLeft > RENEWAL_WARNING_DAYS || daysLeft <= 0) return null;
         return (
           <motion.div
-            className="mb-6 px-4 py-3 rounded-xl flex items-center justify-between gap-3"
+            className="mb-6 px-4 py-3 rounded-[10px] flex items-center justify-between gap-3"
             style={{ background: 'rgba(180,83,9,0.06)', border: '1px solid rgba(180,83,9,0.12)' }}
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
@@ -363,7 +430,7 @@ function DashboardContent() {
       })()}
       {access?.state === 'active' && access.planName && (
         <motion.div
-          className="mb-6 text-[12px] text-muted"
+          className="mb-6 text-[13px] text-muted"
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
         >
@@ -378,36 +445,39 @@ function DashboardContent() {
 
       {/* Getting started onboarding for new users */}
       {stats.completedStations === 0 && (
-        <div className="mb-8 rounded-[20px] bg-surface-raised border border-black/[0.06] p-6" style={{ boxShadow: '0 24px 64px rgba(180,83,9,0.06), 0 2px 4px rgba(0,0,0,0.04)' }}>
-          <div className="text-[10px] font-semibold text-primary uppercase tracking-[0.1em] mb-4">
+        <Reveal
+          delay={REVEAL.onboarding}
+          className="mb-8 rounded-[16px] bg-surface-raised border border-hairline p-6 shadow-elevation-2"
+        >
+          <div className="text-[11px] font-semibold text-primary uppercase tracking-[0.1em] mb-4">
             How it works
           </div>
           <div className="flex flex-col sm:flex-row gap-6">
             <div className="flex-1">
               <div className="text-[24px] font-semibold text-primary/20 font-mono mb-1">01</div>
-              <div className="text-[14px] font-medium text-heading mb-1">Pick a case</div>
+              <div className="text-[15px] font-medium text-heading mb-1">Pick a case</div>
               <div className="text-[13px] text-muted">
                 Choose from {stats.totalStations > 0 ? `${stats.totalStations} stations` : 'stations'} across every SCA domain
               </div>
             </div>
             <div className="flex-1">
               <div className="text-[24px] font-semibold text-primary/20 font-mono mb-1">02</div>
-              <div className="text-[14px] font-medium text-heading mb-1">Talk to your patient</div>
+              <div className="text-[15px] font-medium text-heading mb-1">Talk to your patient</div>
               <div className="text-[13px] text-muted">Voice consultation with an AI patient that responds naturally</div>
             </div>
             <div className="flex-1">
               <div className="text-[24px] font-semibold text-primary/20 font-mono mb-1">03</div>
-              <div className="text-[14px] font-medium text-heading mb-1">Get scored</div>
+              <div className="text-[15px] font-medium text-heading mb-1">Get scored</div>
               <div className="text-[13px] text-muted">Scored feedback on all three SCA domains, a couple of minutes after you finish</div>
             </div>
           </div>
-        </div>
+        </Reveal>
       )}
 
       {/* Quick start. A buyer whose window hasn't opened (or has closed) can
           browse the library but not start — say so here rather than letting
           the button bounce them back to this page with no explanation. */}
-      <div className="mb-8">
+      <Reveal delay={REVEAL.quickStart} className="mb-8">
         {access && !access.allowed && !access.plan && !access.bypass ? (
           /* S1: no plan at all is a different situation from a plan that hasn't
              opened yet, and it used to render as the latter — telling someone
@@ -429,10 +499,10 @@ function DashboardContent() {
           </>
         ) : access && !access.allowed ? (
           <div
-            className="px-5 py-4 rounded-xl text-center"
+            className="px-5 py-4 rounded-[10px] text-center"
             style={{ background: 'rgba(180,83,9,0.04)', border: '1px dashed rgba(180,83,9,0.25)' }}
           >
-            <p className="text-[14px] font-semibold text-heading">
+            <p className="text-[15px] font-semibold text-heading">
               {access.state === 'read_only' ? 'Your access has ended' : `Practice opens ${ACCESS_OPENS_LABEL}`}
             </p>
             <p className="text-[13px] text-muted mt-1">
@@ -473,13 +543,13 @@ function DashboardContent() {
             <Container>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex-1 min-w-0">
-                  <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-1.5">
+                  <div className="text-[11px] font-semibold text-muted uppercase tracking-[0.1em] mb-1.5">
                     Unfinished Case
                   </div>
                   <div className="text-[15px] font-medium text-heading truncate">{lastStation.title}</div>
                   <div className="flex items-center gap-2 mt-1">
                     <DomainTag name={lastStation.domain} size="sm" />
-                    <span className="text-[12px] text-muted">{lastStation.patientName}</span>
+                    <span className="text-[13px] text-muted">{lastStation.patientName}</span>
                     <span className="text-[11px] text-muted">
                       Restarts from the beginning ({Math.floor(lastStation.timeRemaining / 60)} min)
                     </span>
@@ -494,15 +564,13 @@ function DashboardContent() {
             </Container>
           </div>
         )}
-      </div>
+      </Reveal>
 
       {/* Recent sessions */}
       {recentSessions.length > 0 && (
-        <div
-          className="mb-8"
-        >
+        <Reveal delay={REVEAL.recent} className="mb-8">
           <div className="flex items-baseline justify-between mb-3">
-            <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em]">
+            <div className="text-[11px] font-semibold text-muted uppercase tracking-[0.1em]">
               Recent Sessions
             </div>
             <span className="text-[11px] text-muted">
@@ -510,20 +578,18 @@ function DashboardContent() {
               {fmtMark(passMarkFor())} or above passes
             </span>
           </div>
-          <div className="divide-y divide-black/[0.06]">
-            {recentSessions.map((session, i) => (
-              <motion.div
-                key={session.id}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.12 + i * 0.06 }}
-              >
+          <div className="divide-y divide-hairline">
+            {/* Per-row entry animations dropped: the Reveal above already
+                brings this list in, and running both meant every row faded
+                twice, out of step with the block containing it. */}
+            {recentSessions.map((session) => (
+              <div key={session.id}>
                 <Link
                   href={`/clinical-master/feedback/${session.id}`}
-                  className="flex items-center gap-3 py-3 hover:bg-black/[0.02] px-2 -mx-2 rounded-lg transition-colors"
+                  className="flex items-center gap-3 py-3 hover:bg-black/[0.02] px-2 -mx-2 rounded-[10px] transition-colors"
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="text-[14px] font-medium text-heading truncate">{session.stationTitle}</div>
+                    <div className="text-[15px] font-medium text-heading truncate">{session.stationTitle}</div>
                     <div className="flex items-center gap-2 mt-0.5">
                       <DomainTag name={session.domainName} size="sm" />
                       <span className="text-[11px] text-muted">{formatRelativeDate(session.completedAt)}</span>
@@ -536,7 +602,7 @@ function DashboardContent() {
                     <SessionOutcome session={session} />
                   </div>
                 </Link>
-              </motion.div>
+              </div>
             ))}
           </div>
           <Link
@@ -545,28 +611,25 @@ function DashboardContent() {
           >
             View all history
           </Link>
-        </div>
+        </Reveal>
       )}
 
       {/* Domain progress */}
       {(metrics.dataGathering > 0 || metrics.clinicalManagement > 0 || metrics.interpersonalSkills > 0) && (
-        <div>
-          <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-3">
+        <Reveal delay={REVEAL.progress}>
+          <div className="text-[11px] font-semibold text-muted uppercase tracking-[0.1em] mb-3">
             Your Progress
           </div>
           <div className="space-y-4">
+            {/* Row fades dropped for the block-level Reveal; the bars below
+                keep their fill, which draws a value rather than an entrance. */}
             {domainEntries.map((entry, i) => (
-              <motion.div
-                key={entry.key}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.2 + i * 0.06 }}
-              >
+              <div key={entry.key}>
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[13px] font-medium text-heading">
                     {DOMAIN_LABELS[entry.key]}
                   </span>
-                  <span className="text-[12px] font-mono font-medium text-primary">
+                  <span className="text-[13px] font-mono font-medium text-primary">
                     {entry.value}%
                   </span>
                 </div>
@@ -584,7 +647,7 @@ function DashboardContent() {
                     transition={{ type: 'spring', stiffness: 40, damping: 20, delay: 0.3 + i * 0.1 }}
                   />
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
           <Link
@@ -593,7 +656,7 @@ function DashboardContent() {
           >
             View library
           </Link>
-        </div>
+        </Reveal>
       )}
     </div>
   );

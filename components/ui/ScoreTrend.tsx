@@ -65,10 +65,10 @@ export default function ScoreTrend({ sessions }: ScoreTrendProps) {
   const rising = delta >= 0.3;
 
   return (
-    <div className="mb-5 rounded-xl border border-black/[0.07] bg-surface-raised px-4 py-3.5">
+    <div className="mb-5 rounded-[10px] border border-hairline bg-surface-raised px-4 py-3.5">
       <div className="mb-3 flex items-baseline justify-between gap-3">
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-[0.13em] text-muted">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.13em] text-muted">
             Your last {scored.length} marked cases
           </div>
           <div className="mt-0.5 text-[15px] font-semibold text-heading">
@@ -76,7 +76,7 @@ export default function ScoreTrend({ sessions }: ScoreTrendProps) {
           </div>
         </div>
         {rising && (
-          <span className="font-mono text-[12px] font-medium text-success">&#8599; improving</span>
+          <span className="font-mono text-[13px] font-medium text-success">&#8599; improving</span>
         )}
       </div>
 
@@ -125,7 +125,7 @@ export default function ScoreTrend({ sessions }: ScoreTrendProps) {
         ))}
       </svg>
 
-      <p className="mt-2 font-mono text-[10px] text-muted">
+      <p className="mt-2 font-mono text-[11px] text-muted">
         Rolling average of your last {SMOOTH}
       </p>
     </div>

@@ -154,7 +154,7 @@ function StationLibraryContent() {
               </div>
             )
           ) : (
-            <div className="divide-y divide-black/[0.06]">
+            <div className="divide-y divide-hairline">
               {domains.map((domain, index) => {
                 const colors = getDomainColor(domain.name, index);
                 const hasCompleted = domain.completed_count > 0;
@@ -168,11 +168,11 @@ function StationLibraryContent() {
                   >
                     <Link
                       href={`/dashboard/library/${domain.id}`}
-                      className="group -mx-2 flex items-center gap-4 rounded-lg px-2 py-4 transition-colors hover:bg-black/[0.02] focus-visible-ring"
+                      className="group -mx-2 flex items-center gap-4 rounded-[10px] px-2 py-4 transition-colors hover:bg-black/[0.02] focus-visible-ring"
                     >
                       {/* Domain color indicator */}
                       <div
-                        className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-[14px] font-semibold"
+                        className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[10px] text-[13px] font-semibold"
                         style={{ background: colors.bg, color: colors.text }}
                       >
                         {domain.name.charAt(0)}
@@ -183,7 +183,7 @@ function StationLibraryContent() {
                         <div className="line-clamp-2 text-[15px] font-medium leading-snug text-heading transition-colors group-hover:text-primary">
                           {domain.name}
                         </div>
-                        <div className="mt-0.5 text-[12px] text-muted">
+                        <div className="mt-0.5 text-[13px] text-muted">
                           {domain.station_count} case{domain.station_count !== 1 ? 's' : ''}
                           {hasCompleted && ` · ${domain.completed_count} attempted`}
                           {/* Zero passes stays unsaid, matching the dashboard rule

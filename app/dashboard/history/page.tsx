@@ -174,8 +174,8 @@ export default function HistoryPage() {
       {sessions.length === 0 ? (
         <Container>
           <div className="text-center py-12">
-            <p className="text-[16px] font-semibold text-heading mb-2">No sessions yet</p>
-            <p className="text-[14px] text-muted mb-6">
+            <p className="text-[15px] font-semibold text-heading mb-2">No sessions yet</p>
+            <p className="text-[13px] text-muted mb-6">
               Complete a clinical consultation to see your history here.
             </p>
             <Link href="/dashboard/library">
@@ -199,7 +199,7 @@ export default function HistoryPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search your cases, patients or symptoms"
-              className="w-full rounded-xl border border-black/[0.08] bg-white/70 px-4 py-2.5 text-base text-heading transition-all placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 md:text-[14px]"
+              className="w-full rounded-[10px] border border-defined bg-white/70 px-4 py-2.5 text-base text-heading transition-all placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 md:text-[15px]"
             />
             <div className="mt-3 flex flex-wrap gap-2">
               {HISTORY_FILTERS.map((f) => (
@@ -208,7 +208,7 @@ export default function HistoryPage() {
                   type="button"
                   onClick={() => setFilter(f.id)}
                   aria-pressed={filter === f.id}
-                  className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors ${
+                  className={`rounded-full px-3 py-1.5 text-[13px] font-medium transition-colors ${
                     filter === f.id
                       ? 'bg-primary/10 text-primary'
                       : 'bg-black/[0.04] text-muted hover:text-heading'
@@ -220,9 +220,9 @@ export default function HistoryPage() {
             </div>
           </div>
 
-          <div className="divide-y divide-black/[0.06]">
+          <div className="divide-y divide-hairline">
             {visibleSessions.length === 0 && (
-              <p className="py-10 text-center text-[14px] text-muted">
+              <p className="py-10 text-center text-[13px] text-muted">
                 Nothing here matches. {hasMore ? 'Older sessions may not be loaded yet.' : ''}
               </p>
             )}
@@ -242,13 +242,13 @@ export default function HistoryPage() {
                       ? `/clinical-master/station/${session.stationId}`
                       : `/clinical-master/feedback/${session.id}`
                   }
-                  className={`flex items-center gap-3 py-3.5 px-2 -mx-2 rounded-lg hover:bg-black/[0.02] transition-colors group ${
+                  className={`flex items-center gap-3 py-3.5 px-2 -mx-2 rounded-[10px] hover:bg-black/[0.02] transition-colors group ${
                     session.outcome === 'unfinished' ? 'opacity-70 hover:opacity-100' : ''
                   }`}
                 >
                   <div className="flex-1 min-w-0">
                     <div
-                      className={`text-[14px] truncate transition-colors group-hover:text-primary ${
+                      className={`text-[15px] truncate transition-colors group-hover:text-primary ${
                         session.outcome === 'unfinished'
                           ? 'font-normal text-muted'
                           : 'font-medium text-heading'
