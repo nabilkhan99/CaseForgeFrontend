@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import type Stripe from 'stripe';
 import { getStripe } from '@/lib/commerce/stripe';
 import {
-  REFEREE_DISCOUNT_BY_PLAN,
+  REFEREE_REWARD_BY_PLAN,
   REWARD_BY_PLAN,
   decideReferral,
   generateReferralCode,
@@ -36,9 +36,11 @@ type SupabaseAdmin = ReturnType<typeof getSupabaseAdmin>;
  * renewal on the two fixed-term course plans and record the Stripe billing
  * period. Every write is idempotent so Stripe retries are safe.
  *
- * `charge.refunded` -> void the linked referral on ANY refund (partial or full)
- * so it can't be paid out; the pre-order is flipped to refunded only on a full
- * refund (a partially-refunded buyer still holds their seat).
+ * `charge.refunded` -> void the linked referral on ANY genuine refund (partial
+ * or full) so it can't be paid out; the pre-order is flipped to refunded only on
+ * a full refund (a partially-refunded buyer still holds their seat). Refunds
+ * tagged `purpose: referee_reward` are the buyer's own referral cashback and are
+ * skipped entirely — see {@link isRefereeRewardRefund}.
  *
  * `customer.subscription.deleted` -> mark the order canceled. For a fixed-term
  * plan this is also the NORMAL end of a paid term, three months in.
@@ -911,6 +913,7 @@ async function recordReferral(
     plan,
     amount,
     reward_amount: decision.rewardAmount,
+    referee_reward_amount: decision.refereeRewardAmount,
     status: decision.status,
     void_reason: decision.voidReason,
   });
@@ -1010,7 +1013,7 @@ async function mintAdvocateAndInvite(supabase: SupabaseAdmin, args: MintArgs): P
     toName: name,
     referralUrl: referralUrl(origin, code),
     rewardAmount: REWARD_BY_PLAN.complete, // headline "up to £100"
-    refereeDiscount: REFEREE_DISCOUNT_BY_PLAN.complete, // "...and £100 off for them"
+    refereeDiscount: REFEREE_REWARD_BY_PLAN.complete, // "...and £100 back for them"
   });
 
   if (!result.sent) {
@@ -1038,7 +1041,30 @@ async function mintAdvocateAndInvite(supabase: SupabaseAdmin, args: MintArgs): P
  * and a loud clawback warning is logged. A failed referral-void update returns
  * 500 so Stripe retries — the update is idempotent.
  */
+/**
+ * True when this refund IS the referee's referral cashback rather than a real
+ * refund. Paying the buyer's side back onto their card is the natural mechanism,
+ * but `charge.refunded` fires for it exactly as it would for a cancellation —
+ * and voiding the referral there would cancel the referrer's payout every single
+ * time we paid a buyer. The refund carries `purpose: referee_reward` metadata
+ * (see the admin payout action); anything without it is a genuine refund.
+ */
+function isRefereeRewardRefund(charge: Stripe.Charge): boolean {
+  const refunds = charge.refunds?.data ?? [];
+  if (refunds.length === 0) return false;
+  // Every refund on the charge must be a reward payout — a later genuine refund
+  // on the same charge must still void, even though a reward refund precedes it.
+  return refunds.every((r) => r.metadata?.purpose === 'referee_reward');
+}
+
 async function handleChargeRefunded(charge: Stripe.Charge) {
+  if (isRefereeRewardRefund(charge)) {
+    console.log('[stripe-webhook] refund is a referee cashback — referral left intact', {
+      chargeId: charge.id,
+    });
+    return NextResponse.json({ received: true, ignored: 'referee_reward_refund', chargeId: charge.id });
+  }
+
   // Matched on the PaymentIntent. Since every plan became a subscription that
   // id no longer comes from the checkout session (which has none in
   // `subscription` mode) — it is read off the first invoice and written by

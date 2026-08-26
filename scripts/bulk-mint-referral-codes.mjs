@@ -32,6 +32,10 @@ for (const line of readFileSync('.env.local', 'utf8').split('\n')) {
 
 const EXECUTE = process.argv.includes('--execute');
 const SKIP_BREVO = process.argv.includes('--skip-brevo');
+// --limit N mints only the first N (a pilot batch to eyeball end-to-end);
+// a later full run skips them via the owner_email idempotency check.
+const limitArg = process.argv.indexOf('--limit');
+const LIMIT = limitArg > -1 ? Number(process.argv[limitArg + 1]) : Infinity;
 const ORIGIN = 'https://www.fourteenfisherman.com';
 
 const supabase = createClient(
@@ -84,13 +88,14 @@ for (const t of trials) {
   else if (!prev.name && name) prev.name = name;
 }
 
-const toMint = [...leads.values()].filter((l) => !owned.has(l.email));
-const alreadyOwned = leads.size - toMint.length;
+const eligible = [...leads.values()].filter((l) => !owned.has(l.email));
+const toMint = eligible.slice(0, LIMIT);
+const alreadyOwned = leads.size - eligible.length;
 
 console.log(`${EXECUTE ? 'EXECUTE' : 'DRY RUN'}`);
 console.log(`leads: ${leads.size} unique (${waitlist.length} waitlist + ${trials.length} trial rows)`);
 console.log(`already own a code: ${alreadyOwned} — skipped`);
-console.log(`to mint: ${toMint.length}\n`);
+console.log(`to mint: ${toMint.length}${toMint.length < eligible.length ? ` (of ${eligible.length} eligible — --limit)` : ''}\n`);
 
 // ── Mint ───────────────────────────────────────────────────────────────────
 const minted = [];
@@ -157,7 +162,7 @@ for (const attr of ['REFERRAL_CODE', 'REFERRAL_URL']) {
   });
   if (!res.ok && res.status !== 409) {
     const body = await res.text();
-    if (!/already exist/i.test(body)) { console.error(`brevo attribute ${attr}:`, res.status, body.slice(0, 120)); process.exit(1); }
+    if (!/already exist|must be unique/i.test(body)) { console.error(`brevo attribute ${attr}:`, res.status, body.slice(0, 120)); process.exit(1); }
   }
 }
 

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import type { AdvocateStats, DashboardStats } from '@/lib/commerce/referralStats';
+import { payableFrom } from '@/lib/commerce/referrals';
 
 interface Referral {
   id: string;
@@ -13,11 +14,13 @@ interface Referral {
   plan: string;
   amount: number;
   reward_amount: number;
+  referee_reward_amount: number;
   status: 'pending' | 'qualified' | 'paid' | 'void';
   void_reason: string | null;
   created_at: string;
   qualified_at: string | null;
   paid_at: string | null;
+  referee_paid_at: string | null;
 }
 
 /** Advocate row as the admin API returns it — the pure stats plus a share link. */
@@ -63,6 +66,40 @@ function gbp(pence: number): string {
 function fmtDate(iso: string | null): string {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+/**
+ * The pay button, or — for a referral still inside its hold — the date it can be
+ * paid. The server refuses to mark anything paid before it qualifies, so this is
+ * purely about not dangling a button that would bounce.
+ */
+function PayControl({
+  status,
+  createdAt,
+  busy,
+  onPay,
+}: {
+  status: string;
+  createdAt: string;
+  busy: boolean;
+  onPay: () => void;
+}) {
+  if (status === 'pending') {
+    return (
+      <span className="text-[11px] font-medium text-muted whitespace-nowrap" title="Held until the refund window closes">
+        pay from {fmtDate(payableFrom(new Date(createdAt)).toISOString())}
+      </span>
+    );
+  }
+  return (
+    <button
+      onClick={onPay}
+      disabled={busy}
+      className="text-[11px] font-semibold uppercase tracking-wider px-3.5 py-2 rounded-lg bg-primary text-surface-raised hover:bg-primary-light disabled:opacity-50 transition-colors"
+    >
+      {busy ? '…' : 'Mark paid'}
+    </button>
+  );
 }
 
 function fmtTimestamp(date: Date): string {
@@ -124,13 +161,14 @@ export default function ReferralsTable() {
     load();
   }, [load]);
 
-  async function markPaid(id: string) {
+  /** `which` picks the side being settled — the sharer's payout or the buyer's cashback. */
+  async function markPaid(id: string, which: 'sharer' | 'referee' = 'sharer') {
     setPayingId(id);
     try {
       const res = await fetch('/api/admin/referrals', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, action: 'mark_paid' }),
+        body: JSON.stringify({ id, action: which === 'referee' ? 'mark_referee_paid' : 'mark_paid' }),
       });
       if (res.ok) {
         await load();
@@ -224,7 +262,26 @@ export default function ReferralsTable() {
     { label: 'Paid to date', value: gbp(stats.paidPence) },
   ];
 
-  const payoutQueue = referrals.filter((r) => r.status === 'qualified');
+  // Both queues show money owed from the moment it is owed, including referrals
+  // still inside their 5-day hold. Hiding those made the dashboard look empty
+  // while payouts were quietly accruing; a row you can see but not yet pay is
+  // more useful than no row at all.
+  const payoutQueue = referrals.filter((r) => r.status === 'pending' || r.status === 'qualified');
+  // The buyer's cashback is owed independently of the sharer's payout: it
+  // survives the sharer being paid ('paid'), and is cleared by referee_paid_at.
+  const refereeQueue = referrals.filter(
+    (r) =>
+      (r.status === 'pending' || r.status === 'qualified' || r.status === 'paid') &&
+      r.referee_reward_amount > 0 &&
+      !r.referee_paid_at,
+  );
+  // Split each queue into money you can send today vs money still in its hold,
+  // both derived from the same rows so the two figures can never disagree.
+  const sum = (rows: Referral[], pick: (r: Referral) => number) => rows.reduce((t, r) => t + pick(r), 0);
+  const sharerReady = payoutQueue.filter((r) => r.status === 'qualified');
+  const sharerHeld = payoutQueue.filter((r) => r.status === 'pending');
+  const refereeReady = refereeQueue.filter((r) => r.status !== 'pending');
+  const refereeHeld = refereeQueue.filter((r) => r.status === 'pending');
 
   return (
     <div className="min-h-[100dvh] bg-surface text-body font-sans">
@@ -511,7 +568,10 @@ export default function ReferralsTable() {
             <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Payout queue</h2>
             {payoutQueue.length > 0 && (
               <span className="text-xs text-muted">
-                {payoutQueue.length} to pay · <span className="text-primary font-mono">{gbp(owed)}</span>
+                <span className="text-primary font-mono">{gbp(sum(sharerReady, (r) => r.reward_amount))}</span> ready
+                {sharerHeld.length > 0 && (
+                  <> · <span className="font-mono">{gbp(sum(sharerHeld, (r) => r.reward_amount))}</span> held</>
+                )}
               </span>
             )}
           </div>
@@ -519,7 +579,7 @@ export default function ReferralsTable() {
           {loading && referrals.length === 0 ? (
             <p className="mt-8 text-sm text-muted animate-pulse">Loading…</p>
           ) : payoutQueue.length === 0 ? (
-            <p className="mt-8 text-sm text-muted">Nothing to pay out right now. Qualified referrals land here.</p>
+            <p className="mt-8 text-sm text-muted">Nothing owed. A referred purchase lands here straight away, payable once its hold clears.</p>
           ) : (
             <div className="mt-4">
               {payoutQueue.map((r, i) => (
@@ -541,13 +601,68 @@ export default function ReferralsTable() {
                     <span className="font-mono text-base font-semibold text-heading tabular-nums">
                       {gbp(r.reward_amount)}
                     </span>
-                    <button
-                      onClick={() => markPaid(r.id)}
-                      disabled={payingId === r.id}
-                      className="text-[11px] font-semibold uppercase tracking-wider px-3.5 py-2 rounded-lg bg-primary text-surface-raised hover:bg-primary-light disabled:opacity-50 transition-colors"
-                    >
-                      {payingId === r.id ? '…' : 'Mark paid'}
-                    </button>
+                    <PayControl
+                      status={r.status}
+                      createdAt={r.created_at}
+                      busy={payingId === r.id}
+                      onPay={() => markPaid(r.id)}
+                    />
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Buyer cashback — the second half of every two-sided referral. Kept as
+            its own queue because it is owed to a different person and settled
+            separately; a referral can sit here long after the sharer is paid. */}
+        <section className="mt-14">
+          <div className="flex items-baseline justify-between gap-4 border-b border-border pb-3">
+            <h2 className="font-mono text-[11px] uppercase tracking-[0.18em] text-heading">
+              Buyer cashback
+            </h2>
+            {refereeQueue.length > 0 && (
+              <p className="text-xs text-muted">
+                <span className="text-primary font-mono">{gbp(sum(refereeReady, (r) => r.referee_reward_amount))}</span>{' '}
+                ready
+                {refereeHeld.length > 0 && (
+                  <> · <span className="font-mono">{gbp(sum(refereeHeld, (r) => r.referee_reward_amount))}</span> held</>
+                )}
+              </p>
+            )}
+          </div>
+          {refereeQueue.length === 0 ? (
+            <p className="mt-8 text-sm text-muted">
+              Nothing owed to buyers. A referred purchase puts the buyer&rsquo;s cashback here straight away.
+            </p>
+          ) : (
+            <div className="mt-2">
+              {refereeQueue.map((r, i) => (
+                <motion.div
+                  key={`referee-${r.id}`}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.35, delay: Math.min(i * 0.05, 0.4), ease: 'easeOut' }}
+                  className="flex items-center justify-between gap-4 px-1 py-4 border-b border-border"
+                >
+                  <div className="min-w-0">
+                    <div className="text-sm text-heading font-mono truncate">{r.referee_email}</div>
+                    <div className="text-[11px] text-muted truncate">
+                      bought <span className="font-mono">{r.plan}</span> · referred by {r.referrer_email} ·
+                      qualified {fmtDate(r.qualified_at)}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-5 shrink-0">
+                    <span className="font-mono text-base font-semibold text-heading tabular-nums">
+                      {gbp(r.referee_reward_amount)}
+                    </span>
+                    <PayControl
+                      status={r.status}
+                      createdAt={r.created_at}
+                      busy={payingId === r.id}
+                      onPay={() => markPaid(r.id, 'referee')}
+                    />
                   </div>
                 </motion.div>
               ))}
