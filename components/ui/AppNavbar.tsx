@@ -139,7 +139,7 @@ export default function AppNavbar() {
       <motion.nav
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         style={{ maxWidth: 'min(92%, 1200px)', backgroundColor: navBg, boxShadow: navShadow } as any}
-        className="w-full backdrop-blur-2xl border border-hairline rounded-[14px] px-5 py-2.5 flex items-center justify-between"
+        className="relative z-50 w-full backdrop-blur-2xl border border-hairline rounded-[14px] px-5 py-2.5 flex items-center justify-between"
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 120, damping: 20 }}
