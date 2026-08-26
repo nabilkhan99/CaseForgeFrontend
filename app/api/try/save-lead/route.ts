@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { validatePartialAnswers, type PartialAnswers } from '@/lib/trial/questionnaire';
-import { toE164 } from '@/lib/trial/phone';
+import { validatePartialAnswers } from '@/lib/trial/questionnaire';
+import { leadFieldsFrom } from '@/lib/trial/leadRow';
 
 /**
  * Save the lead while they are still answering, not once they have finished.
@@ -115,37 +115,4 @@ export async function POST(req: NextRequest) {
     console.error('[save-lead] unexpected error', error);
     return NextResponse.json({ saved: false, reason: 'error' }, { status: 200 });
   }
-}
-
-/**
- * Map validated answers onto columns, omitting anything not answered yet.
- *
- * Omitting rather than nulling is the point: these arrive one question at a
- * time, and writing `null` for the unanswered ones would erase the answers of
- * the question before.
- */
-export function leadFieldsFrom(
-  answers: PartialAnswers,
-  stationId: string | null,
-): Record<string, string | null> {
-  const fields: Record<string, string | null> = { station_id: stationId };
-  const set = (column: string, value: string | undefined) => {
-    if (value) fields[column] = value;
-  };
-
-  set('first_name', answers.firstName);
-  // E.164, so the SMS step and a phone call both work straight off the row.
-  set('phone', answers.phone ? (toE164(answers.phone) ?? answers.phone) : undefined);
-  set('training_stage', answers.trainingStage);
-  set('training_start_month', answers.trainingStartMonth);
-  set('training_start_year', answers.trainingStartYear);
-  set('akt_status', answers.aktStatus);
-  set('akt_sitting', answers.aktSitting);
-  set('sca_status', answers.scaStatus);
-  set('sca_sitting', answers.scaSitting);
-  set('not_in_training_role', answers.notInTrainingRole);
-  set('expected_start_month', answers.expectedStartMonth);
-  set('expected_start_year', answers.expectedStartYear);
-
-  return fields;
 }
