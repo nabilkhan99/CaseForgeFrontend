@@ -71,12 +71,12 @@ export default function ScoreTrend({ sessions }: ScoreTrendProps) {
           <div className="text-[10px] font-semibold uppercase tracking-[0.13em] text-muted">
             Your last {scored.length} marked cases
           </div>
-          <div className="mt-0.5 text-[15px] font-bold text-heading">
+          <div className="mt-0.5 text-[15px] font-semibold text-heading">
             {rising ? `Up ${delta.toFixed(1)} since you started` : 'How your average is moving'}
           </div>
         </div>
         {rising && (
-          <span className="font-mono text-[12px] font-bold text-success">&#8599; improving</span>
+          <span className="font-mono text-[12px] font-medium text-success">&#8599; improving</span>
         )}
       </div>
 

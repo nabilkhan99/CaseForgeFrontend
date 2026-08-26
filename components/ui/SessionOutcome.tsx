@@ -46,7 +46,7 @@ export default function SessionOutcome({ session, now }: SessionOutcomeProps) {
           </svg>
         )}
         <span
-          className={`font-mono text-[15px] font-bold tabular-nums ${session.passed ? '' : 'text-heading'}`}
+          className={`font-mono text-[15px] font-semibold tabular-nums ${session.passed ? '' : 'text-heading'}`}
           style={session.passed ? { color: TONE_COLOUR.pass } : undefined}
         >
           {session.weightedScore.toFixed(1)}

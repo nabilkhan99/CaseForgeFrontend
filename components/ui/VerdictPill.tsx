@@ -28,7 +28,7 @@ export default function VerdictPill({ verdict, passed, size = 'md' }: VerdictPil
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 font-bold uppercase tracking-wide rounded-lg whitespace-nowrap ${sizeClass}`}
+      className={`inline-flex items-center gap-1.5 font-semibold uppercase tracking-wide rounded-lg whitespace-nowrap ${sizeClass}`}
       style={{ background: style.bg, color: style.color }}
     >
       {passed ? 'Passed' : verdict}

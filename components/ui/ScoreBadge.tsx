@@ -32,12 +32,12 @@ export default function ScoreBadge({ score, showLabel = false, size = 'md' }: Sc
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 font-bold font-mono rounded-lg ${sizeClass}`}
+      className={`inline-flex items-center gap-1.5 font-semibold font-mono rounded-lg ${sizeClass}`}
       style={{ background: TONE_BACKGROUND[tone], color: TONE_COLOUR[tone] }}
       title={`${passMarkPercent()}% is the pass mark (6.0 out of 10.5)`}
     >
       {score}%
-      {showLabel && <span className="font-semibold text-[10px] uppercase">{TONE_LABEL[tone]}</span>}
+      {showLabel && <span className="font-medium text-[10px] uppercase">{TONE_LABEL[tone]}</span>}
     </span>
   );
 }

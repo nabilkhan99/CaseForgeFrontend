@@ -37,10 +37,10 @@ export default function AudioSetupNotice() {
             color: '#92400E',
           }}
         >
-          <span className="font-semibold">Firefox detected.</span> Voice
+          <span className="font-medium">Firefox detected.</span> Voice
           consultations are unreliable in Firefox — the patient&apos;s audio can
           cut out mid-sentence. For the best experience, use{' '}
-          <span className="font-semibold">Chrome, Safari or Edge</span>.
+          <span className="font-medium">Chrome, Safari or Edge</span>.
         </motion.div>
       )}
       <p className="flex items-center justify-center gap-1.5 text-[12px] text-muted">

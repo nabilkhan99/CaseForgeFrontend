@@ -158,7 +158,7 @@ function DomainDetailContent({ domainId }: { domainId: string }) {
               <button
                 type="button"
                 onClick={clear}
-                className="mt-3 text-[13px] font-semibold text-primary hover:underline focus-visible-ring"
+                className="mt-3 text-[13px] font-medium text-primary hover:underline focus-visible-ring"
               >
                 Clear filters
               </button>

@@ -239,7 +239,7 @@ function EvidenceBlock({
 
   return (
     <blockquote className="mt-3 rounded-lg border border-stone-200 bg-white/80 px-3 py-2 text-[12px] leading-[1.65] text-stone-600 shadow-[0_1px_2px_rgba(31,26,20,0.04)]">
-      <div className="mb-1 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-stone-400">
+      <div className="mb-1 flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.08em] text-stone-400">
         {evidence.timestamp_ms != null && (
           <span className="font-mono tracking-normal">[{fmtTs(evidence.timestamp_ms)}]</span>
         )}
@@ -338,9 +338,9 @@ function DomainMiniRow({ domain }: { domain: DomainFeedback }) {
     >
       <div className="min-w-0">
         <div className="mb-2 flex items-center gap-2">
-          <span className="truncate text-[13px] font-semibold text-heading">{meta.label}</span>
+          <span className="truncate text-[13px] font-medium text-heading">{meta.label}</span>
           {meta.weightLabel && (
-            <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-stone-500">
+            <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.08em] text-stone-500">
               weighted
             </span>
           )}
@@ -356,7 +356,7 @@ function DomainMiniRow({ domain }: { domain: DomainFeedback }) {
           overall verdict was the same judgement said four times. The bar is
           already grade-toned, and the grade stays available to screen readers. */}
       <div className="text-right">
-        <div className="font-mono text-[15px] font-semibold tabular-nums text-heading">
+        <div className="font-mono text-[15px] font-medium tabular-nums text-heading">
           {fmtScore(score)}<span className="text-[12px] text-stone-400">/{fmtScore(maxPoints)}</span>
         </div>
         <span className="sr-only">{GRADE_LABELS[domain.grade]}</span>
@@ -389,11 +389,11 @@ function FocusNext({ feedback }: { feedback: ConsultationFeedback }) {
       <div className="grid gap-4">
         {focusAreas.map((focus) => (
           <div key={`${focus.priority}-${focus.label}`} className="grid grid-cols-[32px_1fr] gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/[0.08] font-mono text-[12px] font-semibold text-primary">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/[0.08] font-mono text-[12px] font-medium text-primary">
               {focus.priority}
             </div>
             <div>
-              <h3 className="text-[14px] font-semibold text-heading">{focus.label}</h3>
+              <h3 className="text-[14px] font-medium text-heading">{focus.label}</h3>
               <p className="mt-1 text-[13px] leading-[1.6] text-stone-600">{focus.narrative}</p>
             </div>
           </div>
@@ -426,7 +426,7 @@ function VerdictPanel({ feedback, sessionId }: { feedback: ConsultationFeedback;
           <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Final verdict</div>
           <div className={`font-serif text-[40px] leading-none ${vc.text}`}>{overall.verdict}</div>
           <div className="mt-3 flex items-end gap-2 font-mono text-heading">
-            <span className="text-[24px] font-semibold">{overall.weighted_score.toFixed(1)}</span>
+            <span className="text-[24px] font-bold">{overall.weighted_score.toFixed(1)}</span>
             <span className="pb-1 text-[13px] text-stone-400">/ {overall.max_score.toFixed(1)}</span>
           </div>
         <div className="relative mt-4 h-2 rounded-full bg-stone-200">
@@ -479,19 +479,19 @@ function VerdictPanel({ feedback, sessionId }: { feedback: ConsultationFeedback;
         <div className="space-y-2.5 text-[12px] text-stone-600">
           <div className="flex items-center justify-between gap-3">
             <span>Data gathering</span>
-            <span className="font-mono font-semibold text-heading">/3</span>
+            <span className="font-mono font-medium text-heading">/3</span>
           </div>
           <div className="flex items-center justify-between gap-3">
             <span>Clinical management</span>
-            <span className="font-mono font-semibold text-heading">/4.5</span>
+            <span className="font-mono font-medium text-heading">/4.5</span>
           </div>
           <div className="flex items-center justify-between gap-3">
             <span>Relating</span>
-            <span className="font-mono font-semibold text-heading">/3</span>
+            <span className="font-mono font-medium text-heading">/3</span>
           </div>
           <div className="flex items-center justify-between gap-3 border-t border-black/[0.06] pt-2.5">
-            <span className="font-semibold text-heading">Pass mark</span>
-            <span className="font-mono font-semibold text-heading">
+            <span className="font-medium text-heading">Pass mark</span>
+            <span className="font-mono font-medium text-heading">
               {fmtMark(passMark)} / {fmtMark(maxScore)}
             </span>
           </div>
@@ -533,10 +533,10 @@ function ReportTabs({
             key={tab.key}
             type="button"
             onClick={() => onChange(tab.key)}
-            className={`min-h-[44px] rounded-xl px-4 py-2 text-[13px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 ${
+            className={`min-h-[44px] rounded-xl px-4 py-2 text-[13px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 ${
               active
-                ? 'bg-heading text-white shadow-[0_6px_18px_rgba(31,26,20,0.12)]'
-                : 'text-stone-600 hover:bg-primary/[0.06] hover:text-primary'
+                ? 'bg-heading font-semibold text-white shadow-[0_6px_18px_rgba(31,26,20,0.12)]'
+                : 'font-medium text-stone-600 hover:bg-primary/[0.06] hover:text-primary'
             }`}
           >
             {/* S3: tabs are navigation. Stamping the grade on each one put the
@@ -583,24 +583,24 @@ function OverviewPanel({
           </p>
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
             <div className="rounded-xl border border-black/[0.06] bg-white/70 px-3 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">Result</div>
+              <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">Result</div>
               <div className="mt-1 text-[16px] font-semibold text-heading">{feedback.overall.verdict}</div>
             </div>
             <div className="rounded-xl border border-black/[0.06] bg-white/70 px-3 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">Score</div>
+              <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">Score</div>
               <div className="mt-1 font-mono text-[16px] font-semibold text-heading">
                 {feedback.overall.weighted_score.toFixed(1)} / {feedback.overall.max_score.toFixed(1)}
               </div>
             </div>
             <div className="rounded-xl border border-black/[0.06] bg-white/70 px-3 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">Domains</div>
+              <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">Domains</div>
               <div className="mt-1 text-[16px] font-semibold text-heading">{passedDomains} / {domains.length} passing</div>
             </div>
           </div>
 
           {lowestDomain && (
             <div className="mt-5 rounded-xl border border-amber-200/70 bg-amber-50/60 px-4 py-3 text-[13px] leading-[1.65] text-amber-900">
-              <span className="font-semibold">Most useful area to open first: </span>
+              <span className="font-medium">Most useful area to open first: </span>
               {DOMAIN_META[lowestDomain.domain].label}, because it contributed {fmtScore(domainScore(lowestDomain))} / {fmtScore(domainMaxPoints(lowestDomain))} points.
             </div>
           )}
@@ -614,12 +614,12 @@ function OverviewPanel({
                   return (
                     <div key={`${missed.domain}-${missed.label}-${index}`} className="rounded-xl border border-black/[0.06] bg-white/70 px-3 py-3">
                       <div className="mb-1 flex flex-wrap items-center gap-2">
-                        <span className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.04em] ${severity.className}`}>
+                        <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.04em] ${severity.className}`}>
                           {severity.label}
                         </span>
-                        <span className="text-[12px] font-semibold text-stone-500">{DOMAIN_META[missed.domain].label}</span>
+                        <span className="text-[12px] font-medium text-stone-500">{DOMAIN_META[missed.domain].label}</span>
                       </div>
-                      <p className="text-[13px] font-semibold leading-[1.55] text-heading">{missed.label}</p>
+                      <p className="text-[13px] font-medium leading-[1.55] text-heading">{missed.label}</p>
                     </div>
                   );
                 })}
@@ -672,10 +672,10 @@ function MissedItem({ item }: { item: DomainFeedback['what_you_missed'][number] 
   return (
     <article className="border-l-2 border-amber-500/30 pl-3">
       <div className="mb-1 flex flex-wrap items-center gap-2">
-        <span className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.04em] ${severity.className}`}>
+        <span className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.04em] ${severity.className}`}>
           {severity.label}
         </span>
-        <span className="text-[13px] font-semibold leading-[1.55] text-heading">{item.label}</span>
+        <span className="text-[13px] font-medium leading-[1.55] text-heading">{item.label}</span>
       </div>
       <p className="text-[13px] leading-[1.65] text-stone-600">{item.narrative}</p>
       <EvidenceBlock
@@ -731,11 +731,11 @@ function DomainCard({ domain, index }: { domain: DomainFeedback; index: number }
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <h3 className="text-[20px] font-semibold text-heading">{meta.label}</h3>
               {meta.weightLabel && (
-                <span className="rounded-full border border-black/[0.06] bg-white/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-stone-500">
+                <span className="rounded-full border border-black/[0.06] bg-white/70 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-stone-500">
                   {meta.weightLabel}
                 </span>
               )}
-              <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${gc.badge}`}>
+              <span className={`rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.08em] ${gc.badge}`}>
                 {GRADE_LABELS[domain.grade]}
               </span>
             </div>
@@ -797,7 +797,7 @@ function DomainCard({ domain, index }: { domain: DomainFeedback; index: number }
                 <div className="space-y-3">
                   {cues.map((cue, i) => (
                     <article key={`${cue.cue}-${i}`} className="text-[13px] leading-[1.65] text-stone-600">
-                      <span className="font-semibold text-heading">{cue.status === 'explored' ? 'Explored' : 'Missed'}: </span>
+                      <span className="font-medium text-heading">{cue.status === 'explored' ? 'Explored' : 'Missed'}: </span>
                       {cue.narrative}
                       <EvidenceBlock evidence={cue.evidence} mode={cue.status === 'missed' ? 'missed' : 'supporting'} />
                     </article>
@@ -810,7 +810,7 @@ function DomainCard({ domain, index }: { domain: DomainFeedback; index: number }
           <FeedbackColumn title="How to improve" tone="practice">
             {domain.grade_mover && (
               <PracticeItem>
-                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.08em] text-primary">
+                <span className="mb-1 block text-[11px] font-medium uppercase tracking-[0.08em] text-primary">
                   Biggest grade mover
                 </span>
                 {domain.grade_mover.narrative}
@@ -819,7 +819,7 @@ function DomainCard({ domain, index }: { domain: DomainFeedback; index: number }
 
             {domain.model_moment && (
               <PracticeItem>
-                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.08em] text-stone-500">
+                <span className="mb-1 block text-[11px] font-medium uppercase tracking-[0.08em] text-stone-500">
                   Model moment
                 </span>
                 <span className="italic">{domain.model_moment.narrative}</span>
@@ -840,7 +840,7 @@ function DomainCard({ domain, index }: { domain: DomainFeedback; index: number }
           <button
             type="button"
             onClick={() => setExpanded((value) => !value)}
-            className="mt-5 min-h-[44px] rounded-xl border border-black/[0.06] bg-white px-4 text-[13px] font-semibold text-primary transition hover:border-primary/25 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            className="mt-5 min-h-[44px] rounded-xl border border-black/[0.06] bg-white px-4 text-[13px] font-medium text-primary transition hover:border-primary/25 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           >
             {expanded ? 'Show less detail' : `Show ${hiddenCount} more feedback item${hiddenCount === 1 ? '' : 's'}`}
           </button>
@@ -902,7 +902,7 @@ function TranscriptPanel({ lines }: { lines: TranscriptLine[] }) {
           aria-hidden
           animate={{ rotate: open ? 90 : 0 }}
           transition={{ duration: 0.15 }}
-          className="text-[13px] font-semibold text-primary"
+          className="text-[13px] font-medium text-primary"
         >
           &rsaquo;
         </motion.span>
@@ -939,7 +939,7 @@ function TranscriptPanel({ lines }: { lines: TranscriptLine[] }) {
                     </span>
                     <span className="min-w-0">
                       <span
-                        className={`mr-2 text-[12px] font-semibold uppercase tracking-[0.06em] ${
+                        className={`mr-2 text-[12px] font-medium uppercase tracking-[0.06em] ${
                           line.speaker === 'candidate' ? 'text-primary' : 'text-stone-500'
                         }`}
                       >
@@ -1094,12 +1094,12 @@ export default function FeedbackReport({ sessionId, variant = 'app', from = null
       </button>
     );
     const historyLink = !isTrial && (
-      <Link href="/dashboard/history" className="text-sm font-semibold text-primary hover:underline">
+      <Link href="/dashboard/history" className="text-sm font-medium text-primary hover:underline">
         Go to my history
       </Link>
     );
     const dashboardLink = !isTrial && (
-      <Link href="/dashboard" className="text-sm font-semibold text-muted hover:text-heading hover:underline">
+      <Link href="/dashboard" className="text-sm font-medium text-muted hover:text-heading hover:underline">
         Back to dashboard
       </Link>
     );
@@ -1177,7 +1177,7 @@ export default function FeedbackReport({ sessionId, variant = 'app', from = null
           <>
             This one is on us, and nothing about your consultation has been lost. Try again,
             and if it keeps happening email{' '}
-            <a href="mailto:hello@fourteenfisherman.com" className="font-semibold text-primary hover:underline">
+            <a href="mailto:hello@fourteenfisherman.com" className="font-medium text-primary hover:underline">
               hello@fourteenfisherman.com
             </a>{' '}
             and we&apos;ll mark it by hand.
@@ -1274,14 +1274,14 @@ export default function FeedbackReport({ sessionId, variant = 'app', from = null
             {feedback.station_id && (
               <Link
                 href={`/clinical-master/station/${feedback.station_id}${from ? `?from=${from}` : ''}`}
-                className="min-h-[44px] rounded-xl px-4 py-3 text-[13px] font-semibold text-primary transition hover:bg-primary/[0.06]"
+                className="min-h-[44px] rounded-xl px-4 py-3 text-[13px] font-medium text-primary transition hover:bg-primary/[0.06]"
               >
                 Retry this case
               </Link>
             )}
             <Link
               href="/dashboard"
-              className="min-h-[44px] rounded-xl px-4 py-3 text-[13px] font-semibold text-muted transition hover:bg-stone-100 hover:text-heading"
+              className="min-h-[44px] rounded-xl px-4 py-3 text-[13px] font-medium text-muted transition hover:bg-stone-100 hover:text-heading"
             >
               Back to dashboard
             </Link>

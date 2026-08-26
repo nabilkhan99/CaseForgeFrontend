@@ -126,7 +126,7 @@ export default function LecturePlayerPage() {
           <button
             onClick={retryPlayback}
             disabled={resigning}
-            className="text-primary font-semibold hover:underline disabled:opacity-40"
+            className="text-primary font-medium hover:underline disabled:opacity-40"
           >
             {resigning ? 'reloading…' : 'reload to continue'}
           </button>

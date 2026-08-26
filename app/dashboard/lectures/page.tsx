@@ -167,7 +167,7 @@ function LectureRow({
 
       <div className="flex-1 min-w-0">
         <div
-          className={`text-[15px] font-semibold truncate transition-colors ${
+          className={`text-[15px] font-medium truncate transition-colors ${
             locked ? 'text-muted' : 'text-heading group-hover:text-primary'
           }`}
         >
@@ -301,7 +301,7 @@ export default function LecturesPage() {
             {notice.href && notice.cta && (
               <>
                 {' '}
-                <Link href={notice.href} className="text-primary font-semibold hover:underline">
+                <Link href={notice.href} className="text-primary font-medium hover:underline">
                   {notice.cta}
                 </Link>
               </>

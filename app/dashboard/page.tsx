@@ -211,7 +211,7 @@ function DashboardContent() {
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, ease: 'easeOut' }}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-semibold font-mono"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-medium font-mono"
               style={
                 stats.passedStations > 0
                   ? { background: 'rgba(22,163,74,0.08)', color: '#15803D' }
@@ -228,7 +228,7 @@ function DashboardContent() {
           )}
           {stats.examCountdownDays > 0 && (
             <span
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-semibold font-mono"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-medium font-mono"
               style={{ background: 'rgba(180,83,9,0.08)', color: '#92400E' }}
             >
               SCA exam in {stats.examCountdownDays} days
@@ -285,7 +285,7 @@ function DashboardContent() {
             </div>
             <p className="mt-2.5 text-[11.5px] leading-[1.5] text-muted">
               Pass all {stats.totalStations} stations, sit your SCA, and if you don&apos;t pass we
-              send you <span className="font-semibold text-body">£500 in cash</span> within 5 working
+              send you <span className="font-medium text-body">£500 in cash</span> within 5 working
               days. Unlimited attempts — a station counts once you score{' '}
               {fmtMark(passMarkFor())} / {fmtMark(MAX_WEIGHTED_SCORE)} or better.{' '}
               <Link href="/pricing" className="font-medium text-primary hover:underline">
@@ -315,7 +315,7 @@ function DashboardContent() {
         >
           <p className="text-[13px] text-heading">
             {bouncedPending ? 'Not long now — that case opens on ' : <>You&apos;re in{access.planName ? ` — ${access.planName}` : ''}. Your access opens on </>}
-            <span className="font-semibold">{ACCESS_OPENS_LABEL}</span>.
+            <span className="font-medium">{ACCESS_OPENS_LABEL}</span>.
             {bouncedPending && ' Your plan is ready; consultations start then.'}
           </p>
         </motion.div>
@@ -333,7 +333,7 @@ function DashboardContent() {
         >
           <p className="text-[13px] text-heading">
             Your access has ended &mdash; your history stays available.{' '}
-            <Link href="/pricing?renew=true" className="text-primary font-semibold hover:underline">
+            <Link href="/pricing?renew=true" className="text-primary font-medium hover:underline">
               Renew to practise again
             </Link>
           </p>
@@ -354,7 +354,7 @@ function DashboardContent() {
           >
             <p className="text-[13px] text-heading">
               Your plan expires in {daysLeft} day{daysLeft !== 1 ? 's' : ''} &mdash;{' '}
-              <Link href="/pricing?renew=true" className="text-primary font-semibold hover:underline">
+              <Link href="/pricing?renew=true" className="text-primary font-medium hover:underline">
                 renew to keep access
               </Link>
             </p>
@@ -384,20 +384,20 @@ function DashboardContent() {
           </div>
           <div className="flex flex-col sm:flex-row gap-6">
             <div className="flex-1">
-              <div className="text-[24px] font-bold text-primary/20 font-mono mb-1">01</div>
-              <div className="text-[14px] font-semibold text-heading mb-1">Pick a case</div>
+              <div className="text-[24px] font-semibold text-primary/20 font-mono mb-1">01</div>
+              <div className="text-[14px] font-medium text-heading mb-1">Pick a case</div>
               <div className="text-[13px] text-muted">
                 Choose from {stats.totalStations > 0 ? `${stats.totalStations} stations` : 'stations'} across every SCA domain
               </div>
             </div>
             <div className="flex-1">
-              <div className="text-[24px] font-bold text-primary/20 font-mono mb-1">02</div>
-              <div className="text-[14px] font-semibold text-heading mb-1">Talk to your patient</div>
+              <div className="text-[24px] font-semibold text-primary/20 font-mono mb-1">02</div>
+              <div className="text-[14px] font-medium text-heading mb-1">Talk to your patient</div>
               <div className="text-[13px] text-muted">Voice consultation with an AI patient that responds naturally</div>
             </div>
             <div className="flex-1">
-              <div className="text-[24px] font-bold text-primary/20 font-mono mb-1">03</div>
-              <div className="text-[14px] font-semibold text-heading mb-1">Get scored</div>
+              <div className="text-[24px] font-semibold text-primary/20 font-mono mb-1">03</div>
+              <div className="text-[14px] font-medium text-heading mb-1">Get scored</div>
               <div className="text-[13px] text-muted">Scored feedback on all three SCA domains, a couple of minutes after you finish</div>
             </div>
           </div>
@@ -476,7 +476,7 @@ function DashboardContent() {
                   <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-1.5">
                     Unfinished Case
                   </div>
-                  <div className="text-[15px] font-semibold text-heading truncate">{lastStation.title}</div>
+                  <div className="text-[15px] font-medium text-heading truncate">{lastStation.title}</div>
                   <div className="flex items-center gap-2 mt-1">
                     <DomainTag name={lastStation.domain} size="sm" />
                     <span className="text-[12px] text-muted">{lastStation.patientName}</span>
@@ -566,7 +566,7 @@ function DashboardContent() {
                   <span className="text-[13px] font-medium text-heading">
                     {DOMAIN_LABELS[entry.key]}
                   </span>
-                  <span className="text-[12px] font-mono font-semibold text-primary">
+                  <span className="text-[12px] font-mono font-medium text-primary">
                     {entry.value}%
                   </span>
                 </div>

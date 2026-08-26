@@ -136,7 +136,7 @@ function StationLibraryContent() {
                 <button
                   type="button"
                   onClick={clear}
-                  className="mt-3 text-[13px] font-semibold text-primary hover:underline focus-visible-ring"
+                  className="mt-3 text-[13px] font-medium text-primary hover:underline focus-visible-ring"
                 >
                   Clear filters
                 </button>
@@ -172,7 +172,7 @@ function StationLibraryContent() {
                     >
                       {/* Domain color indicator */}
                       <div
-                        className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-[14px] font-bold"
+                        className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-[14px] font-semibold"
                         style={{ background: colors.bg, color: colors.text }}
                       >
                         {domain.name.charAt(0)}
@@ -180,7 +180,7 @@ function StationLibraryContent() {
 
                       {/* Content */}
                       <div className="min-w-0 flex-1">
-                        <div className="line-clamp-2 text-[15px] font-semibold leading-snug text-heading transition-colors group-hover:text-primary">
+                        <div className="line-clamp-2 text-[15px] font-medium leading-snug text-heading transition-colors group-hover:text-primary">
                           {domain.name}
                         </div>
                         <div className="mt-0.5 text-[12px] text-muted">
@@ -190,7 +190,7 @@ function StationLibraryContent() {
                               that "Passed 0 of N" is a poor thing to greet someone
                               with. Attempts are already shown above. */}
                           {domain.passed_count > 0 && (
-                            <span className="ml-1 font-semibold" style={{ color: '#15803D' }}>
+                            <span className="ml-1 font-medium" style={{ color: '#15803D' }}>
                               {`· ${domain.passed_count} of ${domain.station_count} passed`}
                             </span>
                           )}
@@ -201,7 +201,7 @@ function StationLibraryContent() {
                           into ScoreBadge, whose Pass/Borderline/Refer thresholds
                           turned "3 of 9 done" into a red "33% Refer". */}
                       {hasCompleted && (
-                        <span className="flex-shrink-0 text-[11px] font-semibold tabular-nums text-muted">
+                        <span className="flex-shrink-0 text-[11px] font-medium tabular-nums text-muted">
                           {domain.completed_count}/{domain.station_count}
                         </span>
                       )}

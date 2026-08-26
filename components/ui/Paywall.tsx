@@ -39,7 +39,7 @@ export default function Paywall({
             />
           </svg>
         </div>
-        <h3 className="text-[18px] font-bold text-heading mb-2">{title}</h3>
+        <h3 className="text-[18px] font-semibold text-heading mb-2">{title}</h3>
         <p className="text-[14px] text-muted max-w-sm mx-auto mb-6 leading-relaxed">
           {message}
         </p>

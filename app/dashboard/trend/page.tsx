@@ -36,7 +36,7 @@ function ThemeBlock({ t, technique }: { t: TrendTheme; technique?: boolean }) {
   return (
     <div className="mb-5 pl-3 border-l-2 border-primary/30">
       <div className="flex items-baseline gap-2">
-        <span className="text-[14px] font-semibold text-heading">{t.theme_label}</span>
+        <span className="text-[14px] font-medium text-heading">{t.theme_label}</span>
         <span className="text-[11px] text-muted">
           {t.frequency} {t.frequency === 1 ? 'case' : 'cases'}
           {t.trajectory ? `, ${t.trajectory}` : ''}
@@ -190,7 +190,7 @@ export default function TrendPage() {
           <p className="text-[11px] font-mono uppercase tracking-[0.15em] text-muted mb-1.5">
             Building your development picture
           </p>
-          <p className="text-heading font-bold text-[17px] mb-5">Reading across your cases</p>
+          <p className="text-heading font-semibold text-[17px] mb-5">Reading across your cases</p>
 
           <ol className="space-y-0.5">
             {BUILD_STAGES.map((label, i) => {
@@ -200,7 +200,7 @@ export default function TrendPage() {
                 <li
                   key={label}
                   className={`flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] transition-colors duration-300 ${
-                    live ? 'bg-primary/[0.07] text-heading font-semibold' : done ? 'text-body' : 'text-muted'
+                    live ? 'bg-primary/[0.07] text-heading font-medium' : done ? 'text-body' : 'text-muted'
                   }`}
                 >
                   <span
@@ -284,7 +284,7 @@ export default function TrendPage() {
           type="button"
           onClick={refresh}
           disabled={refreshing}
-          className="min-h-[36px] rounded-full border border-black/[0.08] px-3.5 text-[12px] font-semibold text-primary transition hover:bg-primary/[0.06] disabled:cursor-default disabled:text-muted disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+          className="min-h-[36px] rounded-full border border-black/[0.08] px-3.5 text-[12px] font-medium text-primary transition hover:bg-primary/[0.06] disabled:cursor-default disabled:text-muted disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
         >
           {refreshing ? 'Rebuilding\u2026' : 'Refresh from my latest cases'}
         </button>
@@ -346,7 +346,7 @@ export default function TrendPage() {
           <ol className="flex flex-col gap-2">
             {report.next_steps.map((s, i) => (
               <li key={i} className="flex gap-3 text-[13px] text-stone-600 leading-[1.6]">
-                <span className="text-primary font-mono font-semibold flex-shrink-0">{i + 1}.</span>
+                <span className="text-primary font-mono font-medium flex-shrink-0">{i + 1}.</span>
                 {s}
               </li>
             ))}

@@ -166,7 +166,7 @@ export default function SettingsPage() {
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <span
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-white"
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-white"
                     style={{ background: 'linear-gradient(135deg, #B45309, #D97706)' }}
                   >
                     {access.planName || access.plan}

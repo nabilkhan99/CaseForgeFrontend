@@ -90,7 +90,7 @@ export default function SessionControls({
             {isMuted && <path d="M1.5 1.5l11 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />}
           </svg>
         </motion.span>
-        <span className={`text-[10px] font-semibold uppercase tracking-[0.08em] ${isMuted ? 'text-danger' : 'text-muted'}`}>
+        <span className={`text-[10px] font-medium uppercase tracking-[0.08em] ${isMuted ? 'text-danger' : 'text-muted'}`}>
           {isMuted ? 'Muted' : 'Mute'}
         </span>
       </motion.button>
