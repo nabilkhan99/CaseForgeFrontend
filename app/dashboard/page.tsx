@@ -190,10 +190,10 @@ function DashboardContent() {
     <div>
       {/* Welcome section */}
       <div className="mb-8">
-        <h1 className="text-[28px] font-bold text-heading tracking-[-0.02em]">
+        <h1 className="text-[24px] font-bold text-heading tracking-[-0.02em]">
           {greeting}, {firstName}
         </h1>
-        <p className="text-[14px] text-muted mt-1">
+        <p className="text-[13px] text-muted mt-1">
           {stats.completedStations > 0
             ? `You've completed ${stats.completedStations} session${stats.completedStations !== 1 ? 's' : ''}${stats.currentStreak >= 2 ? ` \u00B7 ${stats.currentStreak}-day streak` : ''}`
             : 'Start your first consultation to begin tracking progress'}
@@ -211,7 +211,7 @@ function DashboardContent() {
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, ease: 'easeOut' }}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-medium font-mono"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-medium font-mono"
               style={
                 stats.passedStations > 0
                   ? { background: 'rgba(22,163,74,0.08)', color: '#15803D' }
@@ -228,7 +228,7 @@ function DashboardContent() {
           )}
           {stats.examCountdownDays > 0 && (
             <span
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-medium font-mono"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-medium font-mono"
               style={{ background: 'rgba(180,83,9,0.08)', color: '#92400E' }}
             >
               SCA exam in {stats.examCountdownDays} days
@@ -262,10 +262,10 @@ function DashboardContent() {
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, ease: 'easeOut' }}
-            className="mt-5 rounded-xl border border-hairline bg-surface-raised px-4 py-3.5"
+            className="mt-5 rounded-[10px] border border-hairline bg-surface-raised px-4 py-3.5"
           >
             <div className="flex items-baseline justify-between gap-3">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.13em] text-primary">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.13em] text-primary">
                 Your £500 guarantee
               </span>
               <span className="font-mono text-[13px] font-bold tabular-nums text-heading">
@@ -308,7 +308,7 @@ function DashboardContent() {
           They paid; the one message that must never appear is "upgrade". */}
       {access?.state === 'none' && access.plan && !access.bypass && (
         <motion.div
-          className="mb-6 px-4 py-3 rounded-xl flex items-center justify-between gap-3"
+          className="mb-6 px-4 py-3 rounded-[10px] flex items-center justify-between gap-3"
           style={{ background: 'rgba(180,83,9,0.06)', border: '1px solid rgba(180,83,9,0.12)' }}
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
@@ -326,7 +326,7 @@ function DashboardContent() {
           twice — quietly first — only competed with itself. */}
       {access?.state === 'read_only' && !access.bypass && (
         <motion.div
-          className="mb-6 px-4 py-3 rounded-xl flex items-center justify-between gap-3"
+          className="mb-6 px-4 py-3 rounded-[10px] flex items-center justify-between gap-3"
           style={{ background: 'rgba(180,83,9,0.08)', border: '1px solid rgba(180,83,9,0.18)' }}
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
@@ -347,7 +347,7 @@ function DashboardContent() {
         if (daysLeft > RENEWAL_WARNING_DAYS || daysLeft <= 0) return null;
         return (
           <motion.div
-            className="mb-6 px-4 py-3 rounded-xl flex items-center justify-between gap-3"
+            className="mb-6 px-4 py-3 rounded-[10px] flex items-center justify-between gap-3"
             style={{ background: 'rgba(180,83,9,0.06)', border: '1px solid rgba(180,83,9,0.12)' }}
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
@@ -363,7 +363,7 @@ function DashboardContent() {
       })()}
       {access?.state === 'active' && access.planName && (
         <motion.div
-          className="mb-6 text-[12px] text-muted"
+          className="mb-6 text-[13px] text-muted"
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
         >
@@ -378,26 +378,26 @@ function DashboardContent() {
 
       {/* Getting started onboarding for new users */}
       {stats.completedStations === 0 && (
-        <div className="mb-8 rounded-[20px] bg-surface-raised border border-hairline p-6 shadow-elevation-2">
-          <div className="text-[10px] font-semibold text-primary uppercase tracking-[0.1em] mb-4">
+        <div className="mb-8 rounded-[16px] bg-surface-raised border border-hairline p-6 shadow-elevation-2">
+          <div className="text-[11px] font-semibold text-primary uppercase tracking-[0.1em] mb-4">
             How it works
           </div>
           <div className="flex flex-col sm:flex-row gap-6">
             <div className="flex-1">
               <div className="text-[24px] font-semibold text-primary/20 font-mono mb-1">01</div>
-              <div className="text-[14px] font-medium text-heading mb-1">Pick a case</div>
+              <div className="text-[15px] font-medium text-heading mb-1">Pick a case</div>
               <div className="text-[13px] text-muted">
                 Choose from {stats.totalStations > 0 ? `${stats.totalStations} stations` : 'stations'} across every SCA domain
               </div>
             </div>
             <div className="flex-1">
               <div className="text-[24px] font-semibold text-primary/20 font-mono mb-1">02</div>
-              <div className="text-[14px] font-medium text-heading mb-1">Talk to your patient</div>
+              <div className="text-[15px] font-medium text-heading mb-1">Talk to your patient</div>
               <div className="text-[13px] text-muted">Voice consultation with an AI patient that responds naturally</div>
             </div>
             <div className="flex-1">
               <div className="text-[24px] font-semibold text-primary/20 font-mono mb-1">03</div>
-              <div className="text-[14px] font-medium text-heading mb-1">Get scored</div>
+              <div className="text-[15px] font-medium text-heading mb-1">Get scored</div>
               <div className="text-[13px] text-muted">Scored feedback on all three SCA domains, a couple of minutes after you finish</div>
             </div>
           </div>
@@ -429,10 +429,10 @@ function DashboardContent() {
           </>
         ) : access && !access.allowed ? (
           <div
-            className="px-5 py-4 rounded-xl text-center"
+            className="px-5 py-4 rounded-[10px] text-center"
             style={{ background: 'rgba(180,83,9,0.04)', border: '1px dashed rgba(180,83,9,0.25)' }}
           >
-            <p className="text-[14px] font-semibold text-heading">
+            <p className="text-[15px] font-semibold text-heading">
               {access.state === 'read_only' ? 'Your access has ended' : `Practice opens ${ACCESS_OPENS_LABEL}`}
             </p>
             <p className="text-[13px] text-muted mt-1">
@@ -473,13 +473,13 @@ function DashboardContent() {
             <Container>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex-1 min-w-0">
-                  <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-1.5">
+                  <div className="text-[11px] font-semibold text-muted uppercase tracking-[0.1em] mb-1.5">
                     Unfinished Case
                   </div>
                   <div className="text-[15px] font-medium text-heading truncate">{lastStation.title}</div>
                   <div className="flex items-center gap-2 mt-1">
                     <DomainTag name={lastStation.domain} size="sm" />
-                    <span className="text-[12px] text-muted">{lastStation.patientName}</span>
+                    <span className="text-[13px] text-muted">{lastStation.patientName}</span>
                     <span className="text-[11px] text-muted">
                       Restarts from the beginning ({Math.floor(lastStation.timeRemaining / 60)} min)
                     </span>
@@ -502,7 +502,7 @@ function DashboardContent() {
           className="mb-8"
         >
           <div className="flex items-baseline justify-between mb-3">
-            <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em]">
+            <div className="text-[11px] font-semibold text-muted uppercase tracking-[0.1em]">
               Recent Sessions
             </div>
             <span className="text-[11px] text-muted">
@@ -520,10 +520,10 @@ function DashboardContent() {
               >
                 <Link
                   href={`/clinical-master/feedback/${session.id}`}
-                  className="flex items-center gap-3 py-3 hover:bg-black/[0.02] px-2 -mx-2 rounded-lg transition-colors"
+                  className="flex items-center gap-3 py-3 hover:bg-black/[0.02] px-2 -mx-2 rounded-[10px] transition-colors"
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="text-[14px] font-medium text-heading truncate">{session.stationTitle}</div>
+                    <div className="text-[15px] font-medium text-heading truncate">{session.stationTitle}</div>
                     <div className="flex items-center gap-2 mt-0.5">
                       <DomainTag name={session.domainName} size="sm" />
                       <span className="text-[11px] text-muted">{formatRelativeDate(session.completedAt)}</span>
@@ -551,7 +551,7 @@ function DashboardContent() {
       {/* Domain progress */}
       {(metrics.dataGathering > 0 || metrics.clinicalManagement > 0 || metrics.interpersonalSkills > 0) && (
         <div>
-          <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-3">
+          <div className="text-[11px] font-semibold text-muted uppercase tracking-[0.1em] mb-3">
             Your Progress
           </div>
           <div className="space-y-4">
@@ -566,7 +566,7 @@ function DashboardContent() {
                   <span className="text-[13px] font-medium text-heading">
                     {DOMAIN_LABELS[entry.key]}
                   </span>
-                  <span className="text-[12px] font-mono font-medium text-primary">
+                  <span className="text-[13px] font-mono font-medium text-primary">
                     {entry.value}%
                   </span>
                 </div>

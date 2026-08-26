@@ -90,14 +90,14 @@ export default function SessionControls({
             {isMuted && <path d="M1.5 1.5l11 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />}
           </svg>
         </motion.span>
-        <span className={`text-[10px] font-medium uppercase tracking-[0.08em] ${isMuted ? 'text-danger' : 'text-muted'}`}>
+        <span className={`text-[11px] font-medium uppercase tracking-[0.08em] ${isMuted ? 'text-danger' : 'text-muted'}`}>
           {isMuted ? 'Muted' : 'Mute'}
         </span>
       </motion.button>
 
       <button
         onClick={onEnd}
-        className="min-h-[44px] px-3 sm:px-5 py-2.5 rounded-xl text-[13px] font-medium text-danger bg-red-50 border border-red-200 hover:bg-red-100 transition-colors cursor-pointer whitespace-nowrap flex-shrink-0"
+        className="min-h-[44px] px-3 sm:px-5 py-2.5 rounded-[10px] text-[13px] font-medium text-danger bg-red-50 border border-red-200 hover:bg-red-100 transition-colors cursor-pointer whitespace-nowrap flex-shrink-0"
       >
         <span className="hidden sm:inline">End Consultation</span>
         <span className="sm:hidden">End</span>

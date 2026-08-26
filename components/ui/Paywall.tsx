@@ -22,7 +22,7 @@ export default function Paywall({
     >
       <Container className="text-center py-12">
         <div
-          className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-5"
+          className="w-14 h-14 rounded-[10px] flex items-center justify-center mx-auto mb-5"
           style={{ background: 'rgba(180,83,9,0.08)' }}
         >
           <svg
@@ -40,7 +40,7 @@ export default function Paywall({
           </svg>
         </div>
         <h3 className="text-[18px] font-semibold text-heading mb-2">{title}</h3>
-        <p className="text-[14px] text-muted max-w-sm mx-auto mb-6 leading-relaxed">
+        <p className="text-[15px] text-muted max-w-sm mx-auto mb-6 leading-relaxed">
           {message}
         </p>
         <Link href="/pricing">

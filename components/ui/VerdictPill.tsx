@@ -24,11 +24,11 @@ const VERDICT_STYLE: Record<Verdict, { bg: string; color: string }> = {
 
 export default function VerdictPill({ verdict, passed, size = 'md' }: VerdictPillProps) {
   const style = VERDICT_STYLE[verdict];
-  const sizeClass = size === 'sm' ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-[11px]';
+  const sizeClass = size === 'sm' ? 'px-2 py-0.5 text-[11px]' : 'px-2.5 py-1 text-[11px]';
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 font-semibold uppercase tracking-wide rounded-lg whitespace-nowrap ${sizeClass}`}
+      className={`inline-flex items-center gap-1.5 font-semibold uppercase tracking-wide rounded-md whitespace-nowrap ${sizeClass}`}
       style={{ background: style.bg, color: style.color }}
     >
       {passed ? 'Passed' : verdict}

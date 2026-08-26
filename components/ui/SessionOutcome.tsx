@@ -77,11 +77,11 @@ export default function SessionOutcome({ session, now }: SessionOutcomeProps) {
   return (
     <div className="text-right" title={hint ?? undefined}>
       <span
-        className={`font-mono text-[12px] ${session.outcome === 'marking' ? 'text-primary' : 'text-muted'}`}
+        className={`font-mono text-[13px] ${session.outcome === 'marking' ? 'text-primary' : 'text-muted'}`}
       >
         {label}
       </span>
-      {hint && <span className="block text-[10px] text-muted">{hint}</span>}
+      {hint && <span className="block text-[11px] text-muted">{hint}</span>}
     </div>
   );
 }

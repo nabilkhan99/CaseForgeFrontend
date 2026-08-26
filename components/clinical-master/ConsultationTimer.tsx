@@ -84,9 +84,9 @@ export default function ConsultationTimer({
 
   return (
     <div className={`flex items-center gap-2 ${className}`}>
-      {label && <span className="text-[12px] text-muted">{label}</span>}
+      {label && <span className="text-[13px] text-muted">{label}</span>}
       <span
-        className={`font-mono text-[18px] md:text-[16px] font-semibold tabular-nums ${colorClass}`}
+        className={`font-mono text-[18px] md:text-[15px] font-semibold tabular-nums ${colorClass}`}
         role="timer"
         aria-live="off"
         aria-label={label ? `${label}: ${timeString} remaining` : `${timeString} remaining`}

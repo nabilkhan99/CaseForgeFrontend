@@ -33,7 +33,7 @@ export default async function CoachingDayPage() {
       <div>
         <PageHeader title="Coaching day" subtitle="Included with Complete" />
         <Container>
-          <p className="text-[14px] leading-[1.7] text-body">
+          <p className="text-[15px] leading-[1.7] text-body">
             The full-day Small-Group Coaching session is part of Complete. Move up to Complete and
             you can pick your date here.
           </p>
@@ -57,7 +57,7 @@ export default async function CoachingDayPage() {
       <div>
         <PageHeader title="Coaching day" subtitle="Your place is booked" />
         <Container>
-          <p className="text-[14px] leading-[1.7] text-body">
+          <p className="text-[15px] leading-[1.7] text-body">
             Your Small-Group Coaching day is booked. It runs 9am to 5pm, remote, with a maximum
             class of six, and we&rsquo;ll email the joining details nearer the time.
           </p>

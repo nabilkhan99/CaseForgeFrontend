@@ -74,7 +74,7 @@ export default function FeedbackModal({ isOpen, onClose, sourceType, sourceId }:
             exit={{ opacity: 0 }}
           >
             <motion.div
-              className="w-full max-w-md bg-white rounded-2xl shadow-elevation-4 border border-border-card overflow-hidden"
+              className="w-full max-w-md bg-white rounded-[16px] shadow-elevation-4 border border-border-card overflow-hidden"
               initial={{ scale: 0.95, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 20 }}
@@ -85,7 +85,7 @@ export default function FeedbackModal({ isOpen, onClose, sourceType, sourceId }:
                 <h3 className="text-base font-semibold text-heading">Send Feedback</h3>
                 <button
                   onClick={onClose}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-black/[0.04] transition-colors text-muted hover:text-heading"
+                  className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-black/[0.04] transition-colors text-muted hover:text-heading"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                     <path d="M18 6L6 18M6 6l12 12" />
@@ -108,7 +108,7 @@ export default function FeedbackModal({ isOpen, onClose, sourceType, sourceId }:
                       id="fb-comment"
                       required
                       rows={4}
-                      className="w-full rounded-xl border border-defined focus:border-primary/30 focus:ring-2 focus:ring-primary/20 text-sm p-3 text-heading placeholder:text-muted resize-none transition-all"
+                      className="w-full rounded-[10px] border border-defined focus:border-primary/30 focus:ring-2 focus:ring-primary/20 text-sm p-3 text-heading placeholder:text-muted resize-none transition-all"
                       placeholder="Spotted a mistake or have a suggestion to improve this case?"
                       value={comment}
                       onChange={e => setComment(e.target.value)}
@@ -121,7 +121,7 @@ export default function FeedbackModal({ isOpen, onClose, sourceType, sourceId }:
                     <input
                       type="email"
                       id="fb-email"
-                      className="w-full rounded-xl border border-defined focus:border-primary/30 focus:ring-2 focus:ring-primary/20 text-sm p-3 text-heading placeholder:text-muted transition-all"
+                      className="w-full rounded-[10px] border border-defined focus:border-primary/30 focus:ring-2 focus:ring-primary/20 text-sm p-3 text-heading placeholder:text-muted transition-all"
                       placeholder="you@example.com"
                       value={email}
                       onChange={e => setEmail(e.target.value)}
@@ -130,7 +130,7 @@ export default function FeedbackModal({ isOpen, onClose, sourceType, sourceId }:
                   <button
                     type="submit"
                     disabled={isSubmitting || !comment.trim()}
-                    className="w-full py-3 rounded-xl text-white text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110"
+                    className="w-full py-3 rounded-[10px] text-white text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110"
                     style={{ background: '#C2410C' }}
                   >
                     {isSubmitting ? 'Sending...' : 'Send Feedback'}

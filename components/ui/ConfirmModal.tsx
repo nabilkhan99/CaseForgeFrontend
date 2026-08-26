@@ -49,9 +49,9 @@ export default function ConfirmModal({
               exit={{ opacity: 0, y: 48 }}
               transition={{ type: 'spring', stiffness: 200, damping: 24 }}
             >
-              <div className="rounded-2xl bg-surface-raised border border-hairline p-6 shadow-elevation-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+              <div className="rounded-[16px] bg-surface-raised border border-hairline p-6 shadow-elevation-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
                 <h3 className="text-[18px] font-semibold text-heading mb-2">{title}</h3>
-                <p className="text-[14px] text-muted mb-6 leading-relaxed">{message}</p>
+                <p className="text-[15px] text-muted mb-6 leading-relaxed">{message}</p>
                 <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
                   <SecondaryButton onClick={onCancel} size="sm">
                     {cancelLabel}

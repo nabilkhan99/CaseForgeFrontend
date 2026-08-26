@@ -16,7 +16,7 @@ const paddingMap = {
 export default function Container({ children, className = '', padding = 'md' }: ContainerProps) {
   return (
     <div
-      className={`rounded-[20px] bg-surface-raised border border-hairline overflow-hidden shadow-elevation-2 ${paddingMap[padding]} ${className}`}
+      className={`rounded-[16px] bg-surface-raised border border-hairline overflow-hidden shadow-elevation-2 ${paddingMap[padding]} ${className}`}
     >
       {children}
     </div>

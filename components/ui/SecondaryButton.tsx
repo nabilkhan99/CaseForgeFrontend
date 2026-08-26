@@ -42,7 +42,7 @@ export default function SecondaryButton({
       onClick={onClick}
       disabled={disabled}
       className={`
-        inline-flex items-center justify-center gap-2 font-medium rounded-xl cursor-pointer
+        inline-flex items-center justify-center gap-2 font-medium rounded-[10px] cursor-pointer
         transition-all duration-150
         ${sizeMap[size]}
         ${variantMap[variant]}

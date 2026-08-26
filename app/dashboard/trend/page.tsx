@@ -36,14 +36,14 @@ function ThemeBlock({ t, technique }: { t: TrendTheme; technique?: boolean }) {
   return (
     <div className="mb-5 pl-3 border-l-2 border-primary/30">
       <div className="flex items-baseline gap-2">
-        <span className="text-[14px] font-medium text-heading">{t.theme_label}</span>
+        <span className="text-[15px] font-medium text-heading">{t.theme_label}</span>
         <span className="text-[11px] text-muted">
           {t.frequency} {t.frequency === 1 ? 'case' : 'cases'}
           {t.trajectory ? `, ${t.trajectory}` : ''}
         </span>
       </div>
       {t.mapped_statement && !technique && (
-        <p className="text-[12px] text-stone-500 mt-1 leading-[1.6]">{t.mapped_statement}</p>
+        <p className="text-[13px] text-stone-500 mt-1 leading-[1.6]">{t.mapped_statement}</p>
       )}
       {t.context_pattern && <p className="text-[13px] text-stone-600 mt-1 leading-[1.6]">{t.context_pattern}</p>}
       {t.development_suggestion && (
@@ -190,7 +190,7 @@ export default function TrendPage() {
           <p className="text-[11px] font-mono uppercase tracking-[0.15em] text-muted mb-1.5">
             Building your development picture
           </p>
-          <p className="text-heading font-semibold text-[17px] mb-5">Reading across your cases</p>
+          <p className="text-heading font-semibold text-[18px] mb-5">Reading across your cases</p>
 
           <ol className="space-y-0.5">
             {BUILD_STAGES.map((label, i) => {
@@ -199,7 +199,7 @@ export default function TrendPage() {
               return (
                 <li
                   key={label}
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] transition-colors duration-300 ${
+                  className={`flex items-center gap-3 rounded-[10px] px-3 py-2 text-[13px] transition-colors duration-300 ${
                     live ? 'bg-primary/[0.07] text-heading font-medium' : done ? 'text-body' : 'text-muted'
                   }`}
                 >
@@ -226,7 +226,7 @@ export default function TrendPage() {
             })}
           </ol>
 
-          <p className="text-muted text-[12px] mt-5">This usually takes a minute or two.</p>
+          <p className="text-muted text-[13px] mt-5">This usually takes a minute or two.</p>
         </div>
       </div>
     );
@@ -271,12 +271,12 @@ export default function TrendPage() {
 
   return (
     <div>
-      <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-2">Development Trends</div>
-      <h1 className="text-[22px] font-bold text-heading mb-1">
+      <div className="text-[11px] font-semibold text-muted uppercase tracking-[0.1em] mb-2">Development Trends</div>
+      <h1 className="text-[24px] font-bold text-heading mb-1">
         Trajectory: {report.overall_trajectory}
       </h1>
       <div className="flex flex-wrap items-baseline justify-between gap-3 mb-4">
-        <p className="text-[12px] text-muted">
+        <p className="text-[13px] text-muted">
           {report.window ? `Across ${report.window.cases_included} cases` : 'Across your recent cases'}
           {report.created_at ? ` \u00B7 built ${formatRelativeDate(report.created_at).toLowerCase()}` : ''}
         </p>
@@ -284,30 +284,30 @@ export default function TrendPage() {
           type="button"
           onClick={refresh}
           disabled={refreshing}
-          className="min-h-[36px] rounded-full border border-defined px-3.5 text-[12px] font-medium text-primary transition hover:bg-primary/[0.06] disabled:cursor-default disabled:text-muted disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+          className="min-h-[36px] rounded-full border border-defined px-3.5 text-[13px] font-medium text-primary transition hover:bg-primary/[0.06] disabled:cursor-default disabled:text-muted disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
         >
           {refreshing ? 'Rebuilding\u2026' : 'Refresh from my latest cases'}
         </button>
       </div>
       {(refreshing || refreshNote) && (
-        <p className="text-[12px] text-muted mb-4">
+        <p className="text-[13px] text-muted mb-4">
           {refreshing
             ? 'Rebuilding from every case you have completed. This takes a minute or two \u2014 you can leave this page open.'
             : refreshNote}
         </p>
       )}
       {report.confidence === 'low' && (
-        <div className="mb-6 p-3 rounded-lg text-[12px] text-amber-700" style={{ background: 'rgba(217,119,6,0.08)' }}>
+        <div className="mb-6 p-3 rounded-[10px] text-[13px] text-amber-700" style={{ background: 'rgba(217,119,6,0.08)' }}>
           Provisional: based on a small number of cases so far.
         </div>
       )}
       {report.overall_narrative && (
-        <p className="text-[14px] text-stone-600 leading-[1.7] mb-8">{report.overall_narrative}</p>
+        <p className="text-[15px] text-stone-600 leading-[1.7] mb-8">{report.overall_narrative}</p>
       )}
 
       {report.recurring_themes.length > 0 && (
         <Container className="mb-8">
-          <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-4">Recurring themes</div>
+          <div className="text-[11px] font-semibold text-muted uppercase tracking-[0.1em] mb-4">Recurring themes</div>
           {report.recurring_themes
             .slice()
             .sort((a, b) => a.priority - b.priority)
@@ -319,7 +319,7 @@ export default function TrendPage() {
 
       {report.style_patterns.length > 0 && (
         <Container className="mb-8">
-          <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-4">Consultation style</div>
+          <div className="text-[11px] font-semibold text-muted uppercase tracking-[0.1em] mb-4">Consultation style</div>
           {report.style_patterns.map((t, i) => (
             <ThemeBlock key={i} t={t} technique />
           ))}
@@ -328,7 +328,7 @@ export default function TrendPage() {
 
       {report.consistent_strengths.length > 0 && (
         <Container className="mb-8">
-          <div className="text-[10px] font-semibold text-success uppercase tracking-[0.1em] mb-4">Keep doing</div>
+          <div className="text-[11px] font-semibold text-success uppercase tracking-[0.1em] mb-4">Keep doing</div>
           <ul className="flex flex-col gap-2">
             {report.consistent_strengths.map((s, i) => (
               <li key={i} className="text-[13px] text-stone-600 leading-[1.6]">
@@ -342,7 +342,7 @@ export default function TrendPage() {
 
       {report.next_steps.length > 0 && (
         <Container className="mb-8">
-          <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-4">Prioritised next steps</div>
+          <div className="text-[11px] font-semibold text-muted uppercase tracking-[0.1em] mb-4">Prioritised next steps</div>
           <ol className="flex flex-col gap-2">
             {report.next_steps.map((s, i) => (
               <li key={i} className="flex gap-3 text-[13px] text-stone-600 leading-[1.6]">
@@ -354,7 +354,7 @@ export default function TrendPage() {
         </Container>
       )}
 
-      {report.caution && <p className="text-[12px] text-muted italic leading-[1.6]">{report.caution}</p>}
+      {report.caution && <p className="text-[13px] text-muted italic leading-[1.6]">{report.caution}</p>}
     </div>
   );
 }

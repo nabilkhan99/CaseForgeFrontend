@@ -140,7 +140,7 @@ export default function LecturePlayerPage() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, ease: 'easeOut' }}
-          className="rounded-[20px] overflow-hidden bg-black shadow-elevation-2"
+          className="rounded-[16px] overflow-hidden bg-black shadow-elevation-2"
         >
           <video
             controls
