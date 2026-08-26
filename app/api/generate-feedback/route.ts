@@ -12,9 +12,16 @@ import type { ConsultationFeedback } from '@/lib/clinical-master/types';
  * been retired; marking now runs on Azure (GPT-5.x), guarded by a shared secret.
  */
 
-export const maxDuration = 60;
+// The after() callback awaits the full mark-consultation round trip (~80-90s),
+// and after() is bound by the route's maxDuration — 60 killed the run mid-flight.
+export const maxDuration = 300;
 
-const inFlightMarkingSessions = new Set<string>();
+/**
+ * A marking claim (clinical_sessions.marking_started_at) older than this is
+ * presumed dead and can be retaken, so a crashed run self-heals on the page's
+ * next trigger poll instead of sticking in 'processing' forever.
+ */
+const MARKING_CLAIM_STALE_MINUTES = 10;
 
 /**
  * Past this age a session that still has no result is stuck, not slow. Marking
@@ -183,40 +190,70 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        if (trigger && !inFlightMarkingSessions.has(sessionId)) {
-            const endpoint = `${markingUrl.replace(/\/+$/, '')}/api/mark-consultation`;
-            inFlightMarkingSessions.add(sessionId);
-            after(async () => {
-                try {
-                    const res = await fetch(endpoint, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'x-marking-secret': markingSecret,
-                        },
-                        body: JSON.stringify({ sessionId }),
-                    });
+        let triggerQueued = false;
+        if (trigger) {
+            // Cross-instance claim: only the request that flips marking_started_at
+            // from null (or stale) wins; concurrent polls from other Vercel
+            // instances see no row back and skip. An in-memory Set can't give
+            // this guarantee — parallel instances each start with an empty one.
+            // Cast: marking_started_at postdates the generated types (0005).
+            const staleCutoff = new Date(
+                Date.now() - MARKING_CLAIM_STALE_MINUTES * 60000
+            ).toISOString();
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data: claim } = await (supabase as any)
+                .from('clinical_sessions')
+                .update({ marking_started_at: new Date().toISOString() })
+                .eq('id', sessionId)
+                .or(`marking_started_at.is.null,marking_started_at.lt.${staleCutoff}`)
+                .select('id')
+                .maybeSingle();
 
-                    if (!res.ok) {
-                        const body = await res.text().catch(() => '');
-                        console.error('Marking endpoint returned an error', {
-                            sessionId,
-                            status: res.status,
-                            body: body.slice(0, 500),
+            if (claim) {
+                triggerQueued = true;
+                const endpoint = `${markingUrl.replace(/\/+$/, '')}/api/mark-consultation`;
+                const releaseClaim = async () => {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    await (supabase as any)
+                        .from('clinical_sessions')
+                        .update({ marking_started_at: null })
+                        .eq('id', sessionId)
+                        .then(null, (err: unknown) =>
+                            console.error('Failed to release marking claim', { sessionId, err })
+                        );
+                };
+                after(async () => {
+                    try {
+                        const res = await fetch(endpoint, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-marking-secret': markingSecret,
+                            },
+                            body: JSON.stringify({ sessionId }),
                         });
+
+                        if (!res.ok) {
+                            const body = await res.text().catch(() => '');
+                            console.error('Marking endpoint returned an error', {
+                                sessionId,
+                                status: res.status,
+                                body: body.slice(0, 500),
+                            });
+                            // Give the claim back so the page's next trigger poll retries.
+                            await releaseClaim();
+                        }
+                    } catch (err) {
+                        console.error('Failed to trigger marking endpoint:', err);
+                        await releaseClaim();
                     }
-                } catch (err) {
-                    console.error('Failed to trigger marking endpoint:', err);
-                } finally {
-                    inFlightMarkingSessions.delete(sessionId);
-                }
-            });
+                });
+            }
         }
 
         return NextResponse.json({
             status: 'generating',
-            triggerQueued: trigger,
-            alreadyInFlight: inFlightMarkingSessions.has(sessionId),
+            triggerQueued,
             ageMinutes,
             // A transcript exists and the session is terminal, so marking should
             // have finished long ago. Say so instead of polling into silence.

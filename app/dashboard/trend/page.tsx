@@ -7,7 +7,9 @@ import Container from '@/components/ui/Container';
 import { TrendReport, TrendTheme } from '@/lib/clinical-master/trendTypes';
 import { formatRelativeDate } from '@/lib/utils';
 
-const MAX_RETRIES = 20;
+// The engine takes ~1-2 minutes per build; 60 x 3s = 3 min matches the
+// trend route's claim TTL so the page outlasts a full build.
+const MAX_RETRIES = 60;
 /** How long to wait for a rebuild before handing the old report back. */
 const REFRESH_MAX_POLLS = 40;
 const POLL_MS = 3000;
