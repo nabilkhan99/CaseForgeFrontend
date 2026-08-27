@@ -158,6 +158,61 @@ export function summariseDomains(stations: readonly LibraryStation[]): DomainSum
     return [...byDomain.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
+export interface DomainBoardRow<T extends LibraryStation = LibraryStation> {
+    domainId: string;
+    domainName: string;
+    /** Every station in the domain, in the order it arrived. */
+    stations: T[];
+    passedCount: number;
+    total: number;
+}
+
+/**
+ * The same station array again, but grouped rather than counted.
+ *
+ * summariseDomains() throws the stations away once it has the totals, which is
+ * exactly right for a list of folders and useless to anything that has to draw
+ * one mark per case. This keeps them, so the board and the roll-up are still
+ * two readings of one fetch rather than two queries that can disagree.
+ *
+ * Ordered by size, largest first: the board is a map of where the work is, and
+ * opening it on the deepest topic area says more than opening it on whichever
+ * domain happens to start with "A" — the roll-up underneath is already the
+ * alphabetical view. Name breaks ties so two nine-case domains never swap
+ * places between renders.
+ *
+ * Station order inside a row is the order the query returned, deliberately not
+ * re-sorted by status: a square's position is how you find the same case again
+ * tomorrow, and squares that rearrange themselves when you pass one would make
+ * the board unreadable as a map.
+ */
+export function groupStationsByDomain<T extends LibraryStation>(
+    stations: readonly T[],
+): DomainBoardRow<T>[] {
+    const byDomain = new Map<string, DomainBoardRow<T>>();
+
+    for (const station of stations) {
+        let row = byDomain.get(station.domain_id);
+        if (!row) {
+            row = {
+                domainId: station.domain_id,
+                domainName: station.domain_name,
+                stations: [],
+                passedCount: 0,
+                total: 0,
+            };
+            byDomain.set(station.domain_id, row);
+        }
+        row.stations.push(station);
+        row.total += 1;
+        if (station.passed) row.passedCount += 1;
+    }
+
+    return [...byDomain.values()].sort(
+        (a, b) => b.total - a.total || a.domainName.localeCompare(b.domainName),
+    );
+}
+
 /** FNV-1a. Small, dependency-free, and stable across runs and machines. */
 export function hashSeed(seed: string): number {
     let hash = 0x811c9dc5;

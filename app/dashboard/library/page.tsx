@@ -11,6 +11,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import { getDomainColor } from '@/lib/constants/domains';
 import LibraryFilters from '@/components/library/LibraryFilters';
 import NextForYou from '@/components/library/NextForYou';
+import StationBoard from '@/components/library/StationBoard';
 import StationRow from '@/components/library/StationRow';
 import { useLibraryFilters } from '@/components/library/useLibraryFilters';
 import { shouldShowDifficulty } from '@/lib/stations/difficulty';
@@ -154,73 +155,80 @@ function StationLibraryContent() {
               </div>
             )
           ) : (
-            <div className="divide-y divide-hairline">
-              {domains.map((domain, index) => {
-                const colors = getDomainColor(domain.name, index);
-                const hasCompleted = domain.completed_count > 0;
+            <>
+              {/* Whole-bank progress, above the folders. Filtered mode keeps
+                  the flat result list on its own: a board of everything is a
+                  strange thing to show beside four search results. */}
+              <StationBoard stations={stations} />
 
-                return (
-                  <motion.div
-                    key={domain.id}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: Math.min(index, 12) * 0.04 }}
-                  >
-                    <Link
-                      href={`/dashboard/library/${domain.id}`}
-                      className="group -mx-2 flex items-center gap-4 rounded-[10px] px-2 py-4 transition-colors hover:bg-black/[0.02] focus-visible-ring"
+              <div className="divide-y divide-hairline">
+                {domains.map((domain, index) => {
+                  const colors = getDomainColor(domain.name, index);
+                  const hasCompleted = domain.completed_count > 0;
+
+                  return (
+                    <motion.div
+                      key={domain.id}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: Math.min(index, 12) * 0.04 }}
                     >
-                      {/* Domain color indicator */}
-                      <div
-                        className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[10px] text-[13px] font-semibold"
-                        style={{ background: colors.bg, color: colors.text }}
+                      <Link
+                        href={`/dashboard/library/${domain.id}`}
+                        className="group -mx-2 flex items-center gap-4 rounded-[10px] px-2 py-4 transition-colors hover:bg-black/[0.02] focus-visible-ring"
                       >
-                        {domain.name.charAt(0)}
-                      </div>
-
-                      {/* Content */}
-                      <div className="min-w-0 flex-1">
-                        <div className="line-clamp-2 text-[15px] font-medium leading-snug text-heading transition-colors group-hover:text-primary">
-                          {domain.name}
+                        {/* Domain color indicator */}
+                        <div
+                          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[10px] text-[13px] font-semibold"
+                          style={{ background: colors.bg, color: colors.text }}
+                        >
+                          {domain.name.charAt(0)}
                         </div>
-                        <div className="mt-0.5 text-[13px] text-muted">
-                          {domain.station_count} case{domain.station_count !== 1 ? 's' : ''}
-                          {hasCompleted && ` · ${domain.completed_count} attempted`}
-                          {/* Zero passes stays unsaid, matching the dashboard rule
-                              that "Passed 0 of N" is a poor thing to greet someone
-                              with. Attempts are already shown above. */}
-                          {domain.passed_count > 0 && (
-                            <span className="ml-1 font-medium" style={{ color: '#15803D' }}>
-                              {`· ${domain.passed_count} of ${domain.station_count} passed`}
-                            </span>
-                          )}
+
+                        {/* Content */}
+                        <div className="min-w-0 flex-1">
+                          <div className="line-clamp-2 text-[15px] font-medium leading-snug text-heading transition-colors group-hover:text-primary">
+                            {domain.name}
+                          </div>
+                          <div className="mt-0.5 text-[13px] text-muted">
+                            {domain.station_count} case{domain.station_count !== 1 ? 's' : ''}
+                            {hasCompleted && ` · ${domain.completed_count} attempted`}
+                            {/* Zero passes stays unsaid, matching the dashboard rule
+                                that "Passed 0 of N" is a poor thing to greet someone
+                                with. Attempts are already shown above. */}
+                            {domain.passed_count > 0 && (
+                              <span className="ml-1 font-medium" style={{ color: '#15803D' }}>
+                                {`· ${domain.passed_count} of ${domain.station_count} passed`}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
 
-                      {/* Coverage, not a grade. This used to feed completed/total
-                          into ScoreBadge, whose Pass/Borderline/Refer thresholds
-                          turned "3 of 9 done" into a red "33% Refer". */}
-                      {hasCompleted && (
-                        <span className="flex-shrink-0 text-[11px] font-medium tabular-nums text-muted">
-                          {domain.completed_count}/{domain.station_count}
-                        </span>
-                      )}
+                        {/* Coverage, not a grade. This used to feed completed/total
+                            into ScoreBadge, whose Pass/Borderline/Refer thresholds
+                            turned "3 of 9 done" into a red "33% Refer". */}
+                        {hasCompleted && (
+                          <span className="flex-shrink-0 text-[11px] font-medium tabular-nums text-muted">
+                            {domain.completed_count}/{domain.station_count}
+                          </span>
+                        )}
 
-                      {/* Chevron */}
-                      <svg
-                        className="h-4 w-4 flex-shrink-0 text-muted transition-colors group-hover:text-primary"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </Link>
-                  </motion.div>
-                );
-              })}
-            </div>
+                        {/* Chevron */}
+                        <svg
+                          className="h-4 w-4 flex-shrink-0 text-muted transition-colors group-hover:text-primary"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                        </svg>
+                      </Link>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </>
           )}
         </>
       )}
