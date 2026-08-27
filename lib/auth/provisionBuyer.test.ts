@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * The provisioning state machine, which decides whether a paid buyer gets an
@@ -91,10 +91,34 @@ function makeStore(responses: {
 
 const ARGS = { preorderId: 'p1', email: 'buyer@x.com', name: 'Jane Doe', sessionId: 'cs_1' }
 
-const PAID = { status: 'paid', provisioned_at: null, set_password_sent_at: null }
+/**
+ * A purchase made after the course opened, which is the case that gets a link.
+ * The suite runs on a fixed clock (see beforeEach) because "has access opened"
+ * is a real date comparison — without pinning it, every send-path test here
+ * would pass or fail depending on the day it was run.
+ */
+const PAID = {
+  status: 'paid',
+  plan: 'self_study',
+  created_at: '2026-09-05T09:00:00Z',
+  provisioned_at: null,
+  set_password_sent_at: null,
+}
+
+/** The same purchase, made before launch: an account, but no link yet. */
+const PAID_PRE_LAUNCH = { ...PAID, created_at: '2026-08-23T09:58:00Z' }
+
+const AFTER_LAUNCH = new Date('2026-09-20T10:00:00Z')
+const BEFORE_LAUNCH = new Date('2026-08-23T10:00:00Z')
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  vi.setSystemTime(AFTER_LAUNCH)
   vi.spyOn(console, 'error').mockImplementation(() => {})
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.spyOn(console, 'info').mockImplementation(() => {})
@@ -240,7 +264,7 @@ describe('provisionBuyerAccount — attaching the buyer\'s free mock', () => {
 })
 
 describe('provisionBuyerAccount — the account exists, only the email is owed', () => {
-  const OWED = { status: 'paid', provisioned_at: '2026-08-20T10:00:00Z', set_password_sent_at: null }
+  const OWED = { ...PAID, provisioned_at: '2026-09-06T10:00:00Z' }
 
   it('claims the send BEFORE making it, then sends', async () => {
     const { store, writes } = makeStore({
@@ -367,5 +391,81 @@ describe('provisionBuyerAccount — the cases where it must do nothing', () => {
     const { store } = makeStore({ read: { data: PAID, error: null } })
 
     await expect(provisionBuyerAccount(store, ARGS)).resolves.toBeUndefined()
+  })
+})
+
+describe('provisionBuyerAccount — the access window has not opened yet', () => {
+  /**
+   * The case that reached a real customer. She bought on 23 August, was
+   * emailed "set a password and you can start practising", and clicked it four
+   * times against a page that does not exist on production, three weeks before
+   * the course opened.
+   */
+  it('creates the account but sends nothing, and leaves the send stamp null', async () => {
+    vi.setSystemTime(BEFORE_LAUNCH)
+    const { store, writes } = makeStore({
+      read: { data: PAID_PRE_LAUNCH, error: null },
+      guardedUpdate: [{ data: [{ id: 'p1' }], error: null }],
+    })
+
+    await provisionBuyerAccount(store, ARGS)
+
+    expect(mocks.provisionAccountForPurchase).toHaveBeenCalledWith(
+      expect.objectContaining({ sendLink: false }),
+    )
+    expect(mocks.sendSetPasswordLink).not.toHaveBeenCalled()
+    // Exactly one write, and it must not claim the send: that null is how
+    // launch day knows this buyer is still owed a login.
+    expect(writes).toHaveLength(1)
+    expect(writes[0].values).toEqual({ provisioned_at: expect.any(String) })
+    expect(writes[0].values).not.toHaveProperty('set_password_sent_at')
+  })
+
+  it('does not resend to a pre-launch buyer whose account already exists', async () => {
+    vi.setSystemTime(BEFORE_LAUNCH)
+    const { store, writes } = makeStore({
+      read: {
+        data: { ...PAID_PRE_LAUNCH, provisioned_at: '2026-08-23T10:00:00Z' },
+        error: null,
+      },
+    })
+
+    await provisionBuyerAccount(store, ARGS)
+
+    expect(mocks.sendSetPasswordLink).not.toHaveBeenCalled()
+    // The account is already there, so the stamp write is a no-op guarded on
+    // `provisioned_at is null` and nothing else is owed.
+    expect(writes.every(write => !('set_password_sent_at' in write.values))).toBe(true)
+  })
+
+  it('sends once the window has opened, on the same purchase', async () => {
+    vi.setSystemTime(AFTER_LAUNCH)
+    const { store } = makeStore({
+      read: { data: PAID_PRE_LAUNCH, error: null },
+      guardedUpdate: [{ data: [{ id: 'p1' }], error: null }],
+    })
+
+    await provisionBuyerAccount(store, ARGS)
+
+    // A first delivery sends through provisionAccountForPurchase; the bare
+    // sendSetPasswordLink is the resend path for an account that already exists.
+    expect(mocks.provisionAccountForPurchase).toHaveBeenCalledWith(
+      expect.not.objectContaining({ sendLink: false }),
+    )
+  })
+
+  it('sends nothing for a plan it does not recognise, rather than assuming open', async () => {
+    vi.setSystemTime(AFTER_LAUNCH)
+    const { store } = makeStore({
+      read: { data: { ...PAID, plan: 'mystery_tier' }, error: null },
+      guardedUpdate: [{ data: [{ id: 'p1' }], error: null }],
+    })
+
+    await provisionBuyerAccount(store, ARGS)
+
+    expect(mocks.sendSetPasswordLink).not.toHaveBeenCalled()
+    expect(mocks.provisionAccountForPurchase).toHaveBeenCalledWith(
+      expect.objectContaining({ sendLink: false }),
+    )
   })
 })

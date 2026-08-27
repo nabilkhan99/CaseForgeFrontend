@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { ACCESS_OPENS_LABEL } from '@/lib/commerce/plans'
 import { buildPurchaseEmailCopy } from './purchaseEmail'
 
 describe('buildPurchaseEmailCopy', () => {
@@ -27,10 +28,20 @@ describe('buildPurchaseEmailCopy', () => {
     expect(buildPurchaseEmailCopy({ planKey: 'complete', firstName: '   ' }).greeting).toBe('Hi there,')
   })
 
-  it('returns four body paragraphs, the first naming the plan', () => {
+  it('returns five body paragraphs, the first naming the plan', () => {
     const copy = buildPurchaseEmailCopy({ planKey: 'complete', firstName: 'Jane' })
-    expect(copy.lines).toHaveLength(4)
+    expect(copy.lines).toHaveLength(5)
     expect(copy.lines[0]).toContain('Complete')
+  })
+
+  // Until launch this is the only email a pre-order buyer gets. Without this
+  // line it never says how they get in, and a buyer who goes looking finds a
+  // set-password page that does not exist yet.
+  it('tells the buyer their login details arrive on launch day', () => {
+    const copy = buildPurchaseEmailCopy({ planKey: 'self_study', firstName: 'Jane' })
+    const promise = copy.lines.find(line => line.includes('login details'))
+    expect(promise).toBeDefined()
+    expect(promise).toContain(ACCESS_OPENS_LABEL)
   })
 
   it('omits the coaching line when there is no coaching day', () => {

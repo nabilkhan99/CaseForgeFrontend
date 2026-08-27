@@ -132,6 +132,12 @@ async function findUserIdByEmail(
 export async function provisionAccountForPurchase(args: {
   email: string;
   fullName?: string | null;
+  /**
+   * Send the set-password link once the account exists. False before the
+   * access window opens: the account is created so launch day is nothing but
+   * an email, but the buyer is told to practise only when they actually can.
+   */
+  sendLink?: boolean;
 }): Promise<ProvisionResult> {
   const supabase = getAdminAuthClient();
   const email = args.email.toLowerCase().trim();
@@ -163,6 +169,18 @@ export async function provisionAccountForPurchase(args: {
       emailSent: false,
       userId: null,
       error: createError.message,
+    };
+  }
+
+  if (args.sendLink === false) {
+    // Not an error: nothing was owed yet. The caller stamps `provisioned_at`
+    // and leaves `set_password_sent_at` null, which is what marks this buyer
+    // as still owed a link when the window opens.
+    return {
+      created: true,
+      alreadyExisted: false,
+      emailSent: false,
+      userId: created?.user?.id ?? null,
     };
   }
 

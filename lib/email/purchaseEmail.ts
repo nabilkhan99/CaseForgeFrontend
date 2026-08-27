@@ -56,6 +56,11 @@ export function buildPurchaseEmailCopy({
     lines: [
       `Thanks for pre-ordering ${planName}. Your place is confirmed.`,
       `This is a pre-order: your AI consultation practice and the on-demand lectures start on ${ACCESS_OPENS_LABEL}, and your 3 months' access runs from that date.`,
+      // The one question this email did not answer, and the reason a buyer
+      // goes looking for a way in before there is one: how they actually get
+      // their account. Until launch this is the ONLY email a pre-order buyer
+      // receives, so the answer has to live in it.
+      `You don't need to do anything yet — we'll email your login details on ${ACCESS_OPENS_LABEL} so you can set a password and go straight in.`,
       `Between now and launch we'll email you everything you need — what to expect, how to get set up, and how to get the most out of the first fortnight.`,
       `Your card receipt comes separately from Stripe. If anything looks wrong, or you just want to ask something, reply to this email and a human will answer.`,
     ],
