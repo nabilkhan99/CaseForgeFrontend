@@ -61,9 +61,13 @@ export default function SessionOutcome({ session, now }: SessionOutcomeProps) {
   let hint: string | null = null;
 
   if (session.outcome === 'marking') {
+    // Elapsed time is a fact we hold; how long marking will take is not. The
+    // hint used to lead with "Usually 1–2 minutes", and because the history
+    // page feeds this a ticking `now`, a stuck run rendered the claim and its
+    // own refutation on one line: "Usually 1–2 minutes · started 47 min ago".
     const elapsed = formatElapsedSince(session.startedAt, now ?? Date.now());
     label = 'Marking…';
-    hint = `Usually 1–2 minutes${elapsed ? ` · started ${elapsed}` : ''}`;
+    hint = elapsed ? `Started ${elapsed}` : null;
   } else if (session.outcome === 'stalled') {
     label = 'Marking stopped';
     hint = 'Open to try again';

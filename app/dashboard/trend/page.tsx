@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
 import Link from 'next/link';
 import Container from '@/components/ui/Container';
+import StageProgressList from '@/components/ui/StageProgressList';
 import { TrendReport, TrendTheme } from '@/lib/clinical-master/trendTypes';
 import { formatRelativeDate } from '@/lib/utils';
 
@@ -22,6 +22,7 @@ const POLL_MS = 3000;
  * Named stages for the wait. The engine doesn't report progress, so these are
  * paced rather than driven — but they name work it genuinely does, and a named
  * stage that takes 30s reads as progress where a bare spinner reads as a hang.
+ * Rendered by the shared StageProgressList, which the marking wait uses too.
  */
 const BUILD_STAGES = [
     'Collecting your marked consultations',
@@ -66,8 +67,14 @@ export default function TrendPage() {
    * must never be reported as "not enough cases yet".
    */
   const [timedOut, setTimedOut] = useState(false);
-  /** Index into BUILD_STAGES while the first build is in flight. */
-  const [stage, setStage] = useState(0);
+  /**
+   * Bumped by "Check again" to restart polling in place. This used to be a
+   * window.location.reload(), which threw the whole page away to do what
+   * re-running one effect does — and diverged from the same button on the
+   * marking wait (FeedbackReport's checkAgain), which has always restarted in
+   * place.
+   */
+  const [pollAttempt, setPollAttempt] = useState(0);
   /** True while a rebuild triggered from this page is still running. */
   const [refreshing, setRefreshing] = useState(false);
   const [refreshNote, setRefreshNote] = useState<string | null>(null);
@@ -125,8 +132,17 @@ export default function TrendPage() {
     }
 
     setRefreshing(false);
-    setRefreshNote('Still rebuilding. Check back in a minute.');
+    // We stopped waiting; the rebuild did not stop. Saying when it will land
+    // would be a guess, so say where it lands instead.
+    setRefreshNote('Still rebuilding in the background. Your current report stays below until the new one lands.');
   }, [refreshing, report]);
+
+  const checkAgain = useCallback(() => {
+    retry.current = 0;
+    setTimedOut(false);
+    setLoading(true);
+    setPollAttempt((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -172,16 +188,7 @@ export default function TrendPage() {
       cancelled = true;
       clearTimeout(t);
     };
-  }, []);
-
-  /** Advance the named stages while the first build runs. Stops on the last one. */
-  useEffect(() => {
-    if (!loading) return;
-    const id = setInterval(() => {
-      setStage((s) => (s < BUILD_STAGES.length - 1 ? s + 1 : s));
-    }, STAGE_MS);
-    return () => clearInterval(id);
-  }, [loading]);
+  }, [pollAttempt]);
 
   if (loading) {
     return (
@@ -192,41 +199,11 @@ export default function TrendPage() {
           </p>
           <p className="text-heading font-semibold text-[18px] mb-5">Reading across your cases</p>
 
-          <ol className="space-y-0.5">
-            {BUILD_STAGES.map((label, i) => {
-              const done = i < stage;
-              const live = i === stage;
-              return (
-                <li
-                  key={label}
-                  className={`flex items-center gap-3 rounded-[10px] px-3 py-2 text-[13px] transition-colors duration-300 ${
-                    live ? 'bg-primary/[0.07] text-heading font-medium' : done ? 'text-body' : 'text-muted'
-                  }`}
-                >
-                  <span
-                    className={`flex-none grid place-items-center w-[15px] h-[15px] rounded-full border-2 transition-colors duration-300 ${
-                      done ? 'border-success bg-success' : live ? 'border-primary' : 'border-black/15'
-                    }`}
-                  >
-                    {done ? (
-                      <svg viewBox="0 0 10 10" className="w-[7px] h-[7px]" aria-hidden="true">
-                        <path d="M1 5.2 3.6 7.8 9 2.4" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    ) : live ? (
-                      <motion.span
-                        className="w-[5px] h-[5px] rounded-full bg-primary"
-                        animate={{ opacity: [1, 0.25, 1] }}
-                        transition={{ duration: 1.1, repeat: Infinity, ease: 'easeInOut' }}
-                      />
-                    ) : null}
-                  </span>
-                  <span>{label}</span>
-                </li>
-              );
-            })}
-          </ol>
+          <StageProgressList stages={BUILD_STAGES} stageMs={STAGE_MS} label="Build stages" />
 
-          <p className="text-muted text-[13px] mt-5">This usually takes a minute or two.</p>
+          <p className="text-muted text-[13px] mt-5">
+            This page updates on its own — no need to refresh.
+          </p>
         </div>
       </div>
     );
@@ -238,12 +215,12 @@ export default function TrendPage() {
         <div className="text-center max-w-md px-6">
           <p className="text-heading font-medium mb-2">Still building your picture.</p>
           <p className="text-muted text-sm mb-6">
-            This one is taking longer than usual. It carries on in the background — reload in a
-            minute and it should be waiting for you.
+            This one is taking longer than usual. The build carries on in the background whether
+            or not this page is open, so checking again is worth a go.
           </p>
           <button
             type="button"
-            onClick={() => window.location.reload()}
+            onClick={checkAgain}
             className="text-primary hover:underline text-sm font-medium"
           >
             Check again
@@ -292,7 +269,7 @@ export default function TrendPage() {
       {(refreshing || refreshNote) && (
         <p className="text-[13px] text-muted mb-4">
           {refreshing
-            ? 'Rebuilding from every case you have completed. This takes a minute or two \u2014 you can leave this page open.'
+            ? 'Rebuilding from every case you have completed. You can leave this page open.'
             : refreshNote}
         </p>
       )}

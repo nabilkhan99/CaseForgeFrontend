@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { BlurFade } from '@/components/magicui/blur-fade';
 import ArcGauge from '@/components/ui/ArcGauge';
 import PrimaryButton from '@/components/ui/PrimaryButton';
+import StageProgressList from '@/components/ui/StageProgressList';
 import {
   ConsultationFeedback,
   DomainFeedback,
@@ -72,13 +73,38 @@ function Reveal({
 /** Poll interval, ms. */
 const POLL_INTERVAL_MS = 3000;
 /**
- * Give-up threshold. Marking normally lands well inside a minute or two, but
- * the old budget (30 × 3s = 90s) expired BEFORE the "a minute or two" we tell
- * the user, so an ordinary slow run fell through to the "still processing"
- * screen and sent people into a refresh loop. 100 × 3s = 5 minutes leaves
- * generous headroom; past that the run is genuinely stuck, not just slow.
+ * Give-up threshold. Marking has been measured at roughly 80 to 90 seconds, and
+ * the old budget (30 × 3s = 90s) gave up right on top of that, so an ordinary
+ * slow run fell through to the "still processing" screen and sent people into a
+ * refresh loop. 100 × 3s = 5 minutes leaves generous headroom; past that the run
+ * is genuinely stuck, not just slow. This figure stays in the code, where it is
+ * a tuning constant — it is not a duration we quote to the user.
  */
 const MAX_RETRIES = 100;
+
+/**
+ * The stages the marking run actually passes through, in order, checked against
+ * MarkingService.mark in CaseForgeAzure (app/services/marking_service.py):
+ * load the session and its transcript, map the station row onto the case pack,
+ * one model pass that grades all three SCA domains and anchors each point to a
+ * transcript quote, then compute_verdict() from the three grades plus any
+ * tier-3 override. Nothing here is a duration or a completion claim — see the
+ * note on StageProgressList for why the pacing is a pace, not a measurement.
+ */
+const MARKING_STAGES = [
+  'Reading your transcript',
+  'Loading the case notes for this station',
+  'Grading the three SCA domains',
+  'Pulling the evidence for each point',
+  'Working out your verdict',
+] as const;
+/**
+ * Pace, not a promise. Marking has been measured at roughly 80 to 90 seconds,
+ * so five stages at 16s each light up across the usual run and the last one
+ * holds for as long as the run does.
+ */
+const MARKING_STAGE_MS = 16000;
+
 const DOMAIN_NAV: DomainKey[] = ['data_gathering', 'clinical_management', 'relating_to_others'];
 
 /**
@@ -278,37 +304,56 @@ function EvidenceBlock({
 }
 
 /**
- * Determinate-feel progress bar for the marking wait. We can't know the exact
- * finish time (marking runs server-side), so the bar eases asymptotically
- * toward ~92% and never stalls or loops — it completes when the real report
- * replaces this component. Gives the user continuous "it's working" feedback
- * instead of a static skeleton, and there is no refresh instruction here.
+ * The marking wait.
+ *
+ * This component knows exactly two things: that a marking run was triggered,
+ * and that no result row has arrived yet. Marking happens on Azure and reports
+ * nothing back in between, so every number about time or completion that could
+ * appear here would be invented here.
+ *
+ * It used to invent one: a percentage eased asymptotically toward 92, a
+ * determinate bar bound to it, and an aria-valuenow announcing it to screen
+ * readers. Someone whose run had died silently watched a confident 91% climb to
+ * 92% and stop, indistinguishable from a run about to finish. What replaced it
+ * claims only what is true — an indeterminate sweep that says "working", and a
+ * log of stages the marking service genuinely runs through (see MARKING_STAGES).
  */
 function MarkingProgress({ compact = false }: { compact?: boolean }) {
-  const [progress, setProgress] = useState(8);
-  useEffect(() => {
-    const id = setInterval(() => {
-      setProgress((p) => (p >= 92 ? p : p + Math.max(0.5, (92 - p) * 0.035)));
-    }, 700);
-    return () => clearInterval(id);
-  }, []);
+  const shouldReduceMotion = useReducedMotion();
 
   return (
-    <div className="mt-6" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress)} aria-label="Marking your consultation">
-      <div className="mb-2 flex items-center justify-between text-sm text-muted">
-        <span>Marking your consultation…</span>
-        <span className="tabular-nums text-stone-400">{Math.round(progress)}%</span>
+    <div className="mt-6">
+      <p className="mb-3 text-sm text-muted">Marking your consultation…</p>
+
+      {/* Indeterminate: a sweep with no width binding, so there is no value to
+          read off it. Decorative — the stage list below carries the meaning. */}
+      <div
+        className="mb-4 h-1.5 w-full overflow-hidden rounded-full bg-primary/10"
+        aria-hidden="true"
+      >
+        {shouldReduceMotion ? (
+          <div className="h-full w-full rounded-full bg-primary/25" />
+        ) : (
+          <motion.div
+            className="h-full rounded-full"
+            style={{ background: 'linear-gradient(90deg, #B45309, #D97706)' }}
+            initial={{ x: '-100%' }}
+            animate={{ x: '100%' }}
+            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut', repeatDelay: 0.5 }}
+          />
+        )}
       </div>
-      <div className="h-2 w-full overflow-hidden rounded-full bg-stone-200/70">
-        <div
-          className="h-full rounded-full bg-primary transition-[width] duration-700 ease-out"
-          style={{ width: `${progress}%` }}
-        />
-      </div>
-      <p className="mt-2 text-xs text-stone-400">
+
+      <StageProgressList
+        stages={MARKING_STAGES}
+        stageMs={MARKING_STAGE_MS}
+        label="Marking stages"
+      />
+
+      <p className="mt-4 text-xs text-stone-400">
         {compact
-          ? 'This usually takes a minute or two — your plan options are below. No need to refresh; it updates on its own.'
-          : 'This usually takes a minute or two. No need to refresh — it updates on its own.'}
+          ? 'Your plan options are below. No need to refresh — this page updates on its own when marking finishes.'
+          : 'Marking runs on our servers, so you can close this tab. This consultation is already in your history, and its report opens from there once it is marked.'}
       </p>
     </div>
   );
