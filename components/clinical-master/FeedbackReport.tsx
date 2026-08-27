@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import Link from 'next/link';
 import { BlurFade } from '@/components/magicui/blur-fade';
+import ArcGauge from '@/components/ui/ArcGauge';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import {
   ConsultationFeedback,
@@ -18,11 +19,11 @@ import {
 import PassCelebration from '@/components/clinical-master/PassCelebration';
 import {
   TONE_BAR_CLASS,
+  TONE_COLOUR,
   fmtMark,
   gradeTone,
   passMarkCaption,
   passMarkFor,
-  passMarkPercent,
   passMarkSentence,
   verdictTone,
 } from '@/lib/clinical-master/scoring';
@@ -39,8 +40,8 @@ import {
 const REVEAL = {
   header: 0,
   verdict: 0.06,
-  domainSummary: 0.12,
-  reportDetail: 0.18,
+  overview: 0.12,
+  breakdown: 0.18,
 } as const;
 
 /**
@@ -79,7 +80,15 @@ const POLL_INTERVAL_MS = 3000;
  */
 const MAX_RETRIES = 100;
 const DOMAIN_NAV: DomainKey[] = ['data_gathering', 'clinical_management', 'relating_to_others'];
-type ReportTab = 'overview' | DomainKey;
+
+/**
+ * Score dial diameter, in px.
+ *
+ * The trial funnel gets a smaller one on purpose: the pricing table renders
+ * directly beneath this report, so every pixel spent above it pushes the offer
+ * further down the page.
+ */
+const GAUGE_SIZE = { app: 224, trial: 184 } as const;
 
 /**
  * Per-domain identity only. Bars and pills are coloured from the GRADE
@@ -149,80 +158,60 @@ function domainScore(domain: DomainFeedback): number {
   );
 }
 
+/**
+ * Grade colour, carried by the tint and the text only.
+ *
+ * The borders used to be tinted too (`border-green-200`, `border-amber-200`),
+ * which drew a hard coloured outline around every graded thing and made the
+ * report read as a wall of warning boxes. `border-hairline` is the house edge
+ * for a passive surface; the tint still says which grade it is.
+ */
 function gradeColours(grade: DomainFeedback['grade']): {
   badge: string;
   text: string;
-  border: string;
 } {
   if (grade === 'CP') {
-    return {
-      badge: 'bg-green-50 text-green-700 border-green-200',
-      text: 'text-green-700',
-      border: 'border-green-200',
-    };
+    return { badge: 'bg-green-50 text-green-700 border-hairline', text: 'text-green-700' };
   }
   if (grade === 'P') {
-    return {
-      badge: 'bg-lime-50 text-lime-700 border-lime-200',
-      text: 'text-lime-700',
-      border: 'border-lime-200',
-    };
+    return { badge: 'bg-lime-50 text-lime-700 border-hairline', text: 'text-lime-700' };
   }
   if (grade === 'F') {
-    return {
-      badge: 'bg-amber-50 text-amber-700 border-amber-200',
-      text: 'text-amber-700',
-      border: 'border-amber-200',
-    };
+    return { badge: 'bg-amber-50 text-amber-700 border-hairline', text: 'text-amber-700' };
   }
-  return {
-    badge: 'bg-red-50 text-red-700 border-red-200',
-    text: 'text-red-700',
-    border: 'border-red-200',
-  };
+  return { badge: 'bg-red-50 text-red-700 border-hairline', text: 'text-red-700' };
+}
+
+/**
+ * The domain that lost the most, proportionally.
+ *
+ * Both the overview's "read this one first" line and the tab that opens by
+ * default come from here, so the page cannot recommend one domain and then
+ * open a different one. Ties keep DOMAIN_NAV order — Array.sort is stable.
+ */
+function lowestScoringDomain(domains: DomainFeedback[]): DomainFeedback | undefined {
+  return domains
+    .slice()
+    .sort((a, b) => (domainScore(a) / domainMaxPoints(a)) - (domainScore(b) / domainMaxPoints(b)))[0];
 }
 
 function verdictColours(verdict: Verdict): {
   text: string;
   badge: string;
-  bar: string;
 } {
   const passing = PASSING_VERDICTS.includes(verdict);
-  // Bars use the shared three-tone palette (green pass / amber borderline /
-  // red fail) so the fill means the same thing here as on every domain bar.
-  const bar = TONE_BAR_CLASS[verdictTone(verdict)];
   if (verdict === 'Pass') {
-    return {
-      text: 'text-green-700',
-      badge: 'bg-green-50 text-green-700 border-green-200',
-      bar,
-    };
+    return { text: 'text-green-700', badge: 'bg-green-50 text-green-700 border-hairline' };
   }
   if (verdict === 'Bare Pass') {
-    return {
-      text: 'text-lime-700',
-      badge: 'bg-lime-50 text-lime-700 border-lime-200',
-      bar,
-    };
+    return { text: 'text-lime-700', badge: 'bg-lime-50 text-lime-700 border-hairline' };
   }
   if (verdict === 'Bare Fail') {
-    return {
-      text: 'text-primary',
-      badge: 'bg-amber-50 text-amber-700 border-amber-200',
-      bar,
-    };
+    return { text: 'text-primary', badge: 'bg-amber-50 text-amber-700 border-hairline' };
   }
   return passing
-    ? {
-      text: 'text-green-700',
-      badge: 'bg-green-50 text-green-700 border-green-200',
-      bar,
-    }
-    : {
-      text: 'text-red-700',
-      badge: 'bg-red-50 text-red-700 border-red-200',
-      bar,
-    };
+    ? { text: 'text-green-700', badge: 'bg-green-50 text-green-700 border-hairline' }
+    : { text: 'text-red-700', badge: 'bg-red-50 text-red-700 border-hairline' };
 }
 
 function severityLabel(tier: number): {
@@ -364,56 +353,132 @@ function LoadingState({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function DomainMiniRow({ domain }: { domain: DomainFeedback }) {
+/**
+ * One domain's summary — and the control that opens its detail.
+ *
+ * These three used to be non-interactive summary cards, with a separate row of
+ * four text tabs underneath repeating the same three names. The card already
+ * carried the score, the bar and the weighting; making it the tab removes the
+ * duplicate row and puts the click where the eye already is.
+ */
+function DomainTab({
+  domain,
+  active,
+  tabId,
+  panelId,
+  onSelect,
+  onKeyDown,
+  buttonRef,
+}: {
+  domain: DomainFeedback;
+  active: boolean;
+  tabId: string;
+  panelId: string;
+  onSelect: () => void;
+  onKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => void;
+  buttonRef: (element: HTMLButtonElement | null) => void;
+}) {
   const meta = DOMAIN_META[domain.domain];
   const score = domainScore(domain);
   const maxPoints = domainMaxPoints(domain);
   const pct = Math.max(0, Math.min(100, (score / maxPoints) * 100));
 
   return (
-    <div
-      className="group grid grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-[10px] border border-hairline bg-white/70 px-4 py-3 transition hover:border-defined hover:bg-white"
+    <button
+      type="button"
+      role="tab"
+      id={tabId}
+      ref={buttonRef}
+      aria-selected={active}
+      aria-controls={panelId}
+      // Roving tabindex: one stop for the whole tablist, arrows move within it.
+      tabIndex={active ? 0 : -1}
+      onClick={onSelect}
+      onKeyDown={onKeyDown}
+      className={`grid min-h-[44px] grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-[12px] border px-4 py-3.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 ${
+        active
+          ? 'border-defined bg-white shadow-elevation-2'
+          : 'border-hairline bg-white/60 hover:border-defined hover:bg-white'
+      }`}
     >
-      <div className="min-w-0">
-        <div className="mb-2 flex items-center gap-2">
-          <span className="truncate text-[13px] font-medium text-heading">{meta.label}</span>
+      <span className="min-w-0">
+        <span className="mb-2 flex items-center gap-2">
+          <span className={`truncate text-[13px] ${active ? 'font-semibold' : 'font-medium'} text-heading`}>
+            {meta.label}
+          </span>
           {meta.weightLabel && (
             <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium uppercase tracking-[0.08em] text-stone-500">
               weighted
             </span>
           )}
-        </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-stone-200/80">
-          <div
-            className={`h-full rounded-full ${TONE_BAR_CLASS[gradeTone(domain.grade)]}`}
+        </span>
+        <span className="block h-1.5 overflow-hidden rounded-full bg-stone-200/80">
+          <span
+            className={`block h-full rounded-full ${TONE_BAR_CLASS[gradeTone(domain.grade)]}`}
             style={{ width: `${pct}%` }}
           />
-        </div>
-      </div>
+        </span>
+      </span>
       {/* S3: a score is information; a per-domain verdict badge alongside the
           overall verdict was the same judgement said four times. The bar is
           already grade-toned, and the grade stays available to screen readers. */}
-      <div className="text-right">
-        <div className="font-mono text-[15px] font-medium tabular-nums text-heading">
+      <span className="text-right">
+        <span className="block font-mono text-[15px] font-medium tabular-nums text-heading">
           {fmtScore(score)}<span className="text-[13px] text-stone-400">/{fmtScore(maxPoints)}</span>
-        </div>
+        </span>
         <span className="sr-only">{GRADE_LABELS[domain.grade]}</span>
-      </div>
-    </div>
+      </span>
+    </button>
   );
 }
 
-function ScoreBreakdown({ domains }: { domains: DomainFeedback[] }) {
-  const ordered = DOMAIN_NAV
-    .map((key) => domains.find((domain) => domain.domain === key))
-    .filter(Boolean) as DomainFeedback[];
+function DomainTabs({
+  domains,
+  active,
+  onChange,
+  tabId,
+  panelId,
+}: {
+  domains: DomainFeedback[];
+  active: DomainKey | null;
+  onChange: (domain: DomainKey) => void;
+  tabId: (domain: DomainKey) => string;
+  panelId: string;
+}) {
+  const buttons = useRef<Partial<Record<DomainKey, HTMLButtonElement | null>>>({});
+
+  function move(index: number, event: React.KeyboardEvent<HTMLButtonElement>) {
+    const keys = domains.map((domain) => domain.domain);
+    let next: number;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = (index + 1) % keys.length;
+    else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = (index - 1 + keys.length) % keys.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = keys.length - 1;
+    else return;
+
+    event.preventDefault();
+    const key = keys[next];
+    onChange(key);
+    buttons.current[key]?.focus();
+  }
 
   return (
-    <section className="grid gap-3 md:grid-cols-3">
-      {ordered.map((domain) => (
-        <DomainMiniRow key={domain.domain} domain={domain} />
+    <div role="tablist" aria-label="Domain breakdown" className="grid gap-3 md:grid-cols-3">
+      {domains.map((domain, index) => (
+        <DomainTab
+          key={domain.domain}
+          domain={domain}
+          active={active === domain.domain}
+          tabId={tabId(domain.domain)}
+          panelId={panelId}
+          onSelect={() => onChange(domain.domain)}
+          onKeyDown={(event) => move(index, event)}
+          buttonRef={(element) => {
+            buttons.current[domain.domain] = element;
+          }}
+        />
       ))}
-    </section>
+    </div>
   );
 }
 
@@ -441,48 +506,70 @@ function FocusNext({ feedback }: { feedback: ConsultationFeedback }) {
   );
 }
 
-function VerdictPanel({ feedback, sessionId }: { feedback: ConsultationFeedback; sessionId: string }) {
+function VerdictPanel({
+  feedback,
+  sessionId,
+  compact = false,
+}: {
+  feedback: ConsultationFeedback;
+  sessionId: string;
+  /** Trial funnel: the same panel, sized so the offer below it stays reachable. */
+  compact?: boolean;
+}) {
   const { overall } = feedback;
   const vc = verdictColours(overall.verdict);
   const isPass = (PASSING_VERDICTS as readonly string[]).includes(overall.verdict);
   const maxScore = overall.max_score || 10.5;
-  const pct = Math.max(0, Math.min(100, (overall.weighted_score / maxScore) * 100));
   const duration = fmtDuration(feedback.timing?.total_duration_ms);
-  // The pass mark, marked on the bar and stated in words. "Bare Fail" and
+  // The pass mark, ticked on the dial and stated in words. "Bare Fail" and
   // "0.5 short of 6.0" are different facts, and only the second one is useful.
   const passMark = passMarkFor(maxScore);
-  const passPct = passMarkPercent(maxScore);
+  const tone = verdictTone(overall.verdict);
+  /** What the celebration blooms out of — measured, not guessed. */
+  const scoreRef = useRef<HTMLSpanElement>(null);
 
   return (
-    <section className="grid gap-5 rounded-[16px] border border-hairline bg-white/80 p-5 shadow-elevation-2 md:p-6 lg:grid-cols-[250px_minmax(0,1fr)_240px]">
-      {/* M1 + M3 live inside this tile, so the bloom is anchored on the score
-          rather than on the page. relative + overflow-hidden keeps both inside
-          the rounded corners. */}
-      <div className="relative overflow-hidden rounded-[10px] bg-surface px-5 py-4">
-        <PassCelebration passed={isPass} sessionId={sessionId} />
-        <div className="relative z-20">
-          <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Final verdict</div>
-          <div className={`font-serif text-[40px] leading-none ${vc.text}`}>{overall.verdict}</div>
-          <div className="mt-3 flex items-end gap-2 font-mono text-heading">
-            <span className="text-[24px] font-bold">{overall.weighted_score.toFixed(1)}</span>
-            <span className="pb-1 text-[13px] text-stone-400">/ {overall.max_score.toFixed(1)}</span>
+    <section className="grid gap-6 rounded-[16px] border border-hairline bg-white/80 p-5 shadow-elevation-2 md:gap-8 md:p-7 lg:grid-cols-[264px_minmax(0,1fr)]">
+      {/*
+        M1 + M3 live inside this tile, so the bloom is anchored on the score
+        rather than on the page. `overflow-hidden` is deliberate and stays: the
+        bloom grows to ~460px and would otherwise spill across the whole report.
+        It is safe for the dial because ArcGauge caps itself at `max-width:100%`,
+        so the gauge shrinks with this column instead of being clipped by it —
+        and at `lg` the column (264px) is wider than the largest gauge (224px)
+        plus its padding.
+      */}
+      <div className="relative overflow-hidden rounded-[12px] bg-surface px-4 py-5">
+        <PassCelebration passed={isPass} sessionId={sessionId} originRef={scoreRef} />
+        <div className="relative z-20 flex flex-col items-center">
+          <div className="mb-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
+            Final verdict
           </div>
-        <div className="relative mt-4 h-2 rounded-full bg-stone-200">
-          <div className="absolute inset-0 overflow-hidden rounded-full">
-            <motion.div
-              className={`h-full rounded-full ${vc.bar}`}
-              initial={{ width: 0 }}
-              animate={{ width: `${pct}%` }}
-              transition={{ duration: 0.8, ease: 'easeOut' }}
-            />
+
+          <ArcGauge
+            value={overall.weighted_score}
+            max={maxScore}
+            threshold={passMark}
+            size={compact ? GAUGE_SIZE.trial : GAUGE_SIZE.app}
+            thickness={compact ? 11 : 13}
+            colour={TONE_COLOUR[tone]}
+            label={`${fmtMark(overall.weighted_score)} out of ${fmtMark(maxScore)}, a ${overall.verdict}. The pass mark is ${fmtMark(passMark)}.`}
+          >
+            <span
+              ref={scoreRef}
+              className={`font-mono font-bold leading-none tabular-nums text-heading ${compact ? 'text-[32px]' : 'text-[38px]'}`}
+            >
+              {overall.weighted_score.toFixed(1)}
+            </span>
+            <span className="mt-1.5 font-mono text-[13px] text-stone-400">
+              / {maxScore.toFixed(1)}
+            </span>
+          </ArcGauge>
+
+          <div className={`mt-1 text-center font-serif leading-none ${compact ? 'text-[26px]' : 'text-[30px]'} ${vc.text}`}>
+            {overall.verdict}
           </div>
-          <div
-            aria-hidden
-            className="absolute -top-1 -bottom-1 w-[2px] rounded-full bg-heading/40"
-            style={{ left: `${passPct}%` }}
-          />
-        </div>
-          <p className="mt-3 text-[13px] leading-[1.55] text-stone-600">
+          <p className="mt-3 text-center text-[13px] leading-[1.55] text-stone-600">
             {passMarkSentence(overall.weighted_score, maxScore)}
           </p>
         </div>
@@ -506,88 +593,24 @@ function VerdictPanel({ feedback, sessionId }: { feedback: ConsultationFeedback;
         </div>
 
         {overall.tier3_override_applied && (
-          <div className="mt-4 rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-[13px] leading-[1.6] text-red-700">
+          <div className="mt-4 rounded-[10px] border border-hairline bg-red-50 px-4 py-3 text-[13px] leading-[1.6] text-red-700">
             A safety critical issue capped the result at Fail, regardless of the arithmetic score.
           </div>
         )}
-      </div>
-
-      <div className="rounded-[10px] border border-hairline bg-stone-50/70 px-4 py-4">
-        <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Score key</div>
-        <div className="space-y-2.5 text-[13px] text-stone-600">
-          <div className="flex items-center justify-between gap-3">
-            <span>Data gathering</span>
-            <span className="font-mono font-medium text-heading">/3</span>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span>Clinical management</span>
-            <span className="font-mono font-medium text-heading">/4.5</span>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span>Relating</span>
-            <span className="font-mono font-medium text-heading">/3</span>
-          </div>
-          <div className="flex items-center justify-between gap-3 border-t border-hairline pt-2.5">
-            <span className="font-medium text-heading">Pass mark</span>
-            <span className="font-mono font-medium text-heading">
-              {fmtMark(passMark)} / {fmtMark(maxScore)}
-            </span>
-          </div>
-          <p className="text-[11px] leading-[1.6] text-stone-500">
-            Clinical management counts 1.5x, so it moves the total more than the other
-            two domains and can decide the verdict on its own. That is why the domain
-            grades and the overall verdict can disagree.
-          </p>
-        </div>
       </div>
     </section>
   );
 }
 
-function ReportTabs({
-  activeTab,
-  onChange,
-  domains,
-}: {
-  activeTab: ReportTab;
-  onChange: (tab: ReportTab) => void;
-  domains: DomainFeedback[];
-}) {
-  const tabs: { key: ReportTab; label: string; grade?: DomainFeedback['grade'] }[] = [
-    { key: 'overview', label: 'Overview' },
-    ...domains.map((domain) => ({
-      key: domain.domain,
-      label: DOMAIN_META[domain.domain].label,
-      grade: domain.grade,
-    })),
-  ];
-
-  return (
-    <div className="flex flex-wrap gap-2 rounded-[10px] border border-hairline bg-white/70 p-2">
-      {tabs.map((tab) => {
-        const active = activeTab === tab.key;
-        return (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => onChange(tab.key)}
-            className={`min-h-[44px] rounded-[10px] px-4 py-2 text-[13px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 ${
-              active
-                ? 'bg-heading font-semibold text-white shadow-elevation-3'
-                : 'font-medium text-stone-600 hover:bg-primary/[0.06] hover:text-primary'
-            }`}
-          >
-            {/* S3: tabs are navigation. Stamping the grade on each one put the
-                verdict on screen three more times before you had read anything. */}
-            <span>{tab.label}</span>
-            {tab.grade && <span className="sr-only"> — {GRADE_LABELS[tab.grade]}</span>}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
+/**
+ * The overview is no longer a tab.
+ *
+ * It was the default tab, so it was what everyone saw first anyway — but being
+ * a tab implied it was one of four peers you might swap between, when it is
+ * really the thing you read before choosing a domain. It now sits between the
+ * verdict and the domain tabs, always open, and the outer card it used to live
+ * in is gone: the whitespace above and below already separates it.
+ */
 function OverviewPanel({
   feedback,
   domains,
@@ -595,9 +618,7 @@ function OverviewPanel({
   feedback: ConsultationFeedback;
   domains: DomainFeedback[];
 }) {
-  const lowestDomain = domains
-    .slice()
-    .sort((a, b) => (domainScore(a) / domainMaxPoints(a)) - (domainScore(b) / domainMaxPoints(b)))[0];
+  const lowestDomain = lowestScoringDomain(domains);
   const passedDomains = domains.filter((domain) => domain.grade === 'CP' || domain.grade === 'P').length;
   const topMisses = domains
     .flatMap((domain) => domain.what_you_missed.map((missed) => ({ ...missed, domain: domain.domain })))
@@ -605,70 +626,63 @@ function OverviewPanel({
     .slice(0, 3);
 
   return (
-    <motion.section
-      key="overview-panel"
-      className="rounded-[10px] border border-hairline bg-white/85 p-5 shadow-elevation-2"
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -6 }}
-      transition={{ duration: 0.18 }}
-    >
-      <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
-        <div className="rounded-[10px] bg-surface px-5 py-5">
-          <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Consultation overview</div>
-          <p className="text-[15px] leading-[1.75] text-stone-700">
-            {feedback.overall.one_line_summary || 'This report summarises the consultation across data gathering, clinical management, and relating to others.'}
-          </p>
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-[10px] border border-hairline bg-white/70 px-3 py-3">
-              <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">Result</div>
-              <div className="mt-1 text-[15px] font-semibold text-heading">{feedback.overall.verdict}</div>
-            </div>
-            <div className="rounded-[10px] border border-hairline bg-white/70 px-3 py-3">
-              <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">Score</div>
-              <div className="mt-1 font-mono text-[15px] font-semibold text-heading">
-                {feedback.overall.weighted_score.toFixed(1)} / {feedback.overall.max_score.toFixed(1)}
-              </div>
-            </div>
-            <div className="rounded-[10px] border border-hairline bg-white/70 px-3 py-3">
-              <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">Domains</div>
-              <div className="mt-1 text-[15px] font-semibold text-heading">{passedDomains} / {domains.length} passing</div>
+    <section className="grid gap-5 lg:grid-cols-[1fr_360px]">
+      <div className="rounded-[12px] bg-surface-raised px-5 py-5">
+        <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Consultation overview</div>
+        <p className="text-[15px] leading-[1.75] text-stone-700">
+          {feedback.overall.one_line_summary || 'This report summarises the consultation across data gathering, clinical management, and relating to others.'}
+        </p>
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-[10px] border border-hairline bg-white/70 px-3 py-3">
+            <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">Result</div>
+            <div className="mt-1 text-[15px] font-semibold text-heading">{feedback.overall.verdict}</div>
+          </div>
+          <div className="rounded-[10px] border border-hairline bg-white/70 px-3 py-3">
+            <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">Score</div>
+            <div className="mt-1 font-mono text-[15px] font-semibold text-heading">
+              {feedback.overall.weighted_score.toFixed(1)} / {feedback.overall.max_score.toFixed(1)}
             </div>
           </div>
-
-          {lowestDomain && (
-            <div className="mt-5 rounded-[10px] border border-amber-200/70 bg-amber-50/60 px-4 py-3 text-[13px] leading-[1.65] text-amber-900">
-              <span className="font-medium">Most useful area to open first: </span>
-              {DOMAIN_META[lowestDomain.domain].label}, because it contributed {fmtScore(domainScore(lowestDomain))} / {fmtScore(domainMaxPoints(lowestDomain))} points.
-            </div>
-          )}
-
-          {topMisses.length > 0 && (
-            <div className="mt-5">
-              <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Highest impact misses</div>
-              <div className="grid gap-3">
-                {topMisses.map((missed, index) => {
-                  const severity = severityLabel(missed.consequence_tier);
-                  return (
-                    <div key={`${missed.domain}-${missed.label}-${index}`} className="rounded-[10px] border border-hairline bg-white/70 px-3 py-3">
-                      <div className="mb-1 flex flex-wrap items-center gap-2">
-                        <span className={`rounded border px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.04em] ${severity.className}`}>
-                          {severity.label}
-                        </span>
-                        <span className="text-[13px] font-medium text-stone-500">{DOMAIN_META[missed.domain].label}</span>
-                      </div>
-                      <p className="text-[13px] font-medium leading-[1.55] text-heading">{missed.label}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          <div className="rounded-[10px] border border-hairline bg-white/70 px-3 py-3">
+            <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">Domains</div>
+            <div className="mt-1 text-[15px] font-semibold text-heading">{passedDomains} / {domains.length} passing</div>
+          </div>
         </div>
 
-        <FocusNext feedback={feedback} />
+        {lowestDomain && (
+          <div className="mt-5 rounded-[10px] border border-hairline bg-amber-50/60 px-4 py-3 text-[13px] leading-[1.65] text-amber-900">
+            {/* This domain is the one already open below, so the copy points
+                there rather than telling you to open something twice. */}
+            <span className="font-medium">Weakest area, and the one open below: </span>
+            {DOMAIN_META[lowestDomain.domain].label}, which contributed {fmtScore(domainScore(lowestDomain))} / {fmtScore(domainMaxPoints(lowestDomain))} points.
+          </div>
+        )}
+
+        {topMisses.length > 0 && (
+          <div className="mt-5">
+            <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Highest impact misses</div>
+            <div className="grid gap-3">
+              {topMisses.map((missed, index) => {
+                const severity = severityLabel(missed.consequence_tier);
+                return (
+                  <div key={`${missed.domain}-${missed.label}-${index}`} className="rounded-[10px] border border-hairline bg-white/70 px-3 py-3">
+                    <div className="mb-1 flex flex-wrap items-center gap-2">
+                      <span className={`rounded border px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.04em] ${severity.className}`}>
+                        {severity.label}
+                      </span>
+                      <span className="text-[13px] font-medium text-stone-500">{DOMAIN_META[missed.domain].label}</span>
+                    </div>
+                    <p className="text-[13px] font-medium leading-[1.55] text-heading">{missed.label}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
-    </motion.section>
+
+      <FocusNext feedback={feedback} />
+    </section>
   );
 }
 
@@ -758,12 +772,14 @@ function DomainCard({ domain, index }: { domain: DomainFeedback; index: number }
   return (
     <motion.section
       id={domain.domain}
-      className="scroll-mt-24 rounded-[10px] border border-hairline bg-white/85 shadow-elevation-2"
+      className="scroll-mt-24 overflow-hidden rounded-[12px] border border-hairline bg-white/85 shadow-elevation-2"
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.15 + index * 0.08 }}
     >
-      <header className={`rounded-t-[22px] border-b border-hairline px-5 py-4 ${meta.headerClass}`}>
+      {/* The header's own radius used to be 22px on a 10px card, which showed
+          as a nick in each top corner. The card clips it now. */}
+      <header className={`border-b border-hairline px-5 py-4 ${meta.headerClass}`}>
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -1024,7 +1040,14 @@ export default function FeedbackReport({
   const [problem, setProblem] = useState<ReportProblem | null>(null);
   /** Station behind a session we never got a report for, so retries have a target. */
   const [failedStationId, setFailedStationId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<ReportTab>('overview');
+  /**
+   * Null until the reader picks one. The tab that is actually open falls back
+   * to the weakest domain (see `activeDomain` below), which cannot be decided
+   * here because the marks have not arrived yet.
+   */
+  const [chosenDomain, setChosenDomain] = useState<DomainKey | null>(null);
+  /** Namespaces the tablist's ids, so two reports could share a page. */
+  const idPrefix = useId();
   const retryCount = useRef(0);
   /**
    * Held in a ref rather than read from props inside the poll: an inline
@@ -1248,6 +1271,20 @@ export default function FeedbackReport({
     );
   }
 
+  /**
+   * Which domain is open.
+   *
+   * The default is the weakest domain, not the first one: the overview already
+   * names it as the thing to read first, so opening any other one would make
+   * the page argue with itself. Derived rather than set in an effect, so there
+   * is no flash of the wrong tab when the marks land.
+   */
+  const activeDomain: DomainKey | null =
+    chosenDomain ?? lowestScoringDomain(orderedDomains)?.domain ?? null;
+  const openDomain = orderedDomains.find((domain) => domain.domain === activeDomain) ?? null;
+  const tabIdFor = (domain: DomainKey) => `${idPrefix}-tab-${domain}`;
+  const panelId = `${idPrefix}-domain-panel`;
+
   return (
     <main className="min-h-[100dvh] bg-surface font-sans">
       <div className="mx-auto max-w-[1180px] px-5 py-8 sm:px-7 lg:px-10 lg:py-10">
@@ -1283,48 +1320,62 @@ export default function FeedbackReport({
         </Reveal>
 
         <Reveal delay={REVEAL.verdict}>
-          <VerdictPanel feedback={feedback} sessionId={sessionId} />
+          <VerdictPanel feedback={feedback} sessionId={sessionId} compact={isTrial} />
         </Reveal>
 
         {feedback.confidence && feedback.confidence.transcript_quality !== 'high' && (
-          <div className="mt-5 rounded-[10px] border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-[1.6] text-amber-800">
+          <div className="mt-5 rounded-[10px] border border-hairline bg-amber-50 px-4 py-3 text-[13px] leading-[1.6] text-amber-800">
             Transcript confidence was {feedback.confidence.transcript_quality}. Some feedback is given with caution.
             {feedback.confidence.notes ? ` ${feedback.confidence.notes}` : ''}
           </div>
         )}
 
-        <Reveal delay={REVEAL.domainSummary} className="mt-8">
-          <div className="mb-3 flex items-center justify-between gap-4">
-            <h2 className="text-[18px] font-semibold text-heading">Domain score summary</h2>
-            <p className="hidden text-[13px] text-muted sm:block">Data /3, Management /4.5, Relating /3</p>
-          </div>
-          <ScoreBreakdown domains={orderedDomains} />
+        {/* Reading order: verdict, then what happened, then the domains. The
+            gaps between the three do the separating — no outer cards. */}
+        <Reveal delay={REVEAL.overview} className="mt-10 md:mt-12">
+          <OverviewPanel feedback={feedback} domains={orderedDomains} />
         </Reveal>
 
-        {/* The tab panels inside keep their own transitions — those fire on tab
-            change, not on load, so they are not a second entry animation. */}
-        <Reveal delay={REVEAL.reportDetail} className="mt-8">
+        <Reveal delay={REVEAL.breakdown} className="mt-12 md:mt-16">
           <section>
-          <div className="mb-4">
-            <h2 className="text-[24px] font-semibold text-heading">Report detail</h2>
-            <p className="mt-1 max-w-[720px] text-[15px] leading-[1.65] text-stone-600">
-              Start with the overview, then switch into a single domain for detailed evidence and practice advice.
-            </p>
-          </div>
-          <ReportTabs activeTab={activeTab} onChange={setActiveTab} domains={orderedDomains} />
-          <div className="mt-5">
-            <AnimatePresence mode="wait">
-              {activeTab === 'overview' ? (
-                <OverviewPanel key="overview" feedback={feedback} domains={orderedDomains} />
-              ) : (
-                orderedDomains
-                  .filter((domain) => domain.domain === activeTab)
-                  .map((domain) => (
-                    <DomainCard key={domain.domain} domain={domain} index={0} />
-                  ))
-              )}
-            </AnimatePresence>
-          </div>
+            <div className="mb-5">
+              <h2 className="text-[24px] font-semibold text-heading">Where the marks went</h2>
+              <p className="mt-1 max-w-[720px] text-[15px] leading-[1.65] text-stone-600">
+                Three domains, three scores. Open one to read the evidence behind its
+                grade — what was credited, what cost marks, and what to practise.
+              </p>
+              {/* Re-homed from the old "Score key" column, which was the only
+                  place the weighting was ever explained in words. */}
+              <p className="mt-2 max-w-[720px] text-[13px] leading-[1.6] text-muted">
+                Clinical management counts 1.5x, so it moves the total more than the
+                other two and can decide the verdict on its own — which is why a domain
+                grade and the overall verdict can disagree.
+              </p>
+            </div>
+
+            <DomainTabs
+              domains={orderedDomains}
+              active={activeDomain}
+              onChange={setChosenDomain}
+              tabId={tabIdFor}
+              panelId={panelId}
+            />
+
+            <div
+              id={panelId}
+              role="tabpanel"
+              aria-labelledby={activeDomain ? tabIdFor(activeDomain) : undefined}
+              tabIndex={0}
+              className="mt-5 rounded-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+            >
+              {/* Fires on tab change, not on load, so it is not a second entry
+                  animation stacked on the Reveal above. */}
+              <AnimatePresence mode="wait">
+                {openDomain && (
+                  <DomainCard key={openDomain.domain} domain={openDomain} index={0} />
+                )}
+              </AnimatePresence>
+            </div>
           </section>
         </Reveal>
 

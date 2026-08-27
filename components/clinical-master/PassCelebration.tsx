@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 
 /** Amber and olive from the palette. No confetti brights — this is an exam result. */
 const PARTICLE_COLOURS = ['#B45309', '#D97706', '#4D7C0F', '#A16207', '#E8A34D'];
@@ -9,11 +9,25 @@ const PARTICLE_MS = 1600;
 /** Matches the bloom below and the 1.1s measured off the reference animation. */
 const BLOOM_MS = 1100;
 
+/** Fractions of the host box, used when there is no element to anchor to. */
+const FALLBACK_ORIGIN = { x: 0.5, y: 0.46 } as const;
+
 interface PassCelebrationProps {
   /** Only a passing verdict celebrates. A fail renders nothing at all. */
   passed: boolean;
   /** Stops a refresh of the same report replaying it. */
   sessionId: string;
+  /**
+   * The element the celebration comes out of — the score itself.
+   *
+   * This used to be two hard-coded fractions of the host box (`left-[18%]
+   * top-[46%]` for the bloom, `w/2, h*0.42` for the particles, which did not
+   * even agree with each other). Both were tuned against one particular score
+   * tile, so the first redesign of that tile left the bloom coming out of
+   * nowhere in particular. Measuring the real element means the effect stays
+   * anchored on the number through any layout it is dropped into.
+   */
+  originRef?: RefObject<HTMLElement | null>;
 }
 
 /**
@@ -31,10 +45,16 @@ interface PassCelebrationProps {
  * no sound, under two seconds, gone. Guarded per session id so reloading a
  * report you passed last month does not throw a party each time.
  */
-export default function PassCelebration({ passed, sessionId }: PassCelebrationProps) {
+export default function PassCelebration({
+  passed,
+  sessionId,
+  originRef,
+}: PassCelebrationProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const frameRef = useRef<number | null>(null);
   const [run, setRun] = useState(false);
+  /** Measured once, in host pixels, so the bloom and the particles agree. */
+  const [origin, setOrigin] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (!passed) return;
@@ -71,12 +91,27 @@ export default function PassCelebration({ passed, sessionId }: PassCelebrationPr
     if (!ctx) return;
     ctx.scale(dpr, dpr);
 
+    // Where the score actually is right now, rather than where it was when
+    // somebody last tuned a percentage.
+    const target = originRef?.current;
+    let ox = w * FALLBACK_ORIGIN.x;
+    let oy = h * FALLBACK_ORIGIN.y;
+    if (target) {
+      const hostRect = host.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      if (targetRect.width > 0 || targetRect.height > 0) {
+        ox = targetRect.left - hostRect.left + targetRect.width / 2;
+        oy = targetRect.top - hostRect.top + targetRect.height / 2;
+      }
+    }
+    setOrigin({ x: ox, y: oy });
+
     const parts = Array.from({ length: PARTICLE_COUNT }, (_, i) => {
       const angle = -Math.PI / 2 + (Math.random() - 0.5) * 2;
       const speed = 2.4 + Math.random() * 4.2;
       return {
-        x: w / 2,
-        y: h * 0.42,
+        x: ox,
+        y: oy,
         vx: Math.cos(angle) * speed * 1.5,
         vy: Math.sin(angle) * speed,
         r: 1.6 + Math.random() * 2.4,
@@ -120,24 +155,29 @@ export default function PassCelebration({ passed, sessionId }: PassCelebrationPr
       if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
       frameRef.current = null;
     };
-  }, [run]);
+  }, [run, originRef]);
 
   if (!passed || !run) return null;
 
   return (
     <>
-      {/* M1 — the bloom. Anchored low-left, over the score rather than the
-          panel's centre, so it reads as coming out of the number. */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute left-[18%] top-[46%] z-0 h-2.5 w-2.5 rounded-full motion-reduce:hidden"
-        style={{
-          background:
-            'radial-gradient(circle, rgba(180,83,9,0.30) 0%, rgba(217,119,6,0.18) 42%, rgba(180,83,9,0) 72%)',
-          transform: 'translate(-50%, -50%) scale(0)',
-          animation: `ff-bloom ${BLOOM_MS}ms cubic-bezier(.16,.84,.36,1) forwards`,
-        }}
-      />
+      {/* M1 — the bloom, growing out of the score itself rather than the
+          panel's centre, which is what makes it read as caused by the number.
+          Rendered one frame after the canvas, once the score has been measured. */}
+      {origin && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute z-0 h-2.5 w-2.5 rounded-full motion-reduce:hidden"
+          style={{
+            left: `${origin.x}px`,
+            top: `${origin.y}px`,
+            background:
+              'radial-gradient(circle, rgba(180,83,9,0.30) 0%, rgba(217,119,6,0.18) 42%, rgba(180,83,9,0) 72%)',
+            transform: 'translate(-50%, -50%) scale(0)',
+            animation: `ff-bloom ${BLOOM_MS}ms cubic-bezier(.16,.84,.36,1) forwards`,
+          }}
+        />
+      )}
       <canvas
         ref={canvasRef}
         aria-hidden
