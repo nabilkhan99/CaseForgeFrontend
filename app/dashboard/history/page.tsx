@@ -4,11 +4,12 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import DomainTag from '@/components/ui/DomainTag';
 import SessionOutcome from '@/components/ui/SessionOutcome';
 import ScoreTrend from '@/components/ui/ScoreTrend';
+import HistorySummary from '@/components/ui/HistorySummary';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import SecondaryButton from '@/components/ui/SecondaryButton';
 import Container from '@/components/ui/Container';
@@ -51,8 +52,12 @@ function matchesFilters(
   );
 }
 
+/** Rows past this one all share the last delay — see the transition below. */
+const MAX_STAGGERED_ROWS = 12;
+
 export default function HistoryPage() {
   const supabase = createClient();
+  const shouldReduceMotion = useReducedMotion();
   const [user, setUser] = useState<User | null>(null);
   const [sessions, setSessions] = useState<SessionHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,6 +70,12 @@ export default function HistoryPage() {
   /** S7: the Case Library's controls, brought across. Both filter what is loaded. */
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<HistoryFilter>('all');
+  /**
+   * Row density. Local and unpersisted on purpose — it is a way of looking at
+   * this list right now, not a setting, and a preference that follows you back
+   * from a session three days later is a surprise rather than a convenience.
+   */
+  const [compact, setCompact] = useState(false);
 
   const ITEMS_PER_PAGE = 20;
 
@@ -185,6 +196,15 @@ export default function HistoryPage() {
         </Container>
       ) : (
         <div>
+          {/* The figures first, then the shape, then the list. The strip reads
+              every loaded row, not the filtered view — see HistorySummary. */}
+          <HistorySummary
+            sessions={sessions}
+            hasMore={hasMore}
+            compact={compact}
+            onCompactChange={setCompact}
+          />
+
           {/* M4 — the shape of the list, which the list itself cannot show. */}
           <ScoreTrend sessions={sessions} />
 
@@ -229,9 +249,26 @@ export default function HistoryPage() {
             {visibleSessions.map((session, i) => (
               <motion.div
                 key={session.id}
+                // The stagger is capped, not proportional. An unbounded
+                // `i * 0.03` is imperceptible on the first screen and absurd
+                // by the hundredth row: at 100 loaded sessions the last one
+                // waited three seconds to appear, on a page whose whole
+                // purpose is that the rows are already there.
+                //
+                // Reduced motion collapses the transition rather than dropping
+                // `initial`, which would hand React different markup between
+                // renders. Same pattern as ArcGauge.
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.03 }}
+                transition={
+                  shouldReduceMotion
+                    ? { duration: 0 }
+                    : {
+                        delay: Math.min(i, MAX_STAGGERED_ROWS) * 0.04,
+                        duration: 0.3,
+                        ease: 'easeOut',
+                      }
+                }
               >
                 {/* An unfinished session has no report to open, so the row goes
                     back to the case itself. Completed work stays visually
@@ -242,7 +279,13 @@ export default function HistoryPage() {
                       ? `/clinical-master/station/${session.stationId}`
                       : `/clinical-master/feedback/${session.id}`
                   }
-                  className={`flex items-center gap-3 py-3.5 px-2 -mx-2 rounded-[10px] hover:bg-black/[0.02] transition-colors group ${
+                  // Compact changes the padding and nothing else. Shrinking the
+                  // type or dropping the domain tag would be removing content
+                  // under the name of density; the point is to fit more rows on
+                  // a screen, not to say less about each one.
+                  className={`flex items-center gap-3 ${
+                    compact ? 'py-2' : 'py-3.5'
+                  } px-2 -mx-2 rounded-[10px] hover:bg-black/[0.02] transition-colors group ${
                     session.outcome === 'unfinished' ? 'opacity-70 hover:opacity-100' : ''
                   }`}
                 >
@@ -256,7 +299,7 @@ export default function HistoryPage() {
                     >
                       {session.stationTitle}
                     </div>
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className={`flex items-center gap-2 ${compact ? 'mt-0.5' : 'mt-1'}`}>
                       <DomainTag name={session.domainName} size="sm" />
                       <span className="text-[11px] text-muted">{formatRelativeDate(session.completedAt)}</span>
                     </div>
