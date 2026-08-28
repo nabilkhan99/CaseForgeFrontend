@@ -257,3 +257,18 @@ export function pickNextForYou<T extends LibraryStation>(
     if (eligible.length === 0) return null;
     return eligible[hashSeed(seed) % eligible.length];
 }
+
+/**
+ * Why this case and not another, in a clause the picker can actually support.
+ *
+ * pickNextForYou() selects on one property — never attempted — and then breaks
+ * the tie on the day's seed, so "you haven't tried this one yet" is the whole
+ * of the rationale and there is no weakest-domain judgement behind it to
+ * report. It is derived from the station rather than typed into the component
+ * beside the recommendation, so the day the picker learns a second rule the
+ * copy stops asserting the first one instead of quietly going stale: anything
+ * this function cannot vouch for returns null, and the line goes unsaid.
+ */
+export function nextForYouReason(station: LibraryStation): string | null {
+    return station.attempts.length === 0 ? 'because you haven’t tried this one yet' : null;
+}
