@@ -5,9 +5,8 @@ import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useRealtimeSession } from '@/hooks/useRealtimeSession';
-import ConsultationTimer from '@/components/clinical-master/ConsultationTimer';
-import AudioVisualizer from '@/components/clinical-master/AudioVisualizer';
-import LiveTranscript from '@/components/clinical-master/LiveTranscript';
+import ConnectingScreen from '@/components/clinical-master/ConnectingScreen';
+import ConsultationStage from '@/components/clinical-master/ConsultationStage';
 import SessionControls from '@/components/clinical-master/SessionControls';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 
@@ -68,7 +67,7 @@ function GuestLiveConsultationContent() {
     router.push(`/try/feedback/${sessionId}`);
   }, [router, sessionId]);
 
-  const { isConnected, isSpeaking, transcript, connect, endConsultation, disconnect, setMicMuted, error, status } =
+  const { isConnected, isSpeaking, transcript, connect, endConsultation, disconnect, setMicMuted, getPatientLevel, error, status } =
     useRealtimeSession({
       sessionId,
       stationId: stationId || undefined,
@@ -163,6 +162,21 @@ function GuestLiveConsultationContent() {
     );
   }
 
+  // Guests used to sit in front of an idle orb and a static full clock for the
+  // whole handshake, with nothing saying a call was being placed — the authed
+  // session has had this gate for a while and `/try` never got it. The gate
+  // stays on "not connected", which also covers `disconnected`; only the pulse
+  // inside it distinguishes a handshake actually in progress.
+  if (status !== 'connected' && !isProcessing) {
+    return (
+      <ConnectingScreen
+        patientName={station?.patient_name}
+        connecting={status === 'connecting'}
+        onCancel={handleLeaveWithoutFinishing}
+      />
+    );
+  }
+
   return (
     <div className="min-h-[100dvh] bg-surface font-sans flex flex-col">
       {/* Top bar */}
@@ -175,11 +189,12 @@ function GuestLiveConsultationContent() {
         >
           &larr; <span className="hidden sm:inline">Exit</span>
         </button>
-        <ConsultationTimer
-          durationSeconds={station?.consultation_duration_seconds || 720}
-          autoStart={isConnected}
-          onComplete={handleEndConsultation}
-        />
+        {/* The clock moved to the ring around the orb — one clock, drawn once.
+            This slot keeps the bar's three-up balance and names who is on the
+            line, which used to be repeated under the avatar. */}
+        <span className="truncate px-2 text-[13px] font-semibold text-heading">
+          {station?.patient_name || 'Patient'}
+        </span>
         <div className="flex items-center gap-2">
           {isConnected && (
             <div className="flex items-center gap-1.5">
@@ -195,51 +210,20 @@ function GuestLiveConsultationContent() {
         </div>
       </div>
 
-      {/* Main voice area */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 gap-6 min-h-0">
-        {/* Patient avatar with pulse */}
-        <motion.div className="relative flex-shrink-0" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}>
-          <motion.div
-            className="absolute rounded-full"
-            style={{ inset: '-16px', border: '1.5px solid rgba(180,83,9,0.1)' }}
-            animate={isSpeaking ? { scale: [1, 1.25, 1], opacity: [0.4, 0, 0.4] } : { scale: 1, opacity: 0 }}
-            transition={{ duration: 2, repeat: Infinity }}
-          />
-          <motion.div
-            className="absolute rounded-full"
-            style={{ inset: '-8px', border: '2px solid rgba(180,83,9,0.15)' }}
-            animate={isSpeaking ? { scale: [1, 1.15, 1], opacity: [0.6, 0, 0.6] } : { scale: 1, opacity: 0 }}
-            transition={{ duration: 1.5, repeat: Infinity, delay: 0.2 }}
-          />
-          <div
-            className="w-20 h-20 rounded-full flex items-center justify-center text-white text-[24px] font-semibold relative"
-            style={{ background: 'linear-gradient(135deg, #F59E0B, #B45309)', boxShadow: '0 8px 32px rgba(180,83,9,0.3)' }}
-          >
-            {patientInitials}
-          </div>
-        </motion.div>
-
-        {/* Speaking indicator */}
-        <div className="text-center flex-shrink-0">
-          <motion.div
-            className="text-[12px] font-semibold text-primary uppercase tracking-[0.1em] mb-0.5"
-            animate={isSpeaking ? { opacity: [1, 0.4, 1] } : { opacity: 0.5 }}
-            transition={{ duration: 1.8, repeat: Infinity }}
-          >
-            {isSpeaking ? 'Patient Speaking' : 'Listening...'}
-          </motion.div>
-          <div className="text-[12px] text-muted">
-            {station?.patient_name || 'Patient'}
-          </div>
-        </div>
-
-        {/* Waveform or Transcript */}
-        {showTranscript ? (
-          <LiveTranscript items={transcript} className="flex-1 w-full max-w-[480px] min-h-0" />
-        ) : (
-          <AudioVisualizer active={isSpeaking} />
-        )}
-      </div>
+      {/* Main voice area — shared with /try so the two cannot drift. Every
+          station in the library is 720s; the fallback here says 720 while the
+          token routes say 480, which is harmless only while every row has a
+          duration. */}
+      <ConsultationStage
+        patientInitials={patientInitials}
+        isSpeaking={isSpeaking}
+        isConnected={isConnected}
+        getPatientLevel={getPatientLevel}
+        durationSeconds={station?.consultation_duration_seconds || 720}
+        onTimeUp={handleEndConsultation}
+        showTranscript={showTranscript}
+        transcript={transcript}
+      />
 
       {/* Controls bar */}
       <SessionControls

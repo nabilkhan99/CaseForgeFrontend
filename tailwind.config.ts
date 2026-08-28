@@ -115,6 +115,24 @@ module.exports = {
           '50%': { backgroundPosition: '100% 50%' },
           '100%': { backgroundPosition: '0% 50%' },
         },
+        // Live consultation. Both are transform/opacity only so they stay on
+        // the compositor: they run for minutes at a time on a phone that is
+        // also holding a WebRTC call and a screen wake lock, and both are used
+        // through `motion-safe:` so `prefers-reduced-motion` stops them dead.
+        //
+        // The orb's resting state when nobody is talking. Kept tiny — this is
+        // "alive", not "animated".
+        'orb-breathe': {
+          '0%, 100%': { transform: 'scale(1)' },
+          '50%': { transform: 'scale(1.025)' },
+        },
+        // A ring leaving the connect pulse. Starts at the ring's own resting
+        // size so that with the animation off the three rings still read as
+        // concentric rather than collapsing on top of each other.
+        'connect-ping': {
+          '0%': { transform: 'scale(1)', opacity: 'var(--ping-opacity, 0.5)' },
+          '80%, 100%': { transform: 'scale(1.5)', opacity: '0' },
+        },
       },
       animation: {
         slideDown: 'slideDown 0.2s ease-out',
@@ -129,6 +147,8 @@ module.exports = {
         'marquee-vertical': 'marquee-vertical var(--duration) infinite linear',
         'gradient-bg': 'gradient-bg 8s linear infinite',
         'gradient-text': 'gradient-bg 8s linear infinite',
+        'orb-breathe': 'orb-breathe 5s ease-in-out infinite',
+        'connect-ping': 'connect-ping 2.4s cubic-bezier(0.25,0.6,0.35,1) infinite',
       },
       borderRadius: {
         'xl': '12px',

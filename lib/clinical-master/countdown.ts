@@ -23,6 +23,21 @@ export function remainingSeconds(deadlineMs: number, nowMs: number): number {
   return Math.max(0, Math.ceil((deadlineMs - nowMs) / 1000));
 }
 
+/**
+ * How much of the countdown is still to run, as a 0..1 fraction of its total.
+ *
+ * The ring around the consultation orb draws this, so it has to be defined for
+ * the states a clock passes through and not only the happy middle: before the
+ * clock starts (`remaining === total`) it is a full ring, at the deadline it is
+ * an empty one, and a zero or nonsense total is an empty one rather than a
+ * division by zero painted as `NaN` into an SVG attribute.
+ */
+export function remainingFraction(remainingSeconds: number, totalSeconds: number): number {
+  if (!Number.isFinite(remainingSeconds) || !Number.isFinite(totalSeconds)) return 0;
+  if (totalSeconds <= 0) return 0;
+  return Math.max(0, Math.min(1, remainingSeconds / totalSeconds));
+}
+
 /** Zero-padded mm:ss. Minutes are not capped — a 90-minute clock reads "90:00". */
 export function formatCountdown(totalSeconds: number): string {
   const safe = Math.max(0, Math.floor(totalSeconds));
