@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { nextForYouReason } from '@/lib/stations/librarySearch';
 import type { Station } from '@/lib/supabase/queries/station-library';
 
 interface NextForYouProps {
@@ -19,11 +20,18 @@ interface NextForYouProps {
  * have not attempted, fixed for the day so it doesn't reshuffle while you think
  * about it, and skippable in one click.
  *
+ * The caption says why this one, because a recommendation that won't show its
+ * reasoning is indistinguishable from a case someone picked at random, and the
+ * reader has no way to tell whether to trust it. The clause comes from
+ * nextForYouReason() rather than being written here, so it can only ever claim
+ * what the picker actually did.
+ *
  * Rules rather than a card — the library is a typographic list, and a boxed
  * hero here would be the only container on the page.
  */
 export default function NextForYou({ station, onSurpriseMe }: NextForYouProps) {
     const href = `/clinical-master/station/${station.id}?from=${station.domain_id}`;
+    const reason = nextForYouReason(station);
 
     return (
         <motion.section
@@ -46,6 +54,7 @@ export default function NextForYou({ station, onSurpriseMe }: NextForYouProps) {
                 </p>
                 <p className="mt-1 text-[13px] text-muted">
                     {station.domain_name} &middot; {station.patient_name}
+                    {reason && <> &middot; <span className="text-primary">{reason}</span></>}
                 </p>
                 {station.presenting_complaint && (
                     <p className="mt-2 line-clamp-2 text-[13px] leading-relaxed text-body">
