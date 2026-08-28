@@ -343,6 +343,8 @@ export function useRealtimeSession({
     /** Whether the receiver actually reports audioLevel on this browser; falls
      *  back to the WebAudio tap when it does not. Logged once. */
     const receiverRefUsableRef = useRef<boolean | null>(null);
+    /** Latched once a real reading has ever been seen — see getPatientLevel. */
+    const patientLevelSeenRef = useRef(false);
     const detectorIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const detectorStartedAtRef = useRef(0);
     /** Echo-coupling estimate: micRms ≈ coupling × patientRms. Starts high
@@ -1837,6 +1839,37 @@ export function useRealtimeSession({
         teardown();
     }, [teardown]);
 
+    /**
+     * The patient's current playback level, 0..1, or null where this browser
+     * won't say.
+     *
+     * Exposed as a getter rather than as state on purpose. The consultation orb
+     * samples this ~30 times a second; as state it would re-render this hook —
+     * and therefore the whole session page, its transcript and its controls —
+     * thirty times a second, on top of the timer's existing twice-a-second
+     * render, for the entire 12 minutes and with a wake lock held so the phone
+     * can never sleep through it. A getter closes over refs only, so it is
+     * referentially stable, costs nothing when nobody calls it, and keeps the
+     * animation entirely outside React.
+     *
+     * This reads the same RFC 6464 receiver level the double-talk detector uses
+     * (see `receiverAudioLevel`) — no AudioContext, no AnalyserNode, nothing to
+     * garbage-collect, and no third audio graph competing with the two that
+     * already exist on Safari/Firefox/iOS.
+     *
+     * null vs 0 matters to the caller: null means "this browser never reports a
+     * level, animate some other way", 0 means "reporting, and it's silent". The
+     * `seen` latch keeps a momentary empty `getSynchronizationSources()` — the
+     * gap before the first RTP packet, or after teardown nulls the receiver —
+     * from being misread as the former.
+     */
+    const getPatientLevel = useCallback((): number | null => {
+        const level = receiverAudioLevel(audioReceiverRef.current);
+        if (level === undefined) return patientLevelSeenRef.current ? 0 : null;
+        patientLevelSeenRef.current = true;
+        return level;
+    }, []);
+
     const setMicMuted = useCallback((muted: boolean) => {
         setIsMuted(muted);
         if (micTrackRef.current) {
@@ -1864,6 +1897,7 @@ export function useRealtimeSession({
         endConsultation,
         disconnect,
         setMicMuted,
+        getPatientLevel,
         error,
         errorKind,
         status,
