@@ -1,6 +1,15 @@
 'use client';
 
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import Link from 'next/link';
 import { BlurFade } from '@/components/magicui/blur-fade';
@@ -29,8 +38,11 @@ import {
   verdictTone,
 } from '@/lib/clinical-master/scoring';
 import {
+  findTranscriptAnchor,
   formatTimestamp,
   normaliseTranscript,
+  spokenTimestamp,
+  transcriptTurnId,
   type TranscriptLine,
 } from '@/lib/clinical-master/transcript';
 
@@ -155,11 +167,36 @@ const DOMAIN_META: Record<DomainKey, {
   },
 };
 
-function fmtTs(ms?: number | null): string {
-  if (ms == null) return '';
-  const t = Math.max(0, Math.floor(ms / 1000));
-  return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+/**
+ * How long a jumped-to transcript turn stays flagged, ms. Long enough to find
+ * with your eye after the scroll settles, short enough not to become chrome.
+ */
+const JUMP_FLAG_MS = 2400;
+/**
+ * The transcript body animates open over 0.2s (see TranscriptPanel), and
+ * scrolling into a box that is still growing lands on a moving target. The jump
+ * waits for it to settle. Paid even when the panel was already open: it is
+ * imperceptible next to the scroll itself, and it keeps one code path rather
+ * than two that differ only in a timeout.
+ */
+const TRANSCRIPT_SETTLE_MS = 220;
+
+/**
+ * How an evidence timestamp reaches the transcript.
+ *
+ * EvidenceBlock renders four levels below the report, so this is a context
+ * rather than four layers of prop drilling. Null when the report has no
+ * transcript to jump into — then the timestamps stay plain text, because a
+ * control that goes nowhere is worse than no control.
+ */
+interface TranscriptJump {
+  /** DOM id of the turn this evidence points at, or null when nothing lines up. */
+  anchorFor: (evidence: Evidence) => string | null;
+  /** Open the transcript if needed, scroll that turn into view, flag it. */
+  jumpTo: (anchorId: string) => void;
 }
+
+const TranscriptJumpContext = createContext<TranscriptJump | null>(null);
 
 function fmtDuration(ms?: number | null): string | null {
   if (ms == null) return null;
@@ -259,6 +296,47 @@ function looksLikeNonEvidenceQuote(quote: string): boolean {
   );
 }
 
+/**
+ * The moment a quote was said — as a control that takes you there.
+ *
+ * Three states, in order of how much we actually know:
+ *  - no timestamp (common: `timestamp_ms` is optional and often null) — render
+ *    nothing at all, rather than a chip reading 00:00 that jumps to the top;
+ *  - a timestamp we cannot place in the transcript (or no transcript on this
+ *    report) — the plain mono stamp this used to be, since the time is still
+ *    true even when there is nowhere to send you;
+ *  - a timestamp matched to a turn — a real button.
+ */
+function EvidenceTimestamp({ evidence }: { evidence: Evidence }) {
+  const jump = useContext(TranscriptJumpContext);
+  const stamp = formatTimestamp(evidence.timestamp_ms);
+  if (!stamp) return null;
+
+  const anchorId = jump?.anchorFor(evidence) ?? null;
+  if (!jump || !anchorId) {
+    return <span className="font-mono tracking-normal">[{stamp}]</span>;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => jump.jumpTo(anchorId)}
+      // "04:12" alone is read as punctuation and says nothing about what the
+      // control does; the visible text stays short.
+      aria-label={`Jump to ${spokenTimestamp(evidence.timestamp_ms)} in the transcript`}
+      // `border-defined` rather than the passive `border-hairline` used by the
+      // static stamp: the tailwind config reserves `defined` for interactive
+      // edges, and this is now the one thing in the quote you can click.
+      // min-h-[44px] is the house touch target — it makes this row taller than
+      // the mono prefix it replaces, which is the cost of the chip being real.
+      className="inline-flex min-h-[44px] items-center gap-1.5 rounded-[6px] border border-defined bg-white px-2.5 py-1 font-mono text-[11px] tracking-normal text-primary transition hover:border-primary/30 hover:bg-primary/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+    >
+      {stamp}
+      <span aria-hidden className="text-[13px] leading-none text-primary/50">&rsaquo;</span>
+    </button>
+  );
+}
+
 function EvidenceBlock({
   evidence,
   fallback,
@@ -292,10 +370,8 @@ function EvidenceBlock({
 
   return (
     <blockquote className="mt-3 rounded-[10px] border border-hairline bg-white/80 px-3 py-2 text-[13px] leading-[1.65] text-stone-600 shadow-elevation-1">
-      <div className="mb-1 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.08em] text-stone-400">
-        {evidence.timestamp_ms != null && (
-          <span className="font-mono tracking-normal">[{fmtTs(evidence.timestamp_ms)}]</span>
-        )}
+      <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] font-medium uppercase tracking-[0.08em] text-stone-400">
+        <EvidenceTimestamp evidence={evidence} />
         {evidence.speaker && <span>{evidence.speaker}</span>}
       </div>
       <span className="italic">&ldquo;{evidence.quote}&rdquo;</span>
@@ -979,14 +1055,87 @@ function ProblemScreen({
   );
 }
 
-function TranscriptPanel({ lines }: { lines: TranscriptLine[] }) {
-  const [open, setOpen] = useState(false);
+/**
+ * One turn — and, when an evidence chip has just sent the reader here, the
+ * marker saying so.
+ */
+function TranscriptTurn({
+  line,
+  anchorId,
+  flagged,
+}: {
+  line: TranscriptLine;
+  anchorId: string;
+  /** True while this is the turn a chip most recently jumped to. */
+  flagged: boolean;
+}) {
+  const shouldReduceMotion = useReducedMotion();
 
+  return (
+    <li
+      id={anchorId}
+      // Focus lands here after a jump, so a keyboard user carries on reading
+      // from the turn rather than from the top of the panel. Not in the tab
+      // order — only a jump reaches it.
+      tabIndex={-1}
+      // Two markers, because they outlive each other. The tint is the "you
+      // landed here" flag and clears after a couple of seconds; the ring
+      // persists while focus does, which is the only one of the two a keyboard
+      // user still needs by then. Programmatic focus following a mouse click
+      // does not match :focus-visible, so a mouse user gets the tint alone.
+      className={`grid grid-cols-[54px_minmax(0,1fr)] gap-3 rounded-r-[6px] border-l-2 pl-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 ${
+        flagged ? 'bg-primary/[0.07]' : 'bg-transparent'
+      } ${shouldReduceMotion ? '' : 'transition-colors duration-300'}`}
+      style={{
+        borderColor: flagged
+          ? 'rgba(180,83,9,0.85)'
+          : line.speaker === 'candidate'
+            ? 'rgba(180,83,9,0.35)'
+            : 'rgba(0,0,0,0.10)',
+      }}
+    >
+      <span className="font-mono text-[11px] leading-[1.7] text-stone-400">
+        {formatTimestamp(line.timestampMs)}
+      </span>
+      <span className="min-w-0">
+        <span
+          className={`mr-2 text-[13px] font-medium uppercase tracking-[0.06em] ${
+            line.speaker === 'candidate' ? 'text-primary' : 'text-stone-500'
+          }`}
+        >
+          {line.label}
+        </span>
+        <span className="text-[13px] leading-[1.7] text-stone-700">{line.text}</span>
+      </span>
+    </li>
+  );
+}
+
+/**
+ * The transcript, and the thing evidence chips scroll into.
+ *
+ * `open` is owned by the report rather than by this panel: a chip several
+ * sections up has to be able to open it before it can scroll into it.
+ */
+function TranscriptPanel({
+  lines,
+  open,
+  onToggle,
+  idPrefix,
+  /** Turn most recently jumped to, flagged so the reader can see where they landed. */
+  flaggedAnchorId,
+}: {
+  lines: TranscriptLine[];
+  open: boolean;
+  onToggle: () => void;
+  idPrefix: string;
+  flaggedAnchorId: string | null;
+}) {
   return (
     <section className="mt-10 border-t border-hairline pt-6">
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={onToggle}
         aria-expanded={open}
         aria-controls="consultation-transcript"
         className="flex min-h-[44px] w-full items-center justify-between gap-4 rounded-[10px] px-2 text-left transition hover:bg-black/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
@@ -1025,28 +1174,12 @@ function TranscriptPanel({ lines }: { lines: TranscriptLine[] }) {
               </p>
               <ol className="space-y-3">
                 {lines.map((line) => (
-                  <li
+                  <TranscriptTurn
                     key={line.key}
-                    className="grid grid-cols-[54px_minmax(0,1fr)] gap-3 border-l-2 pl-3"
-                    style={{
-                      borderColor:
-                        line.speaker === 'candidate' ? 'rgba(180,83,9,0.35)' : 'rgba(0,0,0,0.10)',
-                    }}
-                  >
-                    <span className="font-mono text-[11px] leading-[1.7] text-stone-400">
-                      {formatTimestamp(line.timestampMs)}
-                    </span>
-                    <span className="min-w-0">
-                      <span
-                        className={`mr-2 text-[13px] font-medium uppercase tracking-[0.06em] ${
-                          line.speaker === 'candidate' ? 'text-primary' : 'text-stone-500'
-                        }`}
-                      >
-                        {line.label}
-                      </span>
-                      <span className="text-[13px] leading-[1.7] text-stone-700">{line.text}</span>
-                    </span>
-                  </li>
+                    line={line}
+                    anchorId={transcriptTurnId(idPrefix, line.key)}
+                    flagged={transcriptTurnId(idPrefix, line.key) === flaggedAnchorId}
+                  />
                 ))}
               </ol>
             </div>
@@ -1091,8 +1224,19 @@ export default function FeedbackReport({
    * here because the marks have not arrived yet.
    */
   const [chosenDomain, setChosenDomain] = useState<DomainKey | null>(null);
-  /** Namespaces the tablist's ids, so two reports could share a page. */
+  /** Namespaces the tablist's and the transcript's ids, so two reports could share a page. */
   const idPrefix = useId();
+  const shouldReduceMotion = useReducedMotion();
+  /** Owned here, not in TranscriptPanel: an evidence chip has to be able to open it. */
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
+  /**
+   * A jump asked for but not yet performed, and the turn most recently landed
+   * on. Both are objects rather than bare ids so that clicking the same chip
+   * twice is a new request — setting a string to the value it already holds is
+   * a no-op in React, and the second click would do nothing.
+   */
+  const [jumpRequest, setJumpRequest] = useState<{ anchorId: string } | null>(null);
+  const [landed, setLanded] = useState<{ anchorId: string } | null>(null);
   const retryCount = useRef(0);
   /**
    * Held in a ref rather than read from props inside the poll: an inline
@@ -1196,6 +1340,62 @@ export default function FeedbackReport({
       clearTimeout(timer);
     };
   }, [sessionId, pollAttempt]);
+
+  const jumpTo = useCallback((anchorId: string) => {
+    setTranscriptOpen(true);
+    setJumpRequest({ anchorId });
+  }, []);
+
+  /**
+   * Perform a requested jump, once the panel it lands in has stopped growing.
+   * Cleared on the way out, so a later change to the motion preference cannot
+   * re-fire an old jump.
+   */
+  useEffect(() => {
+    if (!jumpRequest) return;
+    const timer = setTimeout(() => {
+      const target = document.getElementById(jumpRequest.anchorId);
+      if (target) {
+        // Focus first with preventScroll, then scroll deliberately: focus()
+        // does its own jump otherwise, with the browser's alignment rather
+        // than ours, and the turn ends up under the top edge.
+        target.focus({ preventScroll: true });
+        target.scrollIntoView({
+          behavior: shouldReduceMotion ? 'auto' : 'smooth',
+          block: 'center',
+        });
+        setLanded({ anchorId: jumpRequest.anchorId });
+      }
+      setJumpRequest(null);
+    }, TRANSCRIPT_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [jumpRequest, shouldReduceMotion]);
+
+  /** The landing flag is a pointer, not a selection — it clears itself. */
+  useEffect(() => {
+    if (!landed) return;
+    const timer = setTimeout(() => setLanded(null), JUMP_FLAG_MS);
+    return () => clearTimeout(timer);
+  }, [landed]);
+
+  /**
+   * Null while there is no transcript to jump into, which switches every
+   * evidence chip back to the plain timestamp it used to be.
+   */
+  const transcriptJump = useMemo<TranscriptJump | null>(() => {
+    if (transcript.length === 0) return null;
+    return {
+      anchorFor: (evidence) => {
+        const line = findTranscriptAnchor(
+          transcript,
+          evidence.timestamp_ms,
+          evidence.speaker
+        );
+        return line ? transcriptTurnId(idPrefix, line.key) : null;
+      },
+      jumpTo,
+    };
+  }, [transcript, idPrefix, jumpTo]);
 
   const orderedDomains = useMemo(() => {
     if (!feedback) return [];
@@ -1331,6 +1531,7 @@ export default function FeedbackReport({
   const panelId = `${idPrefix}-domain-panel`;
 
   return (
+    <TranscriptJumpContext.Provider value={transcriptJump}>
     <main className="min-h-[100dvh] bg-surface font-sans">
       <div className="mx-auto max-w-[1180px] px-5 py-8 sm:px-7 lg:px-10 lg:py-10">
         {/* The header's own spring entry is replaced by — not stacked on —
@@ -1354,6 +1555,22 @@ export default function FeedbackReport({
                 {feedback.station_title || 'Consultation feedback'}
               </h1>
             </div>
+            {/*
+              No "Marked in 84s" chip here, deliberately.
+
+              Marking really does take 47 to 88 seconds (measured across the
+              production rows that have a claim stamp), but that number is not
+              knowable on this page. `/api/generate-feedback` hands the client
+              `{ status, feedback, transcript }` and nothing else; `feedback
+              .timing` is consultation timing, not marking timing. The only
+              honest pair is `clinical_sessions.marking_started_at` against
+              `session_results.created_at`, and neither is in the payload —
+              `completed_at - started_at` is NOT a substitute, because
+              completed_at is stamped when the result row lands, so it spans
+              the whole consultation. Quoting it would be inventing a number.
+              Surfacing this properly means widening the ready response, which
+              is the polling route's business, not the report's.
+            */}
             <div className="flex flex-wrap gap-2 text-[13px] text-stone-500">
               <span className="rounded-full border border-hairline bg-white/70 px-3 py-1.5">Audio consultation</span>
               <span className="rounded-full border border-hairline bg-white/70 px-3 py-1.5">
@@ -1424,7 +1641,15 @@ export default function FeedbackReport({
           </section>
         </Reveal>
 
-        {transcript.length > 0 && <TranscriptPanel lines={transcript} />}
+        {transcript.length > 0 && (
+          <TranscriptPanel
+            lines={transcript}
+            open={transcriptOpen}
+            onToggle={() => setTranscriptOpen((value) => !value)}
+            idPrefix={idPrefix}
+            flaggedAnchorId={landed?.anchorId ?? null}
+          />
+        )}
 
         {!isTrial && (
           <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
@@ -1449,5 +1674,6 @@ export default function FeedbackReport({
         )}
       </div>
     </main>
+    </TranscriptJumpContext.Provider>
   );
 }
