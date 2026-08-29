@@ -95,7 +95,8 @@ const REVEAL = {
   onboarding: 0.06,
   quickStart: 0.12,
   intensity: 0.18,
-  footer: 0.24,
+  guarantee: 0.24,
+  footer: 0.3,
 } as const;
 
 /**
@@ -148,6 +149,11 @@ function DashboardContent() {
   const [lastSession, setLastSession] = useState<SessionHistoryItem | null>(null);
   const [upNext, setUpNext] = useState<UpNext | null>(null);
   const [calendar, setCalendar] = useState<IntensityCalendar | null>(null);
+  // Pass progress for the guarantee line, counted off the station index the
+  // picker already fetches — no extra query. null when the index came back
+  // empty (which is also what a failed fetch looks like), so a rendered count
+  // is always one counted from real rows, never a fabricated zero.
+  const [passProgress, setPassProgress] = useState<{ passed: number; total: number } | null>(null);
   // `undefined` = not fetched yet; `null` = the lookup failed. Only a loaded
   // answer may drive a "you have no plan" message.
   const [access, setAccess] = useState<SubscriptionResponse | null | undefined>(undefined);
@@ -203,6 +209,11 @@ function DashboardContent() {
         setExamDraft(statsData.examDate ?? '');
         setLastSession(recentData[0] ?? null);
         setCalendar(buildIntensityCalendar(activity, today));
+        setPassProgress(
+          stationIndex.length > 0
+            ? { passed: stationIndex.filter((s) => s.passed).length, total: stationIndex.length }
+            : null,
+        );
         setAccess(accessRes?.state ? (accessRes as SubscriptionResponse) : null);
 
         // The picker only ever offers a station the user has never attempted,
@@ -237,6 +248,17 @@ function DashboardContent() {
    * the product from someone who has paid.
    */
   const canStart = access?.allowed ?? true;
+
+  const shouldReduceMotion = useReducedMotion();
+
+  /**
+   * The guarantee opens with "Join any of our plans", so the line renders only
+   * for someone holding one — promising a browser £500 would be wrong. Not
+   * gated on `canStart`: an expired plan-holder's progress toward the promise
+   * is still theirs, and still the argument for renewing.
+   */
+  const showGuarantee =
+    Boolean(access?.plan) && passProgress !== null && stats.completedStations > 0;
 
   const handleSaveExamDate = async () => {
     if (!user?.id) return;
@@ -379,10 +401,10 @@ function DashboardContent() {
             product owner's call, not lost in the rewrite: the "Passed X of Y
             stations" badge, the £500 guarantee tracker, and the "Your
             development picture" link. The first two put pass/fail framing on
-            the one page a trainee cannot avoid — the guarantee currently has
-            no other in-product surface, so re-homing it is an open decision.
-            The development picture needs no link from here any more: the
-            Development tab in the nav is its front door. */}
+            the one page a trainee cannot avoid — the guarantee returned on the
+            same call, but as one line below the board, after the practice loop
+            rather than ahead of it. The development picture needs no link from
+            here any more: the Development tab in the nav is its front door. */}
       </Reveal>
 
       {/* Plan state. Expiry is read-only, not a lockout: the loud banner says so,
@@ -642,10 +664,51 @@ function DashboardContent() {
         </Reveal>
       )}
 
+      {/* The £500 guarantee, back as one line: the S2 block left with the
+          score-first page, but this is the only in-product surface the cash
+          promise has, so it returns at the width of a rule — a bar filling
+          toward the £500 at its far end. Wording follows the FAQ; the count is
+          best-attempt, matching "unlimited tries". */}
+      {showGuarantee && passProgress && (
+        <Reveal delay={REVEAL.guarantee} className="mb-10 tall:mb-14">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.13em] text-primary">
+              Your £500 guarantee
+            </span>
+            <span className="font-mono text-[11px] tabular-nums text-muted">
+              {passProgress.passed} of {passProgress.total} passed
+            </span>
+          </div>
+          <div className="mt-2.5 flex items-center gap-3">
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-black/[0.05]">
+              {/* The fill is a value being drawn, not an entrance, so it keeps
+                  its sweep — collapsed to 0s under reduced motion rather than
+                  branching on `initial`, the same gate the heatmap uses. */}
+              <motion.div
+                className="h-full rounded-full bg-primary"
+                initial={{ width: 0 }}
+                animate={{
+                  width: `${Math.min(100, (passProgress.passed / passProgress.total) * 100)}%`,
+                }}
+                transition={{ duration: shouldReduceMotion ? 0 : 0.9, ease: [0.16, 0.84, 0.36, 1] }}
+              />
+            </div>
+            <span className="flex-shrink-0 font-mono text-[13px] font-bold text-heading">£500</span>
+          </div>
+          <p className="mt-2 text-[11.5px] leading-[1.5] text-muted">
+            Pass all {passProgress.total} stations, sit your SCA, and if you don&apos;t pass we send
+            you £500 in cash — unlimited attempts.{' '}
+            <Link href="/pricing" className="font-medium text-primary hover:underline">
+              How it works
+            </Link>
+          </p>
+        </Reveal>
+      )}
+
       {/* One quiet line back into the last thing you did.
           The three-row recent list and its "View all history" link are gone —
-          History is a nav tab, and a second list of sessions on the home page
-          was a worse version of it. This is the one row that answers "did my
+          past attempts live on the Library's topic pages, and a second list of
+          sessions on the home page was a worse version of it. This is the one row that answers "did my
           feedback land?", which is the only reason anyone opened that list from
           here. */}
       {lastSession && (
