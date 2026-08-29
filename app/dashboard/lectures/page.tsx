@@ -4,31 +4,46 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion, useReducedMotion } from 'framer-motion';
 import type { Transition } from 'framer-motion';
+import type { User } from '@supabase/supabase-js';
 import PageHeader from '@/components/ui/PageHeader';
 import type { LecturesResponse, LectureSummary } from '@/app/api/lectures/route';
 import type { EntitlementState } from '@/lib/commerce/entitlements';
 import type { SubscriptionResponse } from '@/app/api/subscription/route';
 import ManageBillingButton from '@/components/commerce/ManageBillingButton';
+import { createClient } from '@/lib/supabase/client';
+import { getLectureProgress } from '@/lib/supabase/queries/lectureProgress';
+import {
+  describeWatchedOffset,
+  lectureWatchStatus,
+  minutesLeft,
+  pickLectureHero,
+  watchedFraction,
+  type LectureHeroMode,
+  type LectureProgressMap,
+  type LectureWatchStatus,
+} from '@/lib/lectures/progress';
 
 /**
  * The lecture course.
  *
- * Shape: one dark "cinema" hero for the lecture to watch first, then the rest
- * of the course as typographic rows. No thumbnails anywhere — there is no
+ * Shape: one dark "cinema" hero for the lecture worth watching next, then the
+ * whole course as typographic rows. No thumbnails anywhere — there is no
  * artwork for these lectures and inventing gradient rectangles to stand in for
  * it was explicitly rejected, so the running order (mono numbers), the titles
  * and the real descriptions do the work.
  *
- * WHAT "UP NEXT" MEANS HERE. Nothing tracks whether a lecture has been
- * watched: `lectures` has no progress column, there is no per-user progress
- * table (`domain_progress` is SCA marking domains, not video), the player page
- * records nothing, and no watched flag is persisted client-side either. So the
- * hero cannot be "your next unwatched lecture" and does not pretend to be — it
- * is the first published lecture in running order, and its eyebrow says START
- * HERE rather than UP NEXT FOR YOU. For the same reason no row carries a
- * "watched" tick. If per-user progress is ever added, this is the one place
- * that has to change: `heroLecture` picks by position today, and the row's
- * right-hand column is already the slot a watched state would occupy.
+ * WHAT THE HERO MEANS HERE. `lecture_progress` records the furthest position
+ * each user reached in each lecture, so the hero is now genuinely personal:
+ * the half-watched lecture they touched most recently (RESUME), else the first
+ * one they have not finished (NEXT UP), else — for someone who has watched the
+ * lot — the one they finished last (WATCH AGAIN). A signed-out or brand-new
+ * visitor has no rows at all, which lands on lecture 01 with the original
+ * START HERE copy: "next up" implies a history they don't have yet.
+ *
+ * The list underneath shows every lecture regardless of which one the hero
+ * took, because the hero is a suggestion and the running order is the course.
+ * That means the hero's lecture appears twice on a first visit; the row marks
+ * itself "Resuming above" so the repetition reads as deliberate.
  *
  * Locked users see the same list, greyed — the running order and the titles are
  * the upgrade pitch, so this page never renders an empty "you don't have this"
@@ -208,22 +223,59 @@ function LockGlyph() {
   );
 }
 
+/** The one green in the palette, reserved for "you have finished this". */
+const WATCHED_GREEN = '#15803D';
+/** Progress fill. Brighter than the primary so it reads on the dark hero too. */
+const PROGRESS_AMBER = '#F59E0B';
+
+function TickGlyph() {
+  return (
+    <svg
+      className="w-3.5 h-3.5 flex-shrink-0"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke={WATCHED_GREEN}
+      strokeWidth={2.5}
+      aria-hidden="true"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 12.5l4.5 4.5L19 7" />
+    </svg>
+  );
+}
+
+const HERO_EYEBROW: Record<LectureHeroMode, string> = {
+  resume: 'Resume',
+  'next-up': 'Next up',
+  'watch-again': 'Watch again',
+  'start-here': 'Start here',
+};
+
 /**
- * The one high-contrast moment in a cream product: the lecture to watch first,
+ * The one high-contrast moment in a cream product: the lecture to watch next,
  * at full size, with a play control you cannot miss. Only ever rendered
  * unlocked — see the file header.
  */
 function CinemaHero({
   lecture,
   position,
+  mode,
+  secondsWatched,
   transition,
 }: {
   lecture: LectureSummary;
   position: number;
+  mode: LectureHeroMode;
+  secondsWatched: number;
   transition: Transition;
 }) {
-  const duration = formatDuration(lecture.durationSeconds);
+  const resuming = mode === 'resume';
   const description = cleanDescription(lecture.description);
+  const remaining = minutesLeft(lecture.durationSeconds, secondsWatched);
+  const fraction = watchedFraction(lecture.durationSeconds, secondsWatched);
+
+  // Resuming, the useful number is what is LEFT, not how long the whole thing
+  // runs — they already know, they watched most of it.
+  const stamp = resuming && remaining !== null ? `${remaining} min left` : formatDuration(lecture.durationSeconds);
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={transition}>
@@ -240,9 +292,9 @@ function CinemaHero({
 
         <div className="relative px-6 py-8 sm:px-10 sm:py-11">
           <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#F59E0B]">
-            <span className="font-mono tabular-nums">Lecture {runningNumber(position)}</span>
+            {HERO_EYEBROW[mode]}
             {' · '}
-            Start here
+            <span className="font-mono tabular-nums">Lecture {runningNumber(position)}</span>
           </div>
 
           <h2
@@ -252,13 +304,21 @@ function CinemaHero({
             {lecture.title}
           </h2>
 
-          {description && (
-            <p
-              className="mt-3 max-w-[52ch] text-[15px] leading-[1.6]"
-              style={{ color: 'rgba(250,250,247,0.72)' }}
-            >
-              {description}
+          {/* Resuming, where they got to is more use than what the lecture is
+              about — they have already heard the first half of the answer. */}
+          {resuming ? (
+            <p className="mt-3 max-w-[52ch] text-[15px] leading-[1.6]" style={{ color: 'rgba(250,250,247,0.72)' }}>
+              You left off {describeWatchedOffset(secondsWatched)} &mdash; pick up where you stopped.
             </p>
+          ) : (
+            description && (
+              <p
+                className="mt-3 max-w-[52ch] text-[15px] leading-[1.6]"
+                style={{ color: 'rgba(250,250,247,0.72)' }}
+              >
+                {description}
+              </p>
+            )
           )}
 
           <div className="mt-8 flex items-end justify-between gap-4">
@@ -272,19 +332,34 @@ function CinemaHero({
               <PlayTriangle className="ml-[3px] h-6 w-6 sm:h-8 sm:w-8" />
             </span>
 
-            {/* Bottom-right is where a watched state would sit if one existed.
-                Today it carries the duration alone, and nothing at all when
-                duration_seconds is null. */}
-            {duration && (
+            {stamp && (
               <span
                 className="font-mono text-[12px] tabular-nums uppercase tracking-[0.08em]"
                 style={{ color: 'rgba(250,250,247,0.55)' }}
               >
-                {duration}
+                {stamp}
               </span>
             )}
           </div>
         </div>
+
+        {/* Pinned to the card's own bottom edge rather than floated inside it:
+            it is a property of the card, like a progress bar on a video. */}
+        {resuming && fraction > 0 && (
+          <span
+            aria-hidden="true"
+            className="absolute inset-x-0 bottom-0 block h-[5px]"
+            style={{ background: 'rgba(255,255,255,0.12)' }}
+          >
+            <motion.span
+              className="block h-full"
+              style={{ background: PROGRESS_AMBER }}
+              initial={{ width: 0 }}
+              animate={{ width: `${Math.round(fraction * 100)}%` }}
+              transition={transition}
+            />
+          </span>
+        )}
       </Link>
     </motion.div>
   );
@@ -292,35 +367,61 @@ function CinemaHero({
 
 /**
  * One lecture as a typographic row: number, title, real description. Hairline
- * between rows, no box. The right-hand column is duration (and a lock when the
- * plan doesn't include the course) — it is also where a watched state would go.
+ * between rows, no box.
+ *
+ * The right-hand column carries the state — a lock when the plan doesn't
+ * include the course, a green tick once the lecture is watched, and minutes
+ * remaining rather than total minutes while one is unfinished. An unfinished
+ * lecture also warms the whole row, which is the only fill on the page and so
+ * survives being the one thing the eye lands on.
  */
 function LectureRow({
   lecture,
   position,
   locked,
+  status,
+  secondsWatched,
+  isHero,
   transition,
 }: {
   lecture: LectureSummary;
   position: number;
   locked: boolean;
+  status: LectureWatchStatus;
+  secondsWatched: number;
+  isHero: boolean;
   transition: Transition;
 }) {
-  const duration = formatDuration(lecture.durationSeconds);
   const description = cleanDescription(lecture.description);
+  const watched = !locked && status === 'watched';
+  const inProgress = !locked && status === 'in-progress';
+  const remaining = minutesLeft(lecture.durationSeconds, secondsWatched);
+  const fraction = watchedFraction(lecture.durationSeconds, secondsWatched);
+  const stamp =
+    inProgress && remaining !== null ? `${remaining} min left` : formatDuration(lecture.durationSeconds);
+
+  const titleClass = locked
+    ? 'text-muted'
+    : inProgress
+      ? 'text-primary'
+      : watched
+        ? // Dimmed, not struck through: it is still a link worth following, it
+          // just no longer competes with the lectures still to watch.
+          'text-muted group-hover:text-primary'
+        : 'text-heading group-hover:text-primary';
 
   const inner = (
     <>
-      <span className="font-mono text-[13px] tabular-nums text-muted flex-shrink-0 w-[26px] pt-[2px]">
+      <span
+        className={`font-mono text-[13px] tabular-nums flex-shrink-0 w-[26px] pt-[2px] ${
+          inProgress ? 'text-primary' : 'text-muted'
+        }`}
+      >
         {runningNumber(position)}
       </span>
 
       <div className="flex-1 min-w-0">
-        <div
-          className={`text-[15px] font-medium leading-[1.4] transition-colors ${
-            locked ? 'text-muted' : 'text-heading group-hover:text-primary'
-          }`}
-        >
+        <div className={`text-[15px] font-medium leading-[1.4] transition-colors ${titleClass}`}>
           {lecture.title}
         </div>
         {/* No element at all when there is no description — an empty line under
@@ -328,13 +429,42 @@ function LectureRow({
         {description && (
           <p className="mt-1 text-[13px] leading-[1.5] text-muted line-clamp-2">{description}</p>
         )}
+
+        {inProgress && fraction > 0 && (
+          <div className="mt-2 flex items-center gap-2">
+            <span
+              aria-hidden="true"
+              className="block h-[3px] w-[180px] max-w-full rounded-full overflow-hidden"
+              style={{ background: 'rgba(180,83,9,0.14)' }}
+            >
+              <motion.span
+                className="block h-full rounded-full"
+                style={{ background: PROGRESS_AMBER }}
+                initial={{ width: 0 }}
+                animate={{ width: `${Math.round(fraction * 100)}%` }}
+                transition={transition}
+              />
+            </span>
+            {/* Only when the hero took this same lecture — otherwise it points
+                at a card that isn't there. */}
+            {isHero && <span className="text-[11px] text-muted">Resuming above</span>}
+          </div>
+        )}
       </div>
 
       {/* pt matches the number column so both sit on the title's line rather
           than on the top of the row box, which the description makes taller. */}
       <div className="flex items-center gap-2 flex-shrink-0 pt-[3px] text-muted">
         {locked && <LockGlyph />}
-        {duration && <span className="font-mono text-[12px] tabular-nums">{duration}</span>}
+        {watched && (
+          <>
+            <TickGlyph />
+            <span className="text-[12px]" style={{ color: WATCHED_GREEN }}>
+              Watched
+            </span>
+          </>
+        )}
+        {stamp && <span className="font-mono text-[12px] tabular-nums">{stamp}</span>}
       </div>
     </>
   );
@@ -348,7 +478,9 @@ function LectureRow({
       ) : (
         <Link
           href={`/dashboard/lectures/${lecture.id}`}
-          className="group flex items-start gap-4 py-4 px-2 -mx-2 min-h-[44px] rounded-[10px] duration-200 transition-[background-color,transform] hover:bg-black/[0.02] focus-visible-ring motion-safe:hover:-translate-y-[1px]"
+          className={`group flex items-start gap-4 py-4 px-2 -mx-2 min-h-[44px] rounded-[10px] duration-200 transition-[background-color,transform] focus-visible-ring motion-safe:hover:-translate-y-[1px] ${
+            inProgress ? 'bg-[rgba(180,83,9,0.04)] hover:bg-[rgba(180,83,9,0.07)]' : 'hover:bg-black/[0.02]'
+          }`}
         >
           {inner}
         </Link>
@@ -374,8 +506,46 @@ export default function LecturesPage() {
   // acquisition page. Defaults to false — the safe answer for anyone without a
   // plan — and flips once we know they hold a LIVE Self-Study subscription.
   const [canSwitch, setCanSwitch] = useState(false);
+  // `undefined` means auth is still resolving. Reading progress before then
+  // shows a returning user a course with nothing watched and a START HERE hero
+  // for a lecture they finished a week ago — see the library index for the
+  // same pattern.
+  const [user, setUser] = useState<User | null | undefined>(undefined);
+  const [progress, setProgress] = useState<LectureProgressMap>({});
+  const [progressReady, setProgressReady] = useState(false);
 
   const entrance = useEntrance();
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth
+      .getUser()
+      .then(({ data }) => setUser(data.user ?? null))
+      .catch(() => setUser(null));
+  }, []);
+
+  useEffect(() => {
+    if (user === undefined) return;
+    if (!user) {
+      setProgressReady(true);
+      return;
+    }
+
+    let cancelled = false;
+    getLectureProgress(user.id)
+      .then((map) => {
+        if (!cancelled) setProgress(map);
+      })
+      // A progress read that fails must not hide the course; the page simply
+      // degrades to the state it had before any of this existed.
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setProgressReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   useEffect(() => {
     let cancelled = false;
@@ -416,8 +586,12 @@ export default function LecturesPage() {
     };
   }, []);
 
+  // The hero cannot be picked until progress is in, so the spinner covers both
+  // rather than painting a START HERE card that swaps to RESUME a beat later.
+  const busy = loading || !progressReady;
+
   const count = `${lectures.length} lecture${lectures.length !== 1 ? 's' : ''}`;
-  const subtitle = loading
+  const subtitle = busy
     ? 'Loading…'
     : lectures.length === 0
       ? 'Lectures are on the way'
@@ -427,23 +601,20 @@ export default function LecturesPage() {
 
   const notice = lockNotice(state, unavailable);
 
-  // The hero is the first lecture in running order, and only for someone who
-  // can actually play it. Everyone else gets the plain list.
-  const heroLecture = !locked && lectures.length > 0 ? lectures[0] : null;
-  // With one lecture and no lock, the hero IS the course: a one-row list under
-  // it would restate the same title two inches lower. So the rows are whatever
-  // the hero did not already show — which is nothing, and the list disappears.
-  const rows = heroLecture ? lectures.slice(1) : lectures;
+  // Only for someone who can actually play it — everyone else gets the plain
+  // list. Progress is empty for a locked or signed-out viewer, so the pick
+  // falls through to lecture 01 on its own.
+  const hero = locked ? null : pickLectureHero(lectures, progress);
 
   return (
     <div>
       <PageHeader title="Lectures" subtitle={subtitle} />
 
-      {locked && !loading && !unavailable && state !== 'read_only' && (
+      {locked && !busy && !unavailable && state !== 'read_only' && (
         <UpgradeHero lectures={lectures} canSwitch={canSwitch} />
       )}
 
-      {locked && !loading && (unavailable || state === 'read_only') && (
+      {locked && !busy && (unavailable || state === 'read_only') && (
         <motion.div
           className="mb-8 px-4 py-3 rounded-[10px]"
           style={{ background: 'rgba(180,83,9,0.04)', border: '1px solid rgba(180,83,9,0.08)' }}
@@ -468,7 +639,7 @@ export default function LecturesPage() {
         <div className="mb-8 border-l-2 border-danger pl-4 py-2 text-[13px] text-danger">{error}</div>
       )}
 
-      {loading ? (
+      {busy ? (
         <div className="flex items-center justify-center py-16">
           <motion.div
             className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent"
@@ -482,37 +653,50 @@ export default function LecturesPage() {
         </p>
       ) : (
         <>
-          {heroLecture && (
-            <CinemaHero lecture={heroLecture} position={1} transition={entrance(HERO_DELAY)} />
+          {hero && (
+            <CinemaHero
+              lecture={hero.lecture}
+              position={hero.position}
+              mode={hero.mode}
+              secondsWatched={progress[hero.lecture.id]?.secondsWatched ?? 0}
+              transition={entrance(HERO_DELAY)}
+            />
           )}
 
-          {rows.length > 0 ? (
-            <div className={heroLecture ? 'mt-12' : ''}>
-              <motion.div
-                className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={entrance(EYEBROW_DELAY)}
-              >
-                The course
-              </motion.div>
-              <div className="divide-y divide-hairline">
-                {rows.map((lecture, index) => (
-                  <LectureRow
-                    key={lecture.id}
-                    lecture={lecture}
-                    // Continues the hero's numbering, so the running order reads
-                    // 01, 02, 03 down the page rather than restarting at 01.
-                    position={heroLecture ? index + 2 : index + 1}
-                    locked={locked}
-                    transition={entrance(ROWS_DELAY + Math.min(index, 12) * 0.04)}
-                  />
-                ))}
-              </div>
+          {/* Every lecture, always — the hero is a suggestion, this is the
+              course. Skipping the hero's own row would renumber the list
+              around a choice that changes with the viewer's progress. */}
+          <div className={hero ? 'mt-12' : ''}>
+            <motion.div
+              className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={entrance(EYEBROW_DELAY)}
+            >
+              The course
+            </motion.div>
+            <div className="divide-y divide-hairline">
+              {lectures.map((lecture, index) => (
+                <LectureRow
+                  key={lecture.id}
+                  lecture={lecture}
+                  position={index + 1}
+                  locked={locked}
+                  status={lectureWatchStatus(
+                    lecture.durationSeconds,
+                    progress[lecture.id]?.secondsWatched,
+                  )}
+                  secondsWatched={progress[lecture.id]?.secondsWatched ?? 0}
+                  isHero={hero?.lecture.id === lecture.id}
+                  transition={entrance(ROWS_DELAY + Math.min(index, 12) * 0.04)}
+                />
+              ))}
             </div>
-          ) : (
-            // Hero with nothing under it. Say why, rather than leaving the page
-            // looking like it failed to load the rest.
+          </div>
+
+          {/* A one-lecture course looks like a page that failed to load the
+              rest, so say so rather than leaving the silence. */}
+          {lectures.length === 1 && (
             <motion.p
               className="mt-8 text-[13px] text-muted"
               initial={{ opacity: 0 }}
