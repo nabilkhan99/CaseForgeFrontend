@@ -204,6 +204,16 @@ export async function POST(request: Request) {
         : {}),
       ...(user ? { client_reference_id: user.id } : {}),
       allow_promotion_codes: true,
+      // What happens after they pay. An account is created for them from the
+      // email on this page and the password is set from a link — without saying
+      // so, a buyer lands on /thanks not knowing to go and look for it, which is
+      // the one step between paying and actually getting in.
+      custom_text: {
+        submit: {
+          message:
+            "After payment we'll email you a link to set your password — that's how you get into the course.",
+        },
+      },
       metadata,
       // Renewal, cancellation and plan-change events arrive attached to the
       // SUBSCRIPTION, long after the session is out of reach, and carry neither
