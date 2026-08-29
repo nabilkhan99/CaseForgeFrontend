@@ -344,7 +344,7 @@ function DashboardContent() {
             to say something. */}
         {stats.completedStations >= MIN_CASES_FOR_TREND && (
           <Link
-            href="/dashboard/trend"
+            href="/dashboard/development"
             className="inline-block mt-3 text-[13px] font-medium text-primary hover:underline"
           >
             Your development picture &rarr;
@@ -647,11 +647,16 @@ function DashboardContent() {
               </div>
             ))}
           </div>
+          {/* Was "View all history" pointing at a page that listed every
+              session. That page is now Development, which has no list on it at
+              all — so the link follows the list rather than the URL: past
+              attempts live on the Library's topic pages, next to the case they
+              belong to. */}
           <Link
-            href="/dashboard/history"
+            href="/dashboard/library"
             className="text-[13px] text-primary hover:underline mt-2 inline-block"
           >
-            View all history
+            View all your cases
           </Link>
         </Reveal>
       )}

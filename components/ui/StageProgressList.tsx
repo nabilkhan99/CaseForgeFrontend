@@ -20,10 +20,12 @@ interface StageProgressListProps {
 /**
  * A named-stage log for a wait whose engine reports no progress back to us.
  *
- * Shared by the marking wait (FeedbackReport) and the trend build
- * (app/dashboard/trend), which is why it lives here rather than in either.
+ * Used by the marking wait (FeedbackReport). It lives here rather than inside
+ * that component because it was written for two waits — the trend build was the
+ * other, until Development replaced its full-page spinner with a one-line
+ * notice, which is the right weight for a wait nobody is sitting through.
  *
- * The pacing is a pace, not a measurement: both engines run server-side and
+ * The pacing is a pace, not a measurement: the engine runs server-side and
  * return nothing until the finished row lands, so the list advances on a timer
  * and holds on the last stage rather than pretending to complete. What makes
  * that honest rather than theatre is that the *labels* are real — each one

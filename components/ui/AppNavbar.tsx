@@ -10,7 +10,7 @@ const NAV_LINKS = [
   { label: 'Home', href: '/dashboard', exact: true },
   { label: 'Library', href: '/dashboard/library' },
   { label: 'Lectures', href: '/dashboard/lectures', lockable: true },
-  { label: 'History', href: '/dashboard/history' },
+  { label: 'Development', href: '/dashboard/development' },
   { label: 'Portfolio', href: '/portfolio' },
 ];
 

@@ -25,6 +25,20 @@ const nextConfig = {
         destination: '/sca-cases/remote-triage-acute-headache',
         permanent: true,
       },
+      // History and Trend collapsed into one Development page. Both URLs are in
+      // people's history and in older emails, and the session list one of them
+      // used to show now lives on the Library topic pages — so they redirect to
+      // the picture rather than 404ing.
+      {
+        source: '/dashboard/history',
+        destination: '/dashboard/development',
+        permanent: true,
+      },
+      {
+        source: '/dashboard/trend',
+        destination: '/dashboard/development',
+        permanent: true,
+      },
     ];
   },
   async rewrites() {

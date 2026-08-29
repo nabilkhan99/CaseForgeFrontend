@@ -1420,8 +1420,8 @@ export default function FeedbackReport({
       </button>
     );
     const historyLink = !isTrial && (
-      <Link href="/dashboard/history" className="text-sm font-medium text-primary hover:underline">
-        Go to my history
+      <Link href="/dashboard/library" className="text-sm font-medium text-primary hover:underline">
+        Go to my cases
       </Link>
     );
     const dashboardLink = !isTrial && (
