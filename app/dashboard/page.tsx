@@ -36,7 +36,6 @@ import { MAX_WEIGHTED_SCORE } from '@/lib/clinical-master/types';
 const defaultStats: UserStats = {
   currentStreak: 0,
   completedStations: 0,
-  passedStations: 0,
   totalStations: 0,
   examCountdownDays: 0,
   examDate: null,
@@ -250,8 +249,18 @@ function DashboardContent() {
 
     setExamSaving(true);
     setExamError(null);
-    const saved = await saveExamDate(user.id, examDraft);
-    setExamSaving(false);
+    // saveExamDate reports failure in its return value, but supabase-js can
+    // also reject outright (network drop, aborted fetch) — and a rejection
+    // escaping this handler would leave the button stuck on "Saving…" with no
+    // error and no way back short of a reload.
+    let saved = false;
+    try {
+      saved = await saveExamDate(user.id, examDraft);
+    } catch (error: unknown) {
+      console.error('[dashboard] exam date save failed', error);
+    } finally {
+      setExamSaving(false);
+    }
 
     if (!saved) {
       setExamError('That didn’t save. Try again.');
@@ -366,6 +375,14 @@ function DashboardContent() {
             </div>
           )}
         </div>
+        {/* Three things stood under this greeting and were removed on the
+            product owner's call, not lost in the rewrite: the "Passed X of Y
+            stations" badge, the £500 guarantee tracker, and the "Your
+            development picture" link. The first two put pass/fail framing on
+            the one page a trainee cannot avoid — the guarantee currently has
+            no other in-product surface, so re-homing it is an open decision.
+            The trend link moves with the Development-page work; the
+            /dashboard/trend route itself still answers. */}
       </Reveal>
 
       {/* Plan state. Expiry is read-only, not a lockout: the loud banner says so,

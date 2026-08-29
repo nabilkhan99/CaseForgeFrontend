@@ -1,12 +1,6 @@
 export interface UserStats {
     currentStreak: number;
     completedStations: number;
-    /**
-     * Distinct visible stations whose best attempt reached a passing verdict.
-     * null when the pass query failed — the UI hides the figure rather than
-     * claiming the user has passed nothing.
-     */
-    passedStations: number | null;
     totalStations: number;
     /**
      * Whole days until the exam, floored at 0.

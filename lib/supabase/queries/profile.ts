@@ -8,30 +8,44 @@
 import { createClient } from '@/lib/supabase/client';
 
 /**
- * Store the SCA date in both places that hold it.
+ * Store the SCA date, with `profiles.exam_date` as the authority.
  *
- * `profiles.exam_date` is what getUserStats reads for the dashboard countdown;
- * auth `user_metadata.exam_date` is what Settings reads back into its form. A
- * write that landed in one and not the other left the two surfaces disagreeing
- * about when the exam is, which is why both live behind one function rather
- * than being repeated at each call site.
+ * The profiles row is what getUserStats reads for the dashboard countdown, so
+ * that write alone decides success. Auth `user_metadata.exam_date` — what the
+ * Settings form pre-fills from — is mirrored best-effort afterwards: the two
+ * writes cannot be atomic, and failing the whole save over the mirror would
+ * tell the user their countdown didn't stick when it did. A failed mirror only
+ * costs Settings a stale pre-fill until the next successful save.
  *
  * An empty string clears the date — Settings allows that, so the profiles row
  * takes null rather than an empty string the countdown would try to parse.
  *
- * Returns false instead of throwing: supabase-js reports failures in the
- * result, so a caller that merely awaited would show "Saved" over a failed write.
+ * Returns false instead of throwing: supabase-js reports most failures in the
+ * result, so a caller that merely awaited would show "Saved" over a failed
+ * write — and the ones it throws for (network drop) must not escape either.
  */
 export async function saveExamDate(userId: string, examDate: string): Promise<boolean> {
     const supabase = createClient();
 
-    const { error: authError } = await supabase.auth.updateUser({
-        data: { exam_date: examDate },
-    });
+    try {
+        const { error } = await supabase
+            .from('profiles')
+            .upsert({ id: userId, exam_date: examDate || null }, { onConflict: 'id' });
+        if (error) {
+            console.error('[profile] exam date write failed', error.message);
+            return false;
+        }
+    } catch (error: unknown) {
+        console.error('[profile] exam date write failed', error);
+        return false;
+    }
 
-    const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert({ id: userId, exam_date: examDate || null }, { onConflict: 'id' });
+    try {
+        const { error } = await supabase.auth.updateUser({ data: { exam_date: examDate } });
+        if (error) console.error('[profile] exam date metadata mirror failed', error.message);
+    } catch (error: unknown) {
+        console.error('[profile] exam date metadata mirror failed', error);
+    }
 
-    return !authError && !profileError;
+    return true;
 }
