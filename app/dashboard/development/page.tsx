@@ -20,8 +20,14 @@ import type { DomainCasePoints } from '@/lib/development/domainAverages';
 import { isTrendReportV2, type TrendReportV2 } from '@/lib/clinical-master/trendTypes';
 import { formatRelativeDate } from '@/lib/utils';
 
-/** Enough recent sessions to feed the chart and to name most evidence cases for free. */
-const HISTORY_LIMIT = 20;
+/**
+ * Enough sessions for the chart to be the whole programme, not a page of it.
+ * The chart keeps only scored sessions, and a history dominated by abandoned
+ * or unmarked sessions was starving it: 20 rows once yielded a 4-point chart
+ * for a candidate with 10 marked cases. 400 covers the 200-case bank with
+ * retakes to spare.
+ */
+const HISTORY_LIMIT = 400;
 
 const POLL_MS = 3000;
 /**
@@ -214,12 +220,10 @@ export default function DevelopmentPage() {
   }, [user, poll]);
 
   /**
-   * Name the evidence cases.
-   *
-   * History is already loaded for the chart and covers the recent window, so
-   * most ids are free. Only what it cannot name costs a query — and an id that
-   * still resolves to nothing is rendered as "One of your cases" rather than a
-   * uuid, which would be worse than saying nothing.
+   * Name the evidence cases. Evidence ids are STATION ids (see getCaseTitles),
+   * so history rows — keyed by session — can never name them; this is one
+   * lookup, and a row whose id resolves to nothing is dropped by the table
+   * rather than shown under a placeholder.
    */
   useEffect(() => {
     if (trend.kind !== 'ready') return;
@@ -234,30 +238,18 @@ export default function DevelopmentPage() {
     );
     if (ids.length === 0) return;
 
-    const known = new Map<string, string>();
-    for (const session of sessions) {
-      if (session.stationTitle) known.set(session.id, session.stationTitle);
-    }
-    const missing = ids.filter((id) => !known.has(id));
-
-    if (missing.length === 0) {
-      setCaseTitles(known);
-      return;
-    }
-
-    getCaseTitles(missing)
+    getCaseTitles(ids)
       .then((fetched) => {
-        if (cancelled) return;
-        setCaseTitles(new Map([...known, ...fetched]));
+        if (!cancelled) setCaseTitles(fetched);
       })
       .catch(() => {
-        if (!cancelled) setCaseTitles(known);
+        /* the table hides unresolved rows; an empty map hides them all */
       });
 
     return () => {
       cancelled = true;
     };
-  }, [trend, sessions]);
+  }, [trend]);
 
   if (user === undefined || loadingData) return <Spinner />;
 

@@ -4,12 +4,9 @@ import { useId, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import type { TrendEvidence } from '@/lib/clinical-master/trendTypes';
 
-/** Shown when an evidence id no longer resolves to a station. Never a raw uuid. */
-const UNRESOLVED_CASE_LABEL = 'One of your cases';
-
 interface EvidenceTableProps {
   evidence: TrendEvidence[];
-  /** sessionId → station title, assembled by the page from history + a lookup. */
+  /** station id → title, from getCaseTitles. */
   titles: Map<string, string>;
 }
 
@@ -31,7 +28,12 @@ export default function EvidenceTable({ evidence, titles }: EvidenceTableProps) 
   const [open, setOpen] = useState(false);
   const panelId = useId();
 
-  if (evidence.length === 0) return null;
+  // A row that cannot say which case it was is not evidence, it is an
+  // assertion — "One of your cases" tested exactly as bad as it sounds. Rows
+  // without a resolvable title are dropped, and a table with none disappears.
+  const named = evidence.filter((item) => titles.get(item.case_id));
+
+  if (named.length === 0) return null;
 
   return (
     <div className="mt-4">
@@ -55,8 +57,8 @@ export default function EvidenceTable({ evidence, titles }: EvidenceTableProps) 
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
         </motion.svg>
-        Where it happened &middot; {evidence.length}{' '}
-        {evidence.length === 1 ? 'case' : 'cases'}
+        Where it happened &middot; {named.length}{' '}
+        {named.length === 1 ? 'case' : 'cases'}
       </button>
 
       <AnimatePresence initial={false}>
@@ -70,13 +72,13 @@ export default function EvidenceTable({ evidence, titles }: EvidenceTableProps) 
             className="overflow-hidden"
           >
             <ul className="mt-2 divide-y divide-hairline">
-              {evidence.map((item, index) => (
+              {named.map((item, index) => (
                 <li
                   key={`${item.case_id}-${index}`}
                   className="flex flex-col gap-1 py-2.5 sm:flex-row sm:gap-4"
                 >
                   <span className="flex-shrink-0 text-[13px] font-medium text-heading sm:w-[300px]">
-                    {titles.get(item.case_id) ?? UNRESOLVED_CASE_LABEL}
+                    {titles.get(item.case_id)}
                   </span>
                   <span className="min-w-0 flex-1 text-[12.5px] italic leading-[1.55] text-muted">
                     &ldquo;{item.quote}&rdquo;

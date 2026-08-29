@@ -10,10 +10,24 @@ import { passMarkFor, fmtMark } from '@/lib/clinical-master/scoring';
 
 /** Below this there is no shape to show, only noise. */
 const MIN_POINTS = 4;
-/** Most recent N scored cases. */
-const WINDOW = 10;
-/** Rolling average width — smooths the case-to-case swing without hiding it. */
-const SMOOTH = 3;
+/**
+ * Most recent N scored cases. Effectively "everything": the bank is 200 cases,
+ * so this is a runaway guard, not a window — the chart is the programme, and a
+ * ten-case cap made it disagree with every other number on the page.
+ */
+const WINDOW = 400;
+
+/**
+ * Rolling average width for a given history length. Grows with the history:
+ * three cases of smoothing reads honestly over a dozen points but turns two
+ * months of practice into a scribble, while an eight-case mean over ten points
+ * would just be the total average drawn twice.
+ */
+export function smoothWidthFor(count: number): number {
+  if (count < 12) return 3;
+  if (count < 30) return 5;
+  return 8;
+}
 
 const VIEW_W = 520;
 const VIEW_H = 170;
@@ -148,9 +162,10 @@ export default function ScoreTrend({ sessions }: ScoreTrendProps) {
   const maxScore = scored[0]?.maxScore || MAX_WEIGHTED_SCORE;
   const passMark = passMarkFor(maxScore);
 
+  const smooth = smoothWidthFor(scored.length);
   const rolling = rollingMean(
     scored.map((s) => s.weightedScore),
-    SMOOTH,
+    smooth,
   );
 
   const plotH = VIEW_H - PAD_TOP - PAD_BOTTOM;
@@ -169,7 +184,7 @@ export default function ScoreTrend({ sessions }: ScoreTrendProps) {
   const activeSession = scored[active];
   const activeRolling = rolling[active];
 
-  const summarySentence = `Rolling average score across your last ${count} marked cases, from ${rolling[0].toFixed(1)} to ${rolling[count - 1].toFixed(1)} out of ${fmtMark(maxScore)}. The pass mark is ${fmtMark(passMark)}.`;
+  const summarySentence = `Rolling average score across your ${count} marked cases, from ${rolling[0].toFixed(1)} to ${rolling[count - 1].toFixed(1)} out of ${fmtMark(maxScore)}. The pass mark is ${fmtMark(passMark)}.`;
 
   const stamp = activeSession.completedAt ? new Date(activeSession.completedAt) : null;
   const stampLabel = stamp && Number.isFinite(stamp.getTime()) ? format(stamp, 'EEE HH:mm') : null;
@@ -267,7 +282,7 @@ export default function ScoreTrend({ sessions }: ScoreTrendProps) {
           <div className="text-[11px] font-semibold uppercase tracking-[0.13em] text-muted">
             {inspecting
               ? `${stampLabel ? `${stampLabel} · ` : ''}case ${active + 1} of ${count}`
-              : `Your last ${count} marked cases`}
+              : `Your ${count} marked cases`}
           </div>
           <div className="mt-0.5 flex items-baseline gap-1.5 text-[15px] font-semibold text-heading">
             {inspecting ? (
@@ -310,7 +325,7 @@ export default function ScoreTrend({ sessions }: ScoreTrendProps) {
         ref={frameRef}
         role="slider"
         tabIndex={0}
-        aria-label={`Inspect your last ${count} marked cases`}
+        aria-label={`Inspect your ${count} marked cases`}
         aria-valuemin={1}
         aria-valuemax={count}
         aria-valuenow={active + 1}
@@ -403,8 +418,8 @@ export default function ScoreTrend({ sessions }: ScoreTrendProps) {
 
       <p className="mt-2 font-mono text-[11px] text-muted">
         {inspecting
-          ? `Line here ${activeRolling.toFixed(1)} · rolling average of your last ${SMOOTH}`
-          : `Rolling average of your last ${SMOOTH} · drag across to see each case`}
+          ? `Line here ${activeRolling.toFixed(1)} · rolling average of your last ${smooth}`
+          : `Rolling average of your last ${smooth} · drag across to see each case`}
       </p>
     </div>
   );
