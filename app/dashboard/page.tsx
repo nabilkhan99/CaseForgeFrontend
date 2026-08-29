@@ -9,39 +9,29 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { BlurFade } from '@/components/magicui/blur-fade';
 import { NumberTicker } from '@/components/magicui/number-ticker';
 import PrimaryButton from '@/components/ui/PrimaryButton';
-import DomainTag from '@/components/ui/DomainTag';
 import SessionOutcome from '@/components/ui/SessionOutcome';
-import ArcGauge from '@/components/ui/ArcGauge';
+import TrainingHeatmap from '@/components/dashboard/TrainingHeatmap';
 import {
   getUserStats,
-  getPerformanceMetrics,
   getSessionHistory,
+  getDailyActivityTimestamps,
 } from '@/lib/supabase/queries/dashboard';
-import { getRandomStation } from '@/lib/supabase/queries/station-library';
+import { getRandomStation, getStationIndex } from '@/lib/supabase/queries/station-library';
 import type { Station } from '@/lib/supabase/queries/station-library';
-import type {
-  UserStats,
-  PerformanceMetrics,
-} from '@/lib/dashboard/types';
+import { saveExamDate } from '@/lib/supabase/queries/profile';
+import { dailySeed, nextForYouReason, pickNextForYou } from '@/lib/stations/librarySearch';
+import {
+  buildIntensityCalendar,
+  intensityWindowStart,
+  type IntensityCalendar,
+} from '@/lib/dashboard/trainingIntensity';
+import type { UserStats } from '@/lib/dashboard/types';
 import type { SessionHistoryItem } from '@/lib/supabase/queries/dashboard';
 import type { SubscriptionResponse } from '@/app/api/subscription/route';
-import { formatRelativeDate } from '@/lib/utils';
 import { claimTrialSessionsOnce } from '@/lib/trial/claimOnce';
 import { ACCESS_OPENS_LABEL } from '@/lib/commerce/plans';
-import {
-  TONE_COLOUR,
-  fmtMark,
-  passMarkFor,
-  passMarkPercent,
-} from '@/lib/clinical-master/scoring';
+import { fmtMark, passMarkFor } from '@/lib/clinical-master/scoring';
 import { MAX_WEIGHTED_SCORE } from '@/lib/clinical-master/types';
-
-/**
- * Completed consultations needed before the trend report can say anything.
- * Mirrors MIN_CASES_FOR_TREND in app/api/clinical-master/trend/route.ts — below
- * it the page can only answer "not enough cases yet", so we don't offer it.
- */
-const MIN_CASES_FOR_TREND = 3;
 
 const defaultStats: UserStats = {
   currentStreak: 0,
@@ -49,43 +39,20 @@ const defaultStats: UserStats = {
   passedStations: 0,
   totalStations: 0,
   examCountdownDays: 0,
-};
-
-const defaultMetrics: PerformanceMetrics = {
-  dataGathering: 0,
-  clinicalManagement: 0,
-  interpersonalSkills: 0,
+  examDate: null,
 };
 
 /**
- * Display names for the three SCA domains.
+ * The recommended case, plus the clause that says why it was picked.
  *
- * The keys are the camelCase shape `PerformanceMetrics` uses; the third one is
- * mapped from the `relating_to_others` column in getPerformanceMetrics. Only
- * this dashboard ever called that domain "Interpersonal Skills" — the DB, the
- * marking engine, the feedback report and the exam itself all say "Relating to
- * Others", so a trainee comparing their dashboard to their report was reading
- * two names for one score. The label is corrected here; the key stays as-is
- * because it is the data contract, not the wording.
+ * `reason` is whatever nextForYouReason() will vouch for and nothing else — the
+ * random fallback below carries none, because there is no rationale behind a
+ * station chosen at random and inventing one would be the page's only lie.
  */
-const DOMAIN_LABELS: Record<string, string> = {
-  dataGathering: 'Data Gathering',
-  clinicalManagement: 'Clinical Management',
-  interpersonalSkills: 'Relating to Others',
-};
-
-/**
- * Pass level on the 0–100 domain-average scale, derived rather than guessed.
- *
- * The bars this replaced drew their threshold at a hardcoded 70%, which was
- * simply wrong: the pass mark is 6.0 out of 10.5, or 57.1%. It is also the
- * right number for a *domain* average and not just for the weighted total —
- * the weighted score is g(D1) + 1.5·g(D2) + g(D3) out of 10.5, and GRADE_PCT
- * maps a grade to g/3 as a percentage, so three domains sitting at x% produce
- * exactly 10.5·x/100. Passing therefore means averaging 57.1% across the
- * three, and each dial's tick shows where that sits.
- */
-const PASS_PERCENT = (passMarkFor() / MAX_WEIGHTED_SCORE) * 100;
+interface UpNext {
+  station: Station;
+  reason: string | null;
+}
 
 const DAY_MS = 86_400_000;
 
@@ -107,6 +74,19 @@ function daysUntil(iso: string): number {
 }
 
 /**
+ * Days until a `YYYY-MM-DD` exam date, or null when it is not a date at all.
+ *
+ * Deliberately the same arithmetic getUserStats runs on the stored value: a
+ * date this accepted but that query floored to 0 would save successfully and
+ * then show no countdown, which reads as a lost write.
+ */
+function daysUntilExamDate(value: string): number | null {
+  if (!value) return null;
+  const when = new Date(value);
+  return Number.isNaN(when.getTime()) ? null : daysUntil(value);
+}
+
+/**
  * Page-load stagger for the dashboard's top-level sections. Small increments
  * on purpose — this is a tool someone opens dozens of times, so the whole
  * sequence has to be over before it registers as a reveal.
@@ -115,8 +95,8 @@ const REVEAL = {
   welcome: 0,
   onboarding: 0.06,
   quickStart: 0.12,
-  recent: 0.18,
-  progress: 0.24,
+  intensity: 0.18,
+  footer: 0.24,
 } as const;
 
 /**
@@ -166,13 +146,17 @@ function DashboardContent() {
   // there — you're on the free tier" at paying customers on every load.
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [stats, setStats] = useState<UserStats>(defaultStats);
-  const [metrics, setMetrics] = useState<PerformanceMetrics>(defaultMetrics);
-  const [recentSessions, setRecentSessions] = useState<SessionHistoryItem[]>([]);
-  const [randomStation, setRandomStation] = useState<Station | null>(null);
+  const [lastSession, setLastSession] = useState<SessionHistoryItem | null>(null);
+  const [upNext, setUpNext] = useState<UpNext | null>(null);
+  const [calendar, setCalendar] = useState<IntensityCalendar | null>(null);
   // `undefined` = not fetched yet; `null` = the lookup failed. Only a loaded
   // answer may drive a "you have no plan" message.
   const [access, setAccess] = useState<SubscriptionResponse | null | undefined>(undefined);
   const [loading, setLoading] = useState(true);
+  // The inline exam-date affordance, shown only where the countdown can't be.
+  const [examDraft, setExamDraft] = useState('');
+  const [examSaving, setExamSaving] = useState(false);
+  const [examError, setExamError] = useState<string | null>(null);
   // Set by the middleware / station page when a pending buyer tried to start
   // a case before their window opened.
   const bouncedPending = useSearchParams()?.get('access') === 'pending';
@@ -202,19 +186,37 @@ function DashboardContent() {
         // getLastStation dropped with the unfinished-case strip it fed. It was
         // the only caller, so leaving it in this Promise.all would have been a
         // round trip to Supabase on every dashboard load for nothing.
-        const [statsData, metricsData, recentData, randomStationData, accessRes] = await Promise.all([
+        // getPerformanceMetrics went the same way with the three domain dials.
+        //
+        // One clock for the whole load: the activity window, the day the
+        // recommendation is seeded on and the calendar all have to agree, and a
+        // render that straddled midnight would build them from two dates.
+        const today = new Date();
+        const [statsData, recentData, stationIndex, activity, accessRes] = await Promise.all([
           getUserStats(user.id),
-          getPerformanceMetrics(user.id),
-          getSessionHistory(user.id, 3, 0),
-          getRandomStation(),
+          getSessionHistory(user.id, 1, 0),
+          getStationIndex(user.id),
+          getDailyActivityTimestamps(user.id, intensityWindowStart(today).toISOString()),
           fetch('/api/subscription').then((r) => (r.ok ? r.json() : null)),
         ]);
 
         setStats(statsData);
-        setMetrics(metricsData);
-        setRecentSessions(recentData);
-        setRandomStation(randomStationData);
+        setExamDraft(statsData.examDate ?? '');
+        setLastSession(recentData[0] ?? null);
+        setCalendar(buildIntensityCalendar(activity, today));
         setAccess(accessRes?.state ? (accessRes as SubscriptionResponse) : null);
+
+        // The picker only ever offers a station the user has never attempted,
+        // so it runs out once the bank is exhausted. A random case is still a
+        // case to practise, and it arrives without a reason clause because
+        // there is no reason behind it — see nextForYouReason.
+        const recommended = pickNextForYou(stationIndex, dailySeed(today, user.id));
+        const station = recommended ?? (await getRandomStation());
+        setUpNext(
+          station
+            ? { station, reason: recommended ? nextForYouReason(recommended) : null }
+            : null,
+        );
       } catch (error) {
         console.error('[dashboard] failed to load dashboard data', error);
       } finally {
@@ -228,18 +230,38 @@ function DashboardContent() {
   const firstName = user?.user_metadata?.full_name?.split(' ')[0] || 'there';
 
   /**
-   * Whether to frame the passed-station count as guarantee progress.
+   * Whether the trainee may start a consultation right now.
    *
-   * The guarantee opens with "Join any of our plans", so it does not apply to
-   * someone browsing without one — promising them £500 would be wrong. A null
-   * count means the pass query failed, and a guarantee tracker reading 0 would
-   * be a fabricated fact about money. Both cases fall back to the plain stat.
+   * The same test the quick-start block below has always switched on: an
+   * unanswered or failed subscription lookup counts as allowed, because the one
+   * thing worse than offering a case to someone who cannot open it is hiding
+   * the product from someone who has paid.
    */
-  const showGuarantee =
-    Boolean(access?.plan) &&
-    stats.passedStations !== null &&
-    stats.completedStations > 0 &&
-    stats.totalStations > 0;
+  const canStart = access?.allowed ?? true;
+
+  const handleSaveExamDate = async () => {
+    if (!user?.id) return;
+
+    const days = daysUntilExamDate(examDraft);
+    if (days === null || days <= 0) {
+      setExamError('Pick a date in the future.');
+      return;
+    }
+
+    setExamSaving(true);
+    setExamError(null);
+    const saved = await saveExamDate(user.id, examDraft);
+    setExamSaving(false);
+
+    if (!saved) {
+      setExamError('That didn’t save. Try again.');
+      return;
+    }
+
+    // The countdown reads from `stats`, so it is updated in place rather than
+    // reloading a whole dashboard around a one-field save.
+    setStats((previous) => ({ ...previous, examDate: examDraft, examCountdownDays: days }));
+  };
 
   const greeting = (() => {
     const hour = new Date().getHours();
@@ -260,12 +282,6 @@ function DashboardContent() {
     );
   }
 
-  const domainEntries = [
-    { key: 'dataGathering', value: metrics.dataGathering },
-    { key: 'clinicalManagement', value: metrics.clinicalManagement },
-    { key: 'interpersonalSkills', value: metrics.interpersonalSkills },
-  ];
-
   return (
     // Headroom above the greeting, on top of the layout's pt-24. The padding
     // lives here rather than in app/dashboard/layout.tsx because that layout is
@@ -280,129 +296,76 @@ function DashboardContent() {
     <div className="pt-2 tall:pt-8">
       {/* Welcome section */}
       <Reveal delay={REVEAL.welcome} className="mb-10 tall:mb-14">
-        <h1 className="text-[24px] font-bold text-heading tracking-[-0.02em]">
-          {greeting}, {firstName}
-        </h1>
-        <p className="text-[13px] text-muted mt-1">
-          {stats.completedStations > 0 ? (
-            <>
-              {/* Only the figures count up \u2014 the sentence around them stays put. */}
-              You&apos;ve completed <Tally value={stats.completedStations} className={TICKER_INLINE} />{' '}
-              session{stats.completedStations !== 1 ? 's' : ''}
-              {stats.currentStreak >= 2 && (
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+          <div className="min-w-0">
+            <h1 className="text-[24px] font-bold text-heading tracking-[-0.02em]">
+              {greeting}, {firstName}
+            </h1>
+            <p className="text-[13px] text-muted mt-1">
+              {stats.completedStations > 0 ? (
                 <>
-                  {' \u00B7 '}
-                  <Tally value={stats.currentStreak} className={TICKER_INLINE} />
-                  -day streak
+                  {/* Only the figure counts up \u2014 the sentence around it stays put.
+                      The streak has left this line: it is a headline number on the
+                      board below, and saying it twice on one screen made the
+                      smaller of the two mentions look like a different statistic. */}
+                  <Tally value={stats.completedStations} className={TICKER_INLINE} /> consultation
+                  {stats.completedStations !== 1 ? 's' : ''} &middot; passing means{' '}
+                  {fmtMark(passMarkFor())} of {fmtMark(MAX_WEIGHTED_SCORE)}
                 </>
+              ) : (
+                /* Nothing to count yet, and the pass mark is spelled out in the
+                   "How it works" rows directly below, so the first-run line
+                   stays an instruction rather than a tally of zero. */
+                'Start your first consultation to begin tracking progress'
               )}
-            </>
-          ) : (
-            'Start your first consultation to begin tracking progress'
-          )}
-        </p>
-        <div className="flex flex-wrap items-center gap-2 mt-2">
-          {/* Passing a station is the goal, so it gets its own headline number.
-              Hidden until the first session — "Passed 0 of 78" is a poor greeting —
-              and hidden again when the pass query failed (passedStations === null),
-              because a confident zero would be a fabricated fact. */}
-          {/* S2: with a plan, this count is progress toward the £500 guarantee
-              and moves into its own block below. Without one, the guarantee does
-              not apply ("Join any of our plans"), so it stays a plain stat. */}
-          {!showGuarantee && stats.passedStations !== null && stats.completedStations > 0 && stats.totalStations > 0 && (
-            /* Entry animation removed: the whole welcome block now fades in
-               once via Reveal, and stacking a second fade on a child of it
-               animated the same pixels twice. */
-            <span
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-medium font-mono"
-              style={
-                stats.passedStations > 0
-                  ? { background: 'rgba(22,163,74,0.08)', color: '#15803D' }
-                  : { background: 'rgba(0,0,0,0.03)', color: '#78716C' }
-              }
-            >
-              Passed {stats.passedStations} of {stats.totalStations} stations
-            </span>
-          )}
-          {!showGuarantee && stats.passedStations !== null && stats.completedStations > 0 && stats.totalStations > 0 && (
-            <span className="text-[11px] text-muted">
-              Passed means {fmtMark(passMarkFor())} / {fmtMark(MAX_WEIGHTED_SCORE)} or better
-            </span>
-          )}
-          {stats.examCountdownDays > 0 && (
-            <span
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-medium font-mono"
-              style={{ background: 'rgba(180,83,9,0.08)', color: '#92400E' }}
-            >
-              SCA exam in {stats.examCountdownDays} days
-            </span>
-          )}
-        </div>
-        {/* The cross-case trend report answers "am I getting better?", which is
-            the whole reason someone pays for month two — and until now nothing
-            in the product linked to it. Offered only once it has enough cases
-            to say something. */}
-        {stats.completedStations >= MIN_CASES_FOR_TREND && (
-          <Link
-            href="/dashboard/trend"
-            className="inline-block mt-3 text-[13px] font-medium text-primary hover:underline"
-          >
-            Your development picture &rarr;
-          </Link>
-        )}
-
-        {/* S2 — the guarantee tracker.
-            "Passed 0 of 200 stations" was the first fact the dashboard gave you,
-            and with nothing attached it read as a tally of what you had not done.
-            It is in fact the only view a customer has of a £500 cash promise, so
-            it keeps its prominence and gets its meaning back.
-            Wording follows the FAQ ("pass all 200 mock stations first, not just
-            attempt them… unlimited tries… £500 within 5 working days"); the
-            count is best-attempt, matching "unlimited tries", because
-            passedStationIds() counts distinct stations with any passing attempt. */}
-        {showGuarantee && (
-          /* Entry animation removed for the same reason as the badge above —
-             the Reveal on the welcome block covers this. The progress bar
-             below keeps its fill animation: that is a value being drawn, not a
-             second entrance.
-
-             De-carded: a raised, bordered tile made this read as a widget
-             bolted onto the greeting. Rules above and below give it the same
-             separation without a container, matching the library's
-             NextForYou band. The progress bar inside is the only thing here
-             that still needs an edge, and it draws its own. */
-          <div className="mt-6 border-y border-hairline py-5">
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.13em] text-primary">
-                Your £500 guarantee
-              </span>
-              <span className="font-mono text-[13px] font-bold tabular-nums text-heading">
-                {/* Numerator only: the denominator is a fixed fact, not progress. */}
-                <Tally value={stats.passedStations ?? 0} className={TICKER_INLINE} />
-                <span className="font-normal text-muted"> / {stats.totalStations}</span>
-              </span>
-            </div>
-            <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-black/[0.05]">
-              <motion.div
-                className="h-full rounded-full bg-primary"
-                initial={{ width: 0 }}
-                animate={{
-                  width: `${Math.min(100, ((stats.passedStations ?? 0) / stats.totalStations) * 100)}%`,
-                }}
-                transition={{ duration: 0.9, ease: [0.16, 0.84, 0.36, 1] }}
-              />
-            </div>
-            <p className="mt-2.5 text-[11.5px] leading-[1.5] text-muted">
-              Pass all {stats.totalStations} stations, sit your SCA, and if you don&apos;t pass we
-              send you <span className="font-medium text-body">£500 in cash</span> within 5 working
-              days. Unlimited attempts — a station counts once you score{' '}
-              {fmtMark(passMarkFor())} / {fmtMark(MAX_WEIGHTED_SCORE)} or better.{' '}
-              <Link href="/pricing" className="font-medium text-primary hover:underline">
-                How it works
-              </Link>
             </p>
           </div>
-        )}
+
+          {/* The countdown, or the question that produces one.
+              stats.examCountdownDays is floored at 0, so it cannot distinguish
+              "no date" from "date already past" \u2014 stats.examDate does, and both
+              of those cases want the same thing: a date. */}
+          {stats.examCountdownDays > 0 ? (
+            <div className="flex flex-shrink-0 items-baseline gap-2">
+              <span className="font-mono text-[36px] font-bold leading-none text-primary">
+                <Tally value={stats.examCountdownDays} className={TICKER_INLINE} />
+              </span>
+              <span className="text-[14px] text-body">days to your SCA</span>
+            </div>
+          ) : (
+            /* Quiet on purpose. It occupies the countdown's slot without
+               becoming a second call to action competing with "Up next", and it
+               is the one field that turns this page from a log into a deadline. */
+            <div className="flex-shrink-0">
+              <label htmlFor="home-exam-date" className="text-[11px] text-muted">
+                When&apos;s your SCA?
+              </label>
+              <div className="mt-1 flex items-center gap-2">
+                <input
+                  id="home-exam-date"
+                  type="date"
+                  value={examDraft}
+                  onChange={(e) => {
+                    setExamDraft(e.target.value);
+                    setExamError(null);
+                  }}
+                  className="rounded-[8px] border border-defined bg-white/70 px-2.5 py-1.5 font-mono text-[13px] text-heading focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveExamDate}
+                  disabled={examSaving || !examDraft}
+                  className="text-[13px] font-medium text-primary hover:underline disabled:opacity-40 disabled:hover:no-underline"
+                >
+                  {examSaving ? 'Saving\u2026' : 'Save'}
+                </button>
+              </div>
+              {/* Inline, not a banner: a wrong date in one field is not news
+                  the whole page needs to carry. */}
+              {examError && <p className="mt-1 text-[11px] text-danger">{examError}</p>}
+            </div>
+          )}
+        </div>
       </Reveal>
 
       {/* Plan state. Expiry is read-only, not a lockout: the loud banner says so,
@@ -585,22 +548,55 @@ function DashboardContent() {
               )}
             </p>
           </div>
+        ) : upNext ? (
+          /* One named case instead of a button to a wall of 200.
+             "Start a New Session" handed the decision back to the reader at the
+             exact moment they had opened the page to be told what to do, and the
+             random-case link beside it made the choice look arbitrary. This is
+             the same daily recommendation the library makes, so the two surfaces
+             point at one case rather than two. */
+          <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
+            <div className="min-w-0">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.13em] text-primary">
+                Up next
+              </div>
+              <div className="mb-1 mt-2 text-[24px] font-bold leading-[1.2] tracking-[-0.025em] text-heading">
+                {upNext.station.title}
+              </div>
+              <div className="text-[13px] text-muted">
+                {upNext.station.domain_name} &middot;{' '}
+                {Math.round(upNext.station.consultation_duration_seconds / 60)} min
+                {/* Only ever the clause the picker can support; the fallback
+                    station arrives with none and the sentence simply ends. */}
+                {upNext.reason && (
+                  <>
+                    {' '}
+                    &middot; <span className="text-primary">{upNext.reason}</span>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-shrink-0 items-center gap-4">
+              <Link href={`/clinical-master/station/${upNext.station.id}`}>
+                <PrimaryButton size="sm">Start consultation &rarr;</PrimaryButton>
+              </Link>
+              <Link
+                href="/dashboard/library"
+                className="text-[12px] text-muted hover:text-primary hover:underline"
+              >
+                or pick another
+              </Link>
+            </div>
+          </div>
         ) : (
+          /* No station at all — an empty bank, or both lookups failed. The
+             library still opens, so the page keeps a way in rather than
+             rendering a hole where its primary action belongs. */
           <Link href="/dashboard/library">
             <PrimaryButton size="lg" fullWidth>
               Start a New Session
             </PrimaryButton>
           </Link>
-        )}
-        {randomStation && (access?.allowed ?? true) && (
-          <div className="text-center mt-2">
-            <Link
-              href={`/clinical-master/station/${randomStation.id}`}
-              className="text-[13px] text-primary hover:underline"
-            >
-              or pick a random case &rarr;
-            </Link>
-          </div>
         )}
         {/* The "Unfinished Case" strip stood here. Removed on the product
             owner's call: it could only ever offer a restart from the beginning,
@@ -609,123 +605,44 @@ function DashboardContent() {
             Its query (getLastStation) went with it. */}
       </Reveal>
 
-      {/* Recent sessions */}
-      {recentSessions.length > 0 && (
-        <Reveal delay={REVEAL.recent} className="mb-10 tall:mb-14">
-          {/* The scale caption that sat opposite this eyebrow is gone on the
-              product owner's call. Each row already carries a SessionOutcome
-              that states its own verdict, and the guarantee block above spells
-              the pass mark out in full, so the header was explaining a scale
-              twice over. */}
-          <div className="text-[11px] font-semibold text-muted uppercase tracking-[0.1em] mb-3">
-            Recent Sessions
-          </div>
-          <div className="divide-y divide-hairline">
-            {/* Per-row entry animations dropped: the Reveal above already
-                brings this list in, and running both meant every row faded
-                twice, out of step with the block containing it. */}
-            {recentSessions.map((session) => (
-              <div key={session.id}>
-                <Link
-                  href={`/clinical-master/feedback/${session.id}`}
-                  className="flex items-center gap-3 py-3 hover:bg-black/[0.02] px-2 -mx-2 rounded-[10px] transition-colors"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[15px] font-medium text-heading truncate">{session.stationTitle}</div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <DomainTag name={session.domainName} size="sm" />
-                      <span className="text-[11px] text-muted">{formatRelativeDate(session.completedAt)}</span>
-                    </div>
-                  </div>
-                  {/* S4: shared with the history page so the two can't drift
-                      apart again — they had already grown different wording for
-                      the same state. */}
-                  <div className="flex-shrink-0">
-                    <SessionOutcome session={session} />
-                  </div>
-                </Link>
-              </div>
-            ))}
-          </div>
-          <Link
-            href="/dashboard/history"
-            className="text-[13px] text-primary hover:underline mt-2 inline-block"
-          >
-            View all history
-          </Link>
+      {/* Training intensity — the page's centrepiece.
+
+          It replaces three domain dials and a three-row session list. Both were
+          answers to "how did I do?", asked of someone who has just arrived to
+          decide whether to practise today; a rolling average of four grade bands
+          cannot move on the strength of one more case, so the page's biggest
+          number was also its least responsive to the only thing the reader
+          controls. Consultations per day can only go up, and it goes up the same
+          evening.
+
+          Hidden until the first session: an all-grey board greets nobody, and
+          the "How it works" rows above are the right first screen. Gated on
+          `canStart` with the hero, so a page that cannot offer practice does not
+          lead with a record of it. */}
+      {stats.completedStations > 0 && calendar && canStart && (
+        <Reveal delay={REVEAL.intensity} className="mb-10 tall:mb-14">
+          <TrainingHeatmap calendar={calendar} />
         </Reveal>
       )}
 
-      {/* Domain progress */}
-      {(metrics.dataGathering > 0 || metrics.clinicalManagement > 0 || metrics.interpersonalSkills > 0) && (
-        <Reveal delay={REVEAL.progress}>
-          <div className="text-[11px] font-semibold text-muted uppercase tracking-[0.1em] mb-2">
-            Your Progress
-          </div>
-          {/* What these numbers are an average OF, said once for all three
-              dials rather than three times.
-
-              This matters more than it looks. The figures come from four grade
-              bands (CP/P/F/CF → 100/67/33/0) averaged across marked
-              consultations, so after one case a dial can only read 0, 33, 67 or
-              100, and after two only nine values exist. A percentage sign
-              promises continuous precision the data cannot deliver, so the
-              caption says out loud that the scale is stepped — and the numbers
-              render as whole percentages with no decimal and no counting
-              animation, since a ticker sweeping through 41, 42, 43 would show
-              readings that can never actually occur. */}
-          <p className="mb-6 max-w-[62ch] text-[11.5px] leading-[1.5] text-muted">
-            Your average grade in each domain across every marked consultation. The
-            tick marks pass level — {fmtMark(passMarkFor())} / {fmtMark(MAX_WEIGHTED_SCORE)},
-            or {passMarkPercent()}%. Each consultation is graded in four bands, so
-            these figures move in steps; expect large jumps until you have a dozen
-            cases behind you.
-          </p>
-          <div className="grid grid-cols-1 gap-8 sm:grid-cols-3 sm:gap-4">
-            {/* No entrance animation per dial: the Reveal above already brings
-                this block in, and the file has learned four times over what
-                happens when a child fades inside a parent that is already
-                fading. The arc sweep is a value being drawn, which is the one
-                kind of motion allowed in here — and ArcGauge gates that sweep
-                on useReducedMotion internally (collapsing it to duration 0
-                rather than branching on `initial`, so hydration still matches),
-                so `delay` only staggers a motion that can already switch itself
-                off. No second gate is needed at this call site. */}
-            {domainEntries.map((entry, i) => {
-              // Green once the domain average is at or above pass level, amber
-              // below. Two tones, not the report's three: a red dial on the
-              // page you open every morning would be a verdict on a rolling
-              // average, and an average is not a verdict.
-              const tone = entry.value >= PASS_PERCENT ? 'pass' : 'borderline';
-              return (
-                <div key={entry.key} className="flex flex-col items-center">
-                  <ArcGauge
-                    value={entry.value}
-                    max={100}
-                    threshold={PASS_PERCENT}
-                    size={176}
-                    thickness={11}
-                    colour={TONE_COLOUR[tone]}
-                    label={`${DOMAIN_LABELS[entry.key]}: ${entry.value}% average grade. Pass level is ${passMarkPercent()}%.`}
-                    delay={0.25 + i * 0.12}
-                  >
-                    <span className="font-mono text-[30px] font-bold leading-none tabular-nums text-heading">
-                      {entry.value}
-                      <span className="text-[16px] font-medium text-muted">%</span>
-                    </span>
-                  </ArcGauge>
-                  <div className="mt-1 text-center text-[13px] font-medium text-heading">
-                    {DOMAIN_LABELS[entry.key]}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+      {/* One quiet line back into the last thing you did.
+          The three-row recent list and its "View all history" link are gone —
+          History is a nav tab, and a second list of sessions on the home page
+          was a worse version of it. This is the one row that answers "did my
+          feedback land?", which is the only reason anyone opened that list from
+          here. */}
+      {lastSession && (
+        <Reveal delay={REVEAL.footer} className="border-t border-hairline pt-4">
           <Link
-            href="/dashboard/library"
-            className="text-[13px] text-primary hover:underline mt-3 inline-block"
+            href={`/clinical-master/feedback/${lastSession.id}`}
+            className="-mx-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[10px] px-2 py-2 transition-colors hover:bg-black/[0.02]"
           >
-            View library
+            <span className="text-[13px] text-muted">
+              Last session &middot;{' '}
+              <span className="font-medium text-heading">{lastSession.stationTitle}</span>
+            </span>
+            {/* Shared with the history page so the two can't drift apart. */}
+            <SessionOutcome session={lastSession} />
           </Link>
         </Reveal>
       )}
