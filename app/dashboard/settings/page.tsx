@@ -12,6 +12,7 @@ import SettingRow from '@/components/ui/SettingRow';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import SecondaryButton from '@/components/ui/SecondaryButton';
 import PageHeader from '@/components/ui/PageHeader';
+import { saveExamDate } from '@/lib/supabase/queries/profile';
 import type { SubscriptionResponse } from '@/app/api/subscription/route';
 
 // Access windows are 3 calendar months (28 Feb..1 Dec vary in days); the
@@ -63,16 +64,15 @@ export default function SettingsPage() {
       const { error: authError } = await supabase.auth.updateUser({
         data: {
           full_name: fullName,
-          exam_date: examDate,
         },
       });
 
-      // Also write exam_date to profiles table (fix sync bug)
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert({ id: user.id, exam_date: examDate || null }, { onConflict: 'id' });
+      // The exam date goes to user_metadata *and* profiles, and the dashboard
+      // now collects it too — so both writes live in one helper rather than in
+      // two forms that can drift apart.
+      const examSaved = await saveExamDate(user.id, examDate);
 
-      if (authError || profileError) {
+      if (authError || !examSaved) {
         setSaveError('Your changes could not be saved. Please try again.');
         return;
       }
