@@ -62,7 +62,7 @@ export const PLANS: readonly Plan[] = [
     priceSuffix: '/ 3 months',
     tagline: "One payment · 3 months' access",
     cta: 'checkout',
-    ctaLabel: 'Pre-order now',
+    ctaLabel: 'Buy now',
     highlighted: false,
     billing: FIXED_THREE_MONTH_TERM,
   },

@@ -38,7 +38,7 @@ const FAQS: QA[] = [
   {
     question: 'Can I start practising straight away?',
     answer: [
-      "Not yet — this is a pre-order. Your AI practice and on-demand lectures start on 1 September 2026, and your 3 months' access runs from that date, not from the day you order. Your coaching day will be on whichever date you pick at checkout.",
+      "Yes. Your AI practice and on-demand lectures start the moment you buy, and your 3 months' access runs from that day. Your coaching day will be on whichever date you pick at checkout.",
     ],
   },
   {

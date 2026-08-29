@@ -13,7 +13,7 @@ describe('buildPurchaseEmailCopy', () => {
 
   it('falls back to a generic subject for an unknown plan key', () => {
     expect(buildPurchaseEmailCopy({ planKey: 'mystery_tier', firstName: 'Jane' }).subject).toBe(
-      "You're in — your pre-order confirmed",
+      "You're in — your plan confirmed",
     )
   })
 
@@ -27,9 +27,9 @@ describe('buildPurchaseEmailCopy', () => {
     expect(buildPurchaseEmailCopy({ planKey: 'complete', firstName: '   ' }).greeting).toBe('Hi there,')
   })
 
-  it('returns four body paragraphs, the first naming the plan', () => {
+  it('returns three body paragraphs, the first naming the plan', () => {
     const copy = buildPurchaseEmailCopy({ planKey: 'complete', firstName: 'Jane' })
-    expect(copy.lines).toHaveLength(4)
+    expect(copy.lines).toHaveLength(3)
     expect(copy.lines[0]).toContain('Complete')
   })
 
