@@ -100,6 +100,15 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
               <span className="text-[8px]">✦</span> The original
             </span>
           </Link>
+          {/* A quiet route for the ready-to-buy visitor: without it the only
+              path to a price was scrolling the whole landing page. A text
+              link, not a button — the free mock stays the nav's one ask. */}
+          <Link
+            href="/pricing"
+            className="text-[13px] text-body hover:text-heading transition-colors duration-150"
+          >
+            Pricing
+          </Link>
           {!hideAuth && (
             <>
               <div className="w-px h-4 bg-black/10" />
@@ -117,9 +126,7 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
                 <>
                   {/* Quiet, but present. Accounts are created by purchase, so
                       the landing page had no way in at all for someone who has
-                      already bought — they had to know /auth/sign-in by heart.
-                      A text link, not a second button: the free mock stays the
-                      one thing this nav is asking a visitor to do. */}
+                      already bought — they had to know /auth/sign-in by heart. */}
                   <Link
                     href="/auth/sign-in"
                     className="text-[13px] text-body hover:text-heading transition-colors duration-150"
@@ -209,6 +216,13 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
               <span className="text-[9px] font-semibold px-2 py-[3px] rounded-full bg-primary/10 text-primary border border-primary/15 leading-none inline-flex items-center gap-1">
                 <span className="text-[8px]">✦</span> The original
               </span>
+            </Link>
+            <Link
+              href="/pricing"
+              onClick={() => setMobileOpen(false)}
+              className="min-h-[44px] flex items-center px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
+            >
+              Pricing
             </Link>
             {!hideAuth && (
               <>
