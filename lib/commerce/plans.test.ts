@@ -3,6 +3,7 @@ import {
   PLANS,
   isFixedTermPlan,
   isRollingPlan,
+  checkoutModeFor,
   isSubscriptionPlan,
   planForStripePriceId,
   stripePortalConfigurationId,
@@ -17,12 +18,21 @@ beforeEach(() => {
 })
 
 describe('billing shape', () => {
-  it('makes every checkout plan a subscription', () => {
-    // The migration in one assertion: Self-Study and Complete used to be
-    // `payment` mode. Nothing is sold as a one-off charge any more.
-    expect(isSubscriptionPlan('self_study')).toBe(true)
-    expect(isSubscriptionPlan('complete')).toBe(true)
+  it('makes only the rolling plan a subscription', () => {
+    // The 29 Aug reversal in one assertion: the course terms are one-off
+    // `payment` sales again, so no subscription object exists behind them.
+    expect(isSubscriptionPlan('self_study')).toBe(false)
+    expect(isSubscriptionPlan('complete')).toBe(false)
     expect(isSubscriptionPlan('self_study_monthly')).toBe(true)
+  })
+
+  it('opens the course terms in payment mode and the rolling plan in subscription mode', () => {
+    // What the buyer is actually shown: `subscription` makes Stripe's own page
+    // say "Pay and subscribe ... until you cancel", which is untrue of a course
+    // that does not renew.
+    expect(checkoutModeFor('self_study')).toBe('payment')
+    expect(checkoutModeFor('complete')).toBe('payment')
+    expect(checkoutModeFor('self_study_monthly')).toBe('subscription')
   })
 
   it('leaves Intensive out — it is sold on a call, not through Stripe', () => {
@@ -45,9 +55,14 @@ describe('billing shape', () => {
 
   it('describes the terms the way Stripe prices them', () => {
     const byKey = Object.fromEntries(PLANS.map((p) => [p.key, p.billing]))
-    expect(byKey.self_study).toEqual({ interval: 'month', intervalCount: 3, renews: false })
-    expect(byKey.complete).toEqual({ interval: 'month', intervalCount: 3, renews: false })
-    expect(byKey.self_study_monthly).toEqual({ interval: 'month', intervalCount: 1, renews: true })
+    expect(byKey.self_study).toEqual({ mode: 'payment', interval: 'month', intervalCount: 3, renews: false })
+    expect(byKey.complete).toEqual({ mode: 'payment', interval: 'month', intervalCount: 3, renews: false })
+    expect(byKey.self_study_monthly).toEqual({
+      mode: 'subscription',
+      interval: 'month',
+      intervalCount: 1,
+      renews: true,
+    })
   })
 
   it('refuses an unknown plan string everywhere', () => {

@@ -48,8 +48,9 @@ const FEATURE_ROWS: readonly FeatureRow[] = [
 
 /**
  * Which Self-Study offer the toggle is showing. A presentation concern, not a
- * billing one: both are Stripe subscriptions, they simply differ in term. The
- * plan catalogue owns the real billing shape (`Plan.billing`).
+ * billing one: the course term is a one-off sale, the monthly plan a Stripe
+ * subscription. The plan catalogue owns the real billing shape
+ * (`Plan.billing`).
  */
 type BillingChoice = 'three_month' | 'monthly';
 
@@ -345,7 +346,10 @@ function OwnedCta() {
 function PlanCta({ selfStudy, variant, selfStudyPlan, owned, canUpgrade }: CtaButtonsProps) {
   if (owned === variant) return <OwnedCta />;
   if (variant === 'complete' && canUpgrade) {
-    // A Self-Study customer already has a subscription: Stripe swaps its Price
+    // Dead while UPGRADEABLE_FROM is empty (canSwitchPlan always refuses, so
+    // `canUpgrade` never arrives true). Kept because re-populating that set is
+    // the whole of turning self-serve upgrades back on.
+    // A Self-Study customer would need a subscription: Stripe swaps its Price
     // and invoices only the time left on their term. Sending them through
     // /coaching-day would charge the full £599 for what they part-own.
     return (

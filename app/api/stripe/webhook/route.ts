@@ -12,7 +12,7 @@ import {
   parseMinSpendOverride,
   referralUrl,
 } from '@/lib/commerce/referrals';
-import { isFixedTermPlan, planForStripePriceId } from '@/lib/commerce/plans';
+import { isFixedTermPlan, isRollingPlan, planForStripePriceId } from '@/lib/commerce/plans';
 import { resolvePurchaseEmail } from '@/lib/commerce/buyerEmail';
 import { sendReferralEmail } from '@/lib/email/referralEmail';
 import { sendPurchaseEmail } from '@/lib/email/purchaseEmail';
@@ -551,6 +551,11 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
   // The subscription half of the sale. Deliberately last: it is the one step
   // that can legitimately ask Stripe to retry the whole delivery, and by here
   // everything above has already run (and is idempotent, so the retry is free).
+  //
+  // Only the rolling plan has this half. A one-off course purchase carries no
+  // subscription by design: its PaymentIntent went onto the row above, and its
+  // access window is the plain three calendar months `accessWindow()` derives
+  // from `created_at` — nothing to disarm, nothing to record.
   const subscriptionId =
     typeof session.subscription === 'string'
       ? session.subscription
@@ -560,8 +565,13 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
     if (synced === 'failed') {
       return NextResponse.json({ error: 'Failed to finalise subscription' }, { status: 500 });
     }
-  } else {
-    console.error('[stripe-webhook] paid session carried no subscription', { sessionId: session.id });
+  } else if (isRollingPlan(plan)) {
+    // A rolling plan with no subscription IS broken — it can never renew, and
+    // no cancel/recover event will ever find this order.
+    console.error('[stripe-webhook] rolling plan session carried no subscription', {
+      sessionId: session.id,
+      plan,
+    });
   }
 
   return NextResponse.json({ received: true, recorded: !insertError, preorderId });

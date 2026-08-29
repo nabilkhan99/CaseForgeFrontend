@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getStripe } from '@/lib/commerce/stripe';
 import {
+  checkoutModeFor,
   getPlan,
   stripePriceIdFor,
   type CoachingDayAvailability,
@@ -183,10 +184,14 @@ export async function POST(request: Request) {
       });
     }
 
+    // One-off for the course terms, subscription for the rolling monthly. The
+    // mode decides what Stripe's own page says: `payment` renders "Pay", while
+    // `subscription` renders "Pay and subscribe ... until you cancel" — wrong
+    // for a course that does not renew. See lib/commerce/plans.ts.
+    const mode = checkoutModeFor(plan.key);
+
     const session = await stripe.checkout.sessions.create({
-      // Every plan. The two course plans are fixed-term subscriptions whose
-      // renewal the webhook disarms; see lib/commerce/plans.ts.
-      mode: 'subscription',
+      mode,
       line_items: [{ price: stripePriceIdFor(plan.key as PlanKey), quantity: 1 }],
       success_url: `${origin}/thanks?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: coachingDay ? `${origin}/coaching-day` : `${origin}/#pricing`,
@@ -200,11 +205,14 @@ export async function POST(request: Request) {
       ...(user ? { client_reference_id: user.id } : {}),
       allow_promotion_codes: true,
       metadata,
-      // Monthly charges on purchase, exactly like the course plans — it is a
-      // pre-order either way, and the first payment is what starts the referral
-      // reward moving. No trial: the buyer pays today and their month runs from
-      // today. (Founder decision 2026-08-20.)
-      subscription_data: { description, metadata },
+      // Renewal, cancellation and plan-change events arrive attached to the
+      // SUBSCRIPTION, long after the session is out of reach, and carry neither
+      // session metadata nor client_reference_id — so the rolling plan repeats
+      // it there. A one-off has no such follow-up events; its metadata is put on
+      // the PaymentIntent instead, which is what a later refund arrives with.
+      ...(mode === 'subscription'
+        ? { subscription_data: { description, metadata } }
+        : { payment_intent_data: { description, metadata } }),
     });
 
     if (!session.url) {

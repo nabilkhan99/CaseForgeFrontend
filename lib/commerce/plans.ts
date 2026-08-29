@@ -8,26 +8,41 @@ export type PlanKey = 'self_study' | 'self_study_monthly' | 'complete' | 'intens
 /**
  * How a plan bills, in the shape Stripe expresses it.
  *
- * Every checkout plan is now a Stripe **subscription** — the two course plans
- * are fixed-term subscriptions (one charge, three months, `renews: false`), the
- * rolling plan renews monthly. Nothing is sold in `payment` mode any more.
+ * The two course plans are sold as one-off `payment` sessions; only the rolling
+ * £129 plan is a Stripe subscription.
  *
- * `renews: false` is not something Stripe Checkout can express (there is no
- * `cancel_at` / `cancel_at_period_end` on `subscription_data` in API
- * 2026-06-24.dahlia), so the webhook arms `cancel_at_period_end: true` the
- * moment the session completes. This flag is what tells it which sales need it.
+ * They were briefly fixed-term subscriptions (22 Aug - 29 Aug) so the Customer
+ * Portal could handle plan switching. That was reverted: Stripe Checkout has no
+ * `cancel_at_period_end` on `subscription_data`, so a non-renewing term could
+ * only be faked by disarming the renewal in the webhook *after* the buyer had
+ * already been shown "£299.00 every 3 months ... until you cancel". Self-serve
+ * upgrades are handled by hand instead, which costs nothing at this volume.
  */
 export interface PlanBilling {
-  /** Stripe `recurring.interval`. Everything we sell bills in months. */
+  /**
+   * How Stripe sells it. `payment` is a one-off charge; `subscription` is a
+   * recurring one. The course plans are `payment` again (2026-08-29): sold as
+   * fixed-term subscriptions they made Stripe's own checkout say "£299.00 every
+   * 3 months" and "charge you until you cancel" to a buyer of a thing that does
+   * not renew, which is simply untrue at the moment it matters most.
+   */
+  mode: 'payment' | 'subscription'
+  /** Stripe `recurring.interval`. Only meaningful in `subscription` mode. */
   interval: 'month'
-  /** Stripe `recurring.interval_count`: 3 for a course term, 1 for rolling. */
+  /** Stripe `recurring.interval_count`. Only meaningful in `subscription` mode. */
   intervalCount: number
   /** True only for the rolling plan. False = one charge, then it stops. */
   renews: boolean
 }
 
-/** £299 / £599 course plans: one charge, three months, no renewal. */
+/**
+ * £299 / £599 course plans: one charge, three months, nothing to cancel.
+ *
+ * `interval`/`intervalCount` are retained only to describe the term in copy —
+ * a `payment`-mode Price carries no `recurring` block at all.
+ */
 export const FIXED_THREE_MONTH_TERM: PlanBilling = {
+  mode: 'payment',
   interval: 'month',
   intervalCount: 3,
   renews: false,
@@ -35,6 +50,7 @@ export const FIXED_THREE_MONTH_TERM: PlanBilling = {
 
 /** The rolling Self-Study plan: £129 a month until it is cancelled. */
 export const ROLLING_MONTHLY: PlanBilling = {
+  mode: 'subscription',
   interval: 'month',
   intervalCount: 1,
   renews: true,
@@ -106,20 +122,22 @@ export function getPlan(key: string): Plan | undefined {
 }
 
 /**
- * True when the plan is bought through Stripe Checkout — which now means, for
- * every one of them, `mode: 'subscription'`.
+ * True when the plan is genuinely sold as a Stripe subscription — since
+ * 2026-08-29 that is the rolling £129 plan alone. Intensive is excluded twice
+ * over: it is sold on a call, not through Checkout.
  *
- * Kept as a named helper rather than inlined because it is the thing the
- * checkout route branches on, and "which plans are subscriptions" is exactly
- * the fact that changed. Intensive is excluded: it is sold on a call.
+ * Prefer {@link checkoutModeFor} when the question is "what mode does this open
+ * in"; this one answers "does a subscription object exist afterwards", which is
+ * what the Portal, renewal and cancellation paths actually care about.
  */
 export function isSubscriptionPlan(key: string): boolean {
-  return getPlan(key)?.cta === 'checkout'
+  const plan = getPlan(key)
+  return plan?.cta === 'checkout' && plan.billing.mode === 'subscription'
 }
 
 /**
- * A fixed-term subscription: charged once, three months of access, then it
- * stops. The webhook arms `cancel_at_period_end` for exactly these.
+ * A fixed term: charged once, three months of access, then it stops. Sold in
+ * Stripe `payment` mode, so there is no subscription and nothing to disarm.
  */
 export function isFixedTermPlan(key: string): boolean {
   const plan = getPlan(key)
@@ -130,6 +148,14 @@ export function isFixedTermPlan(key: string): boolean {
 export function isRollingPlan(key: string): boolean {
   const plan = getPlan(key)
   return plan?.cta === 'checkout' && plan.billing.renews
+}
+
+/**
+ * The Stripe Checkout `mode` this plan is sold in. One-off for the course
+ * terms, subscription for the rolling monthly.
+ */
+export function checkoutModeFor(key: string): 'payment' | 'subscription' {
+  return getPlan(key)?.billing.mode ?? 'payment'
 }
 
 /** Server-only: map a checkout-able plan to its Stripe Price id. */

@@ -132,34 +132,62 @@ beforeEach(() => {
   vi.stubEnv('STRIPE_PRICE_COMPLETE', 'price_complete')
 })
 
-describe('every plan is a subscription', () => {
+describe('checkout mode per plan', () => {
   it.each([
-    ['self_study', 'price_self_study'],
-    ['complete', 'price_complete'],
-    ['self_study_monthly', 'price_self_study_monthly'],
-  ])('opens a subscription session for %s', async (plan, price) => {
-    // The migration in one assertion. `payment` mode gave a fixed-term buyer no
-    // Customer, no Portal and no invoice with a printed service period.
+    ['self_study', 'price_self_study', 'payment'],
+    ['complete', 'price_complete', 'payment'],
+    ['self_study_monthly', 'price_self_study_monthly', 'subscription'],
+  ])('opens a session for %s in the mode that plan is sold in', async (plan, price, mode) => {
+    // The course terms are one-off sales; only the rolling plan is a
+    // subscription. The mode is what Stripe's own page reads from, so getting
+    // it wrong tells the buyer their course renews.
     const { status } = await post({ plan, coachingDay: '2026-09-12' })
 
     expect(status).toBe(200)
     const params = sessionParams()
-    expect(params.mode).toBe('subscription')
+    expect(params.mode).toBe(mode)
     expect(params.line_items).toEqual([{ price, quantity: 1 }])
-    expect(params.payment_intent_data).toBeUndefined()
+    if (mode === 'subscription') {
+      expect(params.payment_intent_data).toBeUndefined()
+    } else {
+      expect(params.subscription_data).toBeUndefined()
+    }
   })
 
-  it('repeats the metadata onto the subscription', async () => {
-    // Renewals, Portal plan switches and cancellations all arrive with the
-    // SUBSCRIPTION, carrying neither session metadata nor client_reference_id.
+  it('repeats the metadata onto the PaymentIntent for a one-off course sale', async () => {
+    // A refund arrives as `charge.refunded`, carrying the PaymentIntent and
+    // nothing of the session — so the order has to be identifiable from there.
     signedInAs('buyer@nhs.net')
 
     await post({ plan: 'self_study' })
 
     const params = sessionParams()
-    const subscriptionData = params.subscription_data as { metadata: Record<string, string>; description: string }
-    expect(subscriptionData.metadata).toMatchObject({
+    const paymentData = params.payment_intent_data as {
+      metadata: Record<string, string>
+      description: string
+    }
+    expect(paymentData.metadata).toMatchObject({
       plan: 'self_study',
+      account_email: 'buyer@nhs.net',
+      supabase_user_id: 'user-1',
+    })
+    expect(paymentData.description).toContain('Self-Study')
+  })
+
+  it('repeats the metadata onto the subscription for the rolling plan', async () => {
+    // Renewals and cancellations all arrive with the SUBSCRIPTION, carrying
+    // neither session metadata nor client_reference_id.
+    signedInAs('buyer@nhs.net')
+
+    await post({ plan: 'self_study_monthly' })
+
+    const params = sessionParams()
+    const subscriptionData = params.subscription_data as {
+      metadata: Record<string, string>
+      description: string
+    }
+    expect(subscriptionData.metadata).toMatchObject({
+      plan: 'self_study_monthly',
       account_email: 'buyer@nhs.net',
       supabase_user_id: 'user-1',
     })

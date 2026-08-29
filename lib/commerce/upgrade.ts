@@ -1,25 +1,29 @@
 import type { Entitlement } from './entitlements'
 
 /**
- * Self-Study -> Complete, now a Stripe Customer Portal plan switch.
+ * Self-Study -> Complete.
  *
- * The bespoke `complete_upgrade` pseudo-plan (a separate £300 Price, its own
- * `/dashboard/upgrade` page and a checkout branch) is gone. Every plan is a
- * subscription, so the upgrade is Stripe swapping the subscription's Price and
- * invoicing the proration — the customer pays only for the time left on their
- * term, which is why the copy no longer quotes a flat £300.
+ * There is no self-serve path any more, and the Portal cannot provide one: the
+ * course plans went back to one-off `payment` sales on 2026-08-29, so a
+ * Self-Study buyer has no subscription to switch, and a monthly subscriber
+ * cannot be switched onto a one-off Price. Upgrades are quoted and taken by
+ * hand (founder decision, 2026-08-29) — a flat £300 from Self-Study, and the
+ * balance from monthly — which is fine at this volume.
  *
- * What survives is the question of WHO may be offered it, because a CTA shown
- * to the wrong customer is still a broken product: someone who already holds
- * Complete has nothing to switch to, and someone whose access has lapsed needs
- * to renew, not upgrade.
+ * The set is kept, empty, rather than deleted: it is the single place to name
+ * the plans a self-serve upgrade would apply to when one is built, and every
+ * caller already reads through {@link canSwitchPlan}.
  */
 
-/** The plans there is something above. */
-export const UPGRADEABLE_FROM: ReadonlySet<string> = new Set(['self_study', 'self_study_monthly'])
+/** Plans with a self-serve route to something above. None, by design. */
+export const UPGRADEABLE_FROM: ReadonlySet<string> = new Set<string>()
 
 /**
- * Should this entitlement be offered the switch up to Complete?
+ * Should this entitlement be offered a self-serve switch up to Complete?
+ *
+ * Always false while {@link UPGRADEABLE_FROM} is empty — the logic below is
+ * retained intact so that re-populating that set is the only change needed to
+ * turn self-serve upgrades back on.
  *
  * Takes the *folded* entitlement on purpose: a customer who already holds
  * Complete folds to `complete` (the fold ranks lectures above everything at the
@@ -28,10 +32,6 @@ export const UPGRADEABLE_FROM: ReadonlySet<string> = new Set(['self_study', 'sel
  *
  * `read_only` (a lapsed Self-Study) is deliberately excluded. There is nothing
  * left to switch — that customer needs to buy again, at the full price.
- *
- * Presentation only. The Portal itself is the enforcement: it can only offer
- * the prices its configuration lists, against a subscription the signed-in
- * customer owns.
  */
 export function canSwitchPlan(entitlement: Entitlement): boolean {
   if (!entitlement.plan || !UPGRADEABLE_FROM.has(entitlement.plan)) return false
