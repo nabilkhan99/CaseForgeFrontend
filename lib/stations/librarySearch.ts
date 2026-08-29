@@ -46,7 +46,13 @@ export function stationStatus(station: LibraryStation): Exclude<LibraryStatus, '
     return station.attempts.length > 0 ? 'attempted' : 'not-started';
 }
 
-function matchesStatus(station: LibraryStation, status: LibraryStatus): boolean {
+/**
+ * Exported because the station board filters by dimming rather than by
+ * removing rows, so it needs the predicate without filterStations() around it —
+ * and one "does this row match the chip" rule is the only way the board and a
+ * filtered list can agree about what "Attempted" includes.
+ */
+export function matchesStatus(station: LibraryStation, status: LibraryStatus): boolean {
     switch (status) {
         case 'all':
             return true;
