@@ -272,6 +272,12 @@ export default function LecturePlayerPage() {
           <video
             ref={videoRef}
             controls
+            // The lectures are the product: no download affordance in the
+            // controls, no "Save video as" on right-click. The signed URL is
+            // still reachable by anyone who opens devtools — this closes the
+            // casual paths, the short TTL bounds the rest.
+            controlsList="nodownload"
+            onContextMenu={(event) => event.preventDefault()}
             playsInline
             preload="metadata"
             src={url}
