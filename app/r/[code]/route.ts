@@ -12,7 +12,7 @@ const PREVIEW_BOT_UA =
 
 const OG_TITLE = 'Fourteen Fisherman — The Complete SCA Course'
 const OG_DESCRIPTION =
-  'AI practice on 200 stations, 10 hours of on-demand lectures and a full-day Small-Group Coaching session. Fail your SCA after passing all 200 stations, and we pay you £500.'
+  'AI practice on 200 stations, 8 hours of on-demand lectures and a full-day Small-Group Coaching session. Fail your SCA after passing all 200 stations, and we pay you £500.'
 const OG_IMAGE = 'https://www.fourteenfisherman.com/og/sca-default.jpg'
 
 function escapeHtml(value: string) {

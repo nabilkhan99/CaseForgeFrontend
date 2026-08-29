@@ -118,7 +118,7 @@ describe('GET /api/lectures', () => {
     ])
     for (const [i, lecture] of body.lectures.entries()) {
       expect(lecture.description).toBeNull()
-      // Minutes are the pitch ("10 hours of teaching"); they leak nothing.
+      // Minutes are the pitch ("8 hours of teaching"); they leak nothing.
       expect(lecture.durationSeconds).toBe(ROWS[i].duration_seconds)
     }
   })

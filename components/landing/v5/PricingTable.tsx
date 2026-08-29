@@ -30,7 +30,7 @@ const FEATURE_ROWS: readonly FeatureRow[] = [
   },
   {
     label: 'On-demand Lectures',
-    cells: [{ text: '', cross: true }, { text: '10 hours', sub: '£599 value' }, { text: '10 hours' }],
+    cells: [{ text: '', cross: true }, { text: '8 hours', sub: '£599 value' }, { text: '8 hours' }],
   },
   {
     label: 'Small-Group Coaching',
