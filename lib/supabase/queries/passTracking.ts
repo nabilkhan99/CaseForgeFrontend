@@ -72,6 +72,57 @@ function asVerdict(value: string | null): Verdict | null {
   return value !== null && value in VERDICT_RANK ? (value as Verdict) : null;
 }
 
+/** One attempt's own mark, after the artefact rule in landmine 1 above. */
+export interface AttemptMark {
+  /** The band this attempt reached; null when it was never genuinely marked. */
+  verdict: Verdict | null;
+  /** Score behind that verdict. Null exactly when `verdict` is. */
+  weightedScore: number | null;
+  /** Denominator it was marked out of; null when the row didn't carry one. */
+  maxScore: number | null;
+  /** This attempt alone reached a passing band. */
+  passed: boolean;
+}
+
+const UNMARKED: AttemptMark = {
+  verdict: null,
+  weightedScore: null,
+  maxScore: null,
+  passed: false,
+};
+
+/**
+ * What one attempt scored, or nothing.
+ *
+ * The library now prints a verdict per attempt rather than only the best one
+ * across a station, so the "is this a real mark" rule has to be callable on a
+ * single row. It lives here, next to the two landmines it exists to defuse, and
+ * the station reducer below is its first caller — one rule, so an attempt can
+ * never count towards a station's pass state while its own history line claims
+ * it was never marked.
+ */
+export function markAttempt(
+  row: Pick<StationAttemptRow, 'verdict' | 'weighted_score' | 'max_score'>,
+): AttemptMark {
+  const verdict = asVerdict(row.verdict);
+  const score = row.weighted_score == null ? null : Number(row.weighted_score);
+
+  // Landmine 1: a verdict with a non-positive score is the marking engine
+  // scoring an empty transcript, not a fail the user earned.
+  if (verdict === null || score === null || !Number.isFinite(score) || score <= 0) {
+    return UNMARKED;
+  }
+
+  const rawMax = row.max_score == null ? null : Number(row.max_score);
+
+  return {
+    verdict,
+    weightedScore: score,
+    maxScore: rawMax !== null && Number.isFinite(rawMax) && rawMax > 0 ? rawMax : null,
+    passed: PASSING_VERDICTS.includes(verdict),
+  };
+}
+
 /**
  * Reduce completed attempts to one pass state per station.
  *
@@ -104,26 +155,24 @@ export function reduceStationPassMap(
       attempts: 0,
     };
 
-    const score = row.weighted_score === null ? null : Number(row.weighted_score);
-    const verdict = asVerdict(row.verdict);
-    const scored = verdict !== null && score !== null && Number.isFinite(score) && score > 0;
-
-    const rawMax = row.max_score == null ? null : Number(row.max_score);
-    const maxScore = rawMax !== null && Number.isFinite(rawMax) && rawMax > 0 ? rawMax : null;
+    const mark = markAttempt(row);
 
     let { passed, bestVerdict, bestScore, bestMaxScore } = current;
 
-    if (scored && verdict !== null && score !== null) {
+    if (mark.verdict !== null && mark.weightedScore !== null) {
       // Rank by band first; within the winning band the higher score wins. All
       // three move together, so the trio always describes one real attempt.
       const currentRank = bestVerdict === null ? -1 : VERDICT_RANK[bestVerdict];
-      const rank = VERDICT_RANK[verdict];
-      if (rank > currentRank || (rank === currentRank && score > (bestScore ?? -Infinity))) {
-        bestVerdict = verdict;
-        bestScore = score;
-        bestMaxScore = maxScore;
+      const rank = VERDICT_RANK[mark.verdict];
+      if (
+        rank > currentRank ||
+        (rank === currentRank && mark.weightedScore > (bestScore ?? -Infinity))
+      ) {
+        bestVerdict = mark.verdict;
+        bestScore = mark.weightedScore;
+        bestMaxScore = mark.maxScore;
       }
-      passed = passed || PASSING_VERDICTS.includes(verdict);
+      passed = passed || mark.passed;
     }
 
     byStation.set(row.station_id, {

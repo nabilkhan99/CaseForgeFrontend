@@ -6,7 +6,9 @@ import { AnimatePresence, motion } from 'framer-motion';
 import ScoreBadge from '@/components/ui/ScoreBadge';
 import VerdictPill from '@/components/ui/VerdictPill';
 import { MAX_WEIGHTED_SCORE } from '@/lib/clinical-master/types';
+import { formatAttemptDate } from '@/lib/stations/attemptDate';
 import { difficultyLabel, difficultyStyle } from '@/lib/stations/difficulty';
+import type { AttemptMark } from '@/lib/supabase/queries/passTracking';
 import type { Station } from '@/lib/supabase/queries/station-library';
 
 /**
@@ -24,16 +26,10 @@ export function weightedPercent(score: number | null | undefined): number | null
     return Math.round((score / MAX_WEIGHTED_SCORE) * 100);
 }
 
-function formatDate(dateStr?: string): string {
-    if (!dateStr) return '';
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays}d ago`;
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
-    return `${Math.floor(diffDays / 30)}mo ago`;
+/** That attempt's own score as a percentage of what it was marked out of. */
+function markPercent(mark: AttemptMark): number | null {
+    if (mark.weightedScore === null) return null;
+    return Math.round((mark.weightedScore / (mark.maxScore ?? MAX_WEIGHTED_SCORE)) * 100);
 }
 
 interface StationRowProps {
@@ -57,9 +53,16 @@ interface StationRowProps {
  * it: the old single-row layout kept its desktop three-column shape at 360 px,
  * so titles truncated to about three words and three consecutive cases all
  * read "Woman with…".
+ *
+ * HISTORY IS OPEN BY DEFAULT.
+ * The library is taking over from the History tab, so a case's attempts are
+ * part of what the page is for rather than a detail behind a disclosure — a
+ * trainee who has to click every row to find out how they did is doing the
+ * History tab's job by hand. The chevron still collapses a row, and cases with
+ * no attempts have nothing to open and render no control at all.
  */
 export default function StationRow({ station, showDifficulty = false, showDomain = false }: StationRowProps) {
-    const [expanded, setExpanded] = useState(false);
+    const [expanded, setExpanded] = useState(true);
     const hasAttempts = station.attempts.length > 0;
     const latestAttempt = hasAttempts ? station.attempts[0] : null;
     const latestPercent = weightedPercent(latestAttempt?.score);
@@ -175,6 +178,11 @@ export default function StationRow({ station, showDifficulty = false, showDomain
                                 viewBox="0 0 24 24"
                                 stroke="currentColor"
                                 strokeWidth={2}
+                                // Same reason as the drawer: the row arrives
+                                // open, so the chevron has to arrive pointing
+                                // down rather than animating there from a
+                                // resting state that no longer matches.
+                                initial={false}
                                 animate={{ rotate: expanded ? 90 : 0 }}
                                 transition={{ duration: 0.15 }}
                             >
@@ -185,7 +193,13 @@ export default function StationRow({ station, showDifficulty = false, showDomain
                 </div>
             </div>
 
-            <AnimatePresence>
+            {/* `initial={false}` because the drawer is open on arrival: an
+                entrance animation on content that is already the default state
+                buys nothing, and it costs the case where it cannot run — a
+                background tab pauses requestAnimationFrame, which would leave
+                the history collapsed at its `initial` height until the tab is
+                focused. Toggling still animates. */}
+            <AnimatePresence initial={false}>
                 {expanded && hasAttempts && (
                     <motion.div
                         initial={{ height: 0, opacity: 0 }}
@@ -194,26 +208,60 @@ export default function StationRow({ station, showDifficulty = false, showDomain
                         transition={{ duration: 0.2 }}
                         className="overflow-hidden"
                     >
-                        <div className="space-y-1 pb-3 pl-6">
-                            {station.attempts.map((attempt, i) => {
-                                const percent = weightedPercent(attempt.score);
+                        {/* A hairline down the left, so a run of open rows reads
+                            as history belonging to its case rather than as one
+                            long undifferentiated list. */}
+                        <ul className="ml-2 space-y-0.5 border-l-2 border-black/[0.05] pb-3 pl-4">
+                            {station.attempts.map(attempt => {
+                                const percent = markPercent(attempt.mark);
+                                const when = formatAttemptDate(attempt.completedAt);
+
                                 return (
-                                    <Link
-                                        key={attempt.sessionId}
-                                        href={`/clinical-master/feedback/${attempt.sessionId}?from=${station.domain_id}`}
-                                        className="-mx-2 flex min-h-[44px] items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-black/[0.02] focus-visible-ring"
-                                    >
-                                        <span className="w-5 font-mono text-[11px] text-muted">
-                                            #{station.attempts.length - i}
-                                        </span>
-                                        <span className="flex-1 text-[13px] text-body">
-                                            {formatDate(attempt.completedAt)}
-                                        </span>
-                                        {percent !== null && <ScoreBadge score={percent} size="sm" />}
-                                    </Link>
+                                    <li key={attempt.sessionId}>
+                                        <Link
+                                            href={`/clinical-master/feedback/${attempt.sessionId}?from=${station.domain_id}`}
+                                            className="group -mx-2 flex min-h-[44px] flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-2 py-2 transition-colors hover:bg-black/[0.02] sm:min-h-[36px] sm:flex-nowrap focus-visible-ring"
+                                        >
+                                            <span className="w-[124px] flex-shrink-0 text-[13px] text-body transition-colors group-hover:text-primary">
+                                                {when || 'Attempt'}
+                                            </span>
+
+                                            {/* The band this attempt reached, not
+                                                the station's best: passed={false}
+                                                keeps "Bare Pass" from being
+                                                flattened to "Passed" on a line
+                                                whose whole job is to say what
+                                                happened that time. */}
+                                            {attempt.mark.verdict ? (
+                                                <>
+                                                    <VerdictPill
+                                                        verdict={attempt.mark.verdict}
+                                                        passed={false}
+                                                        size="sm"
+                                                    />
+                                                    {percent !== null && (
+                                                        <span className="font-mono text-[11px] tabular-nums text-muted">
+                                                            {percent}%
+                                                        </span>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                // Sat, never marked — the engine
+                                                // failed or predates it. Saying so
+                                                // beats an invented score.
+                                                <span className="text-[12px] text-muted">
+                                                    Not marked
+                                                </span>
+                                            )}
+
+                                            <span className="ml-auto hidden flex-shrink-0 text-[12px] font-semibold text-primary group-hover:underline sm:inline">
+                                                View feedback →
+                                            </span>
+                                        </Link>
+                                    </li>
                                 );
                             })}
-                        </div>
+                        </ul>
                     </motion.div>
                 )}
             </AnimatePresence>

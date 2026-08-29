@@ -11,7 +11,9 @@ import { createClient } from '@/lib/supabase/client';
 import { visibleStationStates } from '@/lib/stations/visibility';
 import { extractPresentingComplaint } from '@/lib/stations/presentingComplaint';
 import {
+    markAttempt,
     reduceStationPassMap,
+    type AttemptMark,
     type StationAttemptRow,
     type StationPassState,
 } from '@/lib/supabase/queries/passTracking';
@@ -19,8 +21,19 @@ import type { Verdict } from '@/lib/clinical-master/types';
 
 export interface CompletedAttempt {
     sessionId: string;
+    /**
+     * Legacy `clinical_sessions.overall_score`, on either of two historical
+     * scales. Kept only for stations whose attempts predate the marking engine;
+     * anything that compares attempts reads `mark` instead.
+     */
     score: number | null;
     completedAt: string;
+    /**
+     * What this attempt itself scored, from `session_results` — the library
+     * prints a verdict per attempt, which the station-level best verdict cannot
+     * answer. Unmarked and artefact rows come back with a null verdict.
+     */
+    mark: AttemptMark;
 }
 
 export interface Station {
@@ -95,6 +108,31 @@ const EMPTY_PROGRESS: UserStationProgress = {
     passMap: new Map(),
 };
 
+interface SessionResultJoin {
+    verdict: string | null;
+    weighted_score: number | string | null;
+    max_score: number | string | null;
+}
+
+/**
+ * Flatten one `clinical_sessions → session_results` row.
+ *
+ * The join has a unique constraint on session_id so PostgREST returns a single
+ * object, but tolerate the array shape rather than silently dropping every mark
+ * if that constraint ever changes.
+ */
+function toAttemptRow(session: { station_id: string; session_results: unknown }): StationAttemptRow {
+    const joined = session.session_results as SessionResultJoin | SessionResultJoin[] | null;
+    const result = Array.isArray(joined) ? (joined[0] ?? null) : joined;
+
+    return {
+        station_id: session.station_id,
+        verdict: result?.verdict ?? null,
+        weighted_score: result?.weighted_score ?? null,
+        max_score: result?.max_score ?? null,
+    };
+}
+
 /**
  * One user's attempt history, shaped for the library.
  *
@@ -125,21 +163,7 @@ async function fetchUserStationProgress(
     // Only completed sessions carry a mark; an in-progress row would count
     // as an attempt it hasn't earned.
     const passMap = reduceStationPassMap(
-        (sessions ?? [])
-            .filter(s => s.status === 'completed')
-            .map(s => {
-                const result = s.session_results as unknown as {
-                    verdict: string | null;
-                    weighted_score: number | string | null;
-                    max_score: number | string | null;
-                } | null;
-                return {
-                    station_id: s.station_id,
-                    verdict: result?.verdict ?? null,
-                    weighted_score: result?.weighted_score ?? null,
-                    max_score: result?.max_score ?? null,
-                } satisfies StationAttemptRow;
-            }),
+        (sessions ?? []).filter(s => s.status === 'completed').map(toAttemptRow),
     );
 
     const latestByStation: Record<string, SessionInfo> = {};
@@ -155,6 +179,9 @@ async function fetchUserStationProgress(
                 sessionId: session.id,
                 score: session.overall_score,
                 completedAt: session.completed_at || session.started_at,
+                // Same row, same rule as the pass map above: an attempt can
+                // never show a verdict the station's pass state didn't count.
+                mark: markAttempt(toAttemptRow(session)),
             });
         }
 

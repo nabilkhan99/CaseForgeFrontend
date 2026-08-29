@@ -10,11 +10,12 @@ import PageHeader from '@/components/ui/PageHeader';
 import Container from '@/components/ui/Container';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import ScoreBadge from '@/components/ui/ScoreBadge';
-import LibraryFilters from '@/components/library/LibraryFilters';
+import DomainProgressStrip from '@/components/library/DomainProgressStrip';
+import StatusChips from '@/components/library/StatusChips';
 import StationRow from '@/components/library/StationRow';
 import { useLibraryFilters } from '@/components/library/useLibraryFilters';
 import { shouldShowDifficulty } from '@/lib/stations/difficulty';
-import { filterStations, isFilterActive } from '@/lib/stations/librarySearch';
+import { matchesStatus } from '@/lib/stations/librarySearch';
 import { MAX_WEIGHTED_SCORE } from '@/lib/clinical-master/types';
 
 interface PageProps {
@@ -42,7 +43,10 @@ function DomainDetailContent({ domainId }: { domainId: string }) {
   // progress column.
   const [user, setUser] = useState<User | null | undefined>(undefined);
 
-  const { filters, setQuery, setStatus, clear } = useLibraryFilters();
+  // Kept for `status` alone. The search field went with the redesign — a topic
+  // holds at most twelve cases, all of them on screen — but `?status=` is a
+  // link people already hold, and the hook is what keeps it in the URL.
+  const { filters, setStatus } = useLibraryFilters();
 
   useEffect(() => {
     const supabase = createClient();
@@ -78,19 +82,23 @@ function DomainDetailContent({ domainId }: { domainId: string }) {
     };
   }, [domainId, user]);
 
-  const filtering = isFilterActive(filters);
-  const results = useMemo(() => filterStations(stations, filters), [stations, filters]);
-
   // 185 of the bank's 200 cases are "intermediate", so most domains are
   // single-tier and the pill would be the same word stamped on every row.
-  // Judged over the rows on screen, so it stays true after filtering too.
+  // Judged over the whole domain, not the filter: the board dims rather than
+  // removes, so every row stays on screen and the answer must not change
+  // under a chip press.
   const showDifficulty = useMemo(
-    () => shouldShowDifficulty(results.map(s => s.difficulty)),
-    [results],
+    () => shouldShowDifficulty(stations.map(s => s.difficulty)),
+    [stations],
   );
 
   const completedCount = stations.filter(s => s.attempts.length > 0).length;
   const passedCount = stations.filter(s => s.passed).length;
+  const attemptCount = stations.reduce((total, s) => total + s.attempts.length, 0);
+  const matchCount = useMemo(
+    () => stations.filter(s => matchesStatus(s, filters.status)).length,
+    [stations, filters.status],
+  );
   // Average off the marked weighted scores, not clinical_sessions.overall_score:
   // the latter mixes two scales, so averaging it produced a red "8% REFER" badge
   // sitting next to "5 of 5 passed". These come from session_results, are all on
@@ -108,11 +116,14 @@ function DomainDetailContent({ domainId }: { domainId: string }) {
   // "0 of 10 passed · 0 attempted" is the greeting the dashboard explicitly
   // refuses to give; before the first attempt the count is the only honest
   // thing to say.
+  //
+  // Sessions, not cases: the page now lists every attempt, so a count of cases
+  // touched would be smaller than the number of history lines below it.
   const subtitle = stations.length === 0
     ? undefined
     : completedCount === 0
       ? `${stations.length} case${stations.length !== 1 ? 's' : ''}`
-      : `${passedCount} of ${stations.length} passed · ${completedCount} attempted${avgScore > 0 ? ` · Best-attempt average: ${avgScore}%` : ''}`;
+      : `${passedCount} of ${stations.length} passed · ${attemptCount} attempt${attemptCount !== 1 ? 's' : ''}${avgScore > 0 ? ` · Best-attempt average: ${avgScore}%` : ''}`;
 
   return (
     <div>
@@ -141,42 +152,50 @@ function DomainDetailContent({ domainId }: { domainId: string }) {
         </Container>
       ) : (
         <>
-          <LibraryFilters
-            query={filters.query}
-            onQueryChange={setQuery}
+          {/* The row you pressed on the board, reappearing on the page it
+              opened. Decorative — see DomainProgressStrip. */}
+          <DomainProgressStrip
+            stations={stations}
+            passedCount={passedCount}
             status={filters.status}
-            onStatusChange={setStatus}
-            placeholder={`Search ${domainName || 'this domain'}`}
-            resultLabel={
-              filtering ? `${results.length} of ${stations.length}` : undefined
-            }
           />
 
-          {results.length === 0 ? (
-            <div className="py-12 text-center">
-              <p className="text-[15px] text-muted">No cases match that.</p>
-              <button
-                type="button"
-                onClick={clear}
-                className="mt-3 text-[13px] font-medium text-primary hover:underline focus-visible-ring"
-              >
-                Clear filters
-              </button>
-            </div>
-          ) : (
-            <div>
-              {results.map((station, i) => (
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-black/[0.07] pt-3">
+            <StatusChips
+              status={filters.status}
+              onStatusChange={setStatus}
+              label="Filter cases by progress"
+            />
+
+            {/* Only once a chip is pressed: "7 of 7" beside an unfiltered list
+                is a number that answers nothing. */}
+            {filters.status !== 'all' && (
+              <span className="text-[12px] tabular-nums text-muted" aria-live="polite">
+                {matchCount} of {stations.length} shown
+              </span>
+            )}
+          </div>
+
+          <div>
+            {stations.map((station, i) => {
+              const matches = matchesStatus(station, filters.status);
+
+              return (
                 <motion.div
                   key={station.id}
                   initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: Math.min(i, 12) * 0.04 }}
+                  // Dimmed, never removed — the same filter behaviour as the
+                  // board it came from. A case that drops out of the list takes
+                  // its attempt history with it, and this page is now where
+                  // that history lives.
+                  animate={{ opacity: matches ? 1 : 0.32, y: 0 }}
+                  transition={{ delay: Math.min(i, 12) * 0.04, duration: 0.25 }}
                 >
                   <StationRow station={station} showDifficulty={showDifficulty} />
                 </motion.div>
-              ))}
-            </div>
-          )}
+              );
+            })}
+          </div>
         </>
       )}
     </div>
