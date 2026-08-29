@@ -75,7 +75,7 @@ export default async function ThanksPage({ searchParams }: ThanksPageProps) {
             is confirmed.
           </p>
         ) : (
-          <p className="text-body text-lg leading-relaxed mb-3">Your pre-order is confirmed.</p>
+          <p className="text-body text-lg leading-relaxed mb-3">Your order is confirmed.</p>
         )}
 
         <p className="text-muted leading-relaxed mb-10">
@@ -84,9 +84,8 @@ export default async function ThanksPage({ searchParams }: ThanksPageProps) {
           ) : (
             <>A receipt is on its way to your inbox. </>
           )}
-          This is a pre-order: your AI practice and on-demand lectures start on
-          1 September 2026, and your 3 months’ access runs from that date. Your coaching
-          day runs on the date you picked. We’ll email you everything you need before launch.
+          Your AI practice and on-demand lectures are ready now, and your 3 months&rsquo;
+          access starts today. Your coaching day runs on the date you picked.
         </p>
 
         <Link

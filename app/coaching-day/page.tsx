@@ -7,7 +7,6 @@ import { ArrowLeft, ArrowRight, CalendarClock } from 'lucide-react';
 import LandingNavbar from '@/components/landing/LandingNavbar';
 import LandingFooter from '@/components/landing/LandingFooter';
 import CoachingDayPicker, { useCoachingDays } from '@/components/commerce/CoachingDayPicker';
-import { ACCESS_OPENS_LABEL } from '@/lib/commerce/plans';
 import { trackEvent } from '@/lib/analytics';
 
 /**
@@ -62,7 +61,7 @@ export default function CoachingDayPage() {
           </Link>
 
           <p className="mt-6 text-[11px] font-medium uppercase tracking-[0.08em] text-[#854F0B] sm:text-xs">
-            Pre-order · Complete SCA Course · £599 for 3 months
+            Complete SCA Course · £599 for 3 months
           </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-heading sm:text-4xl">
             Choose your coaching day
@@ -72,8 +71,8 @@ export default function CoachingDayPage() {
             six. It runs on the date you choose below.
           </p>
           <p className="mt-3 inline-flex max-w-lg rounded-lg bg-[#FDF6EC] px-3 py-1.5 text-[12px] font-medium leading-relaxed text-[#854F0B]">
-            This is a pre-order: your AI practice and on-demand lectures start{' '}
-            {ACCESS_OPENS_LABEL}, and your 3 months run from that date.
+            Your AI practice and on-demand lectures start the moment you buy, and your 3 months
+            run from today.
           </p>
 
           <div className="mt-8">
@@ -85,7 +84,7 @@ export default function CoachingDayPage() {
             />
           </div>
 
-          {/* Jan–Aug 2027: no fixed dates yet — limited-availability pre-order by arrangement. */}
+          {/* Jan–Aug 2027: no fixed dates yet — limited availability by arrangement. */}
           <div className="mt-4 rounded-xl border border-dashed border-[#D8C7A8] bg-[#FCF7EE] px-4 py-4">
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FDF6EC] px-2.5 py-1 text-[11px] font-semibold text-[#854F0B]">
@@ -96,7 +95,7 @@ export default function CoachingDayPage() {
               </p>
             </div>
             <p className="mt-2 text-xs leading-relaxed text-body sm:text-sm">
-              Dates for that window aren&rsquo;t fixed yet, but you can still pre-order. Email{' '}
+              Dates for that window aren&rsquo;t fixed yet, but you can still sign up now. Email{' '}
               <a
                 href="mailto:hello@fourteenfisherman.com?subject=Coaching%20day%20%E2%80%94%20Jan%E2%80%93Aug%202027"
                 className="font-medium text-primary underline"

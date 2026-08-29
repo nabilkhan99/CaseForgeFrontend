@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowRight, Info } from 'lucide-react';
-import { ACCESS_OPENS_LABEL, BOOK_A_CALL_URL, type PlanKey } from '@/lib/commerce/plans';
+import { BOOK_A_CALL_URL, type PlanKey } from '@/lib/commerce/plans';
 import ManageBillingButton from '@/components/commerce/ManageBillingButton';
 import { trackEvent } from '@/lib/analytics';
 import { Pill } from './editorial';
@@ -372,7 +372,7 @@ function PlanCta({ selfStudy, variant, selfStudyPlan, owned, canUpgrade }: CtaBu
         disabled={selfStudy.submitting}
         className="w-full rounded-full border border-heading/15 bg-white px-2 py-3 text-[13px] font-semibold text-heading transition-colors hover:bg-surface-warm disabled:opacity-60 sm:py-2.5 sm:text-sm"
       >
-        {selfStudy.submitting ? 'Redirecting…' : monthly ? 'Start monthly' : 'Pre-order now'}
+        {selfStudy.submitting ? 'Redirecting…' : monthly ? 'Start monthly' : 'Buy now'}
       </button>
     );
   }
@@ -577,13 +577,6 @@ export default function PricingTable({ ownedPlan, accountEmail, canUpgrade = fal
         >
           <p className="mb-3 flex justify-center">
             <Pill>Choose your prep</Pill>
-          </p>
-
-          <p className="mb-6 flex justify-center">
-            <span className="inline-flex items-center gap-2 rounded-full bg-[#FAEEDA] px-4 py-1.5 text-center text-xs font-semibold text-[#854F0B] sm:text-[13px]">
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#B45309]" aria-hidden="true" />
-              Pre-order — AI practice &amp; lectures start {ACCESS_OPENS_LABEL}
-            </span>
           </p>
 
           <BillingToggle billing={billing} onChange={setBilling} />

@@ -1,5 +1,5 @@
 import { BrevoClient, BrevoError } from '@getbrevo/brevo'
-import { ACCESS_OPENS_LABEL, getPlan } from '@/lib/commerce/plans'
+import { getPlan } from '@/lib/commerce/plans'
 
 interface BuildPurchaseEmailCopyArgs {
   /** Plan key from the Stripe session metadata, e.g. 'complete'. */
@@ -45,7 +45,7 @@ export function buildPurchaseEmailCopy({
   firstName,
   coachingDayLabel,
 }: BuildPurchaseEmailCopyArgs): PurchaseEmailCopy {
-  const planName = getPlan(planKey)?.name ?? 'your pre-order'
+  const planName = getPlan(planKey)?.name ?? 'your plan'
   const first = firstName?.trim().split(' ')[0] || 'there'
   const coachingDay = coachingDayLabel?.trim() || null
 
@@ -54,9 +54,8 @@ export function buildPurchaseEmailCopy({
     heading: `You're in.`,
     greeting: `Hi ${first},`,
     lines: [
-      `Thanks for pre-ordering ${planName}. Your place is confirmed.`,
-      `This is a pre-order: your AI consultation practice and the on-demand lectures start on ${ACCESS_OPENS_LABEL}, and your 3 months' access runs from that date.`,
-      `Between now and launch we'll email you everything you need — what to expect, how to get set up, and how to get the most out of the first fortnight.`,
+      `Thanks for choosing ${planName}. You're all set.`,
+      `Your AI consultation practice and the on-demand lectures are ready now, and your 3 months' access starts today.`,
       `Your card receipt comes separately from Stripe. If anything looks wrong, or you just want to ask something, reply to this email and a human will answer.`,
     ],
     coachingLine: coachingDay
@@ -78,7 +77,7 @@ function coachingPanel(text: string): string {
 }
 
 /**
- * Send the purchase-confirmation email for a completed pre-order. Mirrors the
+ * Send the purchase-confirmation email for a completed purchase. Mirrors the
  * referral email's Brevo pattern (same sender, HTML shell, text alternative,
  * tags). Never throws — failures are logged and returned in the result so the
  * caller (the Stripe webhook) can continue regardless.
@@ -119,7 +118,7 @@ export async function sendPurchaseEmail({
     <title>${copy.subject}</title>
   </head>
   <body style="margin:0;padding:0;background-color:#F5F0EB;font-family:-apple-system,BlinkMacSystemFont,'Plus Jakarta Sans','Segoe UI',Roboto,sans-serif;color:#1C1917;-webkit-font-smoothing:antialiased;">
-    <div style="display:none;font-size:1px;color:#F5F0EB;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">Your place is confirmed — AI practice and lectures start on ${ACCESS_OPENS_LABEL}.</div>
+    <div style="display:none;font-size:1px;color:#F5F0EB;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">Your place is confirmed — your AI practice and lectures are ready now.</div>
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#F5F0EB;">
       <tr>
         <td align="center" style="padding:40px 16px;">

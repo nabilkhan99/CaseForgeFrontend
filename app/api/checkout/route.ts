@@ -136,7 +136,7 @@ export async function POST(request: Request) {
     // automatic discount or the code box, never both.
 
     const origin = new URL(request.url).origin;
-    const productLine = `${plan.name} (pre-order; AI practice & lectures start 1 September 2026)`;
+    const productLine = plan.name;
     const description = coachingDay
       ? `Fourteen Fisherman — ${productLine}, coaching day ${coachingDay.label}`
       : `Fourteen Fisherman — ${productLine}`;
