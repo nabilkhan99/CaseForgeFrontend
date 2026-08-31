@@ -13,15 +13,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   provisionAccountForPurchase: vi.fn(),
-  sendSetPasswordLink: vi.fn(),
+  mintSetPasswordLink: vi.fn(),
   claimTrialSessionsForUser: vi.fn(),
+  /** The receipt email, injected by the webhook. */
+  deliver: vi.fn(),
 }))
 
 vi.mock('server-only', () => ({}))
 
 vi.mock('./provisioning', () => ({
   provisionAccountForPurchase: mocks.provisionAccountForPurchase,
-  sendSetPasswordLink: mocks.sendSetPasswordLink,
+  mintSetPasswordLink: mocks.mintSetPasswordLink,
 }))
 
 vi.mock('./claimTrialSessions', () => ({
@@ -58,12 +60,13 @@ function makeStore(responses: {
       eq: () => builder,
       is: () => {
         write.guarded = true
-        return {
-          select: async () => {
-            writes.push(write)
-            return guarded.shift() ?? { data: [{ id: 'p1' }], error: null }
-          },
+        // supabase-js builders are thenable, so a guarded write may be awaited
+        // with or without a trailing `.select()`. Both land here.
+        const settle = async () => {
+          writes.push(write)
+          return guarded.shift() ?? { data: [{ id: 'p1' }], error: null }
         }
+        return { select: settle, then: (resolve: (r: Result) => unknown) => settle().then(resolve) }
       },
       // Awaiting the builder without `.is()` is the un-guarded release write.
       then: (resolve: (r: Result) => unknown) => {
@@ -89,7 +92,15 @@ function makeStore(responses: {
   return { store: store as unknown as Parameters<typeof provisionBuyerAccount>[0], writes }
 }
 
-const ARGS = { preorderId: 'p1', email: 'buyer@x.com', name: 'Jane Doe', sessionId: 'cs_1' }
+const ARGS = {
+  preorderId: 'p1',
+  email: 'buyer@x.com',
+  name: 'Jane Doe',
+  sessionId: 'cs_1',
+  deliver: mocks.deliver,
+}
+
+const SETUP_URL = 'https://www.fourteenfisherman.com/auth/set-password?token_hash=tok&email=b%40x.com'
 
 const PAID = { status: 'paid', provisioned_at: null, set_password_sent_at: null }
 
@@ -101,15 +112,15 @@ beforeEach(() => {
   mocks.provisionAccountForPurchase.mockResolvedValue({
     created: true,
     alreadyExisted: false,
-    emailSent: true,
     userId: 'user-1',
   })
-  mocks.sendSetPasswordLink.mockResolvedValue({ sent: true })
+  mocks.mintSetPasswordLink.mockResolvedValue({ url: SETUP_URL })
+  mocks.deliver.mockResolvedValue({ sent: true })
   mocks.claimTrialSessionsForUser.mockResolvedValue(1)
 })
 
 describe('provisionBuyerAccount — first attempt (no stamps yet)', () => {
-  it('creates the account, sends the link and stamps both, under the guard', async () => {
+  it('creates the account, stamps it, then claims the send and delivers', async () => {
     const { store, writes } = makeStore({ read: { data: PAID, error: null } })
 
     await provisionBuyerAccount(store, ARGS)
@@ -118,38 +129,54 @@ describe('provisionBuyerAccount — first attempt (no stamps yet)', () => {
       email: 'buyer@x.com',
       fullName: 'Jane Doe',
     })
-    expect(writes).toHaveLength(1)
-    expect(writes[0].guarded).toBe(true)
-    expect(Object.keys(writes[0].values).sort()).toEqual(['provisioned_at', 'set_password_sent_at'])
+    // Two writes, in this order and both guarded: the account exists, then the
+    // send is claimed. They are separate because they mean different things —
+    // losing the send stamp strands a buyer, losing the other costs one retry.
+    expect(writes).toHaveLength(2)
+    expect(writes[0]).toEqual({ values: { provisioned_at: expect.any(String) }, guarded: true })
+    expect(writes[1]).toEqual({ values: { set_password_sent_at: expect.any(String) }, guarded: true })
+    // And the mail carried the freshly minted link.
+    expect(mocks.deliver).toHaveBeenCalledWith({ setupUrl: SETUP_URL })
   })
 
-  it('stamps provisioned_at but not the send when the email fails', async () => {
-    // The recoverable case the stamps exist for: the account is real, the link
-    // never arrived, and the next retry must resend rather than start over.
-    mocks.provisionAccountForPurchase.mockResolvedValue({
-      created: true,
-      alreadyExisted: false,
-      emailSent: false,
-      userId: 'user-1',
-      error: 'brevo_error',
+  it('mints the link only after winning the claim', async () => {
+    // Minting is what INVALIDATES the previous link, so a delivery that is not
+    // going to send must never mint: it would kill the link the winner just
+    // emailed and the buyer would be told theirs had expired.
+    const { store } = makeStore({
+      read: { data: PAID, error: null },
+      // First write (provisioned_at) succeeds, the send claim finds zero rows.
+      guardedUpdate: [{ data: [{ id: 'p1' }], error: null }, { data: [], error: null }],
     })
+
+    await provisionBuyerAccount(store, ARGS)
+
+    expect(mocks.mintSetPasswordLink).not.toHaveBeenCalled()
+    expect(mocks.deliver).not.toHaveBeenCalled()
+  })
+
+  it('hands the send claim back when the receipt email fails', async () => {
+    // The recoverable case the stamps exist for: the account is real, the mail
+    // never arrived, and the next retry must resend rather than start over.
+    mocks.deliver.mockResolvedValue({ sent: false, error: 'brevo_error' })
     const { store, writes } = makeStore({ read: { data: PAID, error: null } })
 
     await provisionBuyerAccount(store, ARGS)
 
     expect(writes[0].values).toHaveProperty('provisioned_at')
-    expect(writes[0].values).not.toHaveProperty('set_password_sent_at')
+    // Claimed, then released — so `set_password_sent_at is null` still means
+    // "still owed" when Stripe comes back.
+    expect(writes[1].values).toEqual({ set_password_sent_at: expect.any(String) })
+    expect(writes[2]).toEqual({ values: { set_password_sent_at: null }, guarded: false })
   })
 
-  it('stamps a repeat buyer terminal without emailing them', async () => {
-    // An account that already exists keeps its password and is owed no link.
-    // Both stamps go down so `set_password_sent_at is null` keeps meaning
-    // "still owes an email" — leaving it null sent every later retry down the
-    // resend branch and mailed them a link they never asked for.
+  it('sends a repeat buyer their receipt, with no set-password link', async () => {
+    // An account that already exists keeps its password, so minting one would
+    // be a password-reset mail nobody asked for. The RECEIPT is still owed —
+    // they paid — so it goes with a sign-in button instead.
     mocks.provisionAccountForPurchase.mockResolvedValue({
       created: false,
       alreadyExisted: true,
-      emailSent: false,
       userId: 'user-1',
       error: 'account_already_exists',
     })
@@ -157,15 +184,29 @@ describe('provisionBuyerAccount — first attempt (no stamps yet)', () => {
 
     await provisionBuyerAccount(store, ARGS)
 
-    expect(mocks.sendSetPasswordLink).not.toHaveBeenCalled()
-    expect(Object.keys(writes[0].values).sort()).toEqual(['provisioned_at', 'set_password_sent_at'])
+    expect(mocks.mintSetPasswordLink).not.toHaveBeenCalled()
+    expect(mocks.deliver).toHaveBeenCalledWith({ setupUrl: null })
+    // Still terminal: both stamps down, so no later retry re-mails them.
+    expect(writes.map((w) => Object.keys(w.values)[0])).toEqual([
+      'provisioned_at',
+      'set_password_sent_at',
+    ])
+  })
+
+  it('delivers the receipt even when the link could not be minted', async () => {
+    // GoTrue having a bad minute must not cost a buyer their proof of payment.
+    mocks.mintSetPasswordLink.mockResolvedValue({ url: null, error: 'link boom' })
+    const { store } = makeStore({ read: { data: PAID, error: null } })
+
+    await provisionBuyerAccount(store, ARGS)
+
+    expect(mocks.deliver).toHaveBeenCalledWith({ setupUrl: null })
   })
 
   it('writes nothing when the account could not be created at all', async () => {
     mocks.provisionAccountForPurchase.mockResolvedValue({
       created: false,
       alreadyExisted: false,
-      emailSent: false,
       userId: null,
       error: 'fetch failed',
     })
@@ -199,7 +240,6 @@ describe('provisionBuyerAccount — attaching the buyer\'s free mock', () => {
     mocks.provisionAccountForPurchase.mockResolvedValue({
       created: false,
       alreadyExisted: true,
-      emailSent: false,
       userId: 'user-1',
       error: 'account_already_exists',
     })
@@ -214,7 +254,6 @@ describe('provisionBuyerAccount — attaching the buyer\'s free mock', () => {
     mocks.provisionAccountForPurchase.mockResolvedValue({
       created: false,
       alreadyExisted: false,
-      emailSent: false,
       userId: null,
       error: 'fetch failed',
     })
@@ -234,8 +273,11 @@ describe('provisionBuyerAccount — attaching the buyer\'s free mock', () => {
 
     await provisionBuyerAccount(store, ARGS)
 
-    expect(writes).toHaveLength(1)
-    expect(Object.keys(writes[0].values).sort()).toEqual(['provisioned_at', 'set_password_sent_at'])
+    expect(mocks.deliver).toHaveBeenCalledTimes(1)
+    expect(writes.map((w) => Object.keys(w.values)[0])).toEqual([
+      'provisioned_at',
+      'set_password_sent_at',
+    ])
   })
 })
 
@@ -251,7 +293,7 @@ describe('provisionBuyerAccount — the account exists, only the email is owed',
     await provisionBuyerAccount(store, ARGS)
 
     expect(mocks.provisionAccountForPurchase).not.toHaveBeenCalled()
-    expect(mocks.sendSetPasswordLink).toHaveBeenCalledTimes(1)
+    expect(mocks.deliver).toHaveBeenCalledTimes(1)
     // One write, and it is the claim — guarded, and only the send stamp.
     expect(writes).toHaveLength(1)
     expect(writes[0]).toEqual({ values: { set_password_sent_at: expect.any(String) }, guarded: true })
@@ -270,11 +312,11 @@ describe('provisionBuyerAccount — the account exists, only the email is owed',
 
     await provisionBuyerAccount(store, ARGS)
 
-    expect(mocks.sendSetPasswordLink).not.toHaveBeenCalled()
+    expect(mocks.deliver).not.toHaveBeenCalled()
   })
 
   it('hands the claim back when the send then fails, so a retry can pick it up', async () => {
-    mocks.sendSetPasswordLink.mockResolvedValue({ sent: false, error: 'brevo_error' })
+    mocks.deliver.mockResolvedValue({ sent: false, error: 'brevo_error' })
     const { store, writes } = makeStore({
       read: { data: OWED, error: null },
       guardedUpdate: [{ data: [{ id: 'p1' }], error: null }],
@@ -296,7 +338,7 @@ describe('provisionBuyerAccount — the account exists, only the email is owed',
 
     await provisionBuyerAccount(store, ARGS)
 
-    expect(mocks.sendSetPasswordLink).not.toHaveBeenCalled()
+    expect(mocks.deliver).not.toHaveBeenCalled()
   })
 })
 
@@ -312,7 +354,7 @@ describe('provisionBuyerAccount — the cases where it must do nothing', () => {
     await provisionBuyerAccount(store, ARGS)
 
     expect(mocks.provisionAccountForPurchase).not.toHaveBeenCalled()
-    expect(mocks.sendSetPasswordLink).not.toHaveBeenCalled()
+    expect(mocks.deliver).not.toHaveBeenCalled()
     expect(writes).toEqual([])
   })
 
@@ -356,7 +398,7 @@ describe('provisionBuyerAccount — the cases where it must do nothing', () => {
     await provisionBuyerAccount(store, ARGS)
 
     expect(mocks.provisionAccountForPurchase).not.toHaveBeenCalled()
-    expect(mocks.sendSetPasswordLink).not.toHaveBeenCalled()
+    expect(mocks.deliver).not.toHaveBeenCalled()
     expect(writes).toEqual([])
   })
 

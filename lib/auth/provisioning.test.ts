@@ -39,7 +39,8 @@ vi.mock('@/lib/email/accountEmail', () => ({
   sendSetPasswordEmail: mocks.sendSetPasswordEmail,
 }))
 
-const { provisionAccountForPurchase, sendSetPasswordLink, setPasswordUrl } = await import('./provisioning')
+const { provisionAccountForPurchase, mintSetPasswordLink, sendSetPasswordLink, setPasswordUrl } =
+  await import('./provisioning')
 
 const TOKEN = 'hashed-token-abc'
 
@@ -56,7 +57,14 @@ beforeEach(() => {
 })
 
 describe('provisionAccountForPurchase', () => {
-  it('creates a confirmed user and emails them a set-password link', async () => {
+  /**
+   * This function owns the ACCOUNT and nothing else. Minting the setup link and
+   * sending the mail moved to provisionBuyer, behind its compare-and-swap, so
+   * that a delivery which is not going to send can never mint — minting is what
+   * invalidates the link the winning delivery just sent.
+   */
+
+  it('creates a confirmed user and mints nothing', async () => {
     const result = await provisionAccountForPurchase({ email: 'buyer@x.com', fullName: 'Jane Doe' })
 
     expect(mocks.createUser).toHaveBeenCalledTimes(1)
@@ -65,8 +73,9 @@ describe('provisionAccountForPurchase', () => {
       email_confirm: true,
       user_metadata: { full_name: 'Jane Doe' },
     })
-    expect(mocks.generateLink).toHaveBeenCalledWith({ type: 'recovery', email: 'buyer@x.com' })
-    expect(result).toEqual({ created: true, alreadyExisted: false, emailSent: true, userId: 'u1', error: undefined })
+    expect(mocks.generateLink).not.toHaveBeenCalled()
+    expect(mocks.sendSetPasswordEmail).not.toHaveBeenCalled()
+    expect(result).toEqual({ created: true, alreadyExisted: false, userId: 'u1' })
   })
 
   it('lowercases and trims the buying email before creating the account', async () => {
@@ -75,33 +84,20 @@ describe('provisionAccountForPurchase', () => {
     expect(mocks.createUser).toHaveBeenCalledWith(
       expect.objectContaining({ email: 'buyer@x.com' }),
     )
-    expect(mocks.generateLink).toHaveBeenCalledWith({ type: 'recovery', email: 'buyer@x.com' })
-    expect(mocks.sendSetPasswordEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ toEmail: 'buyer@x.com' }),
-    )
   })
 
-  it('emails a link on the canonical site, not whatever host called the webhook', async () => {
-    await provisionAccountForPurchase({ email: 'buyer@x.com' })
-
-    const { setPasswordUrl: url } = mocks.sendSetPasswordEmail.mock.calls[0][0]
-    expect(url.startsWith(`${SITE_URL}/auth/set-password`)).toBe(true)
-  })
-
-  it('leaves an existing account alone and sends nothing', async () => {
+  it('leaves an existing account alone', async () => {
     mocks.createUser.mockResolvedValue({ data: null, error: { code: 'email_exists', message: 'x' } })
 
     const result = await provisionAccountForPurchase({ email: 'buyer@x.com' })
 
     expect(mocks.generateLink).not.toHaveBeenCalled()
-    expect(mocks.sendSetPasswordEmail).not.toHaveBeenCalled()
     expect(result.created).toBe(false)
-    expect(result.emailSent).toBe(false)
     // ...but says so, so the caller can log it. A silent skip here is exactly
     // how a stranded buyer stayed invisible.
     expect(result.error).toBe('account_already_exists')
-    // And says it in a form the caller can act on: this buyer owes no email, so
-    // provisioning stamps them terminal instead of retrying for three days.
+    // And says it in a form the caller can act on: this buyer owes no LINK, so
+    // provisionBuyer sends them a receipt with a sign-in button instead.
     expect(result.alreadyExisted).toBe(true)
   })
 
@@ -113,46 +109,28 @@ describe('provisionAccountForPurchase', () => {
 
     const result = await provisionAccountForPurchase({ email: 'buyer@x.com' })
 
-    expect(mocks.generateLink).not.toHaveBeenCalled()
-    expect(mocks.sendSetPasswordEmail).not.toHaveBeenCalled()
-    expect(result).toEqual({ created: false, alreadyExisted: true, emailSent: false, userId: 'existing-user', error: 'account_already_exists' })
+    expect(result).toEqual({
+      created: false,
+      alreadyExisted: true,
+      userId: 'existing-user',
+      error: 'account_already_exists',
+    })
   })
 
-  it('reports an unrelated createUser failure and sends nothing', async () => {
+  it('reports an unrelated createUser failure', async () => {
     mocks.createUser.mockResolvedValue({ data: null, error: { message: 'fetch failed' } })
 
     const result = await provisionAccountForPurchase({ email: 'buyer@x.com' })
 
-    expect(result).toEqual({ created: false, alreadyExisted: false, emailSent: false, userId: null, error: 'fetch failed' })
-    expect(mocks.sendSetPasswordEmail).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      created: false,
+      alreadyExisted: false,
+      userId: null,
+      error: 'fetch failed',
+    })
   })
 
-  it('reports an account created with no link (generateLink failed)', async () => {
-    mocks.generateLink.mockResolvedValue({ data: null, error: { message: 'link boom' } })
-
-    const result = await provisionAccountForPurchase({ email: 'buyer@x.com' })
-
-    expect(result).toEqual({ created: true, alreadyExisted: false, emailSent: false, userId: 'u1', error: 'link boom' })
-    expect(mocks.sendSetPasswordEmail).not.toHaveBeenCalled()
-  })
-
-  it('reports a link with no token in it', async () => {
-    mocks.generateLink.mockResolvedValue({ data: { properties: {} }, error: null })
-
-    const result = await provisionAccountForPurchase({ email: 'buyer@x.com' })
-
-    expect(result).toEqual({ created: true, alreadyExisted: false, emailSent: false, userId: 'u1', error: 'no token in link' })
-  })
-
-  it('reports a Brevo send failure', async () => {
-    mocks.sendSetPasswordEmail.mockResolvedValue({ sent: false, skipped: 'brevo_error' })
-
-    const result = await provisionAccountForPurchase({ email: 'buyer@x.com' })
-
-    expect(result).toEqual({ created: true, alreadyExisted: false, emailSent: false, userId: 'u1', error: 'brevo_error' })
-  })
-
-  it('emails exactly once when a second call races in behind the first', async () => {
+  it('creates the account exactly once when a second call races in behind the first', async () => {
     mocks.createUser
       .mockResolvedValueOnce({ data: { user: { id: 'u1' } }, error: null })
       .mockResolvedValueOnce({ data: null, error: { code: 'email_exists', message: 'x' } })
@@ -162,9 +140,9 @@ describe('provisionAccountForPurchase', () => {
       provisionAccountForPurchase({ email: 'buyer@x.com' }),
     ])
 
-    expect(mocks.sendSetPasswordEmail).toHaveBeenCalledTimes(1)
     expect(first.created).toBe(true)
     expect(second.created).toBe(false)
+    expect(second.alreadyExisted).toBe(true)
   })
 
   it('hands back the auth user id on BOTH paths so the caller can claim their free mock', async () => {
@@ -193,13 +171,75 @@ describe('provisionAccountForPurchase', () => {
   })
 })
 
-describe('sendSetPasswordLink', () => {
+describe('mintSetPasswordLink', () => {
+  it('mints a recovery token and builds the link on the canonical site', async () => {
+    // Never the webhook request's own origin: a Stripe endpoint pointed at a
+    // preview host would otherwise mail buyers a link they cannot sign in from.
+    const { url } = await mintSetPasswordLink({ email: 'Buyer@X.com' })
+
+    expect(mocks.generateLink).toHaveBeenCalledWith({ type: 'recovery', email: 'buyer@x.com' })
+    expect(url?.startsWith(`${SITE_URL}/auth/set-password`)).toBe(true)
+    expect(url).toContain(`token_hash=${TOKEN}`)
+  })
+
+  it('sends nothing — minting is not delivery', async () => {
+    await mintSetPasswordLink({ email: 'buyer@x.com' })
+
+    expect(mocks.sendSetPasswordEmail).not.toHaveBeenCalled()
+  })
+
+  it('reports a generateLink failure rather than returning a broken link', async () => {
+    mocks.generateLink.mockResolvedValue({ data: null, error: { message: 'link boom' } })
+
+    expect(await mintSetPasswordLink({ email: 'buyer@x.com' })).toEqual({
+      url: null,
+      error: 'link boom',
+    })
+  })
+
+  it('reports a link with no token in it', async () => {
+    mocks.generateLink.mockResolvedValue({ data: { properties: {} }, error: null })
+
+    expect(await mintSetPasswordLink({ email: 'buyer@x.com' })).toEqual({
+      url: null,
+      error: 'no token in link',
+    })
+  })
+})
+
+describe('sendSetPasswordLink — the self-serve resend path', () => {
+  /**
+   * /api/auth/resend-set-password is the spec's answer to an expired link, and
+   * the ONLY caller left. The purchase path sends the receipt email instead.
+   * This must keep working exactly as it did.
+   */
+
   it('mints a fresh recovery token and sends the house email', async () => {
     const result = await sendSetPasswordLink({ email: 'Buyer@X.com', fullName: 'Jane' })
 
     expect(mocks.createUser).not.toHaveBeenCalled()
     expect(mocks.generateLink).toHaveBeenCalledWith({ type: 'recovery', email: 'buyer@x.com' })
+    expect(mocks.sendSetPasswordEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ toEmail: 'buyer@x.com', toName: 'Jane' }),
+    )
     expect(result).toEqual({ sent: true })
+  })
+
+  it('emails a link on the canonical site, not whatever host called it', async () => {
+    await sendSetPasswordLink({ email: 'buyer@x.com' })
+
+    const { setPasswordUrl: url } = mocks.sendSetPasswordEmail.mock.calls[0][0]
+    expect(url.startsWith(`${SITE_URL}/auth/set-password`)).toBe(true)
+  })
+
+  it('reports a mint failure without sending', async () => {
+    mocks.generateLink.mockResolvedValue({ data: null, error: { message: 'link boom' } })
+
+    expect(await sendSetPasswordLink({ email: 'buyer@x.com' })).toEqual({
+      sent: false,
+      error: 'link boom',
+    })
+    expect(mocks.sendSetPasswordEmail).not.toHaveBeenCalled()
   })
 
   it('surfaces a send failure instead of claiming success', async () => {
