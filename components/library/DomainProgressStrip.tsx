@@ -19,6 +19,8 @@ const DIMMED_OPACITY = 0.13;
 interface DomainProgressStripProps {
     stations: Station[];
     passedCount: number;
+    /** Attempts across the whole domain, not cases touched. */
+    attemptCount: number;
     /** Dims in step with the case list below, so one filter moves both. */
     status: LibraryStatus;
 }
@@ -31,18 +33,24 @@ interface DomainProgressStripProps {
  * visibly the same object at two zoom levels — and the filter chips move both
  * in step.
  *
- * DECORATIVE ON PURPOSE (`aria-hidden`).
+ * THE SQUARES ARE DECORATIVE (`aria-hidden`), THE COUNT IS NOT.
  * On the board a square is the only way to reach its case, so it must be a
  * link. Here the full case list sits directly beneath with the same links and
  * far more to say — titles, patients, verdicts, attempt history — so making
  * these squares links too would give a screen reader every case twice and add
- * up to twelve tab stops that lead where the next element already leads. The
- * count beside it is repeated in the page header, which is not hidden, so
- * nothing here is the sole carrier of any fact.
+ * up to twelve tab stops that lead where the next element already leads.
+ *
+ * The count beside them used to be hidden on the same reasoning, because the
+ * page header repeated it. The header no longer does: "0 of 4 passed · 3
+ * attempts · Best-attempt average: 19%" was a run-on line saying what the
+ * squares and the score badge already said, so it went and this row inherited
+ * the figures. That makes this the sole carrier, so the count is exposed and
+ * survives the `sm:` breakpoint even though the squares do not.
  */
 export default function DomainProgressStrip({
     stations,
     passedCount,
+    attemptCount,
     status,
 }: DomainProgressStripProps) {
     const shouldReduceMotion = useReducedMotion();
@@ -51,12 +59,15 @@ export default function DomainProgressStrip({
 
     return (
         <motion.div
-            aria-hidden="true"
-            className="mb-6 hidden items-center gap-1 sm:flex"
+            className="mb-6 flex items-center gap-1"
             initial={shouldReduceMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.25 }}
         >
+            {/* Below `sm` the squares would wrap into a second row and stop
+                reading as one strip, so they drop out and the count carries the
+                domain on its own. */}
+            <span aria-hidden="true" className="hidden items-center gap-1 sm:flex">
             {stations.map(station => {
                 const squareStatus = stationStatus(station);
                 const selectedNotStarted =
@@ -77,10 +88,17 @@ export default function DomainProgressStrip({
                     </Tooltip>
                 );
             })}
-
-            <span className="ml-3 font-mono text-[10px] tabular-nums text-muted">
-                {passedCount}/{stations.length}
             </span>
+
+            {/* Nothing to report before the first attempt, and "0/4 passed · 0
+                attempts" is precisely the greeting this page refuses to open
+                with — the header's plain case count says it better. */}
+            {attemptCount > 0 && (
+                <span className="font-mono text-[11px] tabular-nums text-muted sm:ml-3">
+                    {passedCount}/{stations.length} passed &middot; {attemptCount} attempt
+                    {attemptCount !== 1 ? 's' : ''}
+                </span>
+            )}
         </motion.div>
     );
 }
