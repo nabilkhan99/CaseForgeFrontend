@@ -52,6 +52,8 @@ const TOKEN = 'hashed-token-abc'
 beforeEach(() => {
   vi.clearAllMocks()
   delete process.env.AUTH_LINK_ORIGIN
+  delete process.env.VERCEL_ENV
+  delete process.env.VERCEL_BRANCH_URL
   mocks.createUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
   mocks.generateLink.mockResolvedValue({
     data: { properties: { hashed_token: TOKEN } },
@@ -234,6 +236,44 @@ describe('authLinkOrigin', () => {
   it('takes an override, so a preview can mail links it can open', () => {
     process.env.AUTH_LINK_ORIGIN = 'https://preview-abc.vercel.app'
     expect(authLinkOrigin()).toBe('https://preview-abc.vercel.app')
+  })
+
+  it('uses the branch URL on a preview, so every branch works unconfigured', () => {
+    process.env.VERCEL_ENV = 'preview'
+    process.env.VERCEL_BRANCH_URL = 'site-git-develop.vercel.app'
+    expect(authLinkOrigin()).toBe('https://site-git-develop.vercel.app')
+  })
+
+  /**
+   * The opt-in is the whole safety property. Anything that is not positively a
+   * preview lands on the canonical site, because the failure it prevents is
+   * emailing a paying customer a vercel.app link.
+   */
+  it('never uses the branch URL on production', () => {
+    process.env.VERCEL_ENV = 'production'
+    process.env.VERCEL_BRANCH_URL = 'site-git-main.vercel.app'
+    expect(authLinkOrigin()).toBe(SITE_URL)
+  })
+
+  it('never uses the branch URL when VERCEL_ENV is missing or unrecognised', () => {
+    process.env.VERCEL_BRANCH_URL = 'site-git-main.vercel.app'
+    expect(authLinkOrigin()).toBe(SITE_URL)
+    process.env.VERCEL_ENV = 'staging'
+    expect(authLinkOrigin()).toBe(SITE_URL)
+  })
+
+  it('falls back on a preview whose branch URL is missing or blank', () => {
+    process.env.VERCEL_ENV = 'preview'
+    expect(authLinkOrigin()).toBe(SITE_URL)
+    process.env.VERCEL_BRANCH_URL = '   '
+    expect(authLinkOrigin()).toBe(SITE_URL)
+  })
+
+  it('lets the override beat the branch URL, for a preview on a custom domain', () => {
+    process.env.VERCEL_ENV = 'preview'
+    process.env.VERCEL_BRANCH_URL = 'site-git-develop.vercel.app'
+    process.env.AUTH_LINK_ORIGIN = 'https://dev.fourteenfisherman.com'
+    expect(authLinkOrigin()).toBe('https://dev.fourteenfisherman.com')
   })
 
   it('keeps only the origin, so a path or query cannot ride along', () => {

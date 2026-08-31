@@ -20,9 +20,9 @@ import { SITE_URL } from '@/lib/seo/site';
  * buyer without an account returns an `error`, so the webhook logs it rather
  * than stranding them silently.
  *
- * Emailed links point at {@link authLinkOrigin}, never the webhook request's
- * own origin: a Stripe endpoint pointed at a preview or apex host would
- * otherwise email buyers a set-password link on a host they can't sign in from.
+ * Emailed links point at {@link authLinkOrigin} — the deployment's own branch
+ * URL on a preview, the canonical site otherwise — and never at the webhook
+ * request's own origin, which is caller-controlled.
  */
 
 export interface ProvisionResult {
@@ -63,39 +63,75 @@ function getAdminAuthClient() {
 /**
  * Which host an emailed auth link points at.
  *
- * Defaults to {@link SITE_URL}, so production needs no configuration and
- * behaves exactly as it did when this was hardcoded. SITE_URL itself stays
- * hardcoded on purpose — it is the SEO constant behind canonical tags, og:url
- * and JSON-LD, all of which must name the production domain whatever host
- * rendered them. This function exists because an emailed auth link is the one
- * consumer with the opposite requirement: to be testable, it has to be able to
- * point somewhere else.
+ * Resolved per deployment, so every branch mails links you can actually open:
  *
- * Set `AUTH_LINK_ORIGIN` on a preview environment to receive links you can
- * actually open there. Server-only, never NEXT_PUBLIC_: this runs in the Stripe
- * webhook and in the resend route, and nothing in the browser should be able to
- * influence where an account-recovery link points.
+ *   1. `AUTH_LINK_ORIGIN`, when set. The escape hatch — local dev pointing at
+ *      localhost, or a preview you want aimed at a custom domain rather than
+ *      its generated alias.
+ *   2. On a PREVIEW deployment, that deployment's own branch URL. This is
+ *      `VERCEL_BRANCH_URL`, the branch alias, not `VERCEL_URL`, the per-deploy
+ *      one — the branch alias is stable across deploys, so a link minted by one
+ *      build still opens after the next.
+ *   3. Otherwise {@link SITE_URL}.
  *
- * ⚠️ The token is minted against the real Supabase project whatever this is set
- * to, so a preview host verifies a live recovery token and signs you into the
- * real account. Test with a throwaway address, never a customer's.
+ * SITE_URL itself stays hardcoded on purpose: it is the SEO constant behind
+ * canonical tags, og:url and JSON-LD, all of which must name the production
+ * domain whatever host rendered them. An emailed auth link is the one consumer
+ * with the opposite requirement, which is why it resolves separately here.
  *
- * Anything unparseable falls back to SITE_URL rather than throwing: a typo in
- * an env var must not be able to strand a buyer who has already paid.
+ * ⚠️ Step 2 is written as an opt-IN — only a deployment that positively reports
+ * `VERCEL_ENV === 'preview'` may use its own URL. Inverting it (use the branch
+ * URL unless production) would mean an unset or misspelled VERCEL_ENV emailing
+ * paying customers a `vercel.app` link, which is both untrustworthy to receive
+ * and a support problem to explain. Every unknown lands on the canonical site.
+ *
+ * Never the request's own origin, on any branch: the Host header is caller-
+ * controlled, and an account-recovery link whose host comes from a request is
+ * the classic host-header poisoning shape. Every input here is set by the
+ * platform or by us.
+ *
+ * Server-only, never NEXT_PUBLIC_: this runs in the Stripe webhook and the
+ * resend route, and nothing in the browser should influence where an
+ * account-recovery link points.
+ *
+ * ⚠️ The token is minted against the real Supabase project whatever this
+ * returns, so a preview host verifies a live recovery token and signs you into
+ * the real account. Test with a throwaway address, never a customer's.
  */
 export function authLinkOrigin(): string {
-  const override = process.env.AUTH_LINK_ORIGIN?.trim();
-  if (!override) return SITE_URL;
+  const override = originFrom(process.env.AUTH_LINK_ORIGIN, 'AUTH_LINK_ORIGIN');
+  if (override) return override;
+
+  if (process.env.VERCEL_ENV === 'preview') {
+    // VERCEL_BRANCH_URL carries no scheme, by Vercel's definition.
+    const branch = originFrom(`https://${process.env.VERCEL_BRANCH_URL?.trim() ?? ''}`);
+    if (branch) return branch;
+  }
+
+  return SITE_URL;
+}
+
+/**
+ * A candidate origin, or null when it is not one we will mail.
+ *
+ * Keeps only the origin, so a path or query on the env var cannot ride along
+ * into the link. Anything unparseable or non-http returns null rather than
+ * throwing: a typo in a dashboard must not be able to strand a buyer who has
+ * already paid, and the caller falls back to the canonical site.
+ */
+function originFrom(value: string | undefined, envName?: string): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed || trimmed === 'https://') return null;
   try {
-    const url = new URL(override);
+    const url = new URL(trimmed);
     if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-      console.warn('[provisioning] AUTH_LINK_ORIGIN is not http(s); using SITE_URL', { override });
-      return SITE_URL;
+      if (envName) console.warn(`[provisioning] ${envName} is not http(s); using SITE_URL`, { value });
+      return null;
     }
     return url.origin;
   } catch {
-    console.warn('[provisioning] AUTH_LINK_ORIGIN is not a URL; using SITE_URL', { override });
-    return SITE_URL;
+    if (envName) console.warn(`[provisioning] ${envName} is not a URL; using SITE_URL`, { value });
+    return null;
   }
 }
 
