@@ -34,10 +34,6 @@ function LiveConsultationContent() {
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [userId, setUserId] = useState<string | undefined>(undefined);
   const [showTranscript, setShowTranscript] = useState(false);
-  // The countdown hitting zero no longer ends the consultation — the hook's
-  // timer does that SPILL_MS later, so a sentence still in progress is captured
-  // instead of dropped. This only drives what the stage says meanwhile.
-  const [timeUp, setTimeUp] = useState(false);
   const isEndingRef = useRef(false);
 
   useEffect(() => {
@@ -260,8 +256,7 @@ function LiveConsultationContent() {
         isConnected={isConnected}
         getPatientLevel={getPatientLevel}
         durationSeconds={station?.consultation_duration_seconds || 720}
-        onTimeUp={() => setTimeUp(true)}
-        timeUp={timeUp}
+        onTimeUp={handleEndConsultation}
         showTranscript={showTranscript}
         transcript={transcript}
       />

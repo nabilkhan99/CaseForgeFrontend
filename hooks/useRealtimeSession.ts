@@ -135,22 +135,13 @@ const TURN_VOICED_DENSITY_MIN = 0.35;
 const TURN_MAX_MS = 120000;
 
 /**
- * Grace period between the countdown reaching zero and the line actually
- * dropping.
- *
- * Speech is only committed for transcription after ~900ms of silence. Hanging
- * up the instant the clock hit zero therefore threw away whatever the candidate
- * was still saying — measured across 108 timed-out consultations, 69% lost 6s
- * or more and a third lost 15s or more, and because safety netting is the thing
- * candidates say last it was being marked as absent when it had in fact been
- * said. One session lost 31 seconds of continuous speech.
- *
- * The countdown still shows 12:00 and still reaches zero on time; only the
- * teardown moves. Nothing else about these seconds is special — the session
- * behaves exactly as it does at any other point, which is deliberate: a
- * behavioural change here would be a second thing to get wrong.
+ * How long the transport is held open past the end of the consultation while
+ * the candidate's final turn is transcribed. See captureFinalTurn: the p99 for
+ * commit -> transcript across 359 real turns is 3.3s, so this catches
+ * essentially all of them without leaving a dead connection open if the
+ * transcription never arrives.
  */
-const SPILL_MS = 5000;
+const FINAL_TURN_WAIT_MS = 3000;
 
 /**
  * How long to wait for a committed turn's transcription before replying anyway.
@@ -440,6 +431,11 @@ export function useRealtimeSession({
      * resolves one pending commit.
      */
     const pendingCommitsRef = useRef(0);
+    /**
+     * Set only while endRoutine is waiting for the final turn's transcript;
+     * the transcription handler calls it to end that wait early.
+     */
+    const finalTurnResolveRef = useRef<(() => void) | null>(null);
     const respondFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     // --- voice flight recorder ---
     // The event ring ALWAYS records; ?voicedebug=1 only adds the on-page
@@ -1428,10 +1424,66 @@ export function useRealtimeSession({
         setStatus('disconnected');
     }, [flushVoiceLog, clearRespondTimers]);
 
-    // Graceful end: silence the patient immediately, then persist the
-    // transcript and notify. Teardown must come FIRST — the save round-trip
-    // can take seconds (cold start), and while it ran the WebRTC connection
-    // used to stay live with the patient still talking.
+    /**
+     * Commit whatever the candidate was still saying, and wait for its text.
+     *
+     * Speech is not streamed — it accumulates in a server-side buffer and is
+     * only transcribed once the turn is COMMITTED, which normally happens after
+     * ~900ms of silence. Ending the consultation therefore used to discard the
+     * sentence in progress outright: never committed, never transcribed, absent
+     * from the transcript the marking engine reads. Measured across 108
+     * consultations that ran to the timer, 69% lost 6s or more of candidate
+     * speech and a third lost 15s or more, and because safety netting is the
+     * thing candidates say last it was being marked as never said.
+     *
+     * So instead of waiting for a silence that will never come, tell the server
+     * the turn is over and collect the result. Commit does not create a
+     * response (create_response is false, and armRespondDecision is not called
+     * here), so the patient stays silent. From 359 real commits the round trip
+     * is median 0.68s and p99 3.3s, so the cap below costs about a second in
+     * practice while recovering ~98.6% of what was being thrown away.
+     *
+     * Returns immediately when there is nothing outstanding — the common case,
+     * where the candidate stopped talking and the turn already closed itself.
+     */
+    const captureFinalTurn = useCallback(async () => {
+        const turnOpen = turnOpenRef.current;
+        const awaitingTranscript = pendingCommitsRef.current > 0;
+        if (!turnOpen && !awaitingTranscript) {
+            logDebug('final-turn:none');
+            return;
+        }
+
+        if (turnOpen) {
+            turnOpenRef.current = false;
+            logDebug('final-turn:commit', {
+                openMs: turnOpenedAtRef.current ? Date.now() - turnOpenedAtRef.current : 0,
+            });
+            sendEvent({ type: 'input_audio_buffer.commit' });
+            // Stop capturing the moment the buffer is claimed, so the grace
+            // window collects the sentence that was in flight at the buzzer
+            // rather than letting server VAD open a fresh turn after it.
+            micStreamRef.current?.getTracks().forEach((track) => track.stop());
+        }
+
+        await new Promise<void>((resolve) => {
+            const finish = (reason: string) => {
+                if (finalTurnResolveRef.current === null) return;
+                finalTurnResolveRef.current = null;
+                clearTimeout(timeout);
+                logDebug(`final-turn:${reason}`);
+                resolve();
+            };
+            const timeout = setTimeout(() => finish('timeout'), FINAL_TURN_WAIT_MS);
+            finalTurnResolveRef.current = () => finish('captured');
+        });
+    }, [logDebug, sendEvent]);
+
+    // Graceful end: the consultation stops on time — the patient is cut off
+    // mid-word and the microphone closes — but the transport stays up for up to
+    // FINAL_TURN_WAIT_MS while the candidate's last sentence is transcribed.
+    // Teardown still precedes the save: that round trip can take seconds on a
+    // cold start, and the connection must not outlive it.
     const endRoutine = useCallback(async () => {
         if (endedRef.current) return;
         endedRef.current = true;
@@ -1439,9 +1491,14 @@ export function useRealtimeSession({
             clearTimeout(timerRef.current);
             timerRef.current = null;
         }
-        // Request the recorder stop BEFORE teardown stops the mic track, then
-        // let the upload finish in the background while the transcript saves.
+        // The audible end of the consultation, before anything is awaited.
+        interruptPatient();
+        // Stop the recording at the buzzer, not at the end of the grace window,
+        // so the audio ends where the consultation did rather than trailing a
+        // few seconds of silence — and so its upload runs alongside the wait.
+        // Still ahead of any mic track being stopped, as it has to be.
         void flushRecording('end');
+        await captureFinalTurn();
         teardown();
         try {
             await fetch(saveEndpoint, {
@@ -1457,7 +1514,15 @@ export function useRealtimeSession({
             /* best-effort — feedback route also tolerates retries */
         }
         onConsultationEnded?.();
-    }, [saveEndpoint, sessionId, teardown, flushRecording, onConsultationEnded]);
+    }, [
+        saveEndpoint,
+        sessionId,
+        teardown,
+        flushRecording,
+        onConsultationEnded,
+        interruptPatient,
+        captureFinalTurn,
+    ]);
 
     const handleFunctionCall = useCallback(
         (name: string, callId: string, _argsJson: string) => {
@@ -1570,6 +1635,10 @@ export function useRealtimeSession({
                     // Now that we know what was said, decide whether the turn
                     // this transcript belongs to earns a reply.
                     resolveRespondDecision(said, Boolean(dropReason));
+                    // If the consultation has ended and endRoutine is holding
+                    // the transport open for exactly this, release it — the
+                    // sentence that was in flight at the buzzer has landed.
+                    finalTurnResolveRef.current?.();
                     break;
                 }
                 // GA emits response.output_audio_transcript.done; older builds use response.audio_transcript.done.
@@ -1897,15 +1966,8 @@ export function useRealtimeSession({
                             'wait for the doctor to ask what they can help with.',
                     },
                 });
-                // Authoritative consultation timer. The visible countdown in
-                // ConsultationTimer reaches zero at durationSeconds and hands the
-                // UI a "time's up" state; this is the only thing that actually
-                // ends the session, SPILL_MS later. Two clocks used to race to
-                // end it — now one displays and one decides.
-                timerRef.current = setTimeout(
-                    () => void endRoutine(),
-                    durationSeconds * 1000 + SPILL_MS
-                );
+                // Authoritative consultation timer
+                timerRef.current = setTimeout(() => void endRoutine(), durationSeconds * 1000);
                 // Greeting watchdog: if no patient audio arrives shortly after the
                 // channel opens, the session is stalled — fail fast so the user can
                 // retry instead of sitting in a silent 12-minute consultation.
