@@ -46,8 +46,9 @@ export default function Hero() {
       />
 
       <div className="relative mx-auto grid max-w-[1160px] items-center gap-10 lg:grid-cols-[1.08fr_0.92fr] lg:gap-14">
-        {/* Left: the claim */}
-        <div>
+        {/* Left: the claim. Centred on phones — the column is the whole
+            viewport there, so left-ragged type reads as unfinished. */}
+        <div className="text-center sm:text-left">
           <motion.p
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
@@ -92,7 +93,7 @@ export default function Hero() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.12 }}
-            className="mb-7 max-w-[31em] text-base leading-relaxed text-body sm:text-[19px] sm:leading-[1.55]"
+            className="mx-auto mb-7 max-w-[31em] text-base leading-relaxed text-body sm:mx-0 sm:text-[19px] sm:leading-[1.55]"
           >
             Most deaneries fund an SCA preparation course, so you won&rsquo;t be
             out of pocket. Plus: pass all our mock stations, fail your real SCA,
