@@ -27,6 +27,7 @@ import {
   Verdict,
 } from '@/lib/clinical-master/types';
 import PassCelebration from '@/components/clinical-master/PassCelebration';
+import { LearningPointsDisplay } from '@/components/cases/LearningPoints';
 import {
   TONE_BAR_CLASS,
   TONE_COLOUR,
@@ -55,6 +56,7 @@ const REVEAL = {
   verdict: 0.06,
   overview: 0.12,
   breakdown: 0.18,
+  learning: 0.24,
 } as const;
 
 /**
@@ -1640,6 +1642,27 @@ export default function FeedbackReport({
             </div>
           </section>
         </Reveal>
+
+        {/* The teaching notes for the case they just sat, in the same numbered
+            colour-coded form as the public case page. Trainees were finishing a
+            consultation and then opening /sca-cases in another tab to read
+            exactly this, so it belongs here — after the marks, before the
+            evidence. Absent notes render their own empty state, so no guard
+            beyond "we were given the column" is needed. */}
+        {feedback.clinical_learning_points && (
+          <Reveal delay={REVEAL.learning} className="mt-12 md:mt-16">
+            <section>
+              <h2 className="text-[24px] font-semibold text-heading">Learning points</h2>
+              <p className="mt-1 text-[14px] text-muted">
+                The clinical ground this case covers — worth reading now, while the
+                consultation is fresh.
+              </p>
+              <div className="mt-5">
+                <LearningPointsDisplay content={feedback.clinical_learning_points} />
+              </div>
+            </section>
+          </Reveal>
+        )}
 
         {transcript.length > 0 && (
           <TranscriptPanel

@@ -48,7 +48,8 @@ function toFeedback(
     sessionId: string,
     row: SessionResultRow,
     stationId: string | undefined,
-    stationTitle: string | undefined
+    stationTitle: string | undefined,
+    clinicalLearningPoints: string | null | undefined
 ): ConsultationFeedback {
     return {
         session_id: sessionId,
@@ -69,6 +70,7 @@ function toFeedback(
         },
         station_id: stationId,
         station_title: stationTitle ?? 'Station Feedback',
+        clinical_learning_points: clinicalLearningPoints ?? null,
     };
 }
 
@@ -121,18 +123,24 @@ export async function POST(request: NextRequest) {
         if (existingResults) {
             const { data: session } = await supabase
                 .from('clinical_sessions')
-                .select('station_id, transcript, stations(title)')
+                // clinical_learning_points rides along so the report can show the
+                // same teaching notes as the public case page, instead of sending
+                // people off to find their case in another tab.
+                .select('station_id, transcript, stations(title, clinical_learning_points)')
                 .eq('id', sessionId)
                 .single();
 
-            const stationTitle = (session?.stations as { title?: string } | null)?.title;
+            const station = session?.stations as
+                | { title?: string; clinical_learning_points?: string | null }
+                | null;
             return NextResponse.json({
                 status: 'ready',
                 feedback: toFeedback(
                     sessionId,
                     existingResults as SessionResultRow,
                     session?.station_id as string | undefined,
-                    stationTitle
+                    station?.title,
+                    station?.clinical_learning_points
                 ),
                 transcript: Array.isArray(session?.transcript) ? session.transcript : [],
             });
