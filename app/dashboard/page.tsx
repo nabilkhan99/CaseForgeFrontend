@@ -29,7 +29,6 @@ import type { UserStats } from '@/lib/dashboard/types';
 import type { SessionHistoryItem } from '@/lib/supabase/queries/dashboard';
 import type { SubscriptionResponse } from '@/app/api/subscription/route';
 import { claimTrialSessionsOnce } from '@/lib/trial/claimOnce';
-import { ACCESS_OPENS_LABEL } from '@/lib/commerce/plans';
 import { fmtMark, passMarkFor } from '@/lib/clinical-master/scoring';
 import { MAX_WEIGHTED_SCORE } from '@/lib/clinical-master/types';
 
@@ -415,8 +414,11 @@ function DashboardContent() {
           silence would be worse, because the buy path would simply vanish.
           `bypass` (admin, staged deployment, fail-open) suppresses the nags:
           those users have access, whatever their own purchases say. */}
-      {/* state 'none' WITH a plan = a preorder whose window hasn't opened.
-          They paid; the one message that must never appear is "upgrade". */}
+      {/* state 'none' WITH a plan = a purchase whose window hasn't opened. Since
+          the 1 September floor was retired that only happens on a start date we
+          agreed in writing, so the date is the entitlement's own, not a fixed
+          launch day. They paid; the one message that must never appear is
+          "upgrade". */}
       {access?.state === 'none' && access.plan && !access.bypass && (
         /* Two different situations share this banner, and only one of them is
            an alert. Unbounced it is a standing status a preorder buyer reads
@@ -435,8 +437,9 @@ function DashboardContent() {
           animate={{ opacity: 1, y: 0 }}
         >
           <p className="text-[13px] text-heading">
-            {bouncedPending ? 'Not long now — that case opens on ' : <>You&apos;re in{access.planName ? ` — ${access.planName}` : ''}. Your access opens on </>}
-            <span className="font-medium">{ACCESS_OPENS_LABEL}</span>.
+            {bouncedPending
+              ? 'Not long now: that case opens when your access period starts.'
+              : <>You&apos;re in{access.planName ? `: ${access.planName}` : ''}. Your access hasn&apos;t opened yet.</>}
             {bouncedPending && ' Your plan is ready; consultations start then.'}
           </p>
         </motion.div>
@@ -545,7 +548,7 @@ function DashboardContent() {
         {access && !access.allowed && !access.plan && !access.bypass ? (
           /* S1: no plan at all is a different situation from a plan that hasn't
              opened yet, and it used to render as the latter — telling someone
-             who has bought nothing that "practice opens 1 September", while the
+             who has bought nothing that practice had not opened, while the
              one action they can actually take sat in a 13px link further up. */
           <>
             <Link href="/pricing">
@@ -569,7 +572,7 @@ function DashboardContent() {
              user can take that the banner has not already offered. */
           <div className="border-y border-hairline py-5 text-center">
             <p className="text-[15px] font-semibold text-heading">
-              {access.state === 'read_only' ? 'Your access has ended' : `Practice opens ${ACCESS_OPENS_LABEL}`}
+              {access.state === 'read_only' ? 'Your access has ended' : 'Your access has not opened yet'}
             </p>
             <p className="text-[13px] text-muted mt-1">
               {access.state === 'read_only' ? (
