@@ -1456,17 +1456,27 @@ export function useRealtimeSession({
      * where the candidate stopped talking and the turn already closed itself.
      */
     const captureFinalTurn = useCallback(async () => {
-        const turnOpen = turnOpenRef.current;
+        // Two different flags, one per turn-taking path, and BOTH have to be
+        // consulted. turnOpenRef belongs to the client double-talk detector,
+        // which runs only on unreliable-AEC browsers; doctorSpeakingRef is set
+        // from the server's own VAD, which is the Chrome-family path. Checking
+        // only the first shipped a fix that was inert on the browser most
+        // people use — a live test logged `speech_started` ten seconds before
+        // the buzzer and still took the "nothing outstanding" branch.
+        const clientTurnOpen = turnOpenRef.current;
+        const serverTurnOpen = doctorSpeakingRef.current;
         const awaitingTranscript = pendingCommitsRef.current > 0;
-        if (!turnOpen && !awaitingTranscript) {
+        if (!clientTurnOpen && !serverTurnOpen && !awaitingTranscript) {
             logDebug('final-turn:none');
             return;
         }
 
-        if (turnOpen) {
+        if (clientTurnOpen || serverTurnOpen) {
             turnOpenRef.current = false;
+            doctorSpeakingRef.current = false;
             logDebug('final-turn:commit', {
-                openMs: turnOpenedAtRef.current ? Date.now() - turnOpenedAtRef.current : 0,
+                source: clientTurnOpen ? 'client-detector' : 'server-vad',
+                openMs: turnOpenedAtRef.current ? Date.now() - turnOpenedAtRef.current : null,
             });
             sendEvent({ type: 'input_audio_buffer.commit' });
             // Stop capturing the moment the buffer is claimed, so the grace
