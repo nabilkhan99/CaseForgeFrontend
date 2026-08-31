@@ -87,6 +87,12 @@ export default function StudyBudgetChecker({
   const [deaneryId, setDeaneryId] = useState(PLACEHOLDER_ID);
   const [hasResat, setHasResat] = useState(false);
 
+  // Tailwind breakpoints read the viewport, not the container. On the
+  // /study-budget articles this sits inside a ~760px column on a desktop
+  // viewport, so the side-by-side split would be squeezed into half of that.
+  // Only the full-width homepage band gets two columns.
+  const isLanding = surface === 'landing';
+
   const deanery = getDeanery(deaneryId);
   const isPlaceholder = deaneryId === PLACEHOLDER_ID;
 
@@ -122,11 +128,17 @@ export default function StudyBudgetChecker({
         />
 
         <div className="relative">
-          <div className="grid gap-9 lg:grid-cols-[0.95fr_1.05fr] lg:items-center lg:gap-14">
+          <div
+            className={
+              isLanding
+                ? 'grid gap-9 lg:grid-cols-[0.95fr_1.05fr] lg:items-center lg:gap-14'
+                : 'grid gap-9'
+            }
+          >
             <div>
               <Pill dark>NHS study budget</Pill>
 
-              <h2 className="mt-5 font-[family-name:var(--font-display)] text-3xl font-bold leading-[1.12] tracking-[-0.025em] text-white sm:text-[2.5rem]">
+              <h2 className="mt-5 text-balance font-[family-name:var(--font-display)] text-3xl font-bold leading-[1.12] tracking-[-0.025em] text-white sm:text-[2.5rem]">
                 Check your deanery in <Accent dark>10 seconds.</Accent>
               </h2>
 

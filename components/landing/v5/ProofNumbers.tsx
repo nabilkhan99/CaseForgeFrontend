@@ -99,39 +99,51 @@ export default function ProofNumbers() {
   const inView = useInView(ref, { once: true, amount: 0.5 });
 
   return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, y: 16 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.5 }}
-      className="mt-12 grid grid-cols-1 gap-10 border-t border-hairline pt-10 text-center sm:mt-14 sm:grid-cols-3 sm:gap-6 sm:pt-12"
-    >
-      {STATS.map((stat) => (
-        <div key={stat.headline}>
-          <p className="font-medium tracking-tight text-heading">
-            {stat.count ? (
-              <>
-                <span className="font-[family-name:var(--font-serif)] text-4xl font-normal italic text-primary sm:text-5xl">
-                  <CountUp
-                    to={stat.count.to}
-                    suffix={stat.count.suffix}
-                    start={inView}
-                  />
+    <>
+      {/* Framer Motion's `initial` is server-rendered as inline opacity:0, so
+          without JavaScript the reveal never runs and the rail would stay
+          invisible. These are headline proof points, so they degrade to
+          plainly visible instead. */}
+      <noscript>
+        <style>{`[data-proof-numbers]{opacity:1!important;transform:none!important}`}</style>
+      </noscript>
+      <motion.div
+        ref={ref}
+        data-proof-numbers=""
+        initial={{ opacity: 0, y: 16 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.5 }}
+        className="mt-12 grid grid-cols-1 gap-10 border-t border-hairline pt-10 text-center sm:mt-14 sm:grid-cols-3 sm:gap-6 sm:pt-12"
+      >
+        {STATS.map((stat) => (
+          <div key={stat.headline}>
+            <p className="font-medium tracking-tight text-heading">
+              {stat.count ? (
+                <>
+                  <span className="font-[family-name:var(--font-serif)] text-4xl font-normal italic text-primary sm:text-5xl">
+                    <CountUp
+                      to={stat.count.to}
+                      suffix={stat.count.suffix}
+                      start={inView}
+                    />
+                  </span>
+                  <span className="text-2xl sm:text-3xl">
+                    {stat.count.after}
+                  </span>
+                </>
+              ) : (
+                <span className="text-2xl leading-tight sm:text-3xl">
+                  {stat.headline}
                 </span>
-                <span className="text-2xl sm:text-3xl">{stat.count.after}</span>
-              </>
-            ) : (
-              <span className="text-2xl leading-tight sm:text-3xl">
-                {stat.headline}
-              </span>
-            )}
-          </p>
-          <p className="mx-auto mt-2 max-w-[240px] text-sm leading-relaxed text-body">
-            {stat.subline}
-          </p>
-        </div>
-      ))}
-    </motion.div>
+              )}
+            </p>
+            <p className="mx-auto mt-2 max-w-[240px] text-sm leading-relaxed text-body">
+              {stat.subline}
+            </p>
+          </div>
+        ))}
+      </motion.div>
+    </>
   );
 }
