@@ -37,8 +37,14 @@ export interface ConsultationStageProps {
   /** Stable getter for the patient's 0..1 playback level; see useRealtimeSession. */
   getPatientLevel: () => number | null;
   durationSeconds: number;
-  /** Fired when the countdown reaches zero. */
+  /**
+   * Fired when the countdown reaches zero. This does NOT end the consultation —
+   * the session hook owns that, a few seconds later, so a sentence still in
+   * progress is transcribed rather than lost with the connection.
+   */
   onTimeUp: () => void;
+  /** True once the countdown has reached zero and the line is winding down. */
+  timeUp?: boolean;
   showTranscript: boolean;
   transcript: TranscriptItem[];
 }
@@ -50,6 +56,7 @@ export default function ConsultationStage({
   getPatientLevel,
   durationSeconds,
   onTimeUp,
+  timeUp = false,
   showTranscript,
   transcript,
 }: ConsultationStageProps) {
@@ -59,7 +66,7 @@ export default function ConsultationStage({
     <div className="flex-1 flex flex-col items-center justify-center px-6 py-6 gap-5 min-h-0">
       <motion.div
         className="flex-shrink-0 text-[12px] font-semibold text-primary uppercase tracking-[0.1em]"
-        animate={isSpeaking ? { opacity: [1, 0.4, 1] } : { opacity: 0.5 }}
+        animate={isSpeaking && !timeUp ? { opacity: [1, 0.4, 1] } : { opacity: 0.5 }}
         // Reduced motion collapses the pulse to its end value rather than
         // dropping the `animate` prop, which would leave the label stuck at
         // whatever opacity Framer last held. Same reasoning as ArcGauge: the
@@ -68,7 +75,11 @@ export default function ConsultationStage({
           shouldReduceMotion ? { duration: 0 } : { duration: 1.8, repeat: Infinity }
         }
       >
-        {isSpeaking ? 'Patient Speaking' : 'Listening...'}
+        {timeUp
+          ? "Time's up — finish your sentence"
+          : isSpeaking
+            ? 'Patient Speaking'
+            : 'Listening...'}
       </motion.div>
 
       <ConsultationTimer

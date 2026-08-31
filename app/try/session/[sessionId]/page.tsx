@@ -31,6 +31,9 @@ function GuestLiveConsultationContent() {
   const [showEndModal, setShowEndModal] = useState(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
+  // See the authed session page: the countdown reaching zero no longer ends the
+  // consultation, so a sentence in progress is still captured.
+  const [timeUp, setTimeUp] = useState(false);
   const isEndingRef = useRef(false);
 
   useEffect(() => {
@@ -220,7 +223,8 @@ function GuestLiveConsultationContent() {
         isConnected={isConnected}
         getPatientLevel={getPatientLevel}
         durationSeconds={station?.consultation_duration_seconds || 720}
-        onTimeUp={handleEndConsultation}
+        onTimeUp={() => setTimeUp(true)}
+        timeUp={timeUp}
         showTranscript={showTranscript}
         transcript={transcript}
       />

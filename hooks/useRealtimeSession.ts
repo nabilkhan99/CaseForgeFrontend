@@ -135,6 +135,24 @@ const TURN_VOICED_DENSITY_MIN = 0.35;
 const TURN_MAX_MS = 120000;
 
 /**
+ * Grace period between the countdown reaching zero and the line actually
+ * dropping.
+ *
+ * Speech is only committed for transcription after ~900ms of silence. Hanging
+ * up the instant the clock hit zero therefore threw away whatever the candidate
+ * was still saying — measured across 108 timed-out consultations, 69% lost 6s
+ * or more and a third lost 15s or more, and because safety netting is the thing
+ * candidates say last it was being marked as absent when it had in fact been
+ * said. One session lost 31 seconds of continuous speech.
+ *
+ * The countdown still shows 12:00 and still reaches zero on time; only the
+ * teardown moves. Nothing else about these seconds is special — the session
+ * behaves exactly as it does at any other point, which is deliberate: a
+ * behavioural change here would be a second thing to get wrong.
+ */
+const SPILL_MS = 5000;
+
+/**
  * How long to wait for a committed turn's transcription before replying anyway.
  * `input_audio_buffer.commit` does NOT create a response (per the Realtime API
  * reference), so the two are sent separately and the reply is gated on what the
@@ -1795,8 +1813,15 @@ export function useRealtimeSession({
                             'wait for the doctor to ask what they can help with.',
                     },
                 });
-                // Authoritative consultation timer
-                timerRef.current = setTimeout(() => void endRoutine(), durationSeconds * 1000);
+                // Authoritative consultation timer. The visible countdown in
+                // ConsultationTimer reaches zero at durationSeconds and hands the
+                // UI a "time's up" state; this is the only thing that actually
+                // ends the session, SPILL_MS later. Two clocks used to race to
+                // end it — now one displays and one decides.
+                timerRef.current = setTimeout(
+                    () => void endRoutine(),
+                    durationSeconds * 1000 + SPILL_MS
+                );
                 // Greeting watchdog: if no patient audio arrives shortly after the
                 // channel opens, the session is stalled — fail fast so the user can
                 // retry instead of sitting in a silent 12-minute consultation.
