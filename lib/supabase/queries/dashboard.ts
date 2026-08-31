@@ -17,7 +17,6 @@ import type {
 } from '@/lib/dashboard/types';
 import { visibleStationStates } from '@/lib/stations/visibility';
 import { MAX_WEIGHTED_SCORE, PASSING_VERDICTS } from '@/lib/clinical-master/types';
-import { getStationPassMap, passedStationIds } from '@/lib/supabase/queries/passTracking';
 
 // New SCA schema (Build Package Section 12): domains carry CP/P/F/CF grades and
 // the session carries a verdict + weighted score out of 10.5. For the dashboard
@@ -64,12 +63,10 @@ export async function getUserStats(userId: string): Promise<UserStats> {
         .select('*', { count: 'exact', head: true })
         .in('is_active', visibleStationStates());
 
-    // Stations the user has PASSED (best attempt reached a passing verdict) —
-    // distinct stations, so repeat attempts can never push it past the total.
-    // null means the query failed; a fabricated 0 would read as "you have passed
-    // nothing", which is a different and much worse claim than "we don't know".
-    const passMap = await getStationPassMap(userId);
-    const passedStations = passMap === null ? null : passedStationIds(passMap).size;
+    // The passed-station tally left with the home page's badge and guarantee
+    // tracker — nothing read it any more, and it cost a three-table pass-map
+    // join on every dashboard load. passTracking still serves the library and
+    // the admin progress view; if a guarantee surface returns, count it there.
 
     // Calculate exam countdown
     let examCountdownDays = 0;
@@ -83,10 +80,48 @@ export async function getUserStats(userId: string): Promise<UserStats> {
     return {
         currentStreak: profile?.current_streak ?? 0,
         completedStations: completedCount ?? 0,
-        passedStations,
         totalStations: totalStations ?? 0,
         examCountdownDays,
+        examDate: profile?.exam_date ?? null,
     };
+}
+
+/**
+ * When each of a user's consultations finished, for the activity board.
+ *
+ * Only the timestamps: the board draws one square per day and counts them, so
+ * pulling station titles or scores would be tens of kilobytes fetched to be
+ * thrown away. `sinceIso` is the board's own window start — see
+ * intensityWindowStart in lib/dashboard/trainingIntensity.ts — so the range
+ * asked for and the range drawn are derived from one place.
+ *
+ * A caveat inherited from the column: `completed_at` is stamped when the
+ * marking result lands, not when the trainee stopped talking, so a consultation
+ * finished at 23:55 can be dated the next day. It is off by minutes, only ever
+ * near midnight, and correcting it would mean reading transcripts.
+ */
+export async function getDailyActivityTimestamps(
+    userId: string,
+    sinceIso: string,
+): Promise<string[]> {
+    const supabase = createClient();
+
+    const { data, error } = await supabase
+        .from('clinical_sessions')
+        .select('completed_at')
+        .eq('user_id', userId)
+        .eq('status', 'completed')
+        .gte('completed_at', sinceIso)
+        .not('completed_at', 'is', null);
+
+    if (error) {
+        console.error('Error fetching daily activity:', error.message, error.details, error.hint);
+        return [];
+    }
+
+    return (data ?? [])
+        .map(row => row.completed_at)
+        .filter((completedAt): completedAt is string => typeof completedAt === 'string');
 }
 
 /**

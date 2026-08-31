@@ -33,14 +33,14 @@ export default function SessionControls({
   onEnd,
 }: SessionControlsProps) {
   return (
-    <div className="min-h-[88px] flex items-center justify-center gap-3 sm:gap-4 border-t border-black/[0.06] flex-shrink-0 py-3 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pl-[max(1.5rem,env(safe-area-inset-left))] sm:pr-[max(1.5rem,env(safe-area-inset-right))]">
+    <div className="min-h-[88px] flex items-center justify-center gap-3 sm:gap-4 border-t border-hairline flex-shrink-0 py-3 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pl-[max(1.5rem,env(safe-area-inset-left))] sm:pr-[max(1.5rem,env(safe-area-inset-right))]">
       <button
         onClick={onToggleTranscript}
         aria-label={showTranscript ? 'Show waveform' : 'Show transcript'}
         aria-pressed={showTranscript}
         title={showTranscript ? 'Show waveform' : 'Show transcript'}
         className={`w-11 h-11 rounded-full flex items-center justify-center border cursor-pointer hover:bg-black/[0.02] transition-colors flex-shrink-0 ${
-          showTranscript ? 'border-primary/30 bg-primary/5' : 'border-black/[0.08]'
+          showTranscript ? 'border-primary/30 bg-primary/5' : 'border-defined'
         }`}
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className={showTranscript ? 'text-primary' : 'text-muted'}>
@@ -90,14 +90,14 @@ export default function SessionControls({
             {isMuted && <path d="M1.5 1.5l11 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />}
           </svg>
         </motion.span>
-        <span className={`text-[10px] font-semibold uppercase tracking-[0.08em] ${isMuted ? 'text-danger' : 'text-muted'}`}>
+        <span className={`text-[11px] font-medium uppercase tracking-[0.08em] ${isMuted ? 'text-danger' : 'text-muted'}`}>
           {isMuted ? 'Muted' : 'Mute'}
         </span>
       </motion.button>
 
       <button
         onClick={onEnd}
-        className="min-h-[44px] px-3 sm:px-5 py-2.5 rounded-xl text-[13px] font-medium text-danger bg-red-50 border border-red-200 hover:bg-red-100 transition-colors cursor-pointer whitespace-nowrap flex-shrink-0"
+        className="min-h-[44px] px-3 sm:px-5 py-2.5 rounded-[10px] text-[13px] font-medium text-danger bg-red-50 border border-red-200 hover:bg-red-100 transition-colors cursor-pointer whitespace-nowrap flex-shrink-0"
       >
         <span className="hidden sm:inline">End Consultation</span>
         <span className="sm:hidden">End</span>

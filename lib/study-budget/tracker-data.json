@@ -46,7 +46,7 @@
       "sourceUrl": "https://heeoe.hee.nhs.uk/general_practice/gp-study-leave",
       "email": {
         "subject": "SCA preparation course, aspirational activity approval",
-        "body": "Hi [TPD name],\n\nAhead of my SCA sitting in [month] I'd like to apply for an SCA preparation course as an aspirational activity. I've checked the regional course offer; [I couldn't attend the funded regional day because ... / no suitable date was available].\n\nThe course is [course name] at £[amount], structured as a course rather than a subscription. I'll complete Part B of the application and add the PDP entry. Could you sign it off before I book?\n\nThanks,\n[your name]"
+        "body": "Hi [TPD name],\n\nAhead of my SCA sitting in [month] I'd like to apply for an SCA preparation course as an aspirational activity. I've checked the regional course offer; [I couldn't attend the funded regional day because ... / no suitable date was available].\n\nThe course is [course name] at £[amount], paid as a one-off fee for a fixed course term. I'll complete Part B of the application and add the PDP entry. Could you sign it off before I book?\n\nThanks,\n[your name]"
       }
     },
     {
@@ -60,7 +60,7 @@
       "sourceUrl": "/study-budget/sources/thames-valley-wessex-study-leave-march-2026.pdf",
       "email": {
         "subject": "SCA course (ST3) study leave approval",
-        "body": "Hi [ES name],\n\nI'd like to book my ST3 SCA course ahead of my sitting in [month]. I've checked the regional TV and Wessex offer; [I couldn't attend / no suitable date].\n\nThe course is [course name] at £[amount], structured as a course. Could we add it to my PDP and get approval through the South East process before I book?\n\nThanks,\n[your name]"
+        "body": "Hi [ES name],\n\nI'd like to book my ST3 SCA course ahead of my sitting in [month]. I've checked the regional TV and Wessex offer; [I couldn't attend / no suitable date].\n\nThe course is [course name] at £[amount], paid as a one-off fee for a fixed course term. Could we add it to my PDP and get approval through the South East process before I book?\n\nThanks,\n[your name]"
       }
     },
     {
@@ -74,7 +74,7 @@
       "sourceUrl": "/study-budget/sources/thames-valley-wessex-study-leave-march-2026.pdf",
       "email": {
         "subject": "SCA course (ST3) study leave approval",
-        "body": "Hi [ES name],\n\nI'd like to book my ST3 SCA course ahead of my sitting in [month]. I've checked the regional TV and Wessex offer; [I couldn't attend / no suitable date].\n\nThe course is [course name] at £[amount], structured as a course. Could we add it to my PDP and get approval through the South East process before I book?\n\nThanks,\n[your name]"
+        "body": "Hi [ES name],\n\nI'd like to book my ST3 SCA course ahead of my sitting in [month]. I've checked the regional TV and Wessex offer; [I couldn't attend / no suitable date].\n\nThe course is [course name] at £[amount], paid as a one-off fee for a fixed course term. Could we add it to my PDP and get approval through the South East process before I book?\n\nThanks,\n[your name]"
       }
     },
     {
@@ -88,7 +88,7 @@
       "sourceUrl": "/study-budget/sources/midlands-gp-schools-study-leave-guidance-may-2026.pdf",
       "email": {
         "subject": "SCA course, study leave approval (Category I)",
-        "body": "Hi [ES name],\n\nI'd like to add an SCA preparation course to my PDP ahead of my sitting in [month]. The course is [course name] at £[amount], structured as a course and well under the £1,000 threshold.\n\nAs a Category I curriculum activity it needs your ES sign off. Could we agree it at our next review so I can apply on Accent at least 6 weeks before?\n\nThanks,\n[your name]"
+        "body": "Hi [ES name],\n\nI'd like to add an SCA preparation course to my PDP ahead of my sitting in [month]. The course is [course name] at £[amount], a one-off fee well under the £1,000 threshold.\n\nAs a Category I curriculum activity it needs your ES sign off. Could we agree it at our next review so I can apply on Accent at least 6 weeks before?\n\nThanks,\n[your name]"
       }
     },
     {
@@ -102,7 +102,7 @@
       "sourceUrl": "/study-budget/sources/midlands-gp-schools-study-leave-guidance-may-2026.pdf",
       "email": {
         "subject": "SCA course, study leave approval (Category I)",
-        "body": "Hi [ES name],\n\nI'd like to add an SCA preparation course to my PDP ahead of my sitting in [month]. The course is [course name] at £[amount], structured as a course and well under the £1,000 threshold.\n\nAs a Category I curriculum activity it needs your ES sign off. Could we agree it at our next review so I can apply on Accent at least 6 weeks before?\n\nThanks,\n[your name]"
+        "body": "Hi [ES name],\n\nI'd like to add an SCA preparation course to my PDP ahead of my sitting in [month]. The course is [course name] at £[amount], a one-off fee well under the £1,000 threshold.\n\nAs a Category I curriculum activity it needs your ES sign off. Could we agree it at our next review so I can apply on Accent at least 6 weeks before?\n\nThanks,\n[your name]"
       }
     },
     {
@@ -158,7 +158,7 @@
       "sourceUrl": "PENDING - no published source document yet",
       "email": {
         "subject": "SCA course, study leave approval",
-        "body": "Hi [TPD name],\n\nAhead of my SCA sitting in [month] I'd like to book an SCA course. The course is [course name] at £[amount], structured as a course.\n\nAs the detailed funding guidance is still being finalised, could you confirm the current position and give prospective approval before I book?\n\nThanks,\n[your name]"
+        "body": "Hi [TPD name],\n\nAhead of my SCA sitting in [month] I'd like to book an SCA course. The course is [course name] at £[amount], paid as a one-off fee for a fixed course term.\n\nAs the detailed funding guidance is still being finalised, could you confirm the current position and give prospective approval before I book?\n\nThanks,\n[your name]"
       }
     },
     {
@@ -172,7 +172,7 @@
       "sourceUrl": "/study-budget/sources/scotland-nes-gp-registrar-study-leave-faqs-july-2025.pdf",
       "email": {
         "subject": "SCA course, study leave and funding request",
-        "body": "Hi [TPD name],\n\nAhead of my SCA sitting in [month] I'd like to request funding for an SCA course from my nominal budget. The course is [course name] at £[amount], relevant to the RCGP curriculum and structured as a course rather than a subscription.\n\nCould you approve it with funding via TURAS? I'll apply at least 6 weeks ahead and claim against receipts.\n\nThanks,\n[your name]"
+        "body": "Hi [TPD name],\n\nAhead of my SCA sitting in [month] I'd like to request funding for an SCA course from my nominal budget. The course is [course name] at £[amount], relevant to the RCGP curriculum and paid as a one-off fee for a fixed course term.\n\nCould you approve it with funding via TURAS? I'll apply at least 6 weeks ahead and claim against receipts.\n\nThanks,\n[your name]"
       }
     },
     {

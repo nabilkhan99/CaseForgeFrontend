@@ -8,26 +8,41 @@ export type PlanKey = 'self_study' | 'self_study_monthly' | 'complete' | 'intens
 /**
  * How a plan bills, in the shape Stripe expresses it.
  *
- * Every checkout plan is now a Stripe **subscription** — the two course plans
- * are fixed-term subscriptions (one charge, three months, `renews: false`), the
- * rolling plan renews monthly. Nothing is sold in `payment` mode any more.
+ * The two course plans are sold as one-off `payment` sessions; only the rolling
+ * £129 plan is a Stripe subscription.
  *
- * `renews: false` is not something Stripe Checkout can express (there is no
- * `cancel_at` / `cancel_at_period_end` on `subscription_data` in API
- * 2026-06-24.dahlia), so the webhook arms `cancel_at_period_end: true` the
- * moment the session completes. This flag is what tells it which sales need it.
+ * They were briefly fixed-term subscriptions (22 Aug - 29 Aug) so the Customer
+ * Portal could handle plan switching. That was reverted: Stripe Checkout has no
+ * `cancel_at_period_end` on `subscription_data`, so a non-renewing term could
+ * only be faked by disarming the renewal in the webhook *after* the buyer had
+ * already been shown "£299.00 every 3 months ... until you cancel". Self-serve
+ * upgrades are handled by hand instead, which costs nothing at this volume.
  */
 export interface PlanBilling {
-  /** Stripe `recurring.interval`. Everything we sell bills in months. */
+  /**
+   * How Stripe sells it. `payment` is a one-off charge; `subscription` is a
+   * recurring one. The course plans are `payment` again (2026-08-29): sold as
+   * fixed-term subscriptions they made Stripe's own checkout say "£299.00 every
+   * 3 months" and "charge you until you cancel" to a buyer of a thing that does
+   * not renew, which is simply untrue at the moment it matters most.
+   */
+  mode: 'payment' | 'subscription'
+  /** Stripe `recurring.interval`. Only meaningful in `subscription` mode. */
   interval: 'month'
-  /** Stripe `recurring.interval_count`: 3 for a course term, 1 for rolling. */
+  /** Stripe `recurring.interval_count`. Only meaningful in `subscription` mode. */
   intervalCount: number
   /** True only for the rolling plan. False = one charge, then it stops. */
   renews: boolean
 }
 
-/** £299 / £599 course plans: one charge, three months, no renewal. */
+/**
+ * £299 / £599 course plans: one charge, three months, nothing to cancel.
+ *
+ * `interval`/`intervalCount` are retained only to describe the term in copy —
+ * a `payment`-mode Price carries no `recurring` block at all.
+ */
 export const FIXED_THREE_MONTH_TERM: PlanBilling = {
+  mode: 'payment',
   interval: 'month',
   intervalCount: 3,
   renews: false,
@@ -35,6 +50,7 @@ export const FIXED_THREE_MONTH_TERM: PlanBilling = {
 
 /** The rolling Self-Study plan: £129 a month until it is cancelled. */
 export const ROLLING_MONTHLY: PlanBilling = {
+  mode: 'subscription',
   interval: 'month',
   intervalCount: 1,
   renews: true,
@@ -62,7 +78,7 @@ export const PLANS: readonly Plan[] = [
     priceSuffix: '/ 3 months',
     tagline: "One payment · 3 months' access",
     cta: 'checkout',
-    ctaLabel: 'Pre-order now',
+    ctaLabel: 'Buy now',
     highlighted: false,
     billing: FIXED_THREE_MONTH_TERM,
   },
@@ -101,25 +117,51 @@ export const PLANS: readonly Plan[] = [
   },
 ] as const
 
+/**
+ * The FORMAL name of each plan: what it is called on a receipt, in a
+ * post-purchase email, and on an advocate's referral ledger.
+ *
+ * Deliberately not `Plan.name`. That is the marketing label on the pricing page
+ * ("Complete", "Self-Study (monthly)") and it is tuned for a page where the
+ * price sits beside it and the context is obvious. A receipt has neither: it is
+ * read months later by a deanery finance team who have never seen the pricing
+ * page, so it says "Complete SCA Course". These strings come from the receipt
+ * spec and must match it exactly.
+ *
+ * Intensive has no entry: it is sold on a call and never issues a receipt.
+ */
+export const PLAN_LABELS: Record<string, string> = {
+  complete: 'Complete SCA Course',
+  self_study: 'Self-Study',
+  self_study_monthly: 'Self-Study, monthly',
+}
+
+/** The formal plan name, falling back to the key so nothing renders blank. */
+export function planLabel(key: string): string {
+  return PLAN_LABELS[key] ?? key
+}
+
 export function getPlan(key: string): Plan | undefined {
   return PLANS.find((p) => p.key === key)
 }
 
 /**
- * True when the plan is bought through Stripe Checkout — which now means, for
- * every one of them, `mode: 'subscription'`.
+ * True when the plan is genuinely sold as a Stripe subscription — since
+ * 2026-08-29 that is the rolling £129 plan alone. Intensive is excluded twice
+ * over: it is sold on a call, not through Checkout.
  *
- * Kept as a named helper rather than inlined because it is the thing the
- * checkout route branches on, and "which plans are subscriptions" is exactly
- * the fact that changed. Intensive is excluded: it is sold on a call.
+ * Prefer {@link checkoutModeFor} when the question is "what mode does this open
+ * in"; this one answers "does a subscription object exist afterwards", which is
+ * what the Portal, renewal and cancellation paths actually care about.
  */
 export function isSubscriptionPlan(key: string): boolean {
-  return getPlan(key)?.cta === 'checkout'
+  const plan = getPlan(key)
+  return plan?.cta === 'checkout' && plan.billing.mode === 'subscription'
 }
 
 /**
- * A fixed-term subscription: charged once, three months of access, then it
- * stops. The webhook arms `cancel_at_period_end` for exactly these.
+ * A fixed term: charged once, three months of access, then it stops. Sold in
+ * Stripe `payment` mode, so there is no subscription and nothing to disarm.
  */
 export function isFixedTermPlan(key: string): boolean {
   const plan = getPlan(key)
@@ -130,6 +172,14 @@ export function isFixedTermPlan(key: string): boolean {
 export function isRollingPlan(key: string): boolean {
   const plan = getPlan(key)
   return plan?.cta === 'checkout' && plan.billing.renews
+}
+
+/**
+ * The Stripe Checkout `mode` this plan is sold in. One-off for the course
+ * terms, subscription for the rolling monthly.
+ */
+export function checkoutModeFor(key: string): 'payment' | 'subscription' {
+  return getPlan(key)?.billing.mode ?? 'payment'
 }
 
 /** Server-only: map a checkout-able plan to its Stripe Price id. */
@@ -173,28 +223,6 @@ export function planForStripePriceId(priceId: string | null | undefined): PlanKe
   const wanted = priceId?.trim()
   if (!wanted) return null
   return PRICED_PLANS.find((key) => stripePriceEnvFor(key) === wanted) ?? null
-}
-
-/**
- * Server-only: the Stripe Coupon id granting the referee (referred buyer) their
- * side of a two-sided referral, or null when none is configured.
- *
- * Deliberately returns null instead of throwing, unlike {@link stripePriceIdFor}:
- * a missing coupon must degrade to a full-price sale, never block checkout. The
- * pound values themselves live in `REFEREE_DISCOUNT_BY_PLAN` — these coupons must
- * be created in Stripe to match (see scripts/create-referral-coupons.mjs).
- */
-export function stripeRefereeCouponIdFor(key: PlanKey): string | null {
-  const id =
-    key === 'self_study'
-      ? process.env.STRIPE_COUPON_REFERRED_SELF_STUDY
-      : key === 'self_study_monthly'
-        ? process.env.STRIPE_COUPON_REFERRED_SELF_STUDY_MONTHLY
-        : key === 'complete'
-          ? process.env.STRIPE_COUPON_REFERRED_COMPLETE
-          : undefined
-  const trimmed = id?.trim()
-  return trimmed ? trimmed : null
 }
 
 /**
@@ -247,6 +275,12 @@ export interface CoachingDayAvailability {
   status: 'open' | 'closed' | 'sold_out'
 }
 
-/** The course goes live on this date; purchases before it start then. */
+/**
+ * The date the course went live.
+ *
+ * It no longer holds a purchase back: access starts when the money lands, and
+ * the site sells it that way. What it still does is anchor the END of a window
+ * bought during the pre-order period, so retiring the start floor could not
+ * shorten a term already sold. See `lib/commerce/entitlements.ts`.
+ */
 export const ACCESS_OPENS = '2026-09-01'
-export const ACCESS_OPENS_LABEL = '1 September 2026'

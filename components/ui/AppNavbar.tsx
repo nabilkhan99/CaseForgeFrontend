@@ -2,6 +2,7 @@
 
 import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
@@ -10,7 +11,7 @@ const NAV_LINKS = [
   { label: 'Home', href: '/dashboard', exact: true },
   { label: 'Library', href: '/dashboard/library' },
   { label: 'Lectures', href: '/dashboard/lectures', lockable: true },
-  { label: 'History', href: '/dashboard/history' },
+  { label: 'Development', href: '/dashboard/development' },
   { label: 'Portfolio', href: '/portfolio' },
 ];
 
@@ -139,13 +140,26 @@ export default function AppNavbar() {
       <motion.nav
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         style={{ maxWidth: 'min(92%, 1200px)', backgroundColor: navBg, boxShadow: navShadow } as any}
-        className="w-full backdrop-blur-2xl border border-black/[0.06] rounded-[14px] px-5 py-2.5 flex items-center justify-between"
+        className="relative z-50 w-full backdrop-blur-2xl border border-hairline rounded-[14px] px-5 py-2.5 flex items-center justify-between"
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 120, damping: 20 }}
       >
-        {/* Wordmark */}
-        <Link href="/dashboard" className="flex items-center cursor-pointer">
+        {/* Wordmark. The lotus is cropped out of the full lockup rather than
+            being a second drawing of it, so the two can never drift apart; it is
+            square and transparent, so `h-` alone sizes it without squashing.
+            Decorative — the adjacent text is already the accessible name, and a
+            duplicate alt would have a screen reader say the brand twice. */}
+        <Link href="/dashboard" className="flex items-center gap-2 cursor-pointer">
+          <Image
+            src="/mark.png"
+            alt=""
+            width={256}
+            height={256}
+            priority
+            aria-hidden="true"
+            className="h-[18px] w-[18px] flex-shrink-0"
+          />
           <span className="text-[14px] font-semibold text-heading tracking-tight">
             Fourteen Fisherman
           </span>
@@ -187,9 +201,9 @@ export default function AppNavbar() {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -4, scale: 0.98 }}
                 transition={{ type: 'spring', stiffness: 260, damping: 26 }}
-                className="absolute top-12 right-0 w-48 bg-surface-raised border border-black/[0.06] rounded-xl shadow-elevation-3 py-1 z-50"
+                className="absolute top-12 right-0 w-48 bg-surface-raised border border-hairline rounded-xl shadow-elevation-3 py-1 z-50"
               >
-                <div className="px-3 py-2 border-b border-black/[0.06]">
+                <div className="px-3 py-2 border-b border-hairline">
                   <div className="text-[13px] font-medium text-heading truncate">{user?.name}</div>
                   <div className="text-[11px] text-muted truncate">{user?.email}</div>
                 </div>
@@ -266,7 +280,7 @@ export default function AppNavbar() {
             transition={{ type: 'spring', stiffness: 260, damping: 26 }}
             // Not `glass-panel`: at 0.65 alpha the page text read straight
             // through the menu rows. Blur is a finish, not a legibility device.
-            className="absolute top-14 left-0 right-0 mx-4 z-50 rounded-2xl p-4 flex flex-col gap-1 border border-black/[0.06] shadow-elevation-3 backdrop-blur-2xl"
+            className="absolute top-14 left-0 right-0 mx-4 z-50 rounded-2xl p-4 flex flex-col gap-1 border border-hairline shadow-elevation-3 backdrop-blur-2xl"
             style={{ maxWidth: 'min(92%, 1200px)', margin: '0 auto', background: 'rgba(255,252,248,0.97)' }}
           >
             {NAV_LINKS.map((link) => (
@@ -284,7 +298,7 @@ export default function AppNavbar() {
                 {showLock(link) && <LockGlyph />}
               </Link>
             ))}
-            <div className="my-1 border-t border-black/[0.06]" />
+            <div className="my-1 border-t border-hairline" />
             <Link
               href="/dashboard/settings"
               onClick={() => setMobileOpen(false)}

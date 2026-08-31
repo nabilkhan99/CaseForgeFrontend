@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
     dailySeed,
     filterStations,
+    groupStationsByDomain,
     isFilterActive,
     matchesQuery,
     parseStatus,
@@ -143,6 +144,70 @@ describe('summariseDomains', () => {
 
     it('handles an empty bank', () => {
         expect(summariseDomains([])).toEqual([])
+    })
+})
+
+describe('groupStationsByDomain', () => {
+    // Three domains of deliberately different sizes, interleaved in the input
+    // so nothing can pass by accident of arrival order.
+    const stations = [
+        station({ id: 'r1', domain_id: 'resp', domain_name: 'Respiratory' }),
+        station({ id: 'c1', domain_id: 'cardio', domain_name: 'Cardiovascular', attempts: [{}] }),
+        station({ id: 'r2', domain_id: 'resp', domain_name: 'Respiratory', attempts: [{}], passed: true }),
+        station({ id: 'c2', domain_id: 'cardio', domain_name: 'Cardiovascular', passed: true }),
+        station({ id: 'r3', domain_id: 'resp', domain_name: 'Respiratory' }),
+        station({ id: 'd1', domain_id: 'derm', domain_name: 'Dermatology' }),
+    ]
+
+    it('returns one row per domain, biggest first', () => {
+        expect(groupStationsByDomain(stations).map(row => [row.domainId, row.total])).toEqual([
+            ['resp', 3],
+            ['cardio', 2],
+            ['derm', 1],
+        ])
+    })
+
+    it('breaks ties on name, so equal-sized rows never swap between renders', () => {
+        const tied = [
+            station({ id: 'z1', domain_id: 'zed', domain_name: 'Zebra' }),
+            station({ id: 'a1', domain_id: 'ay', domain_name: 'Antelope' }),
+            station({ id: 'm1', domain_id: 'em', domain_name: 'Marmot' }),
+        ]
+        const names = () => groupStationsByDomain(tied).map(row => row.domainName)
+        expect(names()).toEqual(['Antelope', 'Marmot', 'Zebra'])
+        expect(groupStationsByDomain([...tied].reverse()).map(r => r.domainName)).toEqual(names())
+    })
+
+    it('keeps every station, in the order it arrived', () => {
+        const rows = groupStationsByDomain(stations)
+        expect(rows.flatMap(row => row.stations).length).toBe(stations.length)
+        expect(rows[0].stations.map(s => s.id)).toEqual(['r1', 'r2', 'r3'])
+    })
+
+    it('counts passed stations, not attempts', () => {
+        const rows = groupStationsByDomain(stations)
+        expect(rows.map(row => [row.domainId, row.passedCount])).toEqual([
+            ['resp', 1],
+            // Passed without an attempt row is possible for legacy sessions; the
+            // board must still colour it green rather than trust attempts.
+            ['cardio', 1],
+            ['derm', 0],
+        ])
+        for (const row of rows) expect(row.passedCount).toBeLessThanOrEqual(row.total)
+    })
+
+    it('agrees with summariseDomains about totals', () => {
+        // The board and the roll-up sit on the same page: if these two ever
+        // disagree the library is visibly lying about its own size.
+        const board = new Map(groupStationsByDomain(stations).map(r => [r.domainId, r]))
+        for (const domain of summariseDomains(stations)) {
+            expect(board.get(domain.id)!.total).toBe(domain.station_count)
+            expect(board.get(domain.id)!.passedCount).toBe(domain.passed_count)
+        }
+    })
+
+    it('handles an empty bank', () => {
+        expect(groupStationsByDomain([])).toEqual([])
     })
 })
 

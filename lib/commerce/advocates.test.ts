@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { validateNewCode } from './advocates'
+import { validateNewCode, validateSelfServeCode } from './advocates'
 
 describe('validateNewCode', () => {
   it('accepts a happy path with an explicit code', () => {
@@ -134,5 +134,39 @@ describe('validateNewCode', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.value.rewardOverridePence).toBeNull()
+  })
+})
+
+describe('validateSelfServeCode', () => {
+  it('accepts an email alone and mints a code prefixed from the local-part', () => {
+    const result = validateSelfServeCode({ ownerEmail: '  Nabil.Khan@Example.COM ' })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.ownerEmail).toBe('nabil.khan@example.com')
+    // "nabilkhan" with the ambiguous I/L/O stripped -> "NABKHAN", capped at 4.
+    expect(result.value.code.startsWith('NABK')).toBe(true)
+    expect(result.value.code).toHaveLength(8)
+    expect(result.value.code).toMatch(/^[A-Z2-9]+$/)
+  })
+
+  it('falls back to the FF prefix when the local-part has no usable letters', () => {
+    const result = validateSelfServeCode({ ownerEmail: '12345@example.com' })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.code.startsWith('FF')).toBe(true)
+    expect(result.value.code).toMatch(/^[A-Z2-9]+$/)
+  })
+
+  it('rejects a missing or malformed email', () => {
+    expect(validateSelfServeCode({})).toEqual({ ok: false, error: 'A valid email is required' })
+    expect(validateSelfServeCode({ ownerEmail: 'not-an-email' })).toEqual({
+      ok: false,
+      error: 'A valid email is required',
+    })
+  })
+
+  it('never requires a name, unlike validateNewCode', () => {
+    expect(validateNewCode({ ownerEmail: 'a@b.co' }).ok).toBe(false)
+    expect(validateSelfServeCode({ ownerEmail: 'a@b.co' }).ok).toBe(true)
   })
 })

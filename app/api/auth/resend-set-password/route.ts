@@ -136,12 +136,6 @@ export async function POST(request: Request) {
   // No purchase: answer exactly as if there were one. Nothing is sent.
   if (!purchase) return NextResponse.json(GENERIC_OK);
 
-  // The pre-launch refusal that used to sit here is gone with the one in
-  // provisionBuyer: access is open, so a paid buyer asking for a link is owed
-  // one, and the refusal had become the reason a tester could not get a link at
-  // all. Everything else about this route is unchanged — the generic body, and
-  // the detached send below.
-
   // Detached on purpose, and the response never depends on how it goes.
   // Awaiting it leaked twice over: a hit did two upstream round-trips (GoTrue
   // `generateLink`, then Brevo) while a miss returned immediately, so response

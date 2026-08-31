@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MAX_REFEREE_DISCOUNT_PENCE, REFERRAL_DISPLAY_COOKIE } from '@/lib/commerce/referrals';
+import { MAX_REFEREE_REWARD_PENCE, REFERRAL_DISPLAY_COOKIE } from '@/lib/commerce/referrals';
 
 const SEEN_KEY = 'ff_ref_welcome_seen';
 
@@ -35,8 +35,10 @@ function markSeen(): void {
 /**
  * One-time floating notice shown to visitors who arrived through a referral
  * link, so they know both that the recommendation is attached to their order and
- * that it carries money off — the discount is only visible on Stripe's page
- * otherwise, which is far too late to influence the decision to click Buy.
+ * that it carries money back to them. Nothing on the checkout page says so — the
+ * referee's side is paid as cash afterwards, deliberately, so their receipt is
+ * for the full course — which makes saying it here the only chance to influence
+ * the decision to click Buy.
  * Shows at most once per browser: it is marked seen the moment it appears.
  * The headline number is derived from the engine, never hardcoded. Driven purely
  * by the presence of the `ff_ref_by` flag cookie — no cookie data is rendered,
@@ -65,7 +67,7 @@ export default function ReferralWelcome() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 16 }}
           transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: 0.4 }}
-          className="fixed bottom-5 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 sm:bottom-6"
+          className="fixed inset-x-4 bottom-5 z-50 mx-auto max-w-md sm:bottom-6"
         >
           {/* Floating pill (not an inline banner): /r/CODE lands visitors at
               #pricing, so anything anchored to the page top is never seen. */}
@@ -73,8 +75,8 @@ export default function ReferralWelcome() {
             <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[#B45309]" aria-hidden="true" />
             <p className="text-sm leading-snug text-[#44403C]">
               <span className="font-semibold text-[#1C1917]">You were recommended</span> Fourteen
-              Fisherman — up to £{MAX_REFEREE_DISCOUNT_PENCE / 100} off is attached to your order,
-              applied at checkout.
+              Fisherman — join through this link and we send you up to £
+              {MAX_REFEREE_REWARD_PENCE / 100} back.
             </p>
             <button
               type="button"

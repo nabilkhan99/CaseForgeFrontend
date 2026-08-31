@@ -30,20 +30,20 @@ export default function AudioSetupNotice() {
         <motion.div
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
-          className="px-4 py-3 rounded-lg text-[13px] leading-relaxed"
+          className="px-4 py-3 rounded-[10px] text-[13px] leading-relaxed"
           style={{
             background: 'rgba(180,83,9,0.06)',
             border: '1px solid rgba(180,83,9,0.18)',
             color: '#92400E',
           }}
         >
-          <span className="font-semibold">Firefox detected.</span> Voice
+          <span className="font-medium">Firefox detected.</span> Voice
           consultations are unreliable in Firefox — the patient&apos;s audio can
           cut out mid-sentence. For the best experience, use{' '}
-          <span className="font-semibold">Chrome, Safari or Edge</span>.
+          <span className="font-medium">Chrome, Safari or Edge</span>.
         </motion.div>
       )}
-      <p className="flex items-center justify-center gap-1.5 text-[12px] text-muted">
+      <p className="flex items-center justify-center gap-1.5 text-[13px] text-muted">
         <svg
           className="w-3.5 h-3.5 shrink-0"
           viewBox="0 0 24 24"
@@ -61,7 +61,7 @@ export default function AudioSetupNotice() {
         Headphones recommended — they stop the patient&apos;s voice being picked
         up by your mic.
       </p>
-      <p className="text-center text-[12px] text-muted">
+      <p className="text-center text-[13px] text-muted">
         This consultation is recorded and stored with your transcript so your feedback can be reviewed.
       </p>
     </div>

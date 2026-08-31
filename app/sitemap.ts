@@ -3,6 +3,8 @@ import { getPublicCasesForList } from '@/lib/cases/publicCases';
 import { guideArticles } from '@/lib/guides/articles';
 import { guidePath } from '@/lib/guides/articleTypes';
 import { GUIDE_INDEX_PATH } from '@/lib/guides/scaPillarGuide';
+import { portfolioArticles } from '@/lib/portfolio-guides/articles';
+import { portfolioArticlePath } from '@/lib/portfolio-guides/articleTypes';
 import { buildCaseSeoIndex } from '@/lib/seo/cases';
 import { absoluteUrl } from '@/lib/seo/site';
 import { STUDY_BUDGET_ARTICLES, STUDY_BUDGET_HUB } from '@/lib/study-budget/content';
@@ -51,11 +53,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
             changeFrequency: 'monthly' as const,
             priority: article.slug === STUDY_BUDGET_HUB.slug ? 0.85 : 0.7,
         })),
+        // ePortfolio cluster: the tool page is the structural parent of its
+        // articles, so it carries more weight than they do.
         {
             url: absoluteUrl('/gp-portfolio-tool'),
             lastModified: now,
             changeFrequency: 'monthly',
             priority: 0.85,
         },
+        ...portfolioArticles.map(article => ({
+            url: absoluteUrl(portfolioArticlePath(article.slug)),
+            lastModified: now,
+            changeFrequency: 'monthly' as const,
+            priority: 0.7,
+        })),
     ];
 }

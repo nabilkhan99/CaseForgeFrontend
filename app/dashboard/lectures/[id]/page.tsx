@@ -1,10 +1,16 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import type { LecturesResponse, LectureSummary } from '@/app/api/lectures/route';
+import { createClient } from '@/lib/supabase/client';
+import {
+  getLectureProgressEntry,
+  saveLectureProgress,
+} from '@/lib/supabase/queries/lectureProgress';
+import { resumeTarget } from '@/lib/lectures/progress';
 
 /**
  * One lecture, played from a signed URL fetched on mount.
@@ -20,7 +26,18 @@ import type { LecturesResponse, LectureSummary } from '@/app/api/lectures/route'
  * TTL, or a pause over lunch — and Storage answers the next range request with
  * a 400, which a bare <video> shows as nothing at all. So `onError` drops the
  * URL and offers a re-sign rather than leaving a dead player on screen.
+ *
+ * PROGRESS. The furthest position reached is written to `lecture_progress` so
+ * the course list can tick a lecture off and offer to resume it. Everything
+ * about that is deliberately subordinate to playback: the write is throttled,
+ * fire-and-forget, and every failure is swallowed — a dropped progress row
+ * costs a tick, an interrupted lecture costs the lesson. Signed-out viewers
+ * (there is no /try lecture flow today, but the page does not assume it) write
+ * nothing at all.
  */
+
+/** Furthest position is written at most this often while playing. */
+const PROGRESS_WRITE_INTERVAL_MS = 10_000;
 
 export default function LecturePlayerPage() {
   const params = useParams<{ id: string }>();
@@ -32,6 +49,19 @@ export default function LecturePlayerPage() {
   const [error, setError] = useState<string | null>(null);
   const [expired, setExpired] = useState(false);
   const [resigning, setResigning] = useState(false);
+  /** Flips once we know whether there is a user and what they had watched. */
+  const [progressReady, setProgressReady] = useState(false);
+
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const userIdRef = useRef<string | null>(null);
+  /** Furthest position already in the database. Never decreases. */
+  const storedRef = useRef(0);
+  /** Furthest position reached in THIS visit. Survives a mid-watch re-sign. */
+  const furthestRef = useRef(0);
+  const lastSavedRef = useRef(0);
+  const lastWriteAtRef = useRef(0);
+  const progressReadyRef = useRef(false);
+  const resumeAppliedRef = useRef(false);
 
   /**
    * Mint (or re-mint) a playback URL. Returns the outcome rather than setting
@@ -89,6 +119,103 @@ export default function LecturePlayerPage() {
     };
   }, [id, signPlayback]);
 
+  // Runs alongside the signing above rather than after it: the seek can only
+  // happen once BOTH this and the video's metadata have landed, and making it
+  // wait for playback to be ready would make the resume visibly late.
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+
+    async function loadProgress() {
+      try {
+        const { data } = await createClient().auth.getUser();
+        const userId = data.user?.id ?? null;
+        if (cancelled) return;
+        userIdRef.current = userId;
+        if (userId) {
+          const entry = await getLectureProgressEntry(userId, id);
+          if (cancelled) return;
+          storedRef.current = entry?.secondsWatched ?? 0;
+          lastSavedRef.current = storedRef.current;
+        }
+      } catch {
+        // No progress is a fine state to play a lecture in.
+      } finally {
+        if (!cancelled) {
+          progressReadyRef.current = true;
+          setProgressReady(true);
+        }
+      }
+    }
+
+    loadProgress();
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  const persistProgress = useCallback(() => {
+    const userId = userIdRef.current;
+    if (!userId || !id) return;
+    const seconds = Math.floor(Math.max(storedRef.current, furthestRef.current));
+    if (seconds <= 0 || seconds <= lastSavedRef.current) return;
+    lastSavedRef.current = seconds;
+    lastWriteAtRef.current = Date.now();
+    storedRef.current = seconds;
+    saveLectureProgress(userId, id, seconds).catch(() => {
+      // Losing a tick is not worth interrupting a lecture over; the next
+      // write covers the same ground because `seconds` only ever grows.
+    });
+  }, [id]);
+
+  /**
+   * Seek to where they left off, once we know both where that is and how long
+   * the lecture runs. Fires from two directions because either can win the
+   * race — the progress read, or the video's own metadata.
+   */
+  const applyResume = useCallback(() => {
+    const video = videoRef.current;
+    if (!video || !progressReadyRef.current || resumeAppliedRef.current) return;
+    if (!Number.isFinite(video.duration) || video.duration <= 0) return;
+    resumeAppliedRef.current = true;
+    const target = resumeTarget(storedRef.current, furthestRef.current, video.duration);
+    if (target !== null) video.currentTime = target;
+  }, []);
+
+  // A new signed URL means a fresh element with a fresh timeline to place them
+  // on, so the seek is owed again.
+  useEffect(() => {
+    resumeAppliedRef.current = false;
+  }, [url]);
+
+  useEffect(() => {
+    if (progressReady) applyResume();
+  }, [progressReady, url, applyResume]);
+
+  // Backgrounding a tab is the commonest way a lecture ends — no pause event,
+  // no unmount, just a phone going into a pocket. The cleanup covers leaving
+  // the page by any route.
+  useEffect(() => {
+    function onVisibilityChange() {
+      if (document.visibilityState === 'hidden') persistProgress();
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      persistProgress();
+    };
+  }, [persistProgress]);
+
+  function handleTimeUpdate() {
+    const video = videoRef.current;
+    if (!video) return;
+    // Max, not assignment: scrubbing back to re-hear something must not undo
+    // the fact that they have already been past it.
+    furthestRef.current = Math.max(furthestRef.current, video.currentTime);
+    if (Date.now() - lastWriteAtRef.current < PROGRESS_WRITE_INTERVAL_MS) return;
+    persistProgress();
+  }
+
   async function retryPlayback() {
     setResigning(true);
     setError(null);
@@ -126,7 +253,7 @@ export default function LecturePlayerPage() {
           <button
             onClick={retryPlayback}
             disabled={resigning}
-            className="text-primary font-semibold hover:underline disabled:opacity-40"
+            className="text-primary font-medium hover:underline disabled:opacity-40"
           >
             {resigning ? 'reloading…' : 'reload to continue'}
           </button>
@@ -140,14 +267,24 @@ export default function LecturePlayerPage() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, ease: 'easeOut' }}
-          className="rounded-[20px] overflow-hidden bg-black"
-          style={{ boxShadow: '0 24px 64px rgba(180,83,9,0.06), 0 2px 4px rgba(0,0,0,0.04)' }}
+          className="rounded-[16px] overflow-hidden bg-black shadow-elevation-2"
         >
           <video
+            ref={videoRef}
             controls
+            // The lectures are the product: no download affordance in the
+            // controls, no "Save video as" on right-click. The signed URL is
+            // still reachable by anyone who opens devtools — this closes the
+            // casual paths, the short TTL bounds the rest.
+            controlsList="nodownload"
+            onContextMenu={(event) => event.preventDefault()}
             playsInline
             preload="metadata"
             src={url}
+            onLoadedMetadata={applyResume}
+            onTimeUpdate={handleTimeUpdate}
+            onPause={persistProgress}
+            onEnded={persistProgress}
             onError={() => {
               // Almost always the signed URL aging out mid-watch; a genuinely
               // broken file re-signs once and fails again, which reads the same

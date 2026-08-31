@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * The self-service "email me a fresh link" route.
@@ -67,29 +67,10 @@ async function post(email: unknown, ip: string) {
   return { status: response.status, body: await response.json() }
 }
 
-/**
- * A purchase whose access has opened. The route now refuses to hand a link to
- * a buyer whose course has not started, so both the plan and the purchase date
- * are load-bearing, and the clock is pinned: otherwise these tests would start
- * failing on a date rather than on a change.
- */
-const OPEN_PURCHASE = {
-  id: 'p1',
-  full_name: 'Jane Doe',
-  plan: 'self_study',
-  created_at: '2026-09-05T09:00:00Z',
-}
-
-afterEach(() => {
-  vi.useRealTimers()
-})
-
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.useFakeTimers({ shouldAdvanceTime: true })
-  vi.setSystemTime(new Date('2026-09-20T10:00:00Z'))
   vi.spyOn(console, 'error').mockImplementation(() => {})
-  mocks.lookup.mockResolvedValue({ data: OPEN_PURCHASE, error: null })
+  mocks.lookup.mockResolvedValue({ data: { id: 'p1', full_name: 'Jane Doe' }, error: null })
   mocks.sendSetPasswordLink.mockResolvedValue({ sent: true })
 })
 
@@ -195,7 +176,7 @@ describe('throttling', () => {
     mocks.lookup.mockResolvedValue({ data: null, error: null })
     const ip = '4.4.4.4'
     for (let i = 0; i < 5; i += 1) await post(`ghost${i}@x.com`, ip)
-    mocks.lookup.mockResolvedValue({ data: { ...OPEN_PURCHASE, full_name: null }, error: null })
+    mocks.lookup.mockResolvedValue({ data: { id: 'p1', full_name: null }, error: null })
 
     await post('real@x.com', ip)
 

@@ -91,6 +91,18 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
           >
             Study Budget
           </Link>
+          {/* Straight to the plans on the landing page rather than a page of
+              their own. Written as `/#pricing`, not `#pricing`: this nav also
+              renders on /sca-cases and the portfolio tool, where a bare hash
+              would scroll to nothing. /pricing still exists — it is where a
+              signed-in customer renews or upgrades, and it knows which plan
+              they hold, which this section does not. */}
+          <Link
+            href="/#pricing"
+            className="text-[13px] text-body hover:text-heading transition-colors duration-150"
+          >
+            Pricing
+          </Link>
           <Link
             href="/gp-portfolio-tool"
             className="text-[13px] text-body hover:text-heading transition-colors duration-150 flex items-baseline gap-2"
@@ -117,9 +129,7 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
                 <>
                   {/* Quiet, but present. Accounts are created by purchase, so
                       the landing page had no way in at all for someone who has
-                      already bought — they had to know /auth/sign-in by heart.
-                      A text link, not a second button: the free mock stays the
-                      one thing this nav is asking a visitor to do. */}
+                      already bought — they had to know /auth/sign-in by heart. */}
                   <Link
                     href="/auth/sign-in"
                     className="text-[13px] text-body hover:text-heading transition-colors duration-150"
@@ -199,6 +209,13 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
               className="min-h-[44px] flex items-center px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
             >
               Study Budget
+            </Link>
+            <Link
+              href="/#pricing"
+              onClick={() => setMobileOpen(false)}
+              className="min-h-[44px] flex items-center px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
+            >
+              Pricing
             </Link>
             <Link
               href="/gp-portfolio-tool"

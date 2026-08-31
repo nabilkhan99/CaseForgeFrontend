@@ -42,10 +42,22 @@ describe('accessWindow', () => {
     expect(end.toISOString()).toBe('2026-12-04T23:59:59.999Z')
   })
 
-  it('floors preorder-era buys at launch day', () => {
+  it('opens a preorder-era buy at purchase, and still ends 3 months after launch', () => {
+    // The floor was retired at the START only. A 28 July buyer practises from
+    // 28 July, and their window still closes where it was sold to them: the
+    // last instant of 30 November, three months on from launch day.
     const { start, end } = accessWindow('2026-07-28T09:00:00Z')
-    expect(start).toEqual(ACCESS_LAUNCH_DATE)
+    expect(start.toISOString()).toBe('2026-07-28T09:00:00.000Z')
     expect(end.toISOString()).toBe('2026-11-30T23:59:59.999Z')
+  })
+
+  it('never shortens a window that was sold as 3 months from launch', () => {
+    // The property that makes retiring the floor safe for the buyers who
+    // pre-ordered: every pre-launch purchase date lands on the same end date,
+    // the one it had while the floor was in place.
+    for (const bought of ['2026-06-01T00:00:00Z', '2026-07-28T09:00:00Z', '2026-08-31T23:00:00Z']) {
+      expect(accessWindow(bought).end.toISOString()).toBe('2026-11-30T23:59:59.999Z')
+    }
   })
 
   it('takes launch day from the offer, so there is one source of truth', () => {
@@ -59,10 +71,10 @@ describe('accessWindow', () => {
   })
 
   it('grants 3 calendar months, not 3 months and a day', () => {
-    // The preorder window is the one customers can count on a calendar:
-    // 1 Sept -> the last instant of 30 Nov. An inclusive end on the same
-    // day-of-month would hand out 92 days against a promise of three months.
-    const { start, end } = accessWindow('2026-07-28T09:00:00Z')
+    // The window a customer can count on a calendar: 1 Sept -> the last instant
+    // of 30 Nov. An inclusive end on the same day-of-month would hand out 92
+    // days against a promise of three months.
+    const { start, end } = accessWindow('2026-09-01T00:00:00Z')
     expect(start.toISOString()).toBe('2026-09-01T00:00:00.000Z')
     expect(end.toISOString()).toBe('2026-11-30T23:59:59.999Z')
     // Access ends the instant 1 Dec begins.
@@ -122,13 +134,18 @@ describe('computeEntitlement', () => {
     expect(computeEntitlement([row({ status: 'refunded' })], DURING).state).toBe('none')
   })
 
-  it('a monthly buy before launch waits for launch day like every other plan', () => {
-    // Founder ruling 21 Aug 2026: all plans activate on 1 Sept. The plan is
-    // carried so the dashboard can say "you're in, access opens 1 September".
+  it('a monthly is live from the moment it is paid, launch day or not', () => {
+    // The 21 Aug 2026 ruling made every plan wait for 1 September; retiring the
+    // floor undoes it. Stripe bills a rolling plan from the purchase date, so
+    // it has to grant access from the purchase date too.
     const beforeLaunch = new Date(ACCESS_LAUNCH_DATE.getTime() - 1)
-    const e = computeEntitlement([row({ plan: 'self_study_monthly' })], beforeLaunch)
-    expect(e).toMatchObject({ state: 'none', plan: 'self_study_monthly', hasLectures: false })
-    expect(computeEntitlement([row({ plan: 'self_study_monthly' })], ACCESS_LAUNCH_DATE).state).toBe('active')
+    const bought = row({ plan: 'self_study_monthly', created_at: '2026-08-22T00:00:00Z' })
+    expect(computeEntitlement([bought], beforeLaunch)).toMatchObject({
+      state: 'active',
+      plan: 'self_study_monthly',
+      hasLectures: false,
+    })
+    expect(computeEntitlement([bought], ACCESS_LAUNCH_DATE).state).toBe('active')
   })
 
   it('monthly is active while paid, has no lectures and no expiry', () => {
@@ -163,22 +180,24 @@ describe('computeEntitlement', () => {
 
   // ── Finding 2: the window has a start, and it gates ──
 
-  it('a preorder bought before launch grants nothing until launch day', () => {
+  it('a purchase made before launch is live at once, keeping its sold end date', () => {
     const e = computeEntitlement(
       [row({ plan: 'complete', created_at: '2026-07-28T09:00:00Z' })],
       new Date('2026-08-20T22:00:00Z'),
     )
-    expect(e.state).toBe('none')
-    expect(e.hasLectures).toBe(false)
-    // The purchase is still known — callers can say when access opens and ends.
+    expect(e.state).toBe('active')
+    expect(e.hasLectures).toBe(true)
     expect(e.plan).toBe('complete')
     expect(e.expiresAt?.toISOString()).toBe('2026-11-30T23:59:59.999Z')
   })
 
-  it('turns active the instant launch day arrives', () => {
+  it('turns active the instant the purchase lands, not on launch day', () => {
     const rows = [row({ created_at: '2026-07-28T09:00:00Z' })]
-    expect(computeEntitlement(rows, new Date(ACCESS_LAUNCH_DATE.getTime() - 1)).state).toBe('none')
-    expect(computeEntitlement(rows, ACCESS_LAUNCH_DATE).state).toBe('active')
+    // A start still gates — it is just the purchase now, not a fixed date.
+    expect(computeEntitlement(rows, new Date('2026-07-28T08:59:59.999Z')).state).toBe('none')
+    expect(computeEntitlement(rows, new Date('2026-07-28T09:00:00Z')).state).toBe('active')
+    // And it was live long before the retired 1 September floor.
+    expect(computeEntitlement(rows, new Date(ACCESS_LAUNCH_DATE.getTime() - 1)).state).toBe('active')
   })
 
   // ── Finding 9: multi-purchase resolution must not depend on row order ──
@@ -259,21 +278,22 @@ describe('computeEntitlement', () => {
     }
   })
 
-  it('a pending preorder beats a churned monthly, in either order', () => {
-    // The real launch-week case: a lapsed monthly subscriber pre-orders
-    // Complete. Before the fix they were shown self_study_monthly, read-only.
+  it('a deferred-start purchase beats a churned monthly, in either order', () => {
+    // A lapsed monthly subscriber buys Complete with a start date we agreed in
+    // writing (terms 3.3). Before the precedence fix they were shown
+    // self_study_monthly, read-only.
     const churned = row({ plan: 'self_study_monthly', status: 'canceled' })
-    const pending = row({ plan: 'complete', created_at: '2026-07-28T09:00:00Z' })
-    const beforeLaunch = new Date('2026-08-20T22:00:00Z')
+    const deferred = row({ plan: 'complete', created_at: '2027-06-01T00:00:00Z' })
+    const now = new Date('2027-05-01T00:00:00Z')
 
     for (const rows of [
-      [churned, pending],
-      [pending, churned],
+      [churned, deferred],
+      [deferred, churned],
     ]) {
-      const e = computeEntitlement(rows, beforeLaunch)
+      const e = computeEntitlement(rows, now)
       expect(e.state).toBe('none')
       expect(e.plan).toBe('complete')
-      expect(e.expiresAt?.toISOString()).toBe('2026-11-30T23:59:59.999Z')
+      expect(e.expiresAt?.toISOString()).toBe('2027-08-31T23:59:59.999Z')
     }
   })
 
@@ -285,24 +305,22 @@ describe('computeEntitlement', () => {
     expect(e.plan).toBe('self_study')
   })
 
-  it('before launch, nothing is live — a paid monthly and a preorder both wait', () => {
-    // Founder ruling 21 Aug 2026: all plans activate on launch day, so the old
-    // "live access beats pending" scenario cannot exist pre-launch. Both rows
-    // fold to the pending state, and a plan is still carried for the
-    // "you're in, access opens 1 September" banner.
-    const monthly = row({ plan: 'self_study_monthly' })
-    const pending = row({ plan: 'complete', created_at: '2026-07-28T09:00:00Z' })
+  it('before launch day, a paid monthly and an early one-off are both live', () => {
+    // The inverse of the 21 Aug 2026 ruling, which parked every plan until
+    // 1 September. Nothing waits now, so both rows are active and Complete
+    // wins the fold on lectures.
+    const monthly = row({ plan: 'self_study_monthly', created_at: '2026-08-01T00:00:00Z' })
+    const bought = row({ plan: 'complete', created_at: '2026-07-28T09:00:00Z' })
     const beforeLaunch = new Date('2026-08-20T22:00:00Z')
     for (const rows of [
-      [monthly, pending],
-      [pending, monthly],
+      [monthly, bought],
+      [bought, monthly],
     ]) {
       const e = computeEntitlement(rows, beforeLaunch)
-      expect(e.state).toBe('none')
-      expect(e.plan).toBeTruthy()
+      expect(e.state).toBe('active')
+      expect(e.plan).toBe('complete')
     }
-    // And the moment launch arrives, live access exists again and wins outright.
-    expect(computeEntitlement([monthly, pending], ACCESS_LAUNCH_DATE).state).toBe('active')
+    expect(computeEntitlement([monthly, bought], ACCESS_LAUNCH_DATE).state).toBe('active')
   })
 
   it('a refund does not cancel a second, live purchase', () => {
@@ -343,13 +361,15 @@ describe('computeEntitlement', () => {
 
 describe('stripeAccessWindow', () => {
   it('shifts a pre-launch purchase so it keeps its full term', () => {
-    // The worked example: bought 22 Aug 2026, Stripe period 22 Aug -> 22 Nov.
-    // Access must run 1 Sept -> the last instant of 1 Dec, not 22 Nov.
+    // The worked example: bought 22 Aug 2026, Stripe period 22 Aug -> 22 Nov,
+    // against a course sold as 3 months from 1 September. Access now opens on
+    // 22 Aug, and still runs to the last instant of 1 Dec, not 22 Nov: the ten
+    // days the shift adds were sold and are not taken back.
     const { start, end } = stripeAccessWindow(
       '2026-08-22T00:00:00Z',
       '2026-11-22T00:00:00Z',
     )
-    expect(start.toISOString()).toBe('2026-09-01T00:00:00.000Z')
+    expect(start.toISOString()).toBe('2026-08-22T00:00:00.000Z')
     expect(end.toISOString()).toBe('2026-12-01T23:59:59.999Z')
   })
 
@@ -404,10 +424,11 @@ describe('computeEntitlement with a recorded Stripe period', () => {
     expect(e.expiresAt?.toISOString()).toBe('2026-12-01T23:59:59.999Z')
   })
 
-  it('still grants nothing before launch day', () => {
-    // Money moved on 22 August; the course does not open until 1 September.
+  it('is live from the day the money moved, and keeps the shifted end', () => {
+    // Money moved on 22 August, so access runs from 22 August — and still to
+    // the last instant of 1 December, the end the term was sold with.
     const e = computeEntitlement([preLaunchStripeRow()], new Date('2026-08-25T00:00:00Z'))
-    expect(e.state).toBe('none')
+    expect(e.state).toBe('active')
     expect(e.plan).toBe('self_study')
     expect(e.expiresAt?.toISOString()).toBe('2026-12-01T23:59:59.999Z')
   })
@@ -474,12 +495,12 @@ describe('computeEntitlement with a recorded Stripe period', () => {
 
   it('surfaces the coaching day on a pre-launch Complete, so it can be booked', () => {
     // A Portal upgrade lands a `complete` row with no coaching day. The prompt
-    // to book one has to appear before the course opens, not after.
+    // to book one has to appear as soon as the purchase exists.
     const withDay = computeEntitlement(
       [preLaunchStripeRow({ plan: 'complete', coaching_day: '2026-09-12' })],
       new Date('2026-08-25T00:00:00Z'),
     )
-    expect(withDay.state).toBe('none')
+    expect(withDay.state).toBe('active')
     expect(withDay.coachingDay).toBe('2026-09-12')
 
     const without = computeEntitlement(
@@ -607,14 +628,17 @@ describe('decideAccess', () => {
     expect(decideAccess([], ctx())).toMatchObject({ allowed: false, bypass: false })
   })
 
-  it('opens a pre-launch purchase early when the launch date is brought forward', () => {
+  it('lets a purchase practise the day it is made, without a bypass', () => {
     const bought = { plan: 'self_study', status: 'paid', created_at: '2026-08-22T12:00:00Z' }
     const now = new Date('2026-08-23T12:00:00Z')
-    expect(decideAccess([bought], ctx({ now })).entitlement.state).toBe('none')
+    const d = decideAccess([bought], ctx({ now }))
+    expect(d).toMatchObject({ allowed: true, bypass: false })
+    // The end still runs 3 months from launch day, not from the earlier buy.
+    expect(d.entitlement.expiresAt?.toISOString()).toBe('2026-11-30T23:59:59.999Z')
+    // `launchDate` now only moves that anchor: bring it back to the purchase
+    // date and the end shortens to 3 months from the purchase itself.
     const early = decideAccess([bought], ctx({ now, launchDate: new Date('2026-08-22T00:00:00Z') }))
     expect(early.entitlement.state).toBe('active')
-    expect(early.bypass).toBe(false)
-    // The window still runs 3 calendar months from the (earlier) start.
     expect(early.entitlement.expiresAt?.toISOString()).toBe('2026-11-21T23:59:59.999Z')
   })
 

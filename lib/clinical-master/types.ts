@@ -136,6 +136,22 @@ export interface ConsultationFeedback {
   // Display helpers populated by the API route
   station_title?: string;
   station_id?: string;
+  /**
+   * The station's clinical teaching notes — the same column the public case
+   * page renders. Present so the report can show them straight after the
+   * consultation rather than sending people to look the case up elsewhere.
+   */
+  clinical_learning_points?: string | null;
+  /**
+   * The RCGP indicators this consultation was judged against, per domain, as
+   * markdown tables. Shown beside the learning points so a candidate can read
+   * the actual criteria rather than inferring them from their score.
+   */
+  mark_scheme?: {
+    data_gathering: string | null;
+    clinical_management: string | null;
+    relating_to_others: string | null;
+  } | null;
 }
 
 /** Verdict band helpers shared by the feedback UI. */

@@ -5,6 +5,20 @@ import { mintEphemeralKey, unreliableEchoCancellation } from '@/lib/clinical-mas
 import { voiceForStation } from '@/lib/clinical-master/realtimeSession';
 import { visibleStationStates } from '@/lib/stations/visibility';
 
+
+/**
+ * Vercel's default is 10s, and the mint is a network round-trip to Azure that
+ * can hang rather than refuse. On 31 Aug 2026 the eastus2 realtime outage
+ * produced 25 kills at exactly that wall between 07:30 and 09:37 UTC, and a
+ * killed mint means the consultation never starts at all.
+ *
+ * This matters more now the standby-region fallback exists: a primary that
+ * hangs burns most of the budget before the fallback is even attempted, so at
+ * 10s the safety net could not reliably deploy. 20s gives it room. The Hobby
+ * plan caps this at 60.
+ */
+export const maxDuration = 20;
+
 /**
  * Mint an Azure gpt-realtime ephemeral key for an authenticated consultation.
  * Replaces the former /api/livekit-token route. Verifies the Supabase JWT,
@@ -74,6 +88,9 @@ export async function POST(req: NextRequest) {
     }
 
     const durationSeconds = Number(station.consultation_duration_seconds) || 480;
+    // `result` carries `origin` ('primary' | 'fallback') — which Azure region
+    // minted the key. The client logs it to the flight recorder; keep it in the
+    // response.
     return NextResponse.json({ ...result, durationSeconds });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed to start realtime session';

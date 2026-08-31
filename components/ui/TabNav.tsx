@@ -18,7 +18,7 @@ export default function TabNav({ tabs, className = '' }: TabNavProps) {
   const pathname = usePathname();
 
   return (
-    <nav className={`flex items-center gap-1 border-b border-black/[0.06] ${className}`}>
+    <nav className={`flex items-center gap-1 border-b border-hairline ${className}`}>
       {tabs.map((tab) => {
         const isActive = tab.exact
           ? pathname === tab.href

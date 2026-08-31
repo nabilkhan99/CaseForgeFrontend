@@ -1,7 +1,7 @@
 import { after, NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import type { TrendReport } from '@/lib/clinical-master/trendTypes';
+import { isTrendReportV2 } from '@/lib/clinical-master/trendTypes';
 
 /**
  * Trend report orchestrator. Returns the latest persisted trend_reports row for
@@ -56,7 +56,17 @@ export async function POST(request: NextRequest) {
             .limit(1)
             .maybeSingle();
 
-        const haveReport = Boolean(latest);
+        /**
+         * A row in the v1 shape is not a report this product can render — its
+         * fields carry different meanings, and half of them no longer exist.
+         * Treating it as absent is what makes the migration self-healing: the
+         * page asks, the route finds nothing renderable, triggers a rebuild and
+         * answers 'generating', and the next row that lands is v2. Rendering it
+         * partially, or serving it and hoping, would pin an account to a report
+         * it can never move off.
+         */
+        const report = isTrendReportV2(latest) ? latest : null;
+        const haveReport = report !== null;
 
         // The trend engine needs MIN_CASES marked consultations before it can
         // say anything. Answer that here rather than kicking off a build and
@@ -150,8 +160,8 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        if (haveReport && !refresh) {
-            return NextResponse.json({ status: 'ready', report: latest as TrendReport });
+        if (report && !refresh) {
+            return NextResponse.json({ status: 'ready', report });
         }
         return NextResponse.json({ status: 'generating' });
     } catch (error) {

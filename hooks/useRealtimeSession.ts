@@ -135,6 +135,15 @@ const TURN_VOICED_DENSITY_MIN = 0.35;
 const TURN_MAX_MS = 120000;
 
 /**
+ * How long the transport is held open past the end of the consultation while
+ * the candidate's final turn is transcribed. See captureFinalTurn: the p99 for
+ * commit -> transcript across 359 real turns is 3.3s, so this catches
+ * essentially all of them without leaving a dead connection open if the
+ * transcription never arrives.
+ */
+const FINAL_TURN_WAIT_MS = 3000;
+
+/**
  * How long to wait for a committed turn's transcription before replying anyway.
  * `input_audio_buffer.commit` does NOT create a response (per the Realtime API
  * reference), so the two are sent separately and the reply is gated on what the
@@ -198,6 +207,28 @@ function meanProbFromLogprobs(logprobs: unknown): number | undefined {
 
 function asMs(value: unknown): number | undefined {
     return typeof value === 'number' ? value : undefined;
+}
+
+/**
+ * Compact one-line view of a `rate_limits.updated` payload.
+ *
+ * Azure re-sends the full budget for every limiter after each turn, so the raw
+ * event is both large and mostly unchanged — storing it whole would flood the
+ * 4000-entry ring. Only the headroom matters, so each entry collapses to
+ * "name remaining/limit".
+ *
+ * This is the per-consultation token-headroom telemetry: a session that ran
+ * near the ceiling shows up here as shrinking remaining counts, rather than
+ * later as an unexplained mid-consultation failure.
+ */
+function summariseRateLimits(raw: unknown): string {
+    if (!Array.isArray(raw)) return '';
+    return raw
+        .map((entry) => {
+            const e = (entry ?? {}) as { name?: unknown; remaining?: unknown; limit?: unknown };
+            return `${String(e.name ?? '?')} ${String(e.remaining ?? '?')}/${String(e.limit ?? '?')}`;
+        })
+        .join(' · ');
 }
 
 /**
@@ -265,6 +296,9 @@ interface TokenResponse {
     model: string;
     voice: string;
     durationSeconds: number;
+    /** Which Azure region minted the key — 'primary' or 'fallback'. Absent on
+     *  responses from a deployment predating regional failover. */
+    origin?: string;
 }
 
 /**
@@ -343,7 +377,22 @@ export function useRealtimeSession({
     /** Whether the receiver actually reports audioLevel on this browser; falls
      *  back to the WebAudio tap when it does not. Logged once. */
     const receiverRefUsableRef = useRef<boolean | null>(null);
+    /** Latched once a real reading has ever been seen — see getPatientLevel. */
+    const patientLevelSeenRef = useRef(false);
     const detectorIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    /**
+     * Output-side probe for the browsers the double-talk detector skips.
+     *
+     * The detector early-returns on reliable-AEC (Chrome-family) browsers and it
+     * owns the AudioContext, so `snap`/`pat` levels — our only evidence that the
+     * patient was audible — exist for Firefox and Safari and not for Chrome.
+     * That is backwards: on 30 Aug 2026 a tester lost ten Chrome/Edge sessions to
+     * silence and the flight recorder held 28 events with no audio data in any of
+     * them, while her Firefox sessions were richly instrumented. This probe fills
+     * that hole using the receiver's own RFC 6464 level, which needs no
+     * AudioContext and happens to be Chromium-only — exactly where we were blind.
+     */
+    const levelProbeRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const detectorStartedAtRef = useRef(0);
     /** Echo-coupling estimate: micRms ≈ coupling × patientRms. Starts high
      *  (conservative — over-predicts echo) and calibrates down via EMA. */
@@ -382,6 +431,11 @@ export function useRealtimeSession({
      * resolves one pending commit.
      */
     const pendingCommitsRef = useRef(0);
+    /**
+     * Set only while endRoutine is waiting for the final turn's transcript;
+     * the transcription handler calls it to end that wait early.
+     */
+    const finalTurnResolveRef = useRef<(() => void) | null>(null);
     const respondFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     // --- voice flight recorder ---
     // The event ring ALWAYS records; ?voicedebug=1 only adds the on-page
@@ -450,6 +504,64 @@ export function useRealtimeSession({
             lastSentIndexRef.current = Math.max(0, lastSentIndexRef.current - 1000);
         }
     }, []);
+
+    /**
+     * One-shot snapshot of where the patient's voice is actually being sent.
+     *
+     * The transcript rides the data channel and the voice rides the media
+     * track, so every signal we used to record could look perfect while the
+     * user heard nothing — the failure sits in the last hop, into an output
+     * device we never named. Device labels are readable here because the mic
+     * prompt has already granted the permission they depend on, and "playing to
+     * Headset while you are sitting in front of the speakers" is the entire
+     * diagnosis in one string.
+     */
+    const logAudioOutput = useCallback(
+        async (el: HTMLAudioElement) => {
+            logDebug('audio:element', {
+                paused: el.paused,
+                muted: el.muted,
+                volume: el.volume,
+                readyState: el.readyState,
+                sinkId: (el as HTMLAudioElement & { sinkId?: string }).sinkId || 'default',
+            });
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const outputs = devices.filter((d) => d.kind === 'audiooutput');
+                logDebug('audio:outputs', {
+                    count: outputs.length,
+                    devices: outputs.map((d) => ({
+                        id: d.deviceId,
+                        label: d.label || '(unlabelled)',
+                    })),
+                });
+            } catch {
+                /* enumerateDevices can reject in hardened contexts — diagnostics
+                   must never break the consultation they are observing. */
+            }
+        },
+        [logDebug]
+    );
+
+    /**
+     * Log the patient's playback level once a second on the browsers the
+     * double-talk detector skips. See levelProbeRef for why this exists.
+     * `currentTime` advancing is the cheap proof that the element is not merely
+     * un-paused but actually rendering.
+     */
+    const startLevelProbe = useCallback(() => {
+        if (levelProbeRef.current) return;
+        if (unreliableEchoCancellation(navigator.userAgent)) return;
+        levelProbeRef.current = setInterval(() => {
+            const level = receiverAudioLevel(audioReceiverRef.current);
+            const el = audioElRef.current;
+            logDebug('rx:level', {
+                lvl: level === undefined ? null : Number(level.toFixed(4)),
+                paused: el ? el.paused : null,
+                t: el ? Number(el.currentTime.toFixed(1)) : null,
+            });
+        }, 1000);
+    }, [logDebug]);
 
     /** Upload the unsent slice of the event ring. sendBeacon on pagehide
      *  (survives tab close); fetch keepalive everywhere else. Fire-and-forget:
@@ -867,6 +979,15 @@ export function useRealtimeSession({
      */
     const resolveRespondDecision = useCallback(
         (said: string, dropped: boolean) => {
+            // The consultation is over. A transcript can still arrive after the
+            // buzzer — captureFinalTurn holds the transport open precisely so
+            // that it does — and answering it would have the patient speak
+            // after time was called. The fallback timer already checked this;
+            // this path did not, and the grace window is what made it reachable.
+            if (endedRef.current) {
+                logDebug('respond:withheld', { said, reason: 'ended' });
+                return;
+            }
             if (pendingCommitsRef.current === 0) return;
             pendingCommitsRef.current -= 1;
 
@@ -1244,6 +1365,10 @@ export function useRealtimeSession({
             wakeLockRef.current.release().catch(() => {});
             wakeLockRef.current = null;
         }
+        if (levelProbeRef.current) {
+            clearInterval(levelProbeRef.current);
+            levelProbeRef.current = null;
+        }
         if (detectorIntervalRef.current) {
             clearInterval(detectorIntervalRef.current);
             detectorIntervalRef.current = null;
@@ -1308,10 +1433,76 @@ export function useRealtimeSession({
         setStatus('disconnected');
     }, [flushVoiceLog, clearRespondTimers]);
 
-    // Graceful end: silence the patient immediately, then persist the
-    // transcript and notify. Teardown must come FIRST — the save round-trip
-    // can take seconds (cold start), and while it ran the WebRTC connection
-    // used to stay live with the patient still talking.
+    /**
+     * Commit whatever the candidate was still saying, and wait for its text.
+     *
+     * Speech is not streamed — it accumulates in a server-side buffer and is
+     * only transcribed once the turn is COMMITTED, which normally happens after
+     * ~900ms of silence. Ending the consultation therefore used to discard the
+     * sentence in progress outright: never committed, never transcribed, absent
+     * from the transcript the marking engine reads. Measured across 108
+     * consultations that ran to the timer, 69% lost 6s or more of candidate
+     * speech and a third lost 15s or more, and because safety netting is the
+     * thing candidates say last it was being marked as never said.
+     *
+     * So instead of waiting for a silence that will never come, tell the server
+     * the turn is over and collect the result. Commit does not create a
+     * response (create_response is false, and armRespondDecision is not called
+     * here), so the patient stays silent. From 359 real commits the round trip
+     * is median 0.68s and p99 3.3s, so the cap below costs about a second in
+     * practice while recovering ~98.6% of what was being thrown away.
+     *
+     * Returns immediately when there is nothing outstanding — the common case,
+     * where the candidate stopped talking and the turn already closed itself.
+     */
+    const captureFinalTurn = useCallback(async () => {
+        // Two different flags, one per turn-taking path, and BOTH have to be
+        // consulted. turnOpenRef belongs to the client double-talk detector,
+        // which runs only on unreliable-AEC browsers; doctorSpeakingRef is set
+        // from the server's own VAD, which is the Chrome-family path. Checking
+        // only the first shipped a fix that was inert on the browser most
+        // people use — a live test logged `speech_started` ten seconds before
+        // the buzzer and still took the "nothing outstanding" branch.
+        const clientTurnOpen = turnOpenRef.current;
+        const serverTurnOpen = doctorSpeakingRef.current;
+        const awaitingTranscript = pendingCommitsRef.current > 0;
+        if (!clientTurnOpen && !serverTurnOpen && !awaitingTranscript) {
+            logDebug('final-turn:none');
+            return;
+        }
+
+        if (clientTurnOpen || serverTurnOpen) {
+            turnOpenRef.current = false;
+            doctorSpeakingRef.current = false;
+            logDebug('final-turn:commit', {
+                source: clientTurnOpen ? 'client-detector' : 'server-vad',
+                openMs: turnOpenedAtRef.current ? Date.now() - turnOpenedAtRef.current : null,
+            });
+            sendEvent({ type: 'input_audio_buffer.commit' });
+            // Stop capturing the moment the buffer is claimed, so the grace
+            // window collects the sentence that was in flight at the buzzer
+            // rather than letting server VAD open a fresh turn after it.
+            micStreamRef.current?.getTracks().forEach((track) => track.stop());
+        }
+
+        await new Promise<void>((resolve) => {
+            const finish = (reason: string) => {
+                if (finalTurnResolveRef.current === null) return;
+                finalTurnResolveRef.current = null;
+                clearTimeout(timeout);
+                logDebug(`final-turn:${reason}`);
+                resolve();
+            };
+            const timeout = setTimeout(() => finish('timeout'), FINAL_TURN_WAIT_MS);
+            finalTurnResolveRef.current = () => finish('captured');
+        });
+    }, [logDebug, sendEvent]);
+
+    // Graceful end: the consultation stops on time — the patient is cut off
+    // mid-word and the microphone closes — but the transport stays up for up to
+    // FINAL_TURN_WAIT_MS while the candidate's last sentence is transcribed.
+    // Teardown still precedes the save: that round trip can take seconds on a
+    // cold start, and the connection must not outlive it.
     const endRoutine = useCallback(async () => {
         if (endedRef.current) return;
         endedRef.current = true;
@@ -1319,9 +1510,14 @@ export function useRealtimeSession({
             clearTimeout(timerRef.current);
             timerRef.current = null;
         }
-        // Request the recorder stop BEFORE teardown stops the mic track, then
-        // let the upload finish in the background while the transcript saves.
+        // The audible end of the consultation, before anything is awaited.
+        interruptPatient();
+        // Stop the recording at the buzzer, not at the end of the grace window,
+        // so the audio ends where the consultation did rather than trailing a
+        // few seconds of silence — and so its upload runs alongside the wait.
+        // Still ahead of any mic track being stopped, as it has to be.
         void flushRecording('end');
+        await captureFinalTurn();
         teardown();
         try {
             await fetch(saveEndpoint, {
@@ -1337,7 +1533,15 @@ export function useRealtimeSession({
             /* best-effort — feedback route also tolerates retries */
         }
         onConsultationEnded?.();
-    }, [saveEndpoint, sessionId, teardown, flushRecording, onConsultationEnded]);
+    }, [
+        saveEndpoint,
+        sessionId,
+        teardown,
+        flushRecording,
+        onConsultationEnded,
+        interruptPatient,
+        captureFinalTurn,
+    ]);
 
     const handleFunctionCall = useCallback(
         (name: string, callId: string, _argsJson: string) => {
@@ -1372,6 +1576,8 @@ export function useRealtimeSession({
                     if (t === 'error') logDebug('rx:error', evt.error);
                     else if (/transcript(ion)?\.(completed|done)$/.test(t))
                         logDebug(`rx:${t}`, String(evt.transcript ?? ''));
+                    else if (t === 'rate_limits.updated')
+                        logDebug('rx:rate_limits', summariseRateLimits(evt.rate_limits));
                     else logDebug(`rx:${t}`);
                 }
             }
@@ -1448,6 +1654,10 @@ export function useRealtimeSession({
                     // Now that we know what was said, decide whether the turn
                     // this transcript belongs to earns a reply.
                     resolveRespondDecision(said, Boolean(dropReason));
+                    // If the consultation has ended and endRoutine is holding
+                    // the transport open for exactly this, release it — the
+                    // sentence that was in flight at the buzzer has landed.
+                    finalTurnResolveRef.current?.();
                     break;
                 }
                 // GA emits response.output_audio_transcript.done; older builds use response.audio_transcript.done.
@@ -1607,7 +1817,12 @@ export function useRealtimeSession({
                 const body = await res.json().catch(() => ({}));
                 throw new Error(body.error || `Token request failed: ${res.statusText}`);
             }
-            const { ephemeralKey, callsUrl, durationSeconds }: TokenResponse = await res.json();
+            const { ephemeralKey, callsUrl, durationSeconds, origin }: TokenResponse =
+                await res.json();
+            // Which region served this consultation. Recorded so a session that
+            // ran on the standby lane can be told apart afterwards — the standby
+            // transcribes with a different model, so it is worth knowing.
+            logDebug('connect:token', { origin: origin ?? 'unknown' });
 
             // 2. Microphone — classified separately so a denied mic gets
             // recovery instructions rather than "Connection problem".
@@ -1687,9 +1902,18 @@ export function useRealtimeSession({
                     recorderRef.current?.addRemoteTrack(e.track);
                 });
                 attachPatientAnalyser();
+                startLevelProbe();
                 recorderRef.current?.addRemoteTrack(e.track);
-                void el.play().catch(() => {
-                    /* autoplay may require gesture; ignore */
+                void logAudioOutput(el);
+                void el.play().catch((err: unknown) => {
+                    // Not swallowed any more. A refused play() is silent to the
+                    // user and, until this line, silent to us as well — which is
+                    // why ten consecutive silent sessions could not afterwards
+                    // be told apart from a dead output device.
+                    logDebug('audio:play-failed', {
+                        name: err instanceof Error ? err.name : 'unknown',
+                        message: err instanceof Error ? err.message : String(err),
+                    });
                 });
             };
 
@@ -1815,6 +2039,8 @@ export function useRealtimeSession({
         persistTranscript,
         handleServerEvent,
         sendEvent,
+        logAudioOutput,
+        startLevelProbe,
         endRoutine,
         teardown,
         startDoubleTalkDetector,
@@ -1836,6 +2062,37 @@ export function useRealtimeSession({
         recorderRef.current = null;
         teardown();
     }, [teardown]);
+
+    /**
+     * The patient's current playback level, 0..1, or null where this browser
+     * won't say.
+     *
+     * Exposed as a getter rather than as state on purpose. The consultation orb
+     * samples this ~30 times a second; as state it would re-render this hook —
+     * and therefore the whole session page, its transcript and its controls —
+     * thirty times a second, on top of the timer's existing twice-a-second
+     * render, for the entire 12 minutes and with a wake lock held so the phone
+     * can never sleep through it. A getter closes over refs only, so it is
+     * referentially stable, costs nothing when nobody calls it, and keeps the
+     * animation entirely outside React.
+     *
+     * This reads the same RFC 6464 receiver level the double-talk detector uses
+     * (see `receiverAudioLevel`) — no AudioContext, no AnalyserNode, nothing to
+     * garbage-collect, and no third audio graph competing with the two that
+     * already exist on Safari/Firefox/iOS.
+     *
+     * null vs 0 matters to the caller: null means "this browser never reports a
+     * level, animate some other way", 0 means "reporting, and it's silent". The
+     * `seen` latch keeps a momentary empty `getSynchronizationSources()` — the
+     * gap before the first RTP packet, or after teardown nulls the receiver —
+     * from being misread as the former.
+     */
+    const getPatientLevel = useCallback((): number | null => {
+        const level = receiverAudioLevel(audioReceiverRef.current);
+        if (level === undefined) return patientLevelSeenRef.current ? 0 : null;
+        patientLevelSeenRef.current = true;
+        return level;
+    }, []);
 
     const setMicMuted = useCallback((muted: boolean) => {
         setIsMuted(muted);
@@ -1864,6 +2121,7 @@ export function useRealtimeSession({
         endConsultation,
         disconnect,
         setMicMuted,
+        getPatientLevel,
         error,
         errorKind,
         status,

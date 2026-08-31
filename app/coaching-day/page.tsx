@@ -7,7 +7,6 @@ import { ArrowLeft, ArrowRight, CalendarClock } from 'lucide-react';
 import LandingNavbar from '@/components/landing/LandingNavbar';
 import LandingFooter from '@/components/landing/LandingFooter';
 import CoachingDayPicker, { useCoachingDays } from '@/components/commerce/CoachingDayPicker';
-import { ACCESS_OPENS_LABEL } from '@/lib/commerce/plans';
 import { trackEvent } from '@/lib/analytics';
 
 /**
@@ -32,7 +31,7 @@ export default function CoachingDayPage() {
       });
       const data = (await res.json()) as { url?: string; error?: string };
       if (!res.ok || !data.url) {
-        setError(data.error ?? 'Something went wrong — please try again.');
+        setError(data.error ?? 'Something went wrong, please try again.');
         setSubmitting(false);
         return;
       }
@@ -40,7 +39,7 @@ export default function CoachingDayPage() {
       await trackEvent('checkout_started', { plan: 'complete', coaching_day: selected });
       window.location.assign(data.url);
     } catch {
-      setError('Something went wrong — please try again.');
+      setError('Something went wrong, please try again.');
       setSubmitting(false);
     }
   }
@@ -62,7 +61,7 @@ export default function CoachingDayPage() {
           </Link>
 
           <p className="mt-6 text-[11px] font-medium uppercase tracking-[0.08em] text-[#854F0B] sm:text-xs">
-            Pre-order · Complete SCA Course · £599 for 3 months
+            Complete SCA Course · £599 one-off
           </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-heading sm:text-4xl">
             Choose your coaching day
@@ -72,8 +71,8 @@ export default function CoachingDayPage() {
             six. It runs on the date you choose below.
           </p>
           <p className="mt-3 inline-flex max-w-lg rounded-lg bg-[#FDF6EC] px-3 py-1.5 text-[12px] font-medium leading-relaxed text-[#854F0B]">
-            This is a pre-order: your AI practice and on-demand lectures start{' '}
-            {ACCESS_OPENS_LABEL}, and your 3 months run from that date.
+            Your AI practice and on-demand lectures start the moment you buy, and your 3 months
+            run from today.
           </p>
 
           <div className="mt-8">
@@ -85,26 +84,33 @@ export default function CoachingDayPage() {
             />
           </div>
 
-          {/* Jan–Aug 2027: no fixed dates yet — limited-availability pre-order by arrangement. */}
+          {/* Jan to Aug 2027: no fixed coaching dates yet, so buying still opens
+              access immediately and a later start is arranged by email. */}
           <div className="mt-4 rounded-xl border border-dashed border-[#D8C7A8] bg-[#FCF7EE] px-4 py-4">
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FDF6EC] px-2.5 py-1 text-[11px] font-semibold text-[#854F0B]">
                 <CalendarClock className="h-3 w-3" aria-hidden="true" /> Limited availability
               </span>
               <p className="text-sm font-semibold text-heading">
-                Sitting your SCA in Jan–Aug 2027?
+                Sitting your SCA in Jan to Aug 2027?
               </p>
             </div>
             <p className="mt-2 text-xs leading-relaxed text-body sm:text-sm">
-              Dates for that window aren&rsquo;t fixed yet, but you can still pre-order. Email{' '}
+              Dates for that window aren&rsquo;t fixed yet, but you can buy now and start straight
+              away. Your AI practice and on-demand lectures open the moment you pay, and your 3
+              months run from that date.
+            </p>
+            <p className="mt-2 text-xs leading-relaxed text-body sm:text-sm">
+              If your exam is further out and you&rsquo;d rather your 3 months started nearer to it,
+              email{' '}
               <a
                 href="mailto:hello@fourteenfisherman.com?subject=Coaching%20day%20%E2%80%94%20Jan%E2%80%93Aug%202027"
                 className="font-medium text-primary underline"
               >
                 hello@fourteenfisherman.com
               </a>{' '}
-              and we&rsquo;ll arrange your coaching day and set your AI practice and on-demand
-              lecture access to start on a day of your choice.
+              and we&rsquo;ll set a start date that suits you and arrange your coaching day at the
+              same time.
             </p>
           </div>
 

@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getStripe } from '@/lib/commerce/stripe';
 import {
+  checkoutModeFor,
   getPlan,
   stripePriceIdFor,
-  stripeRefereeCouponIdFor,
   type CoachingDayAvailability,
   type PlanKey,
 } from '@/lib/commerce/plans';
@@ -130,18 +130,14 @@ export async function POST(request: Request) {
     // codes degrade silently — checkout must never fail on a bad referral.
     const referralCode = await resolveReferralCode();
 
-    // Two-sided referral: a valid code also buys the *referee* a discount. Stripe
-    // rejects `discounts` and `allow_promotion_codes` on the same session, so a
-    // referred checkout trades the promo-code box for the automatic discount —
-    // the better deal of the two, and it removes the stack-a-100%-off-code vector
-    // that MIN_QUALIFYING_SPEND_BY_PLAN exists to catch. With no coupon configured
-    // this collapses to the previous behaviour: full price, promo box available.
-    // `duration: 'once'` still means "the first invoice", which on a fixed-term
-    // plan is the only invoice — identical economics to the old one-off charge.
-    const refereeCoupon = referralCode ? stripeRefereeCouponIdFor(plan.key as PlanKey) : null;
+    // Referred buyers are NOT discounted here: they pay list price so their
+    // receipt covers the whole course, and their side of the referral reaches
+    // them afterwards as cash (see REFEREE_REWARD_BY_PLAN). That also keeps
+    // Stripe's promo-code box available on every session — Stripe allows an
+    // automatic discount or the code box, never both.
 
     const origin = new URL(request.url).origin;
-    const productLine = `${plan.name} (pre-order; AI practice & lectures start 1 September 2026)`;
+    const productLine = plan.name;
     const description = coachingDay
       ? `Fourteen Fisherman — ${productLine}, coaching day ${coachingDay.label}`
       : `Fourteen Fisherman — ${productLine}`;
@@ -188,10 +184,14 @@ export async function POST(request: Request) {
       });
     }
 
+    // One-off for the course terms, subscription for the rolling monthly. The
+    // mode decides what Stripe's own page says: `payment` renders "Pay", while
+    // `subscription` renders "Pay and subscribe ... until you cancel" — wrong
+    // for a course that does not renew. See lib/commerce/plans.ts.
+    const mode = checkoutModeFor(plan.key);
+
     const session = await stripe.checkout.sessions.create({
-      // Every plan. The two course plans are fixed-term subscriptions whose
-      // renewal the webhook disarms; see lib/commerce/plans.ts.
-      mode: 'subscription',
+      mode,
       line_items: [{ price: stripePriceIdFor(plan.key as PlanKey), quantity: 1 }],
       success_url: `${origin}/thanks?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: coachingDay ? `${origin}/coaching-day` : `${origin}/#pricing`,
@@ -203,15 +203,26 @@ export async function POST(request: Request) {
         ? { customer: customerId, customer_update: { name: 'auto', address: 'auto' as const } }
         : {}),
       ...(user ? { client_reference_id: user.id } : {}),
-      ...(refereeCoupon
-        ? { discounts: [{ coupon: refereeCoupon }] }
-        : { allow_promotion_codes: true }),
+      allow_promotion_codes: true,
+      // What happens after they pay. An account is created for them from the
+      // email on this page and the password is set from a link — without saying
+      // so, a buyer lands on /thanks not knowing to go and look for it, which is
+      // the one step between paying and actually getting in.
+      custom_text: {
+        submit: {
+          message:
+            "After payment we'll email you a link to set your password — that's how you get into the course.",
+        },
+      },
       metadata,
-      // Monthly charges on purchase, exactly like the course plans — it is a
-      // pre-order either way, and the first payment is what starts the referral
-      // reward moving. No trial: the buyer pays today and their month runs from
-      // today. (Founder decision 2026-08-20.)
-      subscription_data: { description, metadata },
+      // Renewal, cancellation and plan-change events arrive attached to the
+      // SUBSCRIPTION, long after the session is out of reach, and carry neither
+      // session metadata nor client_reference_id — so the rolling plan repeats
+      // it there. A one-off has no such follow-up events; its metadata is put on
+      // the PaymentIntent instead, which is what a later refund arrives with.
+      ...(mode === 'subscription'
+        ? { subscription_data: { description, metadata } }
+        : { payment_intent_data: { description, metadata } }),
     });
 
     if (!session.url) {

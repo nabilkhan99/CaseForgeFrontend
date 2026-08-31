@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/admin/guard';
 import { qualificationCutoff, referralUrl } from '@/lib/commerce/referrals';
 import { validateNewCode } from '@/lib/commerce/advocates';
+import { sendPayoutReadyEmail } from '@/lib/email/payoutReadyEmail';
 import {
   computeDashboardStats,
   type CodeRow,
@@ -20,6 +21,67 @@ function getOrigin(request: Request): string {
   return `${proto}://${host}`;
 }
 
+/**
+ * Email the earners of referrals that JUST qualified, asking how to be paid.
+ *
+ * Runs off the back of lazy qualification, so it inherits its trigger: an admin
+ * loading the dashboard. That is deliberate — there is no cron, and a payout
+ * nobody has looked at does not need announcing.
+ *
+ * Sends at most once per referral (`notified_at`), and only stamps the row when
+ * the send actually succeeded, so a Brevo outage retries on the next page load
+ * rather than silently swallowing someone's payout notice.
+ *
+ * Gated OFF by default: set REFERRAL_PAYOUT_EMAIL=true to enable. Both sides are
+ * emailed — the sharer and, when they are owed one, the buyer.
+ */
+async function notifyNewlyQualified(supabase: SupabaseAdmin, ids: string[]): Promise<void> {
+  if (process.env.REFERRAL_PAYOUT_EMAIL !== 'true') return;
+
+  try {
+    const { data: rows, error } = await supabase
+      .from('referrals')
+      .select('id, referrer_email, referee_email, reward_amount, referee_reward_amount, notified_at')
+      .in('id', ids)
+      .is('notified_at', null);
+    if (error) {
+      console.error('[admin-referrals] payout notify lookup failed', error);
+      return;
+    }
+
+    for (const row of rows ?? []) {
+      const sends = [
+        row.reward_amount > 0
+          ? sendPayoutReadyEmail({ toEmail: row.referrer_email, amount: row.reward_amount, side: 'referrer' as const })
+          : null,
+        row.referee_reward_amount > 0
+          ? sendPayoutReadyEmail({ toEmail: row.referee_email, amount: row.referee_reward_amount, side: 'referee' as const })
+          : null,
+      ].filter(Boolean) as Promise<{ sent: boolean }>[];
+
+      if (sends.length === 0) continue;
+      const results = await Promise.allSettled(sends);
+      // Stamp only when every intended email landed; a partial failure retries
+      // both next time, which is a duplicate risk we accept over a silent miss.
+      const allSent = results.every((r) => r.status === 'fulfilled' && r.value.sent);
+      if (!allSent) {
+        console.error('[admin-referrals] payout notify incomplete — will retry', { referralId: row.id });
+        continue;
+      }
+      const { error: stampError } = await supabase
+        .from('referrals')
+        .update({ notified_at: new Date().toISOString() })
+        .eq('id', row.id);
+      if (stampError) {
+        console.error('[admin-referrals] notified_at stamp failed', { referralId: row.id, error: stampError });
+      }
+    }
+  } catch (err: unknown) {
+    // Notification is never allowed to break the dashboard.
+    console.error('[admin-referrals] payout notify threw', err);
+  }
+}
+
 export interface AdminReferral {
   id: string;
   referral_code: string;
@@ -28,11 +90,13 @@ export interface AdminReferral {
   plan: string;
   amount: number;
   reward_amount: number;
+  referee_reward_amount: number;
   status: 'pending' | 'qualified' | 'paid' | 'void';
   void_reason: string | null;
   created_at: string;
   qualified_at: string | null;
   paid_at: string | null;
+  referee_paid_at: string | null;
 }
 
 /**
@@ -41,7 +105,8 @@ export interface AdminReferral {
  *
  * GET  — lazily qualifies eligible pending referrals, then returns the full list.
  * POST — discriminated on `action`:
- *   - `mark_paid`   { id }                          — mark a qualified referral paid.
+ *   - `mark_paid`   { id }                          — mark the SHARER's payout sent.
+ *   - `mark_referee_paid` { id }                    — mark the BUYER's cashback sent.
  *   - `create_code` { ownerName, ownerEmail, code?, rewardOverridePence? }
  *                                                    — issue an affiliate code.
  *   - `set_active`  { code, active }                — activate/deactivate a code.
@@ -86,6 +151,8 @@ export async function GET(request: Request) {
           .eq('status', 'pending');
         if (updateError) {
           console.error('[admin-referrals] qualification update failed', updateError);
+        } else {
+          await notifyNewlyQualified(supabase, ids);
         }
       }
     }
@@ -96,7 +163,7 @@ export async function GET(request: Request) {
   const { data, error } = await supabase
     .from('referrals')
     .select(
-      'id, referral_code, referrer_email, referee_email, plan, amount, reward_amount, status, void_reason, created_at, qualified_at, paid_at',
+      'id, referral_code, referrer_email, referee_email, plan, amount, reward_amount, referee_reward_amount, status, void_reason, created_at, qualified_at, paid_at, referee_paid_at',
     )
     .order('created_at', { ascending: false });
 
@@ -160,6 +227,8 @@ export async function POST(request: Request) {
   switch (body.action) {
     case 'mark_paid':
       return markPaid(supabase, body);
+    case 'mark_referee_paid':
+      return markRefereePaid(supabase, body);
     case 'create_code':
       return createCode(supabase, request, body);
     case 'set_active':
@@ -171,7 +240,7 @@ export async function POST(request: Request) {
 
 type SupabaseAdmin = ReturnType<typeof getSupabaseAdmin>;
 
-/** Mark a qualified referral as paid out. Unchanged from the original handler. */
+/** Mark the SHARER's payout as sent. */
 async function markPaid(supabase: SupabaseAdmin, body: PostBody) {
   if (!body.id) {
     return NextResponse.json({ error: 'Expected { id, action: "mark_paid" }' }, { status: 400 });
@@ -192,6 +261,43 @@ async function markPaid(supabase: SupabaseAdmin, body: PostBody) {
   }
   if (!data) {
     return NextResponse.json({ error: 'Referral not found or not in qualified state' }, { status: 409 });
+  }
+
+  return NextResponse.json({ success: true, referral: data });
+}
+
+/**
+ * Mark the BUYER's cashback as sent — the second half of a two-sided referral.
+ *
+ * Deliberately independent of the sharer's payout: the two go to different
+ * people, often on different days, and either can be sent first. Only a
+ * referral that actually owes the buyer something can be marked, so a legacy
+ * (pre-cashback) or void row can't be ticked off by accident.
+ */
+async function markRefereePaid(supabase: SupabaseAdmin, body: PostBody) {
+  if (!body.id) {
+    return NextResponse.json({ error: 'Expected { id, action: "mark_referee_paid" }' }, { status: 400 });
+  }
+
+  const { data, error } = await supabase
+    .from('referrals')
+    .update({ referee_paid_at: new Date().toISOString() })
+    .eq('id', body.id)
+    .in('status', ['qualified', 'paid'])
+    .gt('referee_reward_amount', 0)
+    .is('referee_paid_at', null)
+    .select('id, referee_paid_at')
+    .maybeSingle();
+
+  if (error) {
+    console.error('[admin-referrals] mark_referee_paid failed', { id: body.id, error });
+    return NextResponse.json({ error: 'Failed to mark buyer paid' }, { status: 500 });
+  }
+  if (!data) {
+    return NextResponse.json(
+      { error: 'Referral not found, owes the buyer nothing, or is already marked paid' },
+      { status: 409 },
+    );
   }
 
   return NextResponse.json({ success: true, referral: data });

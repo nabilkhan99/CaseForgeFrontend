@@ -6,12 +6,13 @@ import { useRouter } from 'next/navigation';
 import type { User } from '@supabase/supabase-js';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { ACCESS_OPENS_LABEL } from '@/lib/commerce/plans';
 import ManageBillingButton from '@/components/commerce/ManageBillingButton';
-import Container from '@/components/ui/Container';
+import SettingRow from '@/components/ui/SettingRow';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import SecondaryButton from '@/components/ui/SecondaryButton';
 import PageHeader from '@/components/ui/PageHeader';
+import { saveExamDate } from '@/lib/supabase/queries/profile';
+import { upgradeEnquiryMailto } from '@/lib/commerce/upgrade';
 import type { SubscriptionResponse } from '@/app/api/subscription/route';
 
 // Access windows are 3 calendar months (28 Feb..1 Dec vary in days); the
@@ -63,16 +64,15 @@ export default function SettingsPage() {
       const { error: authError } = await supabase.auth.updateUser({
         data: {
           full_name: fullName,
-          exam_date: examDate,
         },
       });
 
-      // Also write exam_date to profiles table (fix sync bug)
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert({ id: user.id, exam_date: examDate || null }, { onConflict: 'id' });
+      // The exam date goes to user_metadata *and* profiles, and the dashboard
+      // now collects it too — so both writes live in one helper rather than in
+      // two forms that can drift apart.
+      const examSaved = await saveExamDate(user.id, examDate);
 
-      if (authError || profileError) {
+      if (authError || !examSaved) {
         setSaveError('Your changes could not be saved. Please try again.');
         return;
       }
@@ -104,8 +104,6 @@ export default function SettingsPage() {
     );
   }
 
-  const initial = fullName?.charAt(0)?.toUpperCase() || '?';
-
   return (
     <div>
       <PageHeader
@@ -113,23 +111,21 @@ export default function SettingsPage() {
         subtitle="Manage your account preferences"
       />
 
-      {/* Plan Section */}
+      {/* Plan */}
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 80, damping: 20 }}
       >
-        <Container className="mb-6">
-          <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-5">
-            Plan
-          </div>
+        <SettingRow label="Plan">
           {access === undefined ? (
-            <div className="h-16 rounded-xl bg-black/[0.03] animate-pulse" />
+            <div className="h-16 rounded-[10px] bg-black/[0.03] animate-pulse" />
           ) : access?.plan ? (() => {
             // Three phases, not a boolean: `none` WITH a plan is a purchase whose
-            // window hasn't opened yet (every pre-launch buyer), which is the
-            // opposite of "ended". Folding it into `ended` told a customer who
-            // paid this morning that their access ended on a date in the future.
+            // window hasn't opened yet, which is the opposite of "ended". Folding
+            // it into `ended` told a customer who paid this morning that their
+            // access ended on a date in the future. Since the 1 September floor
+            // was retired this only arises on a start date agreed in writing.
             const phase: 'pending' | 'active' | 'ended' =
               access.state === 'active' ? 'active' : access.state === 'read_only' ? 'ended' : 'pending';
             const ended = phase === 'ended';
@@ -171,22 +167,22 @@ export default function SettingsPage() {
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <span
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-white"
+                    className="px-2.5 py-1 rounded-md text-[11px] font-semibold text-white"
                     style={{ background: 'linear-gradient(135deg, #B45309, #D97706)' }}
                   >
                     {access.planName || access.plan}
                   </span>
                   <span
-                    className={`text-[12px] font-medium ${ended ? 'text-muted' : pending ? 'text-primary' : 'text-success'}`}
+                    className={`text-[13px] font-medium ${ended ? 'text-muted' : pending ? 'text-primary' : 'text-success'}`}
                   >
-                    {ended ? 'Ended' : pending ? `Starts ${ACCESS_OPENS_LABEL}` : 'Active'}
+                    {ended ? 'Ended' : pending ? 'Not started' : 'Active'}
                   </span>
                 </div>
                 <p className="text-[13px] text-muted mb-3">
                   {ended
                     ? `Access ended${expiryDate ? ` on ${expiryDate}` : ''} · your history and feedback stay available`
                     : pending
-                      ? `You're in. Your access opens on ${ACCESS_OPENS_LABEL}${expiryDate ? ` and runs to ${expiryDate}` : ''}.`
+                      ? `You're in. Your access hasn't opened yet${expiryDate ? `; it runs to ${expiryDate}` : ''}.`
                     : access.isMonthly
                       ? `Renews monthly${renewsDate ? ` · next payment ${renewsDate}` : ''} · cancel any time`
                       : `Ends in ${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} · ${expiryDate} · nothing renews`}
@@ -218,18 +214,17 @@ export default function SettingsPage() {
                     </Link>
                   )}
                   {/* One of the three sanctioned upgrade slots (lectures hero,
-                      here, and nowhere on the dashboard home). It opens Stripe's
-                      Portal on the plan switcher: the customer pays only for the
-                      time left on their term, so no headline price is quoted. */}
+                      here, and nowhere on the dashboard home). Since the plans
+                      went back to one-off sales the Portal cannot switch anyone
+                      (see UPGRADEABLE_FROM), so this opens a prepopulated email
+                      and the upgrade is quoted by hand — no headline price. */}
                   {canUpgrade && (
-                    <ManageBillingButton
-                      flow="subscription_update"
-                      busyLabel="Opening Stripe…"
-                      className="text-[13px] text-primary font-medium hover:underline disabled:opacity-60"
-                      errorClassName="text-[12px] text-danger mt-2"
+                    <a
+                      href={upgradeEnquiryMailto(user?.email, access.plan)}
+                      className="text-[13px] text-primary font-medium hover:underline"
                     >
                       Upgrade to Complete &rarr;
-                    </ManageBillingButton>
+                    </a>
                   )}
                   {/* Complete without a date: the one thing they still owe us. */}
                   {needsCoachingDay && (
@@ -245,12 +240,12 @@ export default function SettingsPage() {
                       — on the rolling plan — cancellation. */}
                   <ManageBillingButton
                     className="text-[13px] text-primary font-medium hover:underline disabled:opacity-60"
-                    errorClassName="text-[12px] text-danger mt-2"
+                    errorClassName="text-[13px] text-danger mt-2"
                   >
                     Manage billing &rarr;
                   </ManageBillingButton>
                 </div>
-                <p className="text-[12px] text-muted mt-2">
+                <p className="text-[13px] text-muted mt-2">
                   {access.isMonthly
                     ? 'Cancel, change plan or update your card in Stripe’s secure billing portal.'
                     : 'Invoices, receipts and your card live in Stripe’s secure billing portal. Nothing renews — your plan simply ends on the date above.'}
@@ -272,88 +267,74 @@ export default function SettingsPage() {
               read "Ended" while they can still practise. Say why, rather than
               overwriting the plan's real state with "Active". */}
           {access?.bypass && access.state !== 'active' && (
-            <p className="text-[12px] text-muted mt-4 pt-4 border-t border-black/[0.06]">
+            <p className="text-[13px] text-muted mt-4 pt-4 border-t border-hairline">
               Team access &mdash; you can practise regardless of this plan&apos;s state.
             </p>
           )}
-        </Container>
+        </SettingRow>
       </motion.div>
 
-      {/* Profile Section */}
+      {/* Email — read-only, so it is a fact rather than a field */}
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.06 }}
       >
-        <Container className="mb-6">
-          <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-5">
-            Profile
-          </div>
-
-          {/* Avatar + Email */}
-          <div className="flex items-center gap-4 pb-5 mb-5 border-b border-black/[0.06]">
-            <div
-              className="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-[20px] font-semibold flex-shrink-0"
-              style={{
-                background: 'linear-gradient(135deg, #F59E0B, #B45309)',
-                boxShadow: '0 4px 16px rgba(180,83,9,0.2)',
-              }}
-            >
-              {initial}
-            </div>
-            <div>
-              <p className="text-[15px] font-semibold text-heading">{fullName || 'User'}</p>
-              <p className="text-[13px] text-muted">{user?.email}</p>
-            </div>
-          </div>
-
-          {/* Full Name */}
-          <div>
-            <label className="block text-[11px] font-semibold text-muted uppercase tracking-[0.08em] mb-2">
-              Full Name
-            </label>
-            <input
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl bg-white/70 border border-black/[0.06] text-heading placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-base md:text-[14px]"
-              placeholder="Your full name"
-            />
-          </div>
-        </Container>
+        <SettingRow label="Email">
+          <p className="text-[15px] font-medium text-heading">{user?.email}</p>
+          <p className="text-[13px] text-muted mt-1">
+            This is the address your account and receipts are tied to.
+          </p>
+        </SettingRow>
       </motion.div>
 
-      {/* Exam Section */}
+      {/* Name */}
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.12 }}
+        transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.1 }}
       >
-        <Container className="mb-6">
-          <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.1em] mb-5">
-            Exam Preparation
-          </div>
+        <SettingRow label="Name">
+          <label htmlFor="setting-full-name" className="sr-only">
+            Full name
+          </label>
+          <input
+            id="setting-full-name"
+            type="text"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            className="w-full max-w-sm px-4 py-3 rounded-[10px] bg-white/70 border border-defined text-heading placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-base md:text-[15px]"
+            placeholder="Your full name"
+          />
+        </SettingRow>
+      </motion.div>
 
-          <div>
-            <label className="block text-[11px] font-semibold text-muted uppercase tracking-[0.08em] mb-2">
-              SCA Exam Date
-            </label>
-            <input
-              type="date"
-              value={examDate}
-              onChange={(e) => setExamDate(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl bg-white/70 border border-black/[0.06] text-heading placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-base md:text-[14px]"
-            />
-            <p className="text-[12px] text-muted mt-2">
-              Set your exam date to see a countdown on your dashboard.
-            </p>
-          </div>
-        </Container>
+      {/* Exam date */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.14 }}
+      >
+        <SettingRow label="Exam date">
+          <label htmlFor="setting-exam-date" className="sr-only">
+            SCA exam date
+          </label>
+          <input
+            id="setting-exam-date"
+            type="date"
+            value={examDate}
+            onChange={(e) => setExamDate(e.target.value)}
+            className="w-full max-w-sm px-4 py-3 rounded-[10px] bg-white/70 border border-defined text-heading placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-base md:text-[15px]"
+          />
+          <p className="text-[13px] text-muted mt-2">
+            Sets the countdown on your dashboard.
+          </p>
+        </SettingRow>
       </motion.div>
 
       {/* Save Button */}
       <motion.div
-        className="flex items-center gap-4 mb-8"
+        className="flex items-center gap-4 mt-8 mb-8"
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.18 }}
@@ -391,14 +372,11 @@ export default function SettingsPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.24 }}
       >
-        <Container className="mb-8">
-          <div className="text-[10px] font-semibold text-danger uppercase tracking-[0.1em] mb-4">
-            Account
-          </div>
+        <SettingRow label="Account" tone="danger" className="mb-8">
           <SecondaryButton variant="danger" onClick={handleSignOut}>
             Sign Out
           </SecondaryButton>
-        </Container>
+        </SettingRow>
       </motion.div>
     </div>
   );

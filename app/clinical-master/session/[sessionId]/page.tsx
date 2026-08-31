@@ -7,9 +7,8 @@ import Link from 'next/link';
 import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { micRecoveryHint } from '@/lib/clinical-master/micErrors';
 import { createClient } from '@/lib/supabase/client';
-import ConsultationTimer from '@/components/clinical-master/ConsultationTimer';
-import AudioVisualizer from '@/components/clinical-master/AudioVisualizer';
-import LiveTranscript from '@/components/clinical-master/LiveTranscript';
+import ConnectingScreen from '@/components/clinical-master/ConnectingScreen';
+import ConsultationStage from '@/components/clinical-master/ConsultationStage';
 import SessionControls from '@/components/clinical-master/SessionControls';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 
@@ -71,7 +70,7 @@ function LiveConsultationContent() {
     router.push(feedbackUrl);
   }, [router, sessionId, from]);
 
-  const { isConnected, isSpeaking, transcript, connect, endConsultation, disconnect, setMicMuted, error, errorKind, status } =
+  const { isConnected, isSpeaking, transcript, connect, endConsultation, disconnect, setMicMuted, getPatientLevel, error, errorKind, status } =
     useRealtimeSession({
       sessionId,
       stationId: stationId || undefined,
@@ -199,28 +198,18 @@ function LiveConsultationContent() {
     );
   }
 
-  // Don't paint the live consultation (avatar, "Listening…", running clock)
-  // while the token, microphone and WebRTC handshake are still in flight —
-  // first-timers were talking into a dead line for up to ten seconds.
-  if (!isConnected && !isProcessing) {
+  // Don't paint the live consultation (orb, "Listening…", running clock) while
+  // the token, microphone and WebRTC handshake are still in flight —
+  // first-timers were talking into a dead line for up to ten seconds. The gate
+  // stays on "not connected", which also covers `disconnected`; only the pulse
+  // inside it distinguishes a handshake actually in progress.
+  if (status !== 'connected' && !isProcessing) {
     return (
-      <div className="min-h-[100dvh] bg-surface flex flex-col items-center justify-center gap-6 px-6">
-        <motion.div
-          className="w-12 h-12 rounded-full border-2 border-primary border-t-transparent"
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-        />
-        <div className="text-center max-w-sm">
-          <h3 className="text-[18px] font-semibold text-heading mb-1">Connecting you to {station?.patient_name || 'your patient'}</h3>
-          <p className="text-[14px] leading-[1.65] text-muted">
-            Your browser will ask for your microphone &mdash; choose <span className="font-semibold text-heading">Allow</span>.
-            Headphones help. The patient speaks first; the clock starts when they do.
-          </p>
-        </div>
-        <button onClick={handleLeaveWithoutFinishing} className="text-[13px] font-semibold text-primary hover:underline cursor-pointer">
-          Cancel
-        </button>
-      </div>
+      <ConnectingScreen
+        patientName={station?.patient_name}
+        connecting={status === 'connecting'}
+        onCancel={handleLeaveWithoutFinishing}
+      />
     );
   }
 
@@ -236,11 +225,12 @@ function LiveConsultationContent() {
         >
           &larr; <span className="hidden sm:inline">Exit</span>
         </button>
-        <ConsultationTimer
-          durationSeconds={station?.consultation_duration_seconds || 720}
-          autoStart={isConnected}
-          onComplete={handleEndConsultation}
-        />
+        {/* The clock moved to the ring around the orb — one clock, drawn once.
+            This slot keeps the bar's three-up balance and names who is on the
+            line, which used to be repeated under the avatar. */}
+        <span className="truncate px-2 text-[13px] font-semibold text-heading">
+          {station?.patient_name || 'Patient'}
+        </span>
         <div className="flex items-center gap-2">
           {isConnected && (
             <div className="flex items-center gap-1.5">
@@ -256,51 +246,20 @@ function LiveConsultationContent() {
         </div>
       </div>
 
-      {/* Main voice area */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 gap-6 min-h-0">
-        {/* Patient avatar with pulse */}
-        <motion.div className="relative flex-shrink-0" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}>
-          <motion.div
-            className="absolute rounded-full"
-            style={{ inset: '-16px', border: '1.5px solid rgba(180,83,9,0.1)' }}
-            animate={isSpeaking ? { scale: [1, 1.25, 1], opacity: [0.4, 0, 0.4] } : { scale: 1, opacity: 0 }}
-            transition={{ duration: 2, repeat: Infinity }}
-          />
-          <motion.div
-            className="absolute rounded-full"
-            style={{ inset: '-8px', border: '2px solid rgba(180,83,9,0.15)' }}
-            animate={isSpeaking ? { scale: [1, 1.15, 1], opacity: [0.6, 0, 0.6] } : { scale: 1, opacity: 0 }}
-            transition={{ duration: 1.5, repeat: Infinity, delay: 0.2 }}
-          />
-          <div
-            className="w-20 h-20 rounded-full flex items-center justify-center text-white text-[24px] font-semibold relative"
-            style={{ background: 'linear-gradient(135deg, #F59E0B, #B45309)', boxShadow: '0 8px 32px rgba(180,83,9,0.3)' }}
-          >
-            {patientInitials}
-          </div>
-        </motion.div>
-
-        {/* Speaking indicator */}
-        <div className="text-center flex-shrink-0">
-          <motion.div
-            className="text-[12px] font-semibold text-primary uppercase tracking-[0.1em] mb-0.5"
-            animate={isSpeaking ? { opacity: [1, 0.4, 1] } : { opacity: 0.5 }}
-            transition={{ duration: 1.8, repeat: Infinity }}
-          >
-            {isSpeaking ? 'Patient Speaking' : 'Listening...'}
-          </motion.div>
-          <div className="text-[12px] text-muted">
-            {station?.patient_name || 'Patient'}
-          </div>
-        </div>
-
-        {/* Waveform or Transcript */}
-        {showTranscript ? (
-          <LiveTranscript items={transcript} className="flex-1 w-full max-w-[480px] min-h-0" />
-        ) : (
-          <AudioVisualizer active={isSpeaking} />
-        )}
-      </div>
+      {/* Main voice area — shared with /try so the two cannot drift. Every
+          station in the library is 720s; the fallback here says 720 while the
+          token routes say 480, which is harmless only while every row has a
+          duration. */}
+      <ConsultationStage
+        patientInitials={patientInitials}
+        isSpeaking={isSpeaking}
+        isConnected={isConnected}
+        getPatientLevel={getPatientLevel}
+        durationSeconds={station?.consultation_duration_seconds || 720}
+        onTimeUp={handleEndConsultation}
+        showTranscript={showTranscript}
+        transcript={transcript}
+      />
 
       {/* Controls bar */}
       <SessionControls

@@ -98,7 +98,7 @@ export async function sendReferralEmail({
             <tr>
               <td style="padding:20px 40px 0 40px;">
                 <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">Hi ${firstName},</p>
-                <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">Thanks for pre-ordering. Know another GP trainee sweating the SCA? Share your personal link below — ${pitch}</p>
+                <p style="margin:0 0 18px 0;font-size:16px;line-height:1.6;color:#44403C;">Thanks for joining Fourteen Fisherman. Know another GP trainee sweating the SCA? Share your personal link below — ${pitch}</p>
                 <p style="margin:0 0 12px 0;font-size:14px;line-height:1.5;color:#78716C;">Your link:</p>
               </td>
             </tr>
@@ -136,7 +136,7 @@ export async function sendReferralEmail({
 
   const textBody = `Hi ${firstName},
 
-Thanks for pre-ordering. Know another GP trainee sweating the SCA? Share your personal link — ${pitch}
+Thanks for joining Fourteen Fisherman. Know another GP trainee sweating the SCA? Share your personal link — ${pitch}
 
 Your link: ${referralUrl}
 

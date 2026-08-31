@@ -1,24 +1,29 @@
 import { describe, expect, it } from 'vitest'
 import { computeEntitlement, type Entitlement } from './entitlements'
-import { canSwitchPlan } from './upgrade'
+import { canSwitchPlan, upgradeEnquiryMailto, UPGRADE_CONTACT_EMAIL } from './upgrade'
 
 function entitlement(over: Partial<Entitlement>): Entitlement {
   return { state: 'active', hasLectures: false, ...over }
 }
 
 describe('canSwitchPlan', () => {
-  it('allows an active Self-Study customer', () => {
-    expect(canSwitchPlan(entitlement({ plan: 'self_study' }))).toBe(true)
+  it('offers no self-serve switch to a Self-Study customer', () => {
+    // The course terms are one-off sales again (2026-08-29), so there is no
+    // subscription to switch and the Portal cannot move anyone onto a one-off
+    // Price. Upgrades are quoted and taken by hand.
+    expect(canSwitchPlan(entitlement({ plan: 'self_study' }))).toBe(false)
   })
 
-  it('allows an active monthly Self-Study customer', () => {
-    expect(canSwitchPlan(entitlement({ plan: 'self_study_monthly' }))).toBe(true)
+  it('offers no self-serve switch to a monthly customer either', () => {
+    // A subscription exists here, but its only destination would be a one-off
+    // Price, which Stripe will not switch a subscription onto.
+    expect(canSwitchPlan(entitlement({ plan: 'self_study_monthly' }))).toBe(false)
   })
 
-  it('allows a pre-launch Self-Study buyer whose window has not opened', () => {
-    // `none` with a plan is a paid pre-order, not "no purchase". Refusing them
-    // would mean nobody who bought before 1 September could ever move up.
-    expect(canSwitchPlan(entitlement({ state: 'none', plan: 'self_study' }))).toBe(true)
+  it('offers no self-serve switch to a pre-launch buyer whose window has not opened', () => {
+    // `none` with a plan is a paid pre-order, not "no purchase" — but with
+    // UPGRADEABLE_FROM empty there is nothing to offer them either.
+    expect(canSwitchPlan(entitlement({ state: 'none', plan: 'self_study' }))).toBe(false)
   })
 
   it('refuses someone with no purchase at all', () => {
@@ -53,5 +58,28 @@ describe('canSwitchPlan', () => {
 
   it('refuses the Intensive tier', () => {
     expect(canSwitchPlan(entitlement({ plan: 'intensive', hasLectures: true }))).toBe(false)
+  })
+})
+
+describe('upgradeEnquiryMailto', () => {
+  it('addresses the founders and carries who is asking and what they hold', () => {
+    const href = upgradeEnquiryMailto('gp@example.com', 'self_study_monthly')
+    expect(href.startsWith(`mailto:${UPGRADE_CONTACT_EMAIL}?`)).toBe(true)
+    const params = new URLSearchParams(href.split('?')[1])
+    expect(params.get('subject')).toBe('Upgrade to Complete')
+    expect(params.get('body')).toContain('Account email: gp@example.com')
+    // The human-readable label, not the plan key — this lands in an inbox.
+    expect(params.get('body')).toContain('Current plan: Self-Study, monthly')
+  })
+
+  it('quotes no price — the reply is the quote', () => {
+    const body = new URLSearchParams(upgradeEnquiryMailto('gp@example.com', 'self_study').split('?')[1]).get('body')!
+    expect(body).not.toMatch(/£|\d{3}/)
+  })
+
+  it('degrades to blank fields rather than "undefined" when auth is still resolving', () => {
+    const body = new URLSearchParams(upgradeEnquiryMailto(undefined, null).split('?')[1]).get('body')!
+    expect(body).toContain('Account email: \r\n')
+    expect(body).not.toContain('undefined')
   })
 })

@@ -1,12 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ChevronDown } from 'lucide-react';
 
 interface QA {
   question: string;
-  answer: string[];
+  /**
+   * One node per paragraph. Nodes rather than plain strings so an answer can
+   * carry a link: the study budget answer has to send people to the deanery
+   * guides rather than restate them.
+   */
+  answer: ReactNode[];
 }
 
 const FAQS: QA[] = [
@@ -14,13 +20,24 @@ const FAQS: QA[] = [
     question: 'Will this actually help me pass?',
     answer: [
       "We're confident enough to put real money behind it. Pass all 200 stations, sit your SCA, and if you don't pass, we pay you £500 in cash. No other provider takes that risk with you.",
-      "It's also the most comprehensive SCA preparation you'll find. Most options give you one dimension in isolation: a set of lectures, a day of small-group coaching, or an AI subscription on its own. The Complete SCA Course combines all three. You get AI voice practice on 200 stations, 10 hours of lectures, and a full-day Small-Group Coaching session with a GP tutor (9am to 5pm), where you consult full mock stations live and get each one broken down for you. All three are built from the RCGP curriculum and the three marking domains, so nothing in the real exam catches you out.",
+      "It's also the most comprehensive SCA preparation you'll find. Most options give you one dimension in isolation: a set of lectures, a day of small-group coaching, or an AI subscription on its own. The Complete SCA Course combines all three. You get AI voice practice on 200 stations, 8 hours of lectures, and a full-day Small-Group Coaching session with a GP tutor (9am to 5pm), where you consult full mock stations live and get each one broken down for you. All three are built from the RCGP curriculum and the three marking domains, so nothing in the real exam catches you out.",
     ],
   },
   {
     question: 'Can I use my study budget for this?',
     answer: [
-      'The Complete SCA Course is bought as one payment for a fixed 3-month course term. Nothing renews and there is no recurring charge — your invoice shows a single £599 fee with the course dates it covers, which is the distinction most NHS England study budgets care about (they typically cap around £600). Eligibility varies by deanery. Most trainees pay nothing out of pocket.',
+      <>
+        The Complete SCA Course is £599 one-off, which sits within the £600 cap most NHS England
+        deaneries apply to exam preparation courses (code GP0001). Approval is decided locally and
+        the rules differ by region, so get prospective approval before you book. Our{' '}
+        <Link
+          href="/study-budget/"
+          className="font-medium text-primary underline underline-offset-2 hover:text-heading"
+        >
+          study budget guides
+        </Link>{' '}
+        set out the position for every deanery, with a pre-approval email you can adapt.
+      </>,
     ],
   },
   {
@@ -38,7 +55,7 @@ const FAQS: QA[] = [
   {
     question: 'Can I start practising straight away?',
     answer: [
-      "Not yet — this is a pre-order. Your AI practice and on-demand lectures start on 1 September 2026, and your 3 months' access runs from that date, not from the day you order. Your coaching day will be on whichever date you pick at checkout.",
+      "Yes. Your AI practice and on-demand lectures start the moment you buy, and your 3 months' access runs from that day. Your coaching day will be on whichever date you pick at checkout.",
     ],
   },
   {
@@ -62,7 +79,7 @@ const FAQS: QA[] = [
   {
     question: 'What if my exam is soon?',
     answer: [
-      "That's exactly what this is built for. Your AI practice is unlimited and available the moment you buy, and the lectures are on demand, so you can work through all 10 hours as quickly as your exam date demands: there is no fixed schedule holding you to a slower pace. For the coaching day, simply pick the date at checkout that falls before your exam.",
+      "That's exactly what this is built for. Your AI practice is unlimited and available the moment you buy, and the lectures are on demand, so you can work through all 8 hours as quickly as your exam date demands: there is no fixed schedule holding you to a slower pace. For the coaching day, simply pick the date at checkout that falls before your exam.",
     ],
   },
   {

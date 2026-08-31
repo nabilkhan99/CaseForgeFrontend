@@ -1,175 +1,103 @@
 'use client';
 
-import { Fragment } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import GuaranteeSeal from '@/components/landing/v5/GuaranteeSeal';
-import { ClipboardCheck, AudioLines, MailPlus, ChevronRight } from 'lucide-react';
-import { Accent, Pill } from '@/components/landing/v5/editorial';
+import ProofNumbers from '@/components/landing/v5/ProofNumbers';
+import { Accent, CROSSHATCH_DARK } from '@/components/landing/v5/editorial';
 
-interface Step {
-  icon: React.ReactNode;
-  ringBg: string;
-  title: React.ReactNode;
-  body: string;
-}
-
-const STEPS: Step[] = [
-  {
-    icon: <ClipboardCheck className="h-7 w-7" strokeWidth={1.75} />,
-    ringBg: '#FAEEDA',
-    title: 'Join any of our plans',
-    body: 'Choose the plan that works for you and get instant access to the platform.',
-  },
-  {
-    icon: <AudioLines className="h-7 w-7" strokeWidth={1.75} />,
-    ringBg: '#E7F1D6',
-    title: 'Pass all 200 mock AI SCA stations',
-    body: 'Unlimited attempts, no credits. Keep practising until you’re ready.',
-  },
-  {
-    icon: <MailPlus className="h-7 w-7" strokeWidth={1.75} />,
-    ringBg: '#E4ECF3',
-    title: 'Fail your real SCA? Email us proof',
-    body: 'Send us a screenshot of your result.',
-  },
-  {
-    icon: <span className="text-sm font-bold tracking-tight">£500</span>,
-    ringBg: '#FDE8C8',
-    title: (
-      <>
-        We verify &amp; pay you{' '}
-        <span className="text-[#4A6B1F]">£500</span>
-      </>
-    ),
-    body: 'We’ll verify your progress and send £500 cash within 5 working days.',
-  },
+const STEPS: readonly string[] = [
+  'Join any plan and pass all 200 mock stations, with unlimited attempts.',
+  'Fail your real SCA? Email us a screenshot of your result.',
+  'We verify and pay you £500 cash within 5 working days.',
 ];
 
-const ICON_COLOURS = ['#B45309', '#4A6B1F', '#5B7A9B', '#B45309'];
+interface GuaranteeCardProps {
+  /**
+   * Show the three proof numbers beneath the card. The homepage folds its
+   * trust numbers into this section; /pricing and the trial feedback page
+   * want the guarantee on its own.
+   */
+  proof?: boolean;
+}
 
-// The whole section is meant to be taken in at a glance, so its desktop rhythm
-// is sized to fit a 13" laptop viewport (~760px tall) and only opens back up on
-// genuinely tall screens via the `tall:` (min-height) variant. The height is
-// taken out of the vertical gaps and the heading — the steps and the £500 card
-// keep their full size.
-export default function GuaranteeCard() {
+/**
+ * The £500 guarantee, as one warm amber card: a display-size numeral rail, the
+ * promise, and the three steps that deliver it. Shared by the homepage,
+ * /pricing and the trial feedback page, so the promise reads identically
+ * wherever a trainee meets it.
+ */
+export default function GuaranteeCard({ proof = false }: GuaranteeCardProps) {
   return (
-    <section className="px-5 py-12 sm:px-8 sm:py-8 sm:tall:py-16">
+    <section className="px-5 py-12 sm:px-8 sm:py-16">
       <div className="mx-auto max-w-6xl">
-        {/* Heading */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5 }}
-          className="text-center"
+          className="overflow-hidden rounded-3xl bg-primary px-6 py-10 text-[#FFF7E4] shadow-[0_26px_52px_-34px_rgba(180,83,9,0.75)] sm:px-12 sm:py-12"
+          style={CROSSHATCH_DARK}
         >
-          <Pill>How the guarantee works</Pill>
-          {/* max-w-4xl at sm keeps this on a single line, which is where most
-              of the reclaimed vertical space comes from. */}
-          <h2 className="mx-auto mt-6 max-w-3xl text-3xl font-bold leading-[1.1] tracking-[-0.02em] text-heading sm:max-w-4xl sm:text-[2.75rem] sm:tall:max-w-3xl sm:tall:text-5xl">
-            Our SCA Guarantee. <Accent>Real skin in the game.</Accent>
-          </h2>
-          {/* hand-drawn underline accent */}
-          <svg
-            className="mx-auto mt-3 h-2.5 w-40 text-primary/70 sm:w-52"
-            viewBox="0 0 200 10"
-            fill="none"
-            aria-hidden="true"
-          >
-            <path
-              d="M2 7C40 3 90 2 130 4c25 1 50 2 68 1"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-            />
-          </svg>
-        </motion.div>
-
-        {/* Steps */}
-        <div className="mt-12 flex flex-col items-stretch gap-10 sm:mt-8 sm:flex-row sm:items-start sm:gap-2 sm:tall:mt-16">
-          {STEPS.map((step, i) => (
-            <Fragment key={i}>
-              <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.4, delay: i * 0.08 }}
-                className="flex flex-1 flex-col items-center px-2 text-center"
-              >
-                <div
-                  className="flex h-20 w-20 items-center justify-center rounded-full"
-                  style={{ backgroundColor: step.ringBg, color: ICON_COLOURS[i] }}
-                >
-                  {step.icon}
-                </div>
-                <div className="mt-5 flex items-center justify-center gap-2">
-                  <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[#B45309] text-xs font-semibold text-white">
-                    {i + 1}
-                  </span>
-                  <h3 className="text-[15px] font-semibold leading-snug text-heading sm:text-base">
-                    {step.title}
-                  </h3>
-                </div>
-                <p className="mt-2 max-w-[15rem] text-sm leading-relaxed text-body sm:max-w-[16rem]">
-                  {step.body}
-                </p>
-              </motion.div>
-              {i < STEPS.length - 1 && (
-                <ChevronRight
-                  className="mt-8 hidden h-6 w-6 flex-shrink-0 self-start text-stone-300 sm:block"
-                  aria-hidden="true"
-                />
-              )}
-            </Fragment>
-          ))}
-        </div>
-
-        {/* Never-paid-out card with £500 seal */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
-          className="relative mt-14 overflow-hidden rounded-3xl border border-heading/[0.08] bg-white/60 px-6 py-10 shadow-elevation-1 sm:mt-8 sm:px-12 sm:py-12 sm:tall:mt-16"
-        >
-          {/* faint wave texture */}
-          <svg
-            className="pointer-events-none absolute inset-0 h-full w-full text-[#B45309]/[0.05]"
-            preserveAspectRatio="none"
-            viewBox="0 0 600 200"
-            fill="none"
-            aria-hidden="true"
-          >
-            {[0, 30, 60, 90, 120, 150].map((y) => (
-              <path
-                key={y}
-                d={`M0 ${y + 40}C120 ${y + 10} 240 ${y + 70} 360 ${y + 40}S600 ${y + 10} 600 ${y + 40}`}
-                stroke="currentColor"
-                strokeWidth="1.5"
-              />
-            ))}
-          </svg>
-
-          <div className="relative flex flex-col items-center gap-8 sm:flex-row sm:gap-12">
-            <GuaranteeSeal />
-            <div className="text-center sm:text-left">
-              <p className="text-2xl font-medium leading-snug text-heading sm:text-[2rem]">
-                We&apos;ve never had to pay this out.{' '}
-                <Accent>We don&apos;t expect to start with you.</Accent>
+          <div className="flex flex-col items-center gap-8 sm:flex-row sm:items-center sm:gap-12">
+            {/* Numeral rail */}
+            <div className="w-full flex-shrink-0 border-b border-white/25 pb-7 text-center sm:w-auto sm:border-b-0 sm:border-r sm:pb-0 sm:pr-12">
+              <p className="font-[family-name:var(--font-display)] text-[4.5rem] font-bold leading-none tracking-[-0.04em] text-white sm:text-[5.5rem] lg:text-[6.5rem]">
+                £500
               </p>
+              <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#FAC775] sm:text-xs">
+                Paid in cash
+              </p>
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <h2 className="font-[family-name:var(--font-display)] text-[1.75rem] font-bold leading-[1.12] tracking-[-0.025em] text-white sm:text-[2.25rem] lg:text-[2.5rem]">
+                If you don&apos;t pass the SCA, we&apos;ll pay you £500.
+              </h2>
+
+              <ol className="mt-6 grid gap-3.5">
+                {STEPS.map((step, i) => (
+                  <motion.li
+                    key={step}
+                    initial={{ opacity: 0, y: 10 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.4, delay: 0.1 + i * 0.08 }}
+                    className="flex items-baseline gap-3.5"
+                  >
+                    <span
+                      className="flex-shrink-0 font-mono text-[13px] text-[#FAC775]"
+                      aria-hidden="true"
+                    >
+                      {String(i + 1).padStart(2, '0')}
+                    </span>
+                    <span className="text-[15px] leading-[1.55] sm:text-base">
+                      {step}
+                    </span>
+                  </motion.li>
+                ))}
+              </ol>
+
+              {/* Kept at 24px and up: the accent tone only clears its contrast
+                  threshold on the amber card at large-text sizes. */}
+              <p className="mt-7 text-2xl font-medium leading-snug text-white sm:text-[1.75rem]">
+                We&apos;ve never had to pay this out.{' '}
+                <Accent dark className="!text-[#FAC775]">
+                  We don&apos;t expect to start with you.
+                </Accent>
+              </p>
+
               <Link
                 href="/terms"
-                className="mt-5 inline-block text-sm font-medium text-body underline decoration-heading/30 underline-offset-4 transition hover:text-heading"
+                className="mt-4 inline-block border-b border-white/45 pb-0.5 text-sm font-medium text-[#FFF7E4] transition-colors hover:border-white hover:text-white"
               >
                 Full terms and conditions
               </Link>
             </div>
           </div>
         </motion.div>
+
+        {proof && <ProofNumbers />}
       </div>
     </section>
   );
 }
-

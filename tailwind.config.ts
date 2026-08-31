@@ -37,6 +37,13 @@ module.exports = {
           DEFAULT: 'rgba(0,0,0,0.06)',
           hover: 'rgba(0,0,0,0.10)',
         },
+        // Two neutral edge weights, not six. Flat keys so the utilities read as
+        // `border-hairline` / `divide-hairline` rather than `border-border-*`.
+        // hairline: dividers, section rules and passive card edges.
+        // defined:  interactive edges — inputs, buttons, clickable-card hover.
+        // Tinted off the heading stone (#1C1917) so edges stay warm on cream.
+        hairline: 'rgba(28,25,23,0.06)',
+        defined: 'rgba(28,25,23,0.12)',
         // v4 design tokens (§1.2)
         'bg-page': '#F5EEE3',
         'bg-card': '#FBF7F1',
@@ -108,6 +115,24 @@ module.exports = {
           '50%': { backgroundPosition: '100% 50%' },
           '100%': { backgroundPosition: '0% 50%' },
         },
+        // Live consultation. Both are transform/opacity only so they stay on
+        // the compositor: they run for minutes at a time on a phone that is
+        // also holding a WebRTC call and a screen wake lock, and both are used
+        // through `motion-safe:` so `prefers-reduced-motion` stops them dead.
+        //
+        // The orb's resting state when nobody is talking. Kept tiny — this is
+        // "alive", not "animated".
+        'orb-breathe': {
+          '0%, 100%': { transform: 'scale(1)' },
+          '50%': { transform: 'scale(1.025)' },
+        },
+        // A ring leaving the connect pulse. Starts at the ring's own resting
+        // size so that with the animation off the three rings still read as
+        // concentric rather than collapsing on top of each other.
+        'connect-ping': {
+          '0%': { transform: 'scale(1)', opacity: 'var(--ping-opacity, 0.5)' },
+          '80%, 100%': { transform: 'scale(1.5)', opacity: '0' },
+        },
       },
       animation: {
         slideDown: 'slideDown 0.2s ease-out',
@@ -122,6 +147,8 @@ module.exports = {
         'marquee-vertical': 'marquee-vertical var(--duration) infinite linear',
         'gradient-bg': 'gradient-bg 8s linear infinite',
         'gradient-text': 'gradient-bg 8s linear infinite',
+        'orb-breathe': 'orb-breathe 5s ease-in-out infinite',
+        'connect-ping': 'connect-ping 2.4s cubic-bezier(0.25,0.6,0.35,1) infinite',
       },
       borderRadius: {
         'xl': '12px',
@@ -129,10 +156,13 @@ module.exports = {
         '3xl': '24px',
       },
       boxShadow: {
-        'elevation-1': '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
-        'elevation-2': '0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04)',
-        'elevation-3': '0 12px 32px rgba(0,0,0,0.1), 0 4px 8px rgba(0,0,0,0.04)',
-        'elevation-4': '0 24px 48px rgba(0,0,0,0.12), 0 8px 16px rgba(0,0,0,0.06)',
+        // e1–e3 are resting surfaces: near-hairline, tinted off the heading stone
+        // (#1C1917) rather than pure black. e4 is reserved for things that
+        // genuinely float — modals, popovers, dropdowns.
+        'elevation-1': '0 1px 0 rgba(28,25,23,0.04)',
+        'elevation-2': '0 1px 2px rgba(28,25,23,0.05), 0 1px 0 rgba(28,25,23,0.03)',
+        'elevation-3': '0 2px 6px -1px rgba(28,25,23,0.07), 0 1px 0 rgba(28,25,23,0.03)',
+        'elevation-4': '0 12px 32px -12px rgba(28,25,23,0.18)',
         'card-chrome': '0 1px 2px rgba(31, 26, 20, 0.04), 0 4px 8px rgba(31, 26, 20, 0.04)',
       },
     },

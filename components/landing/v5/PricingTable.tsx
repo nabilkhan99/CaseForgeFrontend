@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowRight, Info } from 'lucide-react';
-import { ACCESS_OPENS_LABEL, BOOK_A_CALL_URL, type PlanKey } from '@/lib/commerce/plans';
+import { BOOK_A_CALL_URL, type PlanKey } from '@/lib/commerce/plans';
 import ManageBillingButton from '@/components/commerce/ManageBillingButton';
 import { trackEvent } from '@/lib/analytics';
 import { Pill } from './editorial';
@@ -30,7 +30,7 @@ const FEATURE_ROWS: readonly FeatureRow[] = [
   },
   {
     label: 'On-demand Lectures',
-    cells: [{ text: '', cross: true }, { text: '10 hours', sub: '£599 value' }, { text: '10 hours' }],
+    cells: [{ text: '', cross: true }, { text: '8 hours', sub: '£599 value' }, { text: '8 hours' }],
   },
   {
     label: 'Small-Group Coaching',
@@ -48,8 +48,9 @@ const FEATURE_ROWS: readonly FeatureRow[] = [
 
 /**
  * Which Self-Study offer the toggle is showing. A presentation concern, not a
- * billing one: both are Stripe subscriptions, they simply differ in term. The
- * plan catalogue owns the real billing shape (`Plan.billing`).
+ * billing one: the course term is a one-off sale, the monthly plan a Stripe
+ * subscription. The plan catalogue owns the real billing shape
+ * (`Plan.billing`).
  */
 type BillingChoice = 'three_month' | 'monthly';
 
@@ -120,7 +121,7 @@ function useSelfStudyCheckout() {
       });
       const data = (await res.json()) as { url?: string; error?: string };
       if (!res.ok || !data.url) {
-        setError(data.error ?? 'Something went wrong — please try again.');
+        setError(data.error ?? 'Something went wrong, please try again.');
         setSubmitting(false);
         return;
       }
@@ -128,7 +129,7 @@ function useSelfStudyCheckout() {
       await trackEvent('checkout_started', { plan });
       window.location.assign(data.url);
     } catch {
-      setError('Something went wrong — please try again.');
+      setError('Something went wrong, please try again.');
       setSubmitting(false);
     }
   }
@@ -312,7 +313,7 @@ function GuaranteeInfo({
             align === 'center' ? 'text-center' : 'text-left'
           }`}
         >
-          This is a <span className="font-medium text-[#27500A]">conditional</span> guarantee &mdash; to
+          This is a <span className="font-medium text-[#27500A]">conditional</span> guarantee: to
           qualify you must first pass all 200 AI stations.
         </motion.p>
       )}
@@ -345,7 +346,10 @@ function OwnedCta() {
 function PlanCta({ selfStudy, variant, selfStudyPlan, owned, canUpgrade }: CtaButtonsProps) {
   if (owned === variant) return <OwnedCta />;
   if (variant === 'complete' && canUpgrade) {
-    // A Self-Study customer already has a subscription: Stripe swaps its Price
+    // Dead while UPGRADEABLE_FROM is empty (canSwitchPlan always refuses, so
+    // `canUpgrade` never arrives true). Kept because re-populating that set is
+    // the whole of turning self-serve upgrades back on.
+    // A Self-Study customer would need a subscription: Stripe swaps its Price
     // and invoices only the time left on their term. Sending them through
     // /coaching-day would charge the full £599 for what they part-own.
     return (
@@ -372,7 +376,7 @@ function PlanCta({ selfStudy, variant, selfStudyPlan, owned, canUpgrade }: CtaBu
         disabled={selfStudy.submitting}
         className="w-full rounded-full border border-heading/15 bg-white px-2 py-3 text-[13px] font-semibold text-heading transition-colors hover:bg-surface-warm disabled:opacity-60 sm:py-2.5 sm:text-sm"
       >
-        {selfStudy.submitting ? 'Redirecting…' : monthly ? 'Start monthly' : 'Pre-order now'}
+        {selfStudy.submitting ? 'Redirecting…' : monthly ? 'Start monthly' : 'Start practising'}
       </button>
     );
   }
@@ -579,13 +583,6 @@ export default function PricingTable({ ownedPlan, accountEmail, canUpgrade = fal
             <Pill>Choose your prep</Pill>
           </p>
 
-          <p className="mb-6 flex justify-center">
-            <span className="inline-flex items-center gap-2 rounded-full bg-[#FAEEDA] px-4 py-1.5 text-center text-xs font-semibold text-[#854F0B] sm:text-[13px]">
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#B45309]" aria-hidden="true" />
-              Pre-order — AI practice &amp; lectures start {ACCESS_OPENS_LABEL}
-            </span>
-          </p>
-
           <BillingToggle billing={billing} onChange={setBilling} />
 
           <MobileCards selfStudy={selfStudy} billing={billing} owned={owned} canUpgrade={canUpgrade} />
@@ -704,7 +701,7 @@ export default function PricingTable({ ownedPlan, accountEmail, canUpgrade = fal
               <div className="col-span-4 bg-[#EAF3DE] px-6 py-3.5">
                 <GuaranteeInfo align="center">
                   <p className="text-[11px] text-[#27500A] sm:text-xs">
-                    Every plan — don&rsquo;t pass, and we pay you £500.
+                    Every plan: don&rsquo;t pass, and we pay you £500.
                   </p>
                 </GuaranteeInfo>
               </div>
