@@ -40,6 +40,13 @@ export interface ReceiptEmailCopyArgs {
   /** "27 September 2026". Monthly only — a consumer-law requirement. */
   nextBillingDate?: string | null
   /**
+   * The recurring charge, formatted — "£129.00". Monthly only.
+   *
+   * Passed in from the actual Stripe amount rather than hardcoded, so the copy
+   * cannot drift from what the card was charged if the Price is ever rotated.
+   */
+  renewalAmount?: string | null
+  /**
    * False when the buyer already had an account, so there is no link to set a
    * password with and the mail points them at sign-in instead.
    */
@@ -80,6 +87,7 @@ export function buildReceiptEmailCopy({
   sessionDate,
   nextBillingDate,
   hasSetupLink,
+  renewalAmount,
   isRenewal = false,
 }: ReceiptEmailCopyArgs): ReceiptEmailCopy {
   const first = firstName?.trim().split(' ')[0] || 'there'
@@ -88,9 +96,10 @@ export function buildReceiptEmailCopy({
   // The monthly renewal terms. Stated on the first charge AND on every renewal:
   // "you will be charged again, on this date, for this much" is the thing a
   // subscriber is entitled to be told, and it is what stops a chargeback.
+  const amount = renewalAmount?.trim() || '£129'
   const renewalTerms = nextBillingDate
-    ? `This is a monthly subscription. It renews on ${nextBillingDate} at £129, and again each month until you cancel. You can cancel any time from your account, or by replying to this email, and you'll keep access until the end of the period you've paid for.`
-    : `This is a monthly subscription. It renews each month at £129 until you cancel. You can cancel any time from your account, or by replying to this email, and you'll keep access until the end of the period you've paid for.`
+    ? `This is a monthly subscription. It renews on ${nextBillingDate} at ${amount}, and again each month until you cancel. You can cancel any time from your account, or by replying to this email, and you'll keep access until the end of the period you've paid for.`
+    : `This is a monthly subscription. It renews each month at ${amount} until you cancel. You can cancel any time from your account, or by replying to this email, and you'll keep access until the end of the period you've paid for.`
 
   if (isRenewal) {
     // A renewal is not a welcome. No setup link — they have had an account for

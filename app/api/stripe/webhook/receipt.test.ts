@@ -16,6 +16,9 @@ const mocks = vi.hoisted(() => ({
   subscriptionsRetrieve: vi.fn(),
   subscriptionsUpdate: vi.fn(),
   issueReceipt: vi.fn(),
+  claimReceiptEmail: vi.fn(),
+  releaseReceiptEmail: vi.fn(),
+  order: { id: 'p1', email: 'buyer@x.com', full_name: 'Jane Okonkwo' } as unknown,
   sendReceiptEmail: vi.fn(),
   sendSetPasswordEmail: vi.fn(),
   provisionBuyerAccount: vi.fn(),
@@ -34,7 +37,11 @@ vi.mock('@/lib/commerce/stripe', () => ({
 
 vi.mock('@/lib/email/referralEmail', () => ({ sendReferralEmail: vi.fn() }))
 vi.mock('@/lib/marketing/preorderContact', () => ({ pushPreorderContactToBrevo: vi.fn(async () => ({})) }))
-vi.mock('@/lib/receipts/issueReceipt', () => ({ issueReceipt: mocks.issueReceipt }))
+vi.mock('@/lib/receipts/issueReceipt', () => ({
+  issueReceipt: mocks.issueReceipt,
+  claimReceiptEmail: mocks.claimReceiptEmail,
+  releaseReceiptEmail: mocks.releaseReceiptEmail,
+}))
 vi.mock('@/lib/email/receiptEmail', () => ({ sendReceiptEmail: mocks.sendReceiptEmail }))
 vi.mock('@/lib/email/accountEmail', () => ({ sendSetPasswordEmail: mocks.sendSetPasswordEmail }))
 
@@ -56,11 +63,22 @@ vi.mock('@supabase/supabase-js', () => ({
       delete: () => ({ eq: async () => ({ error: null }) }),
       insert: () => ({ select: () => ({ single: async () => ({ data: { id: 'p1' }, error: null }) }) }),
       update: () => {
-        const b = { eq: () => b, neq: async () => ({ error: null }), select: async () => ({ data: [], error: null }) }
+        const b = {
+          eq: () => b,
+          neq: () => b,
+          is: () => b,
+          select: async () => ({ data: [], error: null }),
+          then: (r: (v: unknown) => unknown) => Promise.resolve({ error: null }).then(r),
+        }
         return b
       },
       select: () => {
-        const b = { eq: () => b, neq: () => b, maybeSingle: async () => ({ data: null, error: null }) }
+        const b = {
+          eq: () => b,
+          neq: () => b,
+          limit: () => b,
+          maybeSingle: async () => ({ data: mocks.order, error: null }),
+        }
         return b
       },
     }),
@@ -121,6 +139,127 @@ beforeEach(() => {
   })
   mocks.sendReceiptEmail.mockResolvedValue({ sent: true })
   mocks.sendSetPasswordEmail.mockResolvedValue({ sent: true })
+  mocks.claimReceiptEmail.mockResolvedValue(true)
+  mocks.order = { id: 'p1', email: 'buyer@x.com', full_name: 'Jane Okonkwo' }
+})
+
+/** A paid renewal invoice for the rolling plan. */
+function invoicePaid(overrides: Record<string, unknown> = {}) {
+  return {
+    type: 'invoice.paid',
+    created: EVENT_CREATED,
+    data: {
+      object: {
+        id: 'in_test_999',
+        billing_reason: 'subscription_cycle',
+        amount_paid: 12900,
+        currency: 'gbp',
+        parent: { subscription_details: { subscription: 'sub_1' } },
+        ...overrides,
+      },
+    },
+  }
+}
+
+function rollingSubscription() {
+  return {
+    id: 'sub_1',
+    status: 'active',
+    cancel_at: null,
+    cancel_at_period_end: false,
+    items: {
+      data: [
+        {
+          current_period_start: 1787826600,
+          current_period_end: 1790418600,
+          price: { id: 'price_monthly', unit_amount: 12900 },
+        },
+      ],
+    },
+    latest_invoice: { status: 'paid', payments: { data: [] } },
+  }
+}
+
+describe('a monthly renewal', () => {
+  beforeEach(() => {
+    vi.stubEnv('STRIPE_PRICE_SELF_STUDY_MONTHLY', 'price_monthly')
+    mocks.subscriptionsRetrieve.mockResolvedValue(rollingSubscription())
+    mocks.issueReceipt.mockResolvedValue({
+      id: 'r-4479',
+      receiptNumber: 'FF-26-4479',
+      pdf: Buffer.from('%PDF'),
+      fileName: 'Fourteen-Fisherman-receipt-FF-26-4479.pdf',
+      periodEnd: new Date(1790418600 * 1000),
+      content: {},
+    })
+  })
+
+  it('keys the receipt on the INVOICE id, not a session', async () => {
+    // A renewal has no checkout session. The invoice is what makes a
+    // redelivered `invoice.paid` reprint one number instead of burning another.
+    await deliver(invoicePaid())
+
+    expect(mocks.issueReceipt.mock.calls[0][1]).toMatchObject({
+      stripeEventKey: 'in_test_999',
+      planKey: 'self_study_monthly',
+      amountPence: 12900,
+      kind: 'renewal',
+    })
+  })
+
+  it('emails the renewal receipt once', async () => {
+    await deliver(invoicePaid())
+
+    expect(mocks.claimReceiptEmail).toHaveBeenCalledWith(expect.anything(), 'r-4479')
+    expect(mocks.sendReceiptEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ isRenewal: true, hasSetupLink: false, setupUrl: null }),
+    )
+  })
+
+  it('does NOT re-email when Stripe redelivers the same invoice', async () => {
+    // Allocation is idempotent, so a redelivery lands on the same receipt —
+    // right for the number, wrong for the mail. A redelivery is not a failure
+    // Stripe backs off from; it is a success that keeps re-firing, so without
+    // the claim every subscriber would collect duplicates of one receipt.
+    mocks.claimReceiptEmail.mockResolvedValue(false)
+
+    await deliver(invoicePaid())
+
+    expect(mocks.issueReceipt).toHaveBeenCalledTimes(1)
+    expect(mocks.sendReceiptEmail).not.toHaveBeenCalled()
+  })
+
+  it('hands the claim back when the renewal email fails', async () => {
+    mocks.sendReceiptEmail.mockResolvedValue({ sent: false, error: 'brevo_error' })
+
+    await deliver(invoicePaid())
+
+    expect(mocks.releaseReceiptEmail).toHaveBeenCalledWith(expect.anything(), 'r-4479')
+  })
+
+  it('states the renewal amount Stripe actually took', async () => {
+    await deliver(invoicePaid({ amount_paid: 9900 }))
+
+    expect(mocks.sendReceiptEmail.mock.calls[0][0].renewalAmount).toBe('£99.00')
+  })
+
+  it('issues nothing for the FIRST invoice of a subscription', async () => {
+    // subscription_create was already receipted by the checkout handler. Without
+    // this gate the buyer gets two receipts, on two numbers, for one payment.
+    await deliver(invoicePaid({ billing_reason: 'subscription_create' }))
+
+    expect(mocks.issueReceipt).not.toHaveBeenCalled()
+    expect(mocks.sendReceiptEmail).not.toHaveBeenCalled()
+  })
+
+  it('sends nothing when no order sits behind the subscription', async () => {
+    mocks.order = null
+
+    await deliver(invoicePaid())
+
+    expect(mocks.issueReceipt).not.toHaveBeenCalled()
+    expect(mocks.sendReceiptEmail).not.toHaveBeenCalled()
+  })
 })
 
 describe('a completed checkout issues and sends a receipt', () => {

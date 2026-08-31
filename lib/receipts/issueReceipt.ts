@@ -67,12 +67,65 @@ interface ReceiptRow {
 }
 
 export interface IssuedReceipt extends RenderedReceipt {
+  /** `public.receipts.id` — what {@link claimReceiptEmail} claims against. */
+  id: string
   receiptNumber: string
   /** The billing period end, for the email's renewal line. Rolling plan only. */
   periodEnd: Date | null
 }
 
 type ReceiptAdmin = Pick<SupabaseClient, 'rpc'>
+type ReceiptEmailAdmin = Pick<SupabaseClient, 'from'>
+
+/**
+ * Claim the right to email this receipt. True = this call now owns the send.
+ *
+ * Allocation is idempotent, so a redelivered Stripe event gets the SAME receipt
+ * row back — but that answers "which number", not "has it been sent". Without
+ * this second gate a routine redelivery of `invoice.paid` would email a
+ * subscriber another copy of a receipt they already have, and a redelivery is
+ * not a failure Stripe backs off from: it is a success that keeps re-firing.
+ *
+ * The purchase path needs no equivalent — its send is already gated by the
+ * set-password claim on `preorders` — so this is used by renewals only.
+ */
+export async function claimReceiptEmail(
+  supabase: ReceiptEmailAdmin,
+  receiptId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('receipts')
+    .update({ emailed_at: new Date().toISOString() })
+    .eq('id', receiptId)
+    .is('emailed_at', null)
+    .select('id')
+
+  if (error) {
+    // Fail closed: a claim we cannot take is a send we must not make, or a
+    // redelivery could double-email. The retry will try again.
+    console.error('[receipt] could not claim the email send', { receiptId, error })
+    return false
+  }
+  return (data?.length ?? 0) > 0
+}
+
+/** Hand the claim back so a retry can send. */
+export async function releaseReceiptEmail(
+  supabase: ReceiptEmailAdmin,
+  receiptId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('receipts')
+    .update({ emailed_at: null })
+    .eq('id', receiptId)
+
+  if (error) {
+    console.error('[receipt] could not release the email claim — receipt needs a manual resend', {
+      receiptId,
+      error,
+    })
+  }
+}
 
 export async function issueReceipt(
   supabase: ReceiptAdmin,
@@ -136,7 +189,7 @@ export async function issueReceipt(
       periodStart: row.period_start ? new Date(row.period_start) : null,
       periodEnd,
     })
-    return { ...rendered, receiptNumber: row.receipt_number, periodEnd }
+    return { ...rendered, id: row.id, receiptNumber: row.receipt_number, periodEnd }
   } catch (error: unknown) {
     // The number is issued and recorded either way. It is not reused, and the
     // row is the audit trail — this receipt can be re-rendered by hand from it.

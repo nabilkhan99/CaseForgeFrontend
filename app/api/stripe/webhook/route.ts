@@ -17,9 +17,9 @@ import { resolvePurchaseEmail } from '@/lib/commerce/buyerEmail';
 import { sendReferralEmail } from '@/lib/email/referralEmail';
 import { sendReceiptEmail } from '@/lib/email/receiptEmail';
 import { sendSetPasswordEmail } from '@/lib/email/accountEmail';
-import { issueReceipt } from '@/lib/receipts/issueReceipt';
+import { claimReceiptEmail, issueReceipt, releaseReceiptEmail } from '@/lib/receipts/issueReceipt';
 import { paymentMethodLabel } from '@/lib/receipts/paymentMethod';
-import { formatReceiptDate, isReceiptPlanKey } from '@/lib/receipts/receiptContent';
+import { formatAmount, formatReceiptDate, isReceiptPlanKey } from '@/lib/receipts/receiptContent';
 import { pushPreorderContactToBrevo } from '@/lib/marketing/preorderContact';
 import { provisionBuyerAccount } from '@/lib/auth/provisionBuyer';
 
@@ -719,6 +719,7 @@ async function deliverPurchaseReceipt(
     // The renewal date and amount, which the monthly buyer is entitled to be
     // told before the second charge lands.
     nextBillingDate: receipt.periodEnd ? formatReceiptDate(receipt.periodEnd) : null,
+    renewalAmount: formatAmount(session.amount_total ?? 0),
     hasSetupLink: Boolean(setupUrl),
     setupUrl,
     pdf: receipt.pdf,
@@ -985,19 +986,36 @@ async function handleInvoicePaid(invoice: Stripe.Invoice, chargedAt: Date) {
     return NextResponse.json({ received: true, ignored: 'no_subscription' });
   }
 
+  let subscription: Stripe.Subscription | null = null;
   try {
     // Expanded, because syncSubscription will not write anything until it can
     // see that this invoice is paid.
-    const subscription = await getStripe().subscriptions.retrieve(subscriptionId, {
+    subscription = await getStripe().subscriptions.retrieve(subscriptionId, {
       expand: ['latest_invoice'],
     });
     await syncSubscription(subscription);
-    await deliverRenewalReceipt(invoice, subscription, chargedAt);
   } catch (error: unknown) {
     console.error('[stripe-webhook] invoice.paid period refresh failed (non-fatal)', {
       subscriptionId,
       error,
     });
+  }
+
+  // Its own try, deliberately not sharing the one above. The period refresh and
+  // the customer's receipt are unrelated obligations, and this handler always
+  // returns 200 — so folding them together meant a failed period write silently
+  // cost a paying subscriber their receipt, permanently, with no Stripe retry
+  // to recover it.
+  if (subscription) {
+    try {
+      await deliverRenewalReceipt(invoice, subscription, chargedAt);
+    } catch (error: unknown) {
+      console.error('[stripe-webhook] renewal receipt failed (non-fatal)', {
+        subscriptionId,
+        invoiceId: invoice.id,
+        error,
+      });
+    }
   }
 
   return NextResponse.json({ received: true, refreshed: subscriptionId });
@@ -1076,12 +1094,27 @@ async function deliverRenewalReceipt(
 
   if (!receipt) return;
 
-  await sendReceiptEmail({
+  // Allocation is idempotent, so a redelivered `invoice.paid` lands back on the
+  // SAME receipt — which is right for the number and wrong for the mail. Stripe
+  // redelivers routinely, and a redelivery is not a failure it backs off from;
+  // it is a success that keeps re-firing. Without this claim every monthly
+  // subscriber would collect duplicate copies of one receipt.
+  if (!(await claimReceiptEmail(supabase, receipt.id))) {
+    console.info('[stripe-webhook] renewal receipt already emailed — skipping', {
+      receiptNumber: receipt.receiptNumber,
+      invoiceId: invoice.id,
+    });
+    return;
+  }
+
+  const sent = await sendReceiptEmail({
     toEmail: order.email,
     toName: order.full_name ?? null,
     firstName: order.full_name ?? null,
     planKey: plan,
     nextBillingDate: receipt.periodEnd ? formatReceiptDate(receipt.periodEnd) : null,
+    // What this invoice actually took, so the copy cannot drift from the charge.
+    renewalAmount: formatAmount(invoice.amount_paid ?? 0),
     // A month in, they have had an account for a month.
     hasSetupLink: false,
     setupUrl: null,
@@ -1089,6 +1122,14 @@ async function deliverRenewalReceipt(
     pdf: receipt.pdf,
     fileName: receipt.fileName,
   });
+
+  if (!sent.sent) {
+    console.error('[stripe-webhook] renewal receipt email failed — handing the claim back', {
+      receiptNumber: receipt.receiptNumber,
+      result: sent,
+    });
+    await releaseReceiptEmail(supabase, receipt.id);
+  }
 }
 
 /**

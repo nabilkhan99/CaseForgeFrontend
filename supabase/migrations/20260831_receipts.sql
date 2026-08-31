@@ -70,6 +70,17 @@ create table if not exists public.receipts (
   -- 'purchase' (a checkout) or 'renewal' (a monthly subscription cycle).
   kind text not null default 'purchase',
 
+  -- When this receipt was emailed, claimed compare-and-swap style BEFORE the
+  -- send. The renewal path's equivalent of `preorders.set_password_sent_at`.
+  --
+  -- Allocation is idempotent, so a redelivered `invoice.paid` gets the same
+  -- receipt row back — but "same row" and "already emailed" are different
+  -- questions, and without this second one a routine Stripe redelivery would
+  -- send the subscriber another copy of a receipt they already have. The
+  -- purchase path needs no equivalent: its send is already gated by the
+  -- set-password claim on `preorders`.
+  emailed_at timestamptz,
+
   issued_at timestamptz not null default now()
 );
 
