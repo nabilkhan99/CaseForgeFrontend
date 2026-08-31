@@ -389,6 +389,19 @@ export function useRealtimeSession({
     /** Latched once a real reading has ever been seen — see getPatientLevel. */
     const patientLevelSeenRef = useRef(false);
     const detectorIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    /**
+     * Output-side probe for the browsers the double-talk detector skips.
+     *
+     * The detector early-returns on reliable-AEC (Chrome-family) browsers and it
+     * owns the AudioContext, so `snap`/`pat` levels — our only evidence that the
+     * patient was audible — exist for Firefox and Safari and not for Chrome.
+     * That is backwards: on 30 Aug 2026 a tester lost ten Chrome/Edge sessions to
+     * silence and the flight recorder held 28 events with no audio data in any of
+     * them, while her Firefox sessions were richly instrumented. This probe fills
+     * that hole using the receiver's own RFC 6464 level, which needs no
+     * AudioContext and happens to be Chromium-only — exactly where we were blind.
+     */
+    const levelProbeRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const detectorStartedAtRef = useRef(0);
     /** Echo-coupling estimate: micRms ≈ coupling × patientRms. Starts high
      *  (conservative — over-predicts echo) and calibrates down via EMA. */
@@ -495,6 +508,64 @@ export function useRealtimeSession({
             lastSentIndexRef.current = Math.max(0, lastSentIndexRef.current - 1000);
         }
     }, []);
+
+    /**
+     * One-shot snapshot of where the patient's voice is actually being sent.
+     *
+     * The transcript rides the data channel and the voice rides the media
+     * track, so every signal we used to record could look perfect while the
+     * user heard nothing — the failure sits in the last hop, into an output
+     * device we never named. Device labels are readable here because the mic
+     * prompt has already granted the permission they depend on, and "playing to
+     * Headset while you are sitting in front of the speakers" is the entire
+     * diagnosis in one string.
+     */
+    const logAudioOutput = useCallback(
+        async (el: HTMLAudioElement) => {
+            logDebug('audio:element', {
+                paused: el.paused,
+                muted: el.muted,
+                volume: el.volume,
+                readyState: el.readyState,
+                sinkId: (el as HTMLAudioElement & { sinkId?: string }).sinkId || 'default',
+            });
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const outputs = devices.filter((d) => d.kind === 'audiooutput');
+                logDebug('audio:outputs', {
+                    count: outputs.length,
+                    devices: outputs.map((d) => ({
+                        id: d.deviceId,
+                        label: d.label || '(unlabelled)',
+                    })),
+                });
+            } catch {
+                /* enumerateDevices can reject in hardened contexts — diagnostics
+                   must never break the consultation they are observing. */
+            }
+        },
+        [logDebug]
+    );
+
+    /**
+     * Log the patient's playback level once a second on the browsers the
+     * double-talk detector skips. See levelProbeRef for why this exists.
+     * `currentTime` advancing is the cheap proof that the element is not merely
+     * un-paused but actually rendering.
+     */
+    const startLevelProbe = useCallback(() => {
+        if (levelProbeRef.current) return;
+        if (unreliableEchoCancellation(navigator.userAgent)) return;
+        levelProbeRef.current = setInterval(() => {
+            const level = receiverAudioLevel(audioReceiverRef.current);
+            const el = audioElRef.current;
+            logDebug('rx:level', {
+                lvl: level === undefined ? null : Number(level.toFixed(4)),
+                paused: el ? el.paused : null,
+                t: el ? Number(el.currentTime.toFixed(1)) : null,
+            });
+        }, 1000);
+    }, [logDebug]);
 
     /** Upload the unsent slice of the event ring. sendBeacon on pagehide
      *  (survives tab close); fetch keepalive everywhere else. Fire-and-forget:
@@ -1289,6 +1360,10 @@ export function useRealtimeSession({
             wakeLockRef.current.release().catch(() => {});
             wakeLockRef.current = null;
         }
+        if (levelProbeRef.current) {
+            clearInterval(levelProbeRef.current);
+            levelProbeRef.current = null;
+        }
         if (detectorIntervalRef.current) {
             clearInterval(detectorIntervalRef.current);
             detectorIntervalRef.current = null;
@@ -1739,9 +1814,18 @@ export function useRealtimeSession({
                     recorderRef.current?.addRemoteTrack(e.track);
                 });
                 attachPatientAnalyser();
+                startLevelProbe();
                 recorderRef.current?.addRemoteTrack(e.track);
-                void el.play().catch(() => {
-                    /* autoplay may require gesture; ignore */
+                void logAudioOutput(el);
+                void el.play().catch((err: unknown) => {
+                    // Not swallowed any more. A refused play() is silent to the
+                    // user and, until this line, silent to us as well — which is
+                    // why ten consecutive silent sessions could not afterwards
+                    // be told apart from a dead output device.
+                    logDebug('audio:play-failed', {
+                        name: err instanceof Error ? err.name : 'unknown',
+                        message: err instanceof Error ? err.message : String(err),
+                    });
                 });
             };
 
@@ -1874,6 +1958,8 @@ export function useRealtimeSession({
         persistTranscript,
         handleServerEvent,
         sendEvent,
+        logAudioOutput,
+        startLevelProbe,
         endRoutine,
         teardown,
         startDoubleTalkDetector,
