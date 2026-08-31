@@ -118,6 +118,42 @@ const LEARNING_POINT_COLORS = [
     { bg: 'bg-rose-50', border: 'border-rose-300', number: 'text-rose-200' },
 ];
 
+/** `**1. Title**` — how 189 of the 200 active stations write their sections. */
+const BOLD_SECTION = /\*\*(\d+)\.\s+(.+?)\*\*/;
+
+/**
+ * `## 1. Title` / `### 1. Title` — how the other 11 write theirs.
+ *
+ * Same content, different authoring hand. Matching only the bold form meant
+ * those 11 found no sections at all and fell through to flat markdown, losing
+ * the numbered colour-coded cards entirely — the exact thing a tester asked us
+ * to put in front of her. It went unnoticed while this only rendered on the
+ * public case pages; putting it on the feedback report made it obvious.
+ */
+const HEADING_SECTION = /^\s{0,3}#{1,6}\s+(\d+)\.\s+(.+?)\s*$/;
+
+/**
+ * A section heading in either dialect. `remainder` is any text left on the line
+ * after the heading — only possible for the inline bold form; a markdown
+ * heading occupies its whole line.
+ */
+function matchSectionHeading(
+    line: string
+): { number: string; title: string; remainder: string } | null {
+    const heading = line.match(HEADING_SECTION);
+    if (heading) return { number: heading[1], title: heading[2], remainder: '' };
+
+    const bold = line.match(BOLD_SECTION);
+    if (bold) {
+        return {
+            number: bold[1],
+            title: bold[2],
+            remainder: line.replace(BOLD_SECTION, '').trim(),
+        };
+    }
+    return null;
+}
+
 export function LearningPointsDisplay({ content }: { content: string | null }) {
     if (!content) {
         return (
@@ -131,7 +167,6 @@ export function LearningPointsDisplay({ content }: { content: string | null }) {
         );
     }
 
-    const sectionRegex = /\*\*(\d+)\.\s+(.+?)\*\*/;
     const lines = content.split('\n');
     const sections: { number: string; title: string; content: string }[] = [];
     let currentNumber = '';
@@ -139,7 +174,7 @@ export function LearningPointsDisplay({ content }: { content: string | null }) {
     let currentLines: string[] = [];
 
     for (const line of lines) {
-        const match = line.match(sectionRegex);
+        const match = matchSectionHeading(line);
         if (match) {
             if (currentTitle) {
                 sections.push({
@@ -148,10 +183,9 @@ export function LearningPointsDisplay({ content }: { content: string | null }) {
                     content: currentLines.join('\n').trim(),
                 });
             }
-            currentNumber = match[1];
-            currentTitle = match[2];
-            const remainder = line.replace(sectionRegex, '').trim();
-            currentLines = remainder ? [remainder] : [];
+            currentNumber = match.number;
+            currentTitle = match.title;
+            currentLines = match.remainder ? [match.remainder] : [];
         } else {
             currentLines.push(line);
         }
