@@ -27,14 +27,14 @@ const PLACEHOLDER_ID = 'unsure';
 const STEPS: readonly { title: string; body: string }[] = [
   {
     title: 'Get pre-approval',
-    body: 'Send the drafted email to your TPD before you book anything. Approval always sits with your ES and TPD.',
+    body: 'The drafted email names the course, the GP0001 code and the fee. Send it to your TPD before you book anything.',
   },
   {
-    title: 'Enrol and get your invoice',
-    body: 'An itemised invoice with dates, taught hours and curriculum mapping, issued the moment you enrol.',
+    title: 'Enrol, get the invoice',
+    body: 'Itemised, with dates and taught hours, issued the moment you enrol.',
   },
   {
-    title: 'Submit your claim',
+    title: 'Get reimbursed',
     body: 'Send the invoice in with your approval in writing, and your deanery takes it from there.',
   },
 ];
@@ -149,26 +149,23 @@ export default function StudyBudgetChecker({
                 with a pre-approval email drafted for your TPD.
               </p>
 
-              {/* Mad-lib deanery selector */}
-              <p className="mt-8 font-[family-name:var(--font-display)] text-xl font-medium leading-relaxed text-white sm:text-[27px]">
-                I&apos;m training in{' '}
-                <span className="relative inline-block rounded-sm align-baseline focus-within:ring-2 focus-within:ring-[#FAC775]/40">
-                  <span
-                    aria-hidden="true"
-                    className="inline-flex items-baseline gap-1.5 border-b-2 border-[#FAC775] text-[#FAC775]"
-                  >
-                    {deanery ? deaneryLabel(deanery) : 'Select your deanery'}
-                    <ChevronDown
-                      className="h-4 w-4 self-center sm:h-5 sm:w-5"
-                      strokeWidth={2.5}
-                    />
-                  </span>
+              {/* Canvas 1c: a plain dark select. The mad-lib reads nicely but
+                  hides the control; on the section that has to be used rather
+                  than admired, the obvious affordance wins. */}
+              <div className="mt-8 max-w-[26rem]">
+                <label
+                  htmlFor="deanery-select"
+                  className="mb-2 block text-[13.5px] text-[#A8A29E]"
+                >
+                  Select your deanery
+                </label>
+                <div className="relative">
                   <select
                     id="deanery-select"
                     aria-label="Select your deanery"
                     value={deaneryId}
                     onChange={(e) => handleSelect(e.target.value)}
-                    className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0"
+                    className="w-full cursor-pointer appearance-none rounded-lg border border-[#44403C] bg-[#262019] px-3.5 py-3.5 pr-11 text-base text-white transition-colors hover:border-[#FAC775]/60 focus:border-[#FAC775] focus:outline-none focus:ring-2 focus:ring-[#FAC775]/30"
                   >
                     {DEANERIES.filter((d) => d.group === 'Other').map((d) => (
                       <option key={d.id} value={d.id}>
@@ -185,9 +182,13 @@ export default function StudyBudgetChecker({
                       </optgroup>
                     ))}
                   </select>
-                </span>
-                <span className="text-[#A8A29E]">.</span>
-              </p>
+                  <ChevronDown
+                    className="pointer-events-none absolute right-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-[#A8A29E]"
+                    strokeWidth={2}
+                    aria-hidden="true"
+                  />
+                </div>
+              </div>
             </div>
 
             {deanery && (
@@ -285,7 +286,29 @@ function Verdict({ deanery, hasResat, surface, onResitChange }: VerdictProps) {
 
   return (
     <div className="rounded-2xl bg-[#FAFAF9] p-6 shadow-elevation-3 sm:p-7">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      {/* Canvas 1c leads the card with the money, its cap, and how the money
+          arrives. The verdict pill moves below: it answers "how strong is my
+          case", which is a different question from "what will I pay". */}
+      <div className="flex flex-wrap items-baseline gap-x-3.5 gap-y-2">
+        <span
+          className="font-[family-name:var(--font-display)] text-[40px] font-semibold leading-none tracking-[-0.03em] text-[#B45309] sm:text-[44px]"
+          aria-label={`£${youPay} out of pocket`}
+        >
+          £{youPay}
+        </span>
+        <span className="text-[15px] text-body">out of pocket</span>
+        {deanery.chip && (
+          <span className="ml-auto rounded-md bg-[#FEF3C7] px-2.5 py-1.5 text-xs font-medium text-[#92400E]">
+            {deanery.chip}
+          </span>
+        )}
+      </div>
+
+      {deanery.cap && (
+        <p className="mt-3 font-mono text-[13px] text-muted">{deanery.cap}</p>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
         {deanery.verdict !== 'local' && (
           <p
             className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] sm:text-xs"
@@ -304,20 +327,6 @@ function Verdict({ deanery, hasResat, surface, onResitChange }: VerdictProps) {
           </p>
         )}
       </div>
-
-      {!isPlaceholder && (
-        <div className="mt-5 flex items-baseline gap-3">
-          <span
-            className="font-[family-name:var(--font-display)] text-[44px] font-semibold leading-none tracking-[-0.03em] text-[#B45309] sm:text-[52px]"
-            aria-label={`£${youPay} out of pocket`}
-          >
-            £{youPay}
-          </span>
-          <span className="text-[13px] uppercase tracking-[0.12em] text-muted">
-            out of pocket
-          </span>
-        </div>
-      )}
 
       {deanery.resit && (
         <p className="mt-3 text-sm text-body">

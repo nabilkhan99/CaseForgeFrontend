@@ -88,6 +88,18 @@ export interface DeaneryPolicy {
    * which is why the figure sits next to the verdict rather than replacing it.
    */
   youPay?: number;
+  /**
+   * The cap in one line, as the design canvas states it, e.g.
+   * "Up to £600 · code GP0001" or "Capped at £500". Set in mono beside the
+   * out-of-pocket figure so the number has its policy basis next to it.
+   */
+  cap?: string;
+  /**
+   * Status chip beside the figure: "Covered in full", "Part-funded",
+   * "Approval needed" and so on. Describes how the money arrives, where the
+   * verdict pill describes how strong the case is. Both come from the canvas.
+   */
+  chip?: string;
 }
 
 /** Out-of-pocket figure for a deanery, honouring the resit branch. */
@@ -99,6 +111,8 @@ export function outOfPocketFor(deanery: DeaneryPolicy, hasResat: boolean): numbe
 export const DEANERIES: readonly DeaneryPolicy[] = [
   {
     id: 'london',
+    cap: 'Up to £600 · code GP0001',
+    chip: 'Covered in full',
     label: 'London',
     group: 'England',
     verdict: 'strong',
@@ -116,6 +130,8 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'kss',
+    cap: 'Up to £600 per sitting · GP0001',
+    chip: 'Covered in full',
     label: 'Kent, Surrey and Sussex',
     group: 'England',
     verdict: 'strong',
@@ -130,6 +146,8 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'eoe',
+    cap: 'No fixed cap · TPD sign-off',
+    chip: 'Covered with approval',
     label: 'East of England',
     group: 'England',
     verdict: 'strong',
@@ -144,6 +162,8 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'tv',
+    cap: 'One SCA course in ST3',
+    chip: 'Covered with approval',
     label: 'Thames Valley',
     group: 'England',
     verdict: 'strong',
@@ -158,6 +178,8 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'wessex',
+    cap: 'One SCA course in ST3',
+    chip: 'Covered with approval',
     label: 'Wessex',
     group: 'England',
     verdict: 'strong',
@@ -172,6 +194,8 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'em',
+    cap: 'Up to 2 courses · no per-course cap',
+    chip: 'Covered in full',
     label: 'East Midlands',
     group: 'England',
     verdict: 'strong',
@@ -187,6 +211,8 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'wm',
+    cap: 'Up to 2 courses · no per-course cap',
+    chip: 'Covered in full',
     label: 'West Midlands',
     group: 'England',
     verdict: 'strong',
@@ -201,6 +227,8 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'nw',
+    cap: 'Capped at £500',
+    chip: '£500 of £599 covered',
     label: 'North West',
     group: 'England',
     verdict: 'strong',
@@ -215,6 +243,8 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'ne',
+    cap: 'Discretionary · 50% self-funding',
+    chip: 'Part-funded',
     label: 'North East and North Cumbria',
     group: 'England',
     verdict: 'strong',
@@ -233,6 +263,8 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'yh',
+    cap: 'Named list · one per attempt',
+    chip: 'Approval needed',
     label: 'Yorkshire and the Humber',
     group: 'England',
     verdict: 'reasonable',
@@ -247,6 +279,8 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'severn',
+    cap: 'Guidance pending · approval essential',
+    chip: 'Approval needed',
     label: 'Severn',
     group: 'England',
     verdict: 'longshot',
@@ -267,6 +301,8 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'peninsula',
+    cap: 'Guidance pending · approval essential',
+    chip: 'Approval needed',
     label: 'Peninsula',
     group: 'England',
     verdict: 'longshot',
@@ -287,6 +323,8 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'wales',
+    cap: '£600/yr · rolls over to £1,200',
+    chip: 'Covered in full',
     label: 'Wales (HEIW)',
     group: 'Devolved nations',
     verdict: 'strong',
@@ -301,6 +339,8 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'scotland',
+    cap: '£600 per training year',
+    chip: 'Covered in full',
     label: 'Scotland (NES)',
     group: 'Devolved nations',
     verdict: 'strong',
@@ -316,6 +356,8 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'ni',
+    cap: 'After an unsuccessful attempt · up to £750',
+    chip: 'Conditional',
     label: 'Northern Ireland (NIMDTA)',
     group: 'Devolved nations',
     verdict: 'longshot',
@@ -335,6 +377,8 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'unsure',
+    cap: 'Up to £600 · code GP0001',
+    chip: 'Varies by deanery',
     label: 'Not sure yet',
     group: 'Other',
     verdict: 'local',
