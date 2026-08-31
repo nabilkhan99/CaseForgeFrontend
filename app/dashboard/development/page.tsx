@@ -271,7 +271,7 @@ export default function DevelopmentPage() {
       <PageHeader title="Development" subtitle={subtitle} />
 
       <Reveal delay={REVEAL.chart}>
-        <ScoreTrend sessions={sessions} />
+        <ScoreTrend sessions={sessions} domainCases={domainCases} />
       </Reveal>
 
       <Reveal delay={REVEAL.domains}>
