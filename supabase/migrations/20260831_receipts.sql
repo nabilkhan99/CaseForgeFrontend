@@ -213,14 +213,14 @@ begin
       -- retries rather than receiving a half-truth.
       raise;
     when unique_violation then
-    -- (3) A concurrent delivery won. Our increment is rolled back with this
-    -- block, so the series keeps no gap. Their number stands for both of us.
-    select * into v_row from public.receipts where stripe_event_key = p_stripe_event_key;
-    if not found then
-      -- A unique violation that is NOT the event key (a corrupted counter
-      -- colliding on receipt_number) must not be swallowed.
-      raise;
-    end if;
+      -- (3) A concurrent delivery won. Our increment is rolled back with this
+      -- block, so the series keeps no gap. Their number stands for both of us.
+      select * into v_row from public.receipts where stripe_event_key = p_stripe_event_key;
+      if not found then
+        -- A unique violation that is NOT the event key (a corrupted counter
+        -- colliding on receipt_number) must not be swallowed.
+        raise;
+      end if;
   end;
 
   return v_row;
