@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import type { User } from '@supabase/supabase-js';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { ACCESS_OPENS_LABEL } from '@/lib/commerce/plans';
 import ManageBillingButton from '@/components/commerce/ManageBillingButton';
 import SettingRow from '@/components/ui/SettingRow';
 import PrimaryButton from '@/components/ui/PrimaryButton';
@@ -122,9 +121,10 @@ export default function SettingsPage() {
             <div className="h-16 rounded-[10px] bg-black/[0.03] animate-pulse" />
           ) : access?.plan ? (() => {
             // Three phases, not a boolean: `none` WITH a plan is a purchase whose
-            // window hasn't opened yet (every pre-launch buyer), which is the
-            // opposite of "ended". Folding it into `ended` told a customer who
-            // paid this morning that their access ended on a date in the future.
+            // window hasn't opened yet, which is the opposite of "ended". Folding
+            // it into `ended` told a customer who paid this morning that their
+            // access ended on a date in the future. Since the 1 September floor
+            // was retired this only arises on a start date agreed in writing.
             const phase: 'pending' | 'active' | 'ended' =
               access.state === 'active' ? 'active' : access.state === 'read_only' ? 'ended' : 'pending';
             const ended = phase === 'ended';
@@ -174,14 +174,14 @@ export default function SettingsPage() {
                   <span
                     className={`text-[13px] font-medium ${ended ? 'text-muted' : pending ? 'text-primary' : 'text-success'}`}
                   >
-                    {ended ? 'Ended' : pending ? `Starts ${ACCESS_OPENS_LABEL}` : 'Active'}
+                    {ended ? 'Ended' : pending ? 'Not started' : 'Active'}
                   </span>
                 </div>
                 <p className="text-[13px] text-muted mb-3">
                   {ended
                     ? `Access ended${expiryDate ? ` on ${expiryDate}` : ''} · your history and feedback stay available`
                     : pending
-                      ? `You're in. Your access opens on ${ACCESS_OPENS_LABEL}${expiryDate ? ` and runs to ${expiryDate}` : ''}.`
+                      ? `You're in. Your access hasn't opened yet${expiryDate ? `; it runs to ${expiryDate}` : ''}.`
                     : access.isMonthly
                       ? `Renews monthly${renewsDate ? ` · next payment ${renewsDate}` : ''} · cancel any time`
                       : `Ends in ${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} · ${expiryDate} · nothing renews`}

@@ -8,14 +8,21 @@ import { ACCESS_OPENS, PLANS, isRollingPlan } from './plans'
  * decision), so provisioning, tier gating and expiry all hang off
  * `computeEntitlement`.
  *
- * Access model (locked 2026-08-20, Stripe periods added 2026-08-22):
+ * Access model (locked 2026-08-20, Stripe periods added 2026-08-22, launch
+ * floor retired 2026-08-31):
+ * - Access starts at the moment of purchase. The product is live and sold as
+ *   "instant access", so nothing clamps a purchase date forward any more.
  * - Fixed-term plans run for the length of the Stripe subscription period
  *   recorded on the row (`access_starts_at` / `access_ends_at`), shifted
  *   forward so a pre-launch buyer loses none of it — see
  *   {@link stripeAccessWindow}. Rows written before those columns existed fall
  *   back to the calendar-month arithmetic in {@link accessWindow}.
- * - Access is not live before the window starts: a preorder bought today is
- *   `none` until launch.
+ * - `launchDate` survives ONLY as the anchor those end dates were sold
+ *   against. Retiring the start floor must not claw back the days the shift
+ *   exists to give the pre-launch buyers, so the end still runs from
+ *   max(purchase, launch) while the start no longer does.
+ * - A purchase whose window has not opened is still possible, but now only
+ *   deliberately: terms clause 3.3 lets us agree a later start in writing.
  * - A fixed-term row that has gone `canceled` keeps its window: that status is
  *   how a paid term ENDS (Stripe deletes a `cancel_at_period_end` subscription
  *   at period end), not how one is revoked. Only `refunded` revokes.
@@ -31,7 +38,11 @@ import { ACCESS_OPENS, PLANS, isRollingPlan } from './plans'
 
 /**
  * Launch day, derived from the offer's own `ACCESS_OPENS` so there is exactly
- * one source of truth for "the course goes live on".
+ * one source of truth for "the course went live on".
+ *
+ * No longer gates the start of anyone's access. It is now purely the anchor the
+ * pre-launch buyers' END dates were computed against, kept so retiring the
+ * start floor cannot shorten a window that was already sold.
  */
 export const ACCESS_LAUNCH_DATE = new Date(`${ACCESS_OPENS}T00:00:00Z`)
 
@@ -122,32 +133,42 @@ function previousUtcDay(date: Date): Date {
 }
 
 /**
- * Access window of a one-off purchase: 3 calendar months from purchase, floored
- * at launch. `end` is the LAST instant of access (23:59:59.999 UTC), inclusive.
+ * Access window of a one-off purchase: it opens the moment the purchase lands,
+ * and runs 3 calendar months. `end` is the LAST instant of access
+ * (23:59:59.999 UTC), inclusive.
  *
  * The day before the +3-months date, not that date itself: an inclusive end on
  * the same day-of-month would sell "3 calendar months" and deliver 3 months and
- * a day (1 Sept -> 1 Dec 23:59 is 92 days). Buying on 1 Sept now runs to the
- * last instant of 30 Nov, which is what a customer reading "3 months" expects.
+ * a day (1 Sept -> 1 Dec 23:59 is 92 days). Buying on 1 Sept runs to the last
+ * instant of 30 Nov, which is what a customer reading "3 months" expects.
+ *
+ * The end is measured from `launchDate` for anyone who bought before it. Those
+ * buyers were sold three months starting at launch, so counting from their
+ * (earlier) purchase date instead would silently take days back off a window
+ * that has already been promised.
  */
 export function accessWindow(
   createdAt: string,
   launchDate: Date = ACCESS_LAUNCH_DATE,
 ): { start: Date; end: Date } {
   const purchased = new Date(createdAt)
-  const start = purchased < launchDate ? launchDate : purchased
-  const sameDayThreeMonthsOn = addCalendarMonthsUtc(start, ACCESS_WINDOW_MONTHS)
-  return { start, end: endOfUtcDay(previousUtcDay(sameDayThreeMonthsOn)) }
+  const endAnchor = purchased < launchDate ? launchDate : purchased
+  const sameDayThreeMonthsOn = addCalendarMonthsUtc(endAnchor, ACCESS_WINDOW_MONTHS)
+  return { start: purchased, end: endOfUtcDay(previousUtcDay(sameDayThreeMonthsOn)) }
 }
 
 /**
- * How far a pre-launch purchase's access has to be pushed back, in ms.
+ * How far a pre-launch purchase's access has to be extended at the end, in ms.
  *
- * Stripe cannot charge today and start the billing period on 1 September (see
- * stripe-research.md §1c: `billing_cycle_anchor` prorates, `trial_end` defers
- * the money). So a buyer on 22 August gets a Stripe period of 22 Aug → 22 Nov
- * while their *access* only opens on 1 September. Left alone that silently
- * eats 10 days of a three-month course.
+ * Stripe could not charge in August and start the billing period on 1 September
+ * (see stripe-research.md §1c: `billing_cycle_anchor` prorates, `trial_end`
+ * defers the money). So a buyer on 22 August got a Stripe period of
+ * 22 Aug → 22 Nov against a course sold as three months from 1 September. Left
+ * alone that silently eats 10 days.
+ *
+ * Still applied now the start floor is gone: those 10 days were sold, and the
+ * fact that their access opened sooner than promised is not a reason to take
+ * them off the end.
  *
  * Zero once launch has passed, so post-launch buyers are unaffected.
  */
@@ -160,15 +181,17 @@ export function preLaunchShiftMs(createdAt: string, launchDate: Date): number {
 /**
  * Access window of a fixed-term purchase whose Stripe period we recorded.
  *
- * Start: the launch floor, exactly as before — money changing hands early does
- * not open the course early.
+ * Start: the purchase itself. The course is live, so money changing hands is
+ * the only event access waits on.
  *
  * End: Stripe's period end plus {@link preLaunchShiftMs}, so the customer gets
- * the full length they paid for however early they bought. The end is then
- * squared to the last instant of the *previous* UTC day, the same transform
- * {@link accessWindow} applies — which makes the two agree exactly for a
- * post-launch purchase (a 5 Sept buy ends 4 Dec 23:59:59.999 either way) and
- * turns the worked pre-launch example into 1 Sept → the last instant of 1 Dec.
+ * the full length they paid for however early they bought. The shift is kept
+ * even though the start floor is gone: the days it adds were promised to the
+ * pre-launch buyers and opening their access sooner is no reason to take them
+ * back. The end is then squared to the last instant of the *previous* UTC day,
+ * the same transform {@link accessWindow} applies — which makes the two agree
+ * exactly for a post-launch purchase (a 5 Sept buy ends 4 Dec 23:59:59.999
+ * either way) and leaves the worked pre-launch example ending on 1 Dec.
  */
 export function stripeAccessWindow(
   createdAt: string,
@@ -176,10 +199,9 @@ export function stripeAccessWindow(
   launchDate: Date = ACCESS_LAUNCH_DATE,
 ): { start: Date; end: Date } {
   const purchased = new Date(createdAt)
-  const start = purchased < launchDate ? launchDate : purchased
   const periodEnd = new Date(accessEndsAt)
   const shifted = new Date(periodEnd.getTime() + preLaunchShiftMs(createdAt, launchDate))
-  return { start, end: endOfUtcDay(previousUtcDay(shifted)) }
+  return { start: purchased, end: endOfUtcDay(previousUtcDay(shifted)) }
 }
 
 /** A timestamp string that actually parses, or null. */
@@ -215,23 +237,18 @@ function entitlementOf(row: EntitlementRow, now: Date, launchDate: Date): Entitl
   }
 
   if (isMonthlyPlan(row.plan)) {
-    // Founder ruling, 21 Aug 2026: ALL plans activate on launch day — monthly
-    // included. A pre-launch monthly buy is `none`-with-plan until 1 Sept
-    // (the "you're in, access opens 1 September" state), exactly like a
-    // one-off preorder. Known cost, accepted: Stripe bills the first month
-    // from the purchase date, so a pre-launch subscriber pays for days they
-    // cannot use — the launch runbook says to compensate any such buyer
-    // (extend or credit) by hand; as of the ruling there were zero.
+    // The rolling plan is live for as long as the subscription is: Stripe bills
+    // from the purchase date, so access runs from it too. (Until the launch
+    // floor was retired a monthly bought before 1 Sept waited for launch while
+    // still being billed — the accepted cost of the 21 Aug ruling. Nobody waits
+    // now, so nobody has to be compensated by hand for it either.)
     // 'paid' = subscription alive; anything else = Stripe already ended it.
-    // Status is checked BEFORE the launch floor: a canceled subscription is
-    // dead whatever the date, and must never read as a pending plan.
     if (row.status !== 'paid') return { state: 'read_only', plan: row.plan, hasLectures: false }
     // `renewsAt` is display only — see the Entitlement doc comment. Access on a
     // rolling plan is decided by status, because Stripe is the thing that ends
     // it, and a payment that fails mid-period must not leave a stale end date
     // granting access.
     const renewsAt = parseDate(row.access_ends_at) ?? undefined
-    if (now < launchDate) return { state: 'none', plan: row.plan, hasLectures: false, renewsAt }
     return { state: 'active', plan: row.plan, hasLectures: false, renewsAt }
   }
 
@@ -253,11 +270,13 @@ function entitlementOf(row: EntitlementRow, now: Date, launchDate: Date): Entitl
   const { start, end } = fixedTermWindow(row, launchDate)
   const complete = row.plan === 'complete' || row.plan === 'intensive'
 
-  // Before the window opens (preorder-era buys, whose clock starts at launch)
-  // the purchase exists but grants nothing yet. `expiresAt` is still populated
-  // so callers can say when access begins and ends, and the coaching day comes
-  // with it: "you have not booked your day" is true — and worth prompting —
-  // well before the course opens.
+  // Before the window opens the purchase exists but grants nothing yet. With
+  // the launch floor retired the only way to reach this is a start date we
+  // agreed in writing (terms 3.3) and recorded ahead of `now`, so it is rare
+  // rather than routine — but it must still not read as "no purchase".
+  // `expiresAt` is populated so callers can say when access ends, and the
+  // coaching day comes with it: "you have not booked your day" is true — and
+  // worth prompting — before the course opens.
   if (now < start)
     return {
       state: 'none',
@@ -280,12 +299,12 @@ function entitlementOf(row: EntitlementRow, now: Date, launchDate: Date): Entitl
  * Where an entitlement sits on the ladder of "how good is this customer's
  * position", highest first.
  *
- * `none` is deliberately NOT one rank. Since the launch floor landed, a `none`
- * that carries a plan means "bought, window hasn't opened yet" — a pre-launch
- * pre-order — which is a strictly BETTER position than lapsed access, not a
- * worse one. Collapsing the two let an expired old row mask a live new purchase:
- * a user with a spent self_study plus a fresh Complete pre-order folded to the
- * expired self_study, and was shown its plan and its past expiry date.
+ * `none` is deliberately NOT one rank. A `none` that carries a plan means
+ * "bought, window hasn't opened yet" — which is a strictly BETTER position than
+ * lapsed access, not a worse one. Collapsing the two let an expired old row mask
+ * a live new purchase: a user with a spent self_study plus a fresh Complete
+ * purchase folded to the expired self_study, and was shown its plan and its past
+ * expiry date.
  *
  * A `none` with no plan is the fold's empty seed — no purchase at all — and
  * must lose to every real row.
@@ -369,10 +388,10 @@ export interface AccessContext {
   admins: Set<string>
   now?: Date
   /**
-   * When the access window opens for pre-launch purchases. Defaults to the
-   * real launch day; a staged deployment may bring it forward (see
-   * `effectiveLaunchDate`) so testers can practise before 1 Sept on the
-   * SAME gating code production runs — the gate itself is never waived.
+   * The date the course went live, used only to anchor the end of a window
+   * bought before it (see {@link accessWindow}). It no longer holds any
+   * purchase back. A staged deployment may still override it via
+   * `effectiveLaunchDate`.
    */
   launchDate?: Date
 }

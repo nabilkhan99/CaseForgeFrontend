@@ -7,7 +7,7 @@ import { pageMetadata } from '@/lib/seo/site';
 import { LEGAL_MARKDOWN } from '@/lib/legal/legalContent';
 
 export const metadata: Metadata = pageMetadata({
-  title: 'Legal — Terms, Privacy & Cookies',
+  title: 'Legal: Terms, Privacy and Cookies',
   description:
     'Fourteen Fisherman terms and conditions, privacy policy and cookie policy. Operated by Phenolabs Limited.',
   path: '/terms',

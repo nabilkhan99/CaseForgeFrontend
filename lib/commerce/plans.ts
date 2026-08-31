@@ -251,6 +251,12 @@ export interface CoachingDayAvailability {
   status: 'open' | 'closed' | 'sold_out'
 }
 
-/** The course goes live on this date; purchases before it start then. */
+/**
+ * The date the course went live.
+ *
+ * It no longer holds a purchase back: access starts when the money lands, and
+ * the site sells it that way. What it still does is anchor the END of a window
+ * bought during the pre-order period, so retiring the start floor could not
+ * shorten a term already sold. See `lib/commerce/entitlements.ts`.
+ */
 export const ACCESS_OPENS = '2026-09-01'
-export const ACCESS_OPENS_LABEL = '1 September 2026'

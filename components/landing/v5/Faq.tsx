@@ -1,12 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ChevronDown } from 'lucide-react';
 
 interface QA {
   question: string;
-  answer: string[];
+  /**
+   * One node per paragraph. Nodes rather than plain strings so an answer can
+   * carry a link: the study budget answer has to send people to the deanery
+   * guides rather than restate them.
+   */
+  answer: ReactNode[];
 }
 
 const FAQS: QA[] = [
@@ -20,7 +26,18 @@ const FAQS: QA[] = [
   {
     question: 'Can I use my study budget for this?',
     answer: [
-      'The Complete SCA Course is bought as one payment for a fixed 3-month course term. Nothing renews and there is no recurring charge — your invoice shows a single £599 fee with the course dates it covers, which is the distinction most NHS England study budgets care about (they typically cap around £600). Eligibility varies by deanery. Most trainees pay nothing out of pocket.',
+      <>
+        The Complete SCA Course is £599 one-off, which sits within the £600 cap most NHS England
+        deaneries apply to exam preparation courses (code GP0001). Approval is decided locally and
+        the rules differ by region, so get prospective approval before you book. Our{' '}
+        <Link
+          href="/study-budget/"
+          className="font-medium text-primary underline underline-offset-2 hover:text-heading"
+        >
+          study budget guides
+        </Link>{' '}
+        set out the position for every deanery, with a pre-approval email you can adapt.
+      </>,
     ],
   },
   {

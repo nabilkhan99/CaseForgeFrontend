@@ -121,7 +121,7 @@ function useSelfStudyCheckout() {
       });
       const data = (await res.json()) as { url?: string; error?: string };
       if (!res.ok || !data.url) {
-        setError(data.error ?? 'Something went wrong — please try again.');
+        setError(data.error ?? 'Something went wrong, please try again.');
         setSubmitting(false);
         return;
       }
@@ -129,7 +129,7 @@ function useSelfStudyCheckout() {
       await trackEvent('checkout_started', { plan });
       window.location.assign(data.url);
     } catch {
-      setError('Something went wrong — please try again.');
+      setError('Something went wrong, please try again.');
       setSubmitting(false);
     }
   }
@@ -313,7 +313,7 @@ function GuaranteeInfo({
             align === 'center' ? 'text-center' : 'text-left'
           }`}
         >
-          This is a <span className="font-medium text-[#27500A]">conditional</span> guarantee &mdash; to
+          This is a <span className="font-medium text-[#27500A]">conditional</span> guarantee: to
           qualify you must first pass all 200 AI stations.
         </motion.p>
       )}
@@ -376,7 +376,7 @@ function PlanCta({ selfStudy, variant, selfStudyPlan, owned, canUpgrade }: CtaBu
         disabled={selfStudy.submitting}
         className="w-full rounded-full border border-heading/15 bg-white px-2 py-3 text-[13px] font-semibold text-heading transition-colors hover:bg-surface-warm disabled:opacity-60 sm:py-2.5 sm:text-sm"
       >
-        {selfStudy.submitting ? 'Redirecting…' : monthly ? 'Start monthly' : 'Buy now'}
+        {selfStudy.submitting ? 'Redirecting…' : monthly ? 'Start monthly' : 'Start practising'}
       </button>
     );
   }
@@ -701,7 +701,7 @@ export default function PricingTable({ ownedPlan, accountEmail, canUpgrade = fal
               <div className="col-span-4 bg-[#EAF3DE] px-6 py-3.5">
                 <GuaranteeInfo align="center">
                   <p className="text-[11px] text-[#27500A] sm:text-xs">
-                    Every plan — don&rsquo;t pass, and we pay you £500.
+                    Every plan: don&rsquo;t pass, and we pay you £500.
                   </p>
                 </GuaranteeInfo>
               </div>
