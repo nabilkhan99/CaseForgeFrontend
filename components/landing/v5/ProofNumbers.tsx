@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   animate,
   motion,
   useInView,
   useMotionValue,
-  useTransform,
+  useReducedMotion,
 } from 'framer-motion';
 
 interface CountConfig {
@@ -16,6 +16,7 @@ interface CountConfig {
 }
 
 interface Stat {
+  /** Stable React key, and the fallback headline when there is no count. */
   headline: string;
   subline: string;
   count?: CountConfig;
@@ -44,35 +45,76 @@ interface CountUpProps {
   start: boolean;
 }
 
+/**
+ * Counts up to `to`, but renders `to` as its resting value.
+ *
+ * The number is a headline proof point, so the markup must never say "0". The
+ * final value is therefore the state's initial value: it is what the server
+ * renders, what a client with JavaScript disabled keeps, what anyone on
+ * `prefers-reduced-motion` keeps, and what is shown if the viewport observer
+ * never fires. The count is a decoration layered on top of a correct number,
+ * not the thing that produces it.
+ */
 function CountUp({ to, suffix = '', start }: CountUpProps) {
+  const [shown, setShown] = useState(to);
   const count = useMotionValue(0);
-  const display = useTransform(count, (v) => `${Math.round(v)}${suffix}`);
+  const prefersReducedMotion = useReducedMotion();
+  const hasRun = useRef(false);
 
   useEffect(() => {
-    if (!start) return;
+    if (!start || prefersReducedMotion || hasRun.current) return;
+    hasRun.current = true;
+
+    count.set(0);
+    setShown(0);
+    const unsubscribe = count.on('change', (value) =>
+      setShown(Math.round(value))
+    );
     const controls = animate(count, to, {
       duration: 1.4,
       ease: [0.16, 1, 0.3, 1],
     });
-    return () => controls.stop();
-  }, [start, to, count]);
 
-  return <motion.span>{display}</motion.span>;
+    return () => {
+      unsubscribe();
+      controls.stop();
+    };
+  }, [start, prefersReducedMotion, to, count]);
+
+  return (
+    <>
+      {shown}
+      {suffix}
+    </>
+  );
 }
 
-export default function TrustBar() {
+/**
+ * The three proof numbers that sit under the guarantee card. Kept as its own
+ * component so the guarantee treatment can be reused on /pricing and the trial
+ * feedback page without dragging the landing page's marketing stats along.
+ */
+export default function ProofNumbers() {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, amount: 0.5 });
 
   return (
-    <section className="px-5 py-10 sm:px-8 sm:py-16">
+    <>
+      {/* Framer Motion's `initial` is server-rendered as inline opacity:0, so
+          without JavaScript the reveal never runs and the rail would stay
+          invisible. These are headline proof points, so they degrade to
+          plainly visible instead. */}
+      <noscript>
+        <style>{`[data-proof-numbers]{opacity:1!important;transform:none!important}`}</style>
+      </noscript>
       <motion.div
         ref={ref}
+        data-proof-numbers=""
         initial={{ opacity: 0, y: 16 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.5 }}
-        className="mx-auto grid max-w-5xl grid-cols-1 gap-10 text-center sm:grid-cols-3 sm:gap-6"
+        className="mt-12 grid grid-cols-1 gap-10 border-t border-hairline pt-10 text-center sm:mt-14 sm:grid-cols-3 sm:gap-6 sm:pt-12"
       >
         {STATS.map((stat) => (
           <div key={stat.headline}>
@@ -86,7 +128,9 @@ export default function TrustBar() {
                       start={inView}
                     />
                   </span>
-                  <span className="text-2xl sm:text-3xl">{stat.count.after}</span>
+                  <span className="text-2xl sm:text-3xl">
+                    {stat.count.after}
+                  </span>
                 </>
               ) : (
                 <span className="text-2xl leading-tight sm:text-3xl">
@@ -100,6 +144,6 @@ export default function TrustBar() {
           </div>
         ))}
       </motion.div>
-    </section>
+    </>
   );
 }

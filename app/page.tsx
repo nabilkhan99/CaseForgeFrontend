@@ -7,13 +7,11 @@ import LandingFooter from '@/components/landing/LandingFooter';
 import ReferralWelcome from '@/components/landing/ReferralWelcome';
 import {
   Hero,
+  StudyBudgetChecker,
   GuaranteeCard,
-  TrustBar,
-  ProductShowcase,
   VideoProof,
   CompleteCourse,
   Testimonials,
-  StudyBudgetChecker,
   Faq,
 } from '@/components/landing/v5';
 import PricingTable from '@/components/landing/v5/PricingTable';
@@ -34,15 +32,15 @@ export default function LandingPage() {
       <ReferralWelcome />
       <main className="flex flex-col pb-16 sm:pb-20">
         <Hero />
-        <GuaranteeCard />
-        <TrustBar />
+        <StudyBudgetChecker />
+        <GuaranteeCard proof />
         <VideoProof />
         <CompleteCourse />
-        <ProductShowcase />
         <Testimonials />
-        <StudyBudgetChecker />
         <PricingTable />
         <Faq />
+        {/* Not in the brief's list of eight, but not asked for either — kept
+            as the page's closing call to action. */}
         <FinalCta />
       </main>
       <LandingFooter />
