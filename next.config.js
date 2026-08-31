@@ -16,6 +16,13 @@ const nextConfig = {
     unoptimized: true,
     domains: ['case-forge-frontend-n5fd.vercel.app','www.fourteenfisherman.com'],
   },
+  // pdfkit (under @react-pdf/renderer) loads its built-in font data through a
+  // dynamic require that file tracing cannot see, so the deployed function had
+  // no pdfkit/js/standard-fonts/* and every receipt PDF render threw
+  // MODULE_NOT_FOUND — buyers got the no-receipt fallback email. 184K.
+  outputFileTracingIncludes: {
+    '/api/stripe/webhook': ['./node_modules/pdfkit/js/standard-fonts/**'],
+  },
   async redirects() {
     return [
       // Renamed case slug (was auto-derived as the meaninglessly generic
