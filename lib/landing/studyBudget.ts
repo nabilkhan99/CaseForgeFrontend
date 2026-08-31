@@ -100,6 +100,13 @@ export interface DeaneryPolicy {
    * verdict pill describes how strong the case is. Both come from the canvas.
    */
   chip?: string;
+  /**
+   * The position in one line, as the canvas writes it. This is the card body:
+   * the canvas card is figure, cap, chip and this, and nothing else. `body`,
+   * `quote` and `doc` are the long form, and they belong to the /study-budget
+   * article surface rather than the homepage card.
+   */
+  detail?: string;
 }
 
 /** Out-of-pocket figure for a deanery, honouring the resit branch. */
@@ -111,6 +118,7 @@ export function outOfPocketFor(deanery: DeaneryPolicy, hasResat: boolean): numbe
 export const DEANERIES: readonly DeaneryPolicy[] = [
   {
     id: 'london',
+    detail: "One SCA preparation course per trainee under GP0001, with prospective approval.",
     cap: 'Up to £600 · code GP0001',
     chip: 'Covered in full',
     label: 'London',
@@ -130,6 +138,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'kss',
+    detail: "One SCA preparation course per sitting, so a resit attracts its own funding.",
     cap: 'Up to £600 per sitting · GP0001',
     chip: 'Covered in full',
     label: 'Kent, Surrey and Sussex',
@@ -146,6 +155,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'eoe',
+    detail: "Exam preparation is approved as an aspirational activity with TPD sign-off: one SCA course per programme.",
     cap: 'No fixed cap · TPD sign-off',
     chip: 'Covered with approval',
     label: 'East of England',
@@ -162,6 +172,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'tv',
+    detail: "Regional and RCGP-accredited courses are prioritised first, so say which ones you tried and why the dates did not fit.",
     cap: 'One SCA course in ST3',
     chip: 'Covered with approval',
     label: 'Thames Valley',
@@ -178,6 +189,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'wessex',
+    detail: "Regional and RCGP-accredited courses are considered first. Name the one whose dates did not work for your sitting.",
     cap: 'One SCA course in ST3',
     chip: 'Covered with approval',
     label: 'Wessex',
@@ -194,6 +206,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'em',
+    detail: "Two SCA courses across the whole of training, with no published per-course cap.",
     cap: 'Up to 2 courses · no per-course cap',
     chip: 'Covered in full',
     label: 'East Midlands',
@@ -211,6 +224,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'wm',
+    detail: "Two SCA courses across the whole of training, with no published per-course cap.",
     cap: 'Up to 2 courses · no per-course cap',
     chip: 'Covered in full',
     label: 'West Midlands',
@@ -227,6 +241,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'nw',
+    detail: "Non-accredited courses are considered up to £500 with prior approval, leaving £99 to you.",
     cap: 'Capped at £500',
     chip: '£500 of £599 covered',
     label: 'North West',
@@ -243,6 +258,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'ne',
+    detail: "Non-accredited courses are discretionary with 50% self-funding expected, around £300 each way.",
     cap: 'Discretionary · 50% self-funding',
     chip: 'Part-funded',
     label: 'North East and North Cumbria',
@@ -263,6 +279,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'yh',
+    detail: "One SCA course per exam attempt from a named approved list. Ask your TPD about an off-list course before booking.",
     cap: 'Named list · one per attempt',
     chip: 'Approval needed',
     label: 'Yorkshire and the Humber',
@@ -279,6 +296,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'severn',
+    detail: "Detailed guidance is pending publication, so get prospective approval in writing before you pay.",
     cap: 'Guidance pending · approval essential',
     chip: 'Approval needed',
     label: 'Severn',
@@ -301,6 +319,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'peninsula',
+    detail: "Detailed guidance is pending publication, so get prospective approval in writing before you pay.",
     cap: 'Guidance pending · approval essential',
     chip: 'Approval needed',
     label: 'Peninsula',
@@ -323,6 +342,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'wales',
+    detail: "£600 per training year, and unused budget rolls over once to a maximum of £1,200.",
     cap: '£600/yr · rolls over to £1,200',
     chip: 'Covered in full',
     label: 'Wales (HEIW)',
@@ -339,6 +359,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'scotland',
+    detail: "A nominal £600 per registrar per training year, with individual course fees fundable.",
     cap: '£600 per training year',
     chip: 'Covered in full',
     label: 'Scotland (NES)',
@@ -356,6 +377,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'ni',
+    detail: "Funded through the SUCCESS programme after an unsuccessful attempt, at up to £750 per course.",
     cap: 'After an unsuccessful attempt · up to £750',
     chip: 'Conditional',
     label: 'Northern Ireland (NIMDTA)',
@@ -377,6 +399,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'unsure',
+    detail: "Most English deaneries fund one SCA preparation course, typically up to £600 under GP0001. Rules differ by region, so check yours.",
     cap: 'Up to £600 · code GP0001',
     chip: 'Varies by deanery',
     label: 'Not sure yet',

@@ -27,15 +27,15 @@ const PLACEHOLDER_ID = 'unsure';
 const STEPS: readonly { title: string; body: string }[] = [
   {
     title: 'Get pre-approval',
-    body: 'The drafted email names the course, the GP0001 code and the fee. Send it to your TPD before you book anything.',
+    body: 'The drafted email names the course, code and fee.',
   },
   {
     title: 'Enrol, get the invoice',
-    body: 'Itemised, with dates and taught hours, issued the moment you enrol.',
+    body: 'Itemised, with dates and taught hours.',
   },
   {
     title: 'Get reimbursed',
-    body: 'Send the invoice in with your approval in writing, and your deanery takes it from there.',
+    body: 'Send it in with your approval in writing.',
   },
 ];
 
@@ -60,15 +60,6 @@ function transformEmailText(text: string): string {
     .replace('Dear [name],\n\n', 'Dear [name],\n\nI hope you are well.\n\n');
 }
 
-/**
- * Verdict titles repeat the pill wording ("Strong case: …") — strip the
- * prefix so the headline doesn't say it twice, and re-capitalise.
- */
-function displayTitle(title: string): string {
-  const match = title.match(/^(?:Strong case|Reasonable chance): (.*)$/);
-  if (!match) return title;
-  return match[1].charAt(0).toUpperCase() + match[1].slice(1);
-}
 
 /**
  * The deanery checker, as the page's one dark band.
@@ -144,9 +135,8 @@ export default function StudyBudgetChecker({
               </h2>
 
               <p className="mt-4 max-w-[34em] text-sm leading-relaxed text-[#D6D3D1] sm:text-base">
-                Most trainees can claim our Complete SCA Course on the NHS study
-                budget. Pick your region to see its published policy, quoted,
-                with a pre-approval email drafted for your TPD.
+                Quoted from each region&rsquo;s published study leave policy.
+                We&rsquo;ll draft the pre-approval email for you.
               </p>
 
               {/* Canvas 1c: a plain dark select. The mad-lib reads nicely but
@@ -275,9 +265,7 @@ function Verdict({ deanery, hasResat, surface, onResitChange }: VerdictProps) {
   const showResit = Boolean(deanery.resit) && hasResat;
   const verdict = showResit ? deanery.resit!.verdict : deanery.verdict;
   const theme = VERDICT_THEMES[verdict];
-  const title = showResit ? deanery.resit!.title : deanery.title;
   const body = showResit ? deanery.resit!.body : deanery.body;
-  const isPlaceholder = deanery.id === PLACEHOLDER_ID;
 
   // Deliberately not shown on the placeholder: until someone picks a region we
   // do not know their cap, and "£0" against "not sure yet" would be a funding
@@ -308,26 +296,6 @@ function Verdict({ deanery, hasResat, surface, onResitChange }: VerdictProps) {
         <p className="mt-3 font-mono text-[13px] text-muted">{deanery.cap}</p>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-        {deanery.verdict !== 'local' && (
-          <p
-            className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] sm:text-xs"
-            style={{ color: theme.accent }}
-          >
-            <span
-              className="inline-block h-2 w-2 rounded-full"
-              style={{ background: theme.accent }}
-            />
-            {theme.pill}
-          </p>
-        )}
-        {!isPlaceholder && (
-          <p className="ml-auto font-mono text-[11px] uppercase tracking-[0.1em] text-muted">
-            {deanery.label}
-          </p>
-        )}
-      </div>
-
       {deanery.resit && (
         <p className="mt-3 text-sm text-body">
           Have you sat the SCA before?{' '}
@@ -351,56 +319,33 @@ function Verdict({ deanery, hasResat, surface, onResitChange }: VerdictProps) {
         </p>
       )}
 
-      <h3
-        className="mt-3 font-[family-name:var(--font-serif)] text-2xl leading-snug sm:text-[30px] sm:leading-[1.25]"
-        style={{ color: theme.title }}
-      >
-        {displayTitle(title)}
-      </h3>
-
-      <p className="mt-4 max-w-prose text-sm leading-relaxed text-body sm:text-[15px] sm:leading-[1.7]">
-        {body}
+      <p className="mt-3.5 text-[15px] leading-relaxed text-body">
+        {deanery.detail ?? body}
       </p>
 
-      <blockquote
-        className="mt-6 border-l-2 pl-4 sm:pl-5"
-        style={{ borderColor: theme.border }}
-      >
-        <p
-          className="font-[family-name:var(--font-serif)] text-base italic leading-relaxed sm:text-lg"
-          style={{ color: theme.title }}
+      {/* The canvas card stops here. The quoted policy and its source are the
+          long form and live on the /study-budget pages; the card keeps one
+          link out to them so the evidence is a click away, not a paragraph. */}
+      <p className="mt-4 border-t border-heading/[0.07] pt-3.5 text-[12.5px] text-muted">
+        {deanery.doc}
+        <span className="mx-1.5 text-muted/50">&middot;</span>
+        <a
+          href={deanery.policyUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() =>
+            trackEvent('study_budget_policy_link_clicked', {
+              deanery: deanery.id,
+              verdict,
+              surface,
+            })
+          }
+          className="underline decoration-[#d9cdb3] underline-offset-2 transition-colors hover:text-heading"
+          style={{ color: theme.accent }}
         >
-          &ldquo;{deanery.quote}&rdquo;
-        </p>
-        {deanery.quote2 && (
-          <p
-            className="mt-2 font-[family-name:var(--font-serif)] text-base italic leading-relaxed sm:text-lg"
-            style={{ color: theme.title }}
-          >
-            &ldquo;{deanery.quote2}&rdquo;
-          </p>
-        )}
-        <footer className="mt-2 text-xs text-muted sm:text-[13px]">
-          {deanery.doc}
-          <span className="mx-1.5 text-muted/50">&middot;</span>
-          <a
-            href={deanery.policyUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() =>
-              trackEvent('study_budget_policy_link_clicked', {
-                deanery: deanery.id,
-                verdict,
-                surface,
-              })
-            }
-            className="underline decoration-[#d9cdb3] underline-offset-2 transition-colors hover:text-heading"
-            style={{ color: theme.accent }}
-          >
-            Read the full policy
-          </a>
-        </footer>
-      </blockquote>
+          Read the full policy
+        </a>
+      </p>
     </div>
   );
 }
