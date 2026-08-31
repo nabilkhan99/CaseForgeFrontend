@@ -86,7 +86,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
     contact: null,
     portalUrl: 'https://lasepgmdesupport.hee.nhs.uk',
     portalLabel: 'LaSE support portal',
-    body: "Your deanery's approved course list funds one exam preparation course per sitting, up to £600 per SCA course under code GP0001, with no restriction on provider. Complete is £599, structured as a course.",
+    body: "Your deanery's approved course list funds one exam preparation course per sitting, up to £600 per SCA course under code GP0001, with no restriction on provider. Complete is £599, so it fits inside that cap.",
     quote:
       'Exam preparation course... max 1 per sitting; max £600 per SCA preparation course (GP0001)',
     doc: 'NHSE London approved study courses list, September 2025',
@@ -101,7 +101,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
     title: 'Strong case: £600 per SCA course, one per sitting',
     usesGpCode: true,
     contact: '[your patch Faculty Administrator]',
-    body: "KSS's own approved list (code S-GP0001) funds one exam preparation course per sitting, up to £600 per SCA course, provider agnostic. Complete is £599, structured as a course.",
+    body: "KSS's own approved list (code S-GP0001) funds one exam preparation course per sitting, up to £600 per SCA course, provider agnostic. Complete is £599, so it fits inside that cap.",
     quote:
       'Exam preparation course... max 1 per sitting; Max £600 per SCA preparation course',
     doc: 'KSS General Practice approved list, revised March 2026',
@@ -284,7 +284,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
     title: "Fundable at your TPD's discretion",
     usesGpCode: false,
     contact: '[your regional NES GP team]',
-    body: 'NES funding sits with your TPD, judged on educational need and curricular relevance against a £600 budget per training stage. Course fees are fundable for individual courses; annual subscriptions are not, and Complete is a fixed-term course: one payment for 3 months, with nothing renewing afterwards. Expensive courses may be part funded, so the email below asks for full funding with part funding as the fallback.',
+    body: 'NES funding sits with your TPD, judged on educational need and curricular relevance against a £600 budget per training stage. Course fees are fundable for individual courses; annual subscriptions are not. Expensive courses may be part funded, so the email below asks for full funding with part funding as the fallback.',
     quote:
       'NES will fund course fees for individual GP Continuing Professional Development courses',
     doc: 'NES study leave FAQs for GP registrars, July 2025',
