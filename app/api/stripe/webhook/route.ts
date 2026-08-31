@@ -16,6 +16,7 @@ import { isFixedTermPlan, isRollingPlan, planForStripePriceId } from '@/lib/comm
 import { resolvePurchaseEmail } from '@/lib/commerce/buyerEmail';
 import { sendReferralEmail } from '@/lib/email/referralEmail';
 import { sendReceiptEmail } from '@/lib/email/receiptEmail';
+import { sendSetPasswordEmail } from '@/lib/email/accountEmail';
 import { issueReceipt } from '@/lib/receipts/issueReceipt';
 import { paymentMethodLabel } from '@/lib/receipts/paymentMethod';
 import { formatReceiptDate, isReceiptPlanKey } from '@/lib/receipts/receiptContent';
@@ -597,6 +598,53 @@ async function handleCheckoutCompleted(
   return NextResponse.json({ received: true, recorded: !insertError, preorderId });
 }
 
+/**
+ * No receipt could be produced — send the buyer their account link anyway.
+ *
+ * The failure this exists for is not exotic: deploy this code before running
+ * the receipts migration and `issue_receipt` does not exist, so EVERY buyer
+ * gets a null receipt. Without a fallback each one would be sent nothing at
+ * all, the send stamp would be handed back, and Stripe would retry the same
+ * failure for three days and then stop — leaving a paying customer with no
+ * account and no email. That is strictly worse than the two-email flow this
+ * replaced, and it is the one regression worth defending against.
+ *
+ * So the buyer gets the plain set-password email (the same one the self-serve
+ * resend sends) and the send is marked done. Account access is the urgent half
+ * and it is restored immediately; the receipt is owed and is logged loudly
+ * enough to find — every row is still recorded in `preorders`, so it can be
+ * issued by hand afterwards.
+ *
+ * With no link either there is genuinely nothing useful to send, so it reports
+ * a failure and lets Stripe's retry have another go.
+ */
+async function sendAccountEmailInstead(
+  args: DeliverPurchaseReceiptArgs & { reason: string },
+): Promise<{ sent: boolean; error?: string }> {
+  const { session, buyerEmail, buyerName, setupUrl, reason } = args;
+
+  if (!setupUrl) {
+    console.error('[stripe-webhook] CRITICAL: no receipt AND no setup link — buyer got nothing', {
+      sessionId: session.id,
+      reason,
+    });
+    return { sent: false, error: reason };
+  }
+
+  console.error('[stripe-webhook] CRITICAL: sent the account email with NO receipt — this buyer is owed one', {
+    sessionId: session.id,
+    email: buyerEmail,
+    reason,
+  });
+
+  const result = await sendSetPasswordEmail({
+    toEmail: buyerEmail,
+    toName: buyerName,
+    setPasswordUrl: setupUrl,
+  });
+  return result.sent ? { sent: true } : { sent: false, error: result.skipped };
+}
+
 interface DeliverPurchaseReceiptArgs {
   session: Stripe.Checkout.Session;
   preorderId: string;
@@ -629,13 +677,14 @@ async function deliverPurchaseReceipt(
   const { session, preorderId, plan, buyerEmail, buyerName, chargedAt, period, setupUrl } = args;
 
   if (!isReceiptPlanKey(plan)) {
-    // Intensive, or a plan key we do not sell through Checkout. Nothing to
-    // print, and inventing a template for it would be worse than not sending.
-    console.error('[stripe-webhook] no receipt template for this plan — nothing sent', {
+    // Intensive, or a plan key we do not sell through Checkout. Unreachable
+    // today — /api/checkout rejects anything whose cta is not 'checkout' — but
+    // inventing a template would be worse than falling back.
+    console.error('[stripe-webhook] no receipt template for this plan', {
       sessionId: session.id,
       plan,
     });
-    return { sent: false, error: 'no_receipt_template' };
+    return sendAccountEmailInstead({ ...args, reason: 'no_receipt_template' });
   }
 
   const coachingDayLabel = session.metadata?.coaching_day_label ?? null;
@@ -659,7 +708,7 @@ async function deliverPurchaseReceipt(
     kind: 'purchase',
   });
 
-  if (!receipt) return { sent: false, error: 'receipt_unavailable' };
+  if (!receipt) return sendAccountEmailInstead({ ...args, reason: 'receipt_unavailable' });
 
   const result = await sendReceiptEmail({
     toEmail: buyerEmail,
