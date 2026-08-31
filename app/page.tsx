@@ -9,7 +9,6 @@ import {
   Hero,
   GuaranteeCard,
   TrustBar,
-  ProductShowcase,
   VideoProof,
   CompleteCourse,
   Testimonials,
@@ -38,7 +37,6 @@ export default function LandingPage() {
         <TrustBar />
         <VideoProof />
         <CompleteCourse />
-        <ProductShowcase />
         <Testimonials />
         <StudyBudgetChecker />
         <PricingTable />
