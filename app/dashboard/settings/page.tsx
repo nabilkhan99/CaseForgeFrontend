@@ -12,6 +12,7 @@ import PrimaryButton from '@/components/ui/PrimaryButton';
 import SecondaryButton from '@/components/ui/SecondaryButton';
 import PageHeader from '@/components/ui/PageHeader';
 import { saveExamDate } from '@/lib/supabase/queries/profile';
+import { upgradeEnquiryMailto } from '@/lib/commerce/upgrade';
 import type { SubscriptionResponse } from '@/app/api/subscription/route';
 
 // Access windows are 3 calendar months (28 Feb..1 Dec vary in days); the
@@ -213,18 +214,17 @@ export default function SettingsPage() {
                     </Link>
                   )}
                   {/* One of the three sanctioned upgrade slots (lectures hero,
-                      here, and nowhere on the dashboard home). It opens Stripe's
-                      Portal on the plan switcher: the customer pays only for the
-                      time left on their term, so no headline price is quoted. */}
+                      here, and nowhere on the dashboard home). Since the plans
+                      went back to one-off sales the Portal cannot switch anyone
+                      (see UPGRADEABLE_FROM), so this opens a prepopulated email
+                      and the upgrade is quoted by hand — no headline price. */}
                   {canUpgrade && (
-                    <ManageBillingButton
-                      flow="subscription_update"
-                      busyLabel="Opening Stripe…"
-                      className="text-[13px] text-primary font-medium hover:underline disabled:opacity-60"
-                      errorClassName="text-[13px] text-danger mt-2"
+                    <a
+                      href={upgradeEnquiryMailto(user?.email, access.plan)}
+                      className="text-[13px] text-primary font-medium hover:underline"
                     >
                       Upgrade to Complete &rarr;
-                    </ManageBillingButton>
+                    </a>
                   )}
                   {/* Complete without a date: the one thing they still owe us. */}
                   {needsCoachingDay && (

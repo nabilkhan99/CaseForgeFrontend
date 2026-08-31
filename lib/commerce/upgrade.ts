@@ -1,4 +1,5 @@
 import type { Entitlement } from './entitlements'
+import { planLabel } from './plans'
 
 /**
  * Self-Study -> Complete.
@@ -38,4 +39,30 @@ export function canSwitchPlan(entitlement: Entitlement): boolean {
   // 'none' WITH a plan is a pre-launch purchase whose window hasn't opened.
   // They have bought Self-Study and may absolutely move up before 1 September.
   return entitlement.state === 'active' || entitlement.state === 'none'
+}
+
+/** Where a hand-quoted upgrade enquiry lands. */
+export const UPGRADE_CONTACT_EMAIL = 'hello@fourteenfisherman.com'
+
+/**
+ * The upgrade path while {@link UPGRADEABLE_FROM} is empty: a prepopulated
+ * email carrying the two facts a quote needs — who is asking, and what they
+ * already hold. No price is printed in the body on purpose: the reply IS the
+ * quote, so the price lives in one inbox rather than in copy that can go
+ * stale.
+ */
+export function upgradeEnquiryMailto(
+  accountEmail: string | null | undefined,
+  plan: string | null | undefined,
+): string {
+  const subject = 'Upgrade to Complete'
+  const body = [
+    "Hi — I'd like to upgrade to the Complete course.",
+    '',
+    `Account email: ${accountEmail ?? ''}`,
+    `Current plan: ${plan ? planLabel(plan) : ''}`,
+    '',
+    'Thanks',
+  ].join('\r\n')
+  return `mailto:${UPGRADE_CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { computeEntitlement, type Entitlement } from './entitlements'
-import { canSwitchPlan } from './upgrade'
+import { canSwitchPlan, upgradeEnquiryMailto, UPGRADE_CONTACT_EMAIL } from './upgrade'
 
 function entitlement(over: Partial<Entitlement>): Entitlement {
   return { state: 'active', hasLectures: false, ...over }
@@ -58,5 +58,28 @@ describe('canSwitchPlan', () => {
 
   it('refuses the Intensive tier', () => {
     expect(canSwitchPlan(entitlement({ plan: 'intensive', hasLectures: true }))).toBe(false)
+  })
+})
+
+describe('upgradeEnquiryMailto', () => {
+  it('addresses the founders and carries who is asking and what they hold', () => {
+    const href = upgradeEnquiryMailto('gp@example.com', 'self_study_monthly')
+    expect(href.startsWith(`mailto:${UPGRADE_CONTACT_EMAIL}?`)).toBe(true)
+    const params = new URLSearchParams(href.split('?')[1])
+    expect(params.get('subject')).toBe('Upgrade to Complete')
+    expect(params.get('body')).toContain('Account email: gp@example.com')
+    // The human-readable label, not the plan key — this lands in an inbox.
+    expect(params.get('body')).toContain('Current plan: Self-Study, monthly')
+  })
+
+  it('quotes no price — the reply is the quote', () => {
+    const body = new URLSearchParams(upgradeEnquiryMailto('gp@example.com', 'self_study').split('?')[1]).get('body')!
+    expect(body).not.toMatch(/£|\d{3}/)
+  })
+
+  it('degrades to blank fields rather than "undefined" when auth is still resolving', () => {
+    const body = new URLSearchParams(upgradeEnquiryMailto(undefined, null).split('?')[1]).get('body')!
+    expect(body).toContain('Account email: \r\n')
+    expect(body).not.toContain('undefined')
   })
 })

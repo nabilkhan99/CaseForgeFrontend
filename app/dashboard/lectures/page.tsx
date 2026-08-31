@@ -9,7 +9,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import type { LecturesResponse, LectureSummary } from '@/app/api/lectures/route';
 import type { EntitlementState } from '@/lib/commerce/entitlements';
 import type { SubscriptionResponse } from '@/app/api/subscription/route';
-import ManageBillingButton from '@/components/commerce/ManageBillingButton';
+import { upgradeEnquiryMailto } from '@/lib/commerce/upgrade';
 import { createClient } from '@/lib/supabase/client';
 import { getLectureProgress } from '@/lib/supabase/queries/lectureProgress';
 import {
@@ -100,7 +100,7 @@ function totalMinutes(lectures: LectureSummary[]): number {
 const UPGRADE_CTA_CLASS =
   'inline-flex items-center min-h-[44px] px-5 rounded-[10px] text-[14px] font-semibold text-white bg-gradient-to-br from-[#B45309] to-[#D97706] shadow-[0_4px_12px_rgba(180,83,9,0.2)] disabled:opacity-60';
 
-function UpgradeHero({ lectures, canSwitch }: { lectures: LectureSummary[]; canSwitch: boolean }) {
+function UpgradeHero({ lectures, upgradeHref }: { lectures: LectureSummary[]; upgradeHref: string | null }) {
   const mins = totalMinutes(lectures);
   const n = lectures.length;
   // Only quantify once there is something to quantify — "18 minutes of
@@ -129,20 +129,17 @@ function UpgradeHero({ lectures, canSwitch }: { lectures: LectureSummary[]; canS
         against the marking framework your consultations are scored on &mdash; watch as often as you like for the
         length of your plan. Complete also adds a coaching day.
       </p>
-      {/* A live Self-Study customer switches plan inside Stripe's Portal, which
-          prorates the difference against the time left on their term. Everyone
-          else — no plan, or a lapsed one — belongs on the acquisition page. */}
-      {canSwitch ? (
+      {/* A live Self-Study customer asks for the upgrade by email and it is
+          quoted by hand — the Portal cannot switch a one-off plan (see
+          UPGRADEABLE_FROM). Everyone else — no plan, or a lapsed one — belongs
+          on the acquisition page. */}
+      {upgradeHref ? (
         <>
-          <ManageBillingButton
-            flow="subscription_update"
-            busyLabel="Opening Stripe…"
-            className={UPGRADE_CTA_CLASS}
-          >
+          <a href={upgradeHref} className={UPGRADE_CTA_CLASS}>
             Upgrade to Complete &rarr;
-          </ManageBillingButton>
+          </a>
           <p className="text-[13px] text-muted mt-3">
-            You pay only for the time left on your plan.
+            Email us and we&rsquo;ll reply with your price &mdash; you only pay the difference.
           </p>
         </>
       ) : (
@@ -502,10 +499,12 @@ export default function LecturesPage() {
   const [unavailable, setUnavailable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Whether "what Complete adds" is a Stripe plan switch or a trip to the
-  // acquisition page. Defaults to false — the safe answer for anyone without a
-  // plan — and flips once we know they hold a LIVE Self-Study subscription.
+  // Whether "what Complete adds" is a hand-quoted upgrade enquiry or a trip to
+  // the acquisition page. Defaults to false — the safe answer for anyone
+  // without a plan — and flips once we know they hold a LIVE Self-Study plan.
   const [canSwitch, setCanSwitch] = useState(false);
+  // Their plan key, so the enquiry email can say what they already hold.
+  const [planKey, setPlanKey] = useState<string | null>(null);
   // `undefined` means auth is still resolving. Reading progress before then
   // shows a returning user a course with nothing watched and a START HERE hero
   // for a lecture they finished a week ago — see the library index for the
@@ -554,7 +553,10 @@ export default function LecturesPage() {
       .then((data: SubscriptionResponse | null) => {
         if (cancelled || !data) return;
         const selfStudy = data.plan === 'self_study' || data.plan === 'self_study_monthly';
-        if (selfStudy && data.state !== 'read_only') setCanSwitch(true);
+        if (selfStudy && data.state !== 'read_only') {
+          setCanSwitch(true);
+          setPlanKey(data.plan ?? null);
+        }
       })
       .catch(() => {});
     return () => {
@@ -611,7 +613,10 @@ export default function LecturesPage() {
       <PageHeader title="Lectures" subtitle={subtitle} />
 
       {locked && !busy && !unavailable && state !== 'read_only' && (
-        <UpgradeHero lectures={lectures} canSwitch={canSwitch} />
+        <UpgradeHero
+          lectures={lectures}
+          upgradeHref={canSwitch ? upgradeEnquiryMailto(user?.email, planKey) : null}
+        />
       )}
 
       {locked && !busy && (unavailable || state === 'read_only') && (
