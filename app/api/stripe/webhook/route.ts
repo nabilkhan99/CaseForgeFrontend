@@ -15,7 +15,10 @@ import {
 import { isFixedTermPlan, isRollingPlan, planForStripePriceId } from '@/lib/commerce/plans';
 import { resolvePurchaseEmail } from '@/lib/commerce/buyerEmail';
 import { sendReferralEmail } from '@/lib/email/referralEmail';
-import { sendPurchaseEmail } from '@/lib/email/purchaseEmail';
+import { sendReceiptEmail } from '@/lib/email/receiptEmail';
+import { issueReceipt } from '@/lib/receipts/issueReceipt';
+import { paymentMethodLabel } from '@/lib/receipts/paymentMethod';
+import { formatReceiptDate, isReceiptPlanKey } from '@/lib/receipts/receiptContent';
 import { pushPreorderContactToBrevo } from '@/lib/marketing/preorderContact';
 import { provisionBuyerAccount } from '@/lib/auth/provisionBuyer';
 
@@ -86,7 +89,15 @@ export async function POST(request: Request) {
   const origin = new URL(request.url).origin;
 
   if (event.type === 'checkout.session.completed') {
-    return handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session, origin);
+    return handleCheckoutCompleted(
+      event.data.object as Stripe.Checkout.Session,
+      origin,
+      // The event's own timestamp is the charge time, to the second, and it is
+      // STABLE across Stripe's retries — unlike `Date.now()`, which would date
+      // a redelivered receipt to whenever the retry landed. `session.created`
+      // is when the customer opened Checkout, which can be a different day.
+      new Date(event.created * 1000),
+    );
   }
   if (event.type === 'charge.refunded') {
     return handleChargeRefunded(event.data.object as Stripe.Charge);
@@ -98,7 +109,7 @@ export async function POST(request: Request) {
     return handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
   }
   if (event.type === 'invoice.paid') {
-    return handleInvoicePaid(event.data.object as Stripe.Invoice);
+    return handleInvoicePaid(event.data.object as Stripe.Invoice, new Date(event.created * 1000));
   }
 
   return NextResponse.json({ received: true, ignored: event.type });
@@ -325,7 +336,11 @@ async function writeSubscriptionState(
   return 'ok';
 }
 
-async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin: string) {
+async function handleCheckoutCompleted(
+  session: Stripe.Checkout.Session,
+  origin: string,
+  chargedAt: Date,
+) {
   if (session.payment_status !== 'paid') {
     // Async payment methods settle later via checkout.session.async_payment_succeeded;
     // card payments (our case) are always 'paid' here.
@@ -499,72 +514,54 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
     }
   }
 
-  // Confirmation email + Brevo pre-order contact sync. Gated on isNewPreorder so
-  // this only runs for a genuinely NEW pre-order (the insert succeeded): a Stripe
-  // webhook retry takes the 23505 duplicate path and must never double-email the
-  // customer. Best-effort throughout: never fail the webhook.
+  // Brevo pre-order contact sync. Gated on isNewPreorder so this only runs for a
+  // genuinely NEW pre-order; a Stripe webhook retry takes the 23505 duplicate
+  // path. Best-effort: never fail the webhook.
+  //
+  // The purchase-confirmation email that used to sit here is GONE. It has been
+  // folded into the receipt email that provisioning sends below, so a buyer gets
+  // one mail carrying the receipt AND the setup link, rather than two arriving
+  // seconds apart between which the only required action got lost.
   if (isNewPreorder) {
     try {
-      const coachingDayLabel = session.metadata?.coaching_day_label ?? null;
-      const [emailResult, contactResult] = await Promise.allSettled([
-        sendPurchaseEmail({ toEmail: buyerEmail, toName: buyerName, planKey: plan, coachingDayLabel }),
-        pushPreorderContactToBrevo({
-          email: buyerEmail,
-          fullName: buyerName,
-          planKey: plan,
-          coachingDayLabel,
-          amountPence: session.amount_total ?? 0,
-        }),
-      ]);
-
-      if (emailResult.status === 'rejected') {
-        console.error('[stripe-webhook] purchase confirmation email threw', {
-          sessionId: session.id,
-          reason: emailResult.reason,
-        });
-      } else if (!emailResult.value.sent) {
-        console.warn('[stripe-webhook] purchase confirmation email not sent', {
-          sessionId: session.id,
-          result: emailResult.value,
-        });
-      }
-      if (contactResult.status === 'rejected') {
-        console.error('[stripe-webhook] preorder contact sync threw', {
-          sessionId: session.id,
-          reason: contactResult.reason,
-        });
-      }
+      await pushPreorderContactToBrevo({
+        email: buyerEmail,
+        fullName: buyerName,
+        planKey: plan,
+        coachingDayLabel: session.metadata?.coaching_day_label ?? null,
+        amountPence: session.amount_total ?? 0,
+      });
     } catch (error: unknown) {
-      console.error('[stripe-webhook] purchase confirmation error', { sessionId: session.id, error });
+      console.error('[stripe-webhook] preorder contact sync threw', { sessionId: session.id, error });
     }
   }
 
-  if (preorderId) {
-    await provisionBuyerAccount(supabase, {
-      preorderId,
-      email: buyerEmail,
-      name: buyerName,
-      sessionId: session.id,
-    });
-  }
-
-  // The subscription half of the sale. Deliberately last: it is the one step
-  // that can legitimately ask Stripe to retry the whole delivery, and by here
-  // everything above has already run (and is idempotent, so the retry is free).
+  // The subscription half of the sale, and — for the rolling plan — the billing
+  // period the receipt has to print.
   //
-  // Only the rolling plan has this half. A one-off course purchase carries no
-  // subscription by design: its PaymentIntent went onto the row above, and its
-  // access window is the plain three calendar months `accessWindow()` derives
-  // from `created_at` — nothing to disarm, nothing to record.
+  // Moved AHEAD of provisioning (it used to be the last thing in this handler)
+  // because the monthly receipt cannot be rendered without the period, and a
+  // receipt that says "Billing period [start date] to [end date]" is not a
+  // receipt. Nothing else moves with it: only the rolling plan carries a
+  // subscription at all, the two course plans are one-off `payment` sessions.
+  //
+  // It is still the one step that can legitimately ask Stripe to retry the whole
+  // delivery, and doing that here is strictly safer than doing it at the end:
+  // everything above is idempotent and replays for free, and the buyer is not
+  // emailed until it has succeeded. Before, a sync failure 500'd AFTER the mail
+  // had already gone.
   const subscriptionId =
     typeof session.subscription === 'string'
       ? session.subscription
       : (session.subscription?.id ?? null);
+
+  let period: AccessPeriod | undefined;
   if (subscriptionId) {
     const synced = await syncCheckoutSubscription(supabase, subscriptionId, plan);
-    if (synced === 'failed') {
+    if (synced.status === 'failed') {
       return NextResponse.json({ error: 'Failed to finalise subscription' }, { status: 500 });
     }
+    period = synced.period;
   } else if (isRollingPlan(plan)) {
     // A rolling plan with no subscription IS broken — it can never renew, and
     // no cancel/recover event will ever find this order.
@@ -574,7 +571,112 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, origin:
     });
   }
 
+  // Account + receipt, as one delivery. `provisionBuyerAccount` decides whether
+  // anything is owed at all (and holds the lock that makes sure only one Stripe
+  // delivery sends); this callback is what gets sent when it is.
+  if (preorderId) {
+    await provisionBuyerAccount(supabase, {
+      preorderId,
+      email: buyerEmail,
+      name: buyerName,
+      sessionId: session.id,
+      deliver: ({ setupUrl }) =>
+        deliverPurchaseReceipt(supabase, {
+          session,
+          preorderId,
+          plan,
+          buyerEmail,
+          buyerName,
+          chargedAt,
+          period,
+          setupUrl,
+        }),
+    });
+  }
+
   return NextResponse.json({ received: true, recorded: !insertError, preorderId });
+}
+
+interface DeliverPurchaseReceiptArgs {
+  session: Stripe.Checkout.Session;
+  preorderId: string;
+  plan: string;
+  buyerEmail: string;
+  buyerName: string | null;
+  chargedAt: Date;
+  period?: AccessPeriod;
+  setupUrl: string | null;
+}
+
+/**
+ * The one email a buyer gets when they pay: receipt PDF attached, account setup
+ * link as the button.
+ *
+ * Called from inside `provisionBuyerAccount`, which has already decided that a
+ * send is owed and taken the lock for it, so this never has to ask "again?" —
+ * and the receipt number it allocates is keyed on the checkout session id, so
+ * even a delivery that somehow slipped the lock would reprint the SAME number
+ * rather than burn a new one.
+ *
+ * Returns `{ sent: false }` rather than throwing on every failure path: the
+ * caller hands the send stamp back on a false, which is what lets Stripe's next
+ * retry pick the buyer up again.
+ */
+async function deliverPurchaseReceipt(
+  supabase: SupabaseAdmin,
+  args: DeliverPurchaseReceiptArgs,
+): Promise<{ sent: boolean; error?: string }> {
+  const { session, preorderId, plan, buyerEmail, buyerName, chargedAt, period, setupUrl } = args;
+
+  if (!isReceiptPlanKey(plan)) {
+    // Intensive, or a plan key we do not sell through Checkout. Nothing to
+    // print, and inventing a template for it would be worse than not sending.
+    console.error('[stripe-webhook] no receipt template for this plan — nothing sent', {
+      sessionId: session.id,
+      plan,
+    });
+    return { sent: false, error: 'no_receipt_template' };
+  }
+
+  const coachingDayLabel = session.metadata?.coaching_day_label ?? null;
+  const periodStart = period?.startsAt ? new Date(period.startsAt) : null;
+  const periodEnd = period?.endsAt ? new Date(period.endsAt) : null;
+
+  const receipt = await issueReceipt(supabase, {
+    // Idempotency key. Same session, same number, every time.
+    stripeEventKey: session.id,
+    preorderId,
+    email: buyerEmail,
+    customerName: buyerName,
+    planKey: plan,
+    amountPence: session.amount_total ?? 0,
+    currency: session.currency ?? 'gbp',
+    paymentMethod: paymentMethodLabel(session.payment_method_types),
+    paidAt: chargedAt,
+    periodStart,
+    periodEnd,
+    coachingDayLabel,
+    kind: 'purchase',
+  });
+
+  if (!receipt) return { sent: false, error: 'receipt_unavailable' };
+
+  const result = await sendReceiptEmail({
+    toEmail: buyerEmail,
+    toName: buyerName,
+    firstName: buyerName,
+    planKey: plan,
+    sessionDate: coachingDayLabel,
+    // The renewal date and amount, which the monthly buyer is entitled to be
+    // told before the second charge lands.
+    nextBillingDate: receipt.periodEnd ? formatReceiptDate(receipt.periodEnd) : null,
+    hasSetupLink: Boolean(setupUrl),
+    setupUrl,
+    pdf: receipt.pdf,
+    fileName: receipt.fileName,
+  });
+
+  return { sent: result.sent, error: result.error ?? result.skipped };
 }
 
 /**
@@ -589,7 +691,7 @@ async function syncCheckoutSubscription(
   supabase: SupabaseAdmin,
   subscriptionId: string,
   plan: string,
-): Promise<'ok' | 'failed'> {
+): Promise<{ status: 'ok' | 'failed'; period?: AccessPeriod }> {
   let subscription: Stripe.Subscription;
   try {
     // The invoice comes back with it because the PaymentIntent that paid it is
@@ -600,11 +702,11 @@ async function syncCheckoutSubscription(
     });
   } catch (error: unknown) {
     console.error('[stripe-webhook] subscription retrieve failed', { subscriptionId, error });
-    return 'failed';
+    return { status: 'failed' };
   }
 
   if (isFixedTermPlan(plan) && !(await armFixedTermCancellation(subscription))) {
-    return 'failed';
+    return { status: 'failed' };
   }
 
   const paymentIntentId = readInvoicePaymentIntentId(subscription);
@@ -616,10 +718,12 @@ async function syncCheckoutSubscription(
     });
   }
 
-  return writeSubscriptionState(supabase, subscriptionId, {
-    period: readAccessPeriod(subscription),
+  const period = readAccessPeriod(subscription);
+  const status = await writeSubscriptionState(supabase, subscriptionId, {
+    period,
     paymentIntentId,
   });
+  return { status, period };
 }
 
 /**
@@ -825,7 +929,7 @@ async function syncSubscription(subscription: Stripe.Subscription): Promise<void
  * The subscription is re-read rather than trusted from the invoice: the invoice
  * carries the subscription id, not its current period.
  */
-async function handleInvoicePaid(invoice: Stripe.Invoice) {
+async function handleInvoicePaid(invoice: Stripe.Invoice, chargedAt: Date) {
   const subscriptionId = subscriptionIdFromInvoice(invoice);
   if (!subscriptionId) {
     // A one-off invoice with no subscription behind it — nothing of ours.
@@ -839,6 +943,7 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
       expand: ['latest_invoice'],
     });
     await syncSubscription(subscription);
+    await deliverRenewalReceipt(invoice, subscription, chargedAt);
   } catch (error: unknown) {
     console.error('[stripe-webhook] invoice.paid period refresh failed (non-fatal)', {
       subscriptionId,
@@ -847,6 +952,88 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
   }
 
   return NextResponse.json({ received: true, refreshed: subscriptionId });
+}
+
+/**
+ * A monthly renewal cleared — send its receipt.
+ *
+ * Only for `billing_reason: subscription_cycle`. The FIRST invoice of a
+ * subscription is `subscription_create`, and that charge already had its
+ * receipt sent by the checkout handler; without this gate the monthly buyer
+ * would get two receipts for one payment, on two different numbers.
+ *
+ * The plan comes from the PRICE, not from metadata: a renewal arrives attached
+ * to the subscription, and a subscription carries no checkout metadata. This is
+ * what `planForStripePriceId` exists for.
+ *
+ * Entirely best-effort. A missing renewal receipt is a support email; a thrown
+ * exception here would re-run the whole invoice handler on Stripe's retry.
+ */
+async function deliverRenewalReceipt(
+  invoice: Stripe.Invoice,
+  subscription: Stripe.Subscription,
+  chargedAt: Date,
+): Promise<void> {
+  if (invoice.billing_reason !== 'subscription_cycle') return;
+  if (!invoice.id) return;
+
+  const plan = planFromSubscription(subscription);
+  if (!plan || !isReceiptPlanKey(plan) || !isRollingPlan(plan)) return;
+
+  const supabase = getSupabaseAdmin();
+  const { data: order, error } = await supabase
+    .from('preorders')
+    .select('id, email, full_name')
+    .eq('stripe_subscription_id', subscription.id)
+    .neq('status', 'refunded')
+    .maybeSingle();
+
+  if (error || !order?.email) {
+    console.error('[stripe-webhook] renewal receipt: no order behind this subscription', {
+      subscriptionId: subscription.id,
+      invoiceId: invoice.id,
+      error,
+    });
+    return;
+  }
+
+  const period = readAccessPeriod(subscription);
+  const receipt = await issueReceipt(supabase, {
+    // Idempotency key. The invoice, not the session — a renewal has no session,
+    // and this is what makes a redelivered `invoice.paid` reprint one number.
+    stripeEventKey: invoice.id,
+    preorderId: order.id,
+    email: order.email,
+    customerName: order.full_name ?? null,
+    planKey: plan,
+    // What this invoice actually took, which is not necessarily the list price.
+    amountPence: invoice.amount_paid ?? 0,
+    currency: invoice.currency ?? 'gbp',
+    paymentMethod: paymentMethodLabel(
+      (invoice as unknown as { payment_settings?: { payment_method_types?: string[] | null } })
+        .payment_settings?.payment_method_types,
+    ),
+    paidAt: chargedAt,
+    periodStart: period.startsAt ? new Date(period.startsAt) : null,
+    periodEnd: period.endsAt ? new Date(period.endsAt) : null,
+    kind: 'renewal',
+  });
+
+  if (!receipt) return;
+
+  await sendReceiptEmail({
+    toEmail: order.email,
+    toName: order.full_name ?? null,
+    firstName: order.full_name ?? null,
+    planKey: plan,
+    nextBillingDate: receipt.periodEnd ? formatReceiptDate(receipt.periodEnd) : null,
+    // A month in, they have had an account for a month.
+    hasSetupLink: false,
+    setupUrl: null,
+    isRenewal: true,
+    pdf: receipt.pdf,
+    fileName: receipt.fileName,
+  });
 }
 
 /**
