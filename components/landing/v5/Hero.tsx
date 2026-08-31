@@ -33,7 +33,7 @@ export default function Hero() {
 
   return (
     <section
-      className="relative overflow-hidden border-b border-[#E4DDC9] px-5 pb-14 pt-20 sm:px-8 sm:pb-16 sm:pt-24"
+      className="relative overflow-hidden border-b border-[#E4DDC9] px-5 pb-14 pt-28 sm:px-8 sm:pb-16 sm:pt-32"
       style={CROSSHATCH}
     >
       <div
@@ -111,9 +111,6 @@ export default function Hero() {
               className="inline-flex items-center gap-2 rounded-lg bg-[#B45309] px-7 py-4 text-base font-medium text-white shadow-[0_10px_24px_-14px_rgba(180,83,9,0.7)] sm:text-[16.5px]"
             >
               Try Free Mock Station
-              <span className="rounded-md bg-white/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-white/95">
-                Beta
-              </span>
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </motion.a>
             <p className="mt-4 text-xs text-[#78716C] sm:text-sm">12 minutes · no card</p>

@@ -286,7 +286,13 @@ function Verdict({ deanery, hasResat, surface, onResitChange }: VerdictProps) {
         </span>
         <span className="text-[15px] text-body">out of pocket</span>
         {deanery.chip && (
-          <span className="ml-auto rounded-md bg-[#FEF3C7] px-2.5 py-1.5 text-xs font-medium text-[#92400E]">
+          <span
+            className={`ml-auto rounded-md px-2.5 py-1.5 text-xs font-medium ${
+              deanery.chip === 'Very likely approved'
+                ? 'bg-[#DCFCE7] text-[#166534]'
+                : 'bg-[#FEF3C7] text-[#92400E]'
+            }`}
+          >
             {deanery.chip}
           </span>
         )}

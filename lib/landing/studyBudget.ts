@@ -95,7 +95,7 @@ export interface DeaneryPolicy {
    */
   cap?: string;
   /**
-   * Status chip beside the figure: "Covered in full", "Part-funded",
+   * Status chip beside the figure: "Very likely approved", "Part-funded",
    * "Approval needed" and so on. Describes how the money arrives, where the
    * verdict pill describes how strong the case is. Both come from the canvas.
    */
@@ -120,7 +120,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
     id: 'london',
     detail: "One SCA preparation course per trainee under GP0001, with prospective approval.",
     cap: 'Up to £600 · code GP0001',
-    chip: 'Covered in full',
+    chip: 'Very likely approved',
     label: 'London',
     group: 'England',
     verdict: 'strong',
@@ -140,7 +140,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
     id: 'kss',
     detail: "One SCA preparation course per sitting, so a resit attracts its own funding.",
     cap: 'Up to £600 per sitting · GP0001',
-    chip: 'Covered in full',
+    chip: 'Very likely approved',
     label: 'Kent, Surrey and Sussex',
     group: 'England',
     verdict: 'strong',
@@ -208,7 +208,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
     id: 'em',
     detail: "Two SCA courses across the whole of training, with no published per-course cap.",
     cap: 'Up to 2 courses · no per-course cap',
-    chip: 'Covered in full',
+    chip: 'Very likely approved',
     label: 'East Midlands',
     group: 'England',
     verdict: 'strong',
@@ -226,7 +226,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
     id: 'wm',
     detail: "Two SCA courses across the whole of training, with no published per-course cap.",
     cap: 'Up to 2 courses · no per-course cap',
-    chip: 'Covered in full',
+    chip: 'Very likely approved',
     label: 'West Midlands',
     group: 'England',
     verdict: 'strong',
@@ -344,7 +344,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
     id: 'wales',
     detail: "£600 per training year, and unused budget rolls over once to a maximum of £1,200.",
     cap: '£600/yr · rolls over to £1,200',
-    chip: 'Covered in full',
+    chip: 'Very likely approved',
     label: 'Wales (HEIW)',
     group: 'Devolved nations',
     verdict: 'strong',
@@ -361,7 +361,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
     id: 'scotland',
     detail: "A nominal £600 per registrar per training year, with individual course fees fundable.",
     cap: '£600 per training year',
-    chip: 'Covered in full',
+    chip: 'Very likely approved',
     label: 'Scotland (NES)',
     group: 'Devolved nations',
     verdict: 'strong',
