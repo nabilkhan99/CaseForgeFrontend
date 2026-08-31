@@ -34,7 +34,7 @@ Contact: hello@fourteenfisherman.com
 
 3.2 Plan contents, prices and access periods are as described on the pricing page at the time of purchase. The Self-Study and Complete plans are sold as a fixed 3-month course term: you make one payment, the term does not renew, and no further charge is made. The monthly Self-Study plan is a rolling monthly plan that renews until you cancel it.
 
-3.3 Course access runs for the access period stated at purchase, starting from the date your access is activated.
+3.3 Course access runs for the access period stated at purchase, starting from the date of purchase, unless we agree a later start date with you in writing.
 
 3.4 We may improve, update or replace individual stations, lectures or materials during your access period. We will not materially reduce what you purchased.
 

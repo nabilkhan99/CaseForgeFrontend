@@ -272,7 +272,7 @@ export default function CompleteCourse() {
             <Accent>Plus one live coaching day, on a date you choose.</Accent>
           </h2>
           <p className="mx-auto mt-7 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-[15px] font-medium text-heading sm:text-lg">
-            {['Unlimited AI Practice', '8 Hours of On-Demand Lectures', '8-Hour Coaching Day'].map(
+            {['Unlimited AI Practice', '8 Hours of On-Demand Lectures', 'One Full-Day Coaching Session'].map(
               (chip, index) => (
                 <span key={chip} className="contents">
                   {index > 0 && (
