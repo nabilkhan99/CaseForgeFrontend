@@ -80,3 +80,29 @@ export function pageMetadata({
         },
     };
 }
+
+/**
+ * SoftwareApplication schema for the free GP portfolio tool.
+ *
+ * Rendered as a raw <script type="application/ld+json"> by the page, following
+ * the ORGANIZATION_JSON_LD precedent in app/layout.tsx: Next's Metadata API has
+ * no JSON-LD hook, and `pageMetadata` returns a `Metadata` object, so there is
+ * nowhere sensible to thread this through it.
+ *
+ * Deliberately NO FAQPage schema (Google retired FAQ rich results for
+ * non-government sites, so it is validation surface for no gain) and NO
+ * aggregateRating (rating markup without visible on-page reviews is a manual
+ * action risk).
+ */
+export const PORTFOLIO_TOOL_JSON_LD = {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'GP Portfolio Tool',
+    applicationCategory: 'EducationalApplication',
+    operatingSystem: 'Web',
+    url: `${SITE_URL}/gp-portfolio-tool`,
+    description:
+        'Free AI tool that generates structured clinical case reviews for the RCGP ePortfolio, mapped to the RCGP capability framework.',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'GBP' },
+    publisher: { '@type': 'Organization', name: SITE_NAME },
+};

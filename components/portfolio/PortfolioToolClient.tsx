@@ -9,6 +9,8 @@ import { ReviewDisplay } from '@/components/ReviewDisplay';
 import type { CaseReviewResponse } from '@/lib/types';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import PortfolioGuaranteeBanner from '@/components/portfolio/PortfolioGuaranteeBanner';
+import ReferralStrip from '@/components/portfolio/ReferralStrip';
+import { usePortfolioReviewState } from '@/components/portfolio/PortfolioReviewState';
 import { analytics } from '@/lib/analytics';
 import { FeedbackWidget } from '@/components/FeedbackWidget';
 
@@ -17,6 +19,7 @@ export default function PortfolioToolClient() {
   const [authChecked, setAuthChecked] = useState(false);
   const [review, setReview] = useState<CaseReviewResponse | null>(null);
   const [experienceGroups, setExperienceGroups] = useState<string[]>([]);
+  const { setHasReview } = usePortfolioReviewState();
 
   useEffect(() => {
     const supabase = createClient();
@@ -37,6 +40,15 @@ export default function PortfolioToolClient() {
       setExperienceGroups(JSON.parse(savedExperienceGroups));
     }
   }, []);
+
+  // Publish "is a review on screen?" to the below-fold block, which the SERVER
+  // page renders as our sibling so its HTML ships in the initial response.
+  // Keyed off `review` rather than off the generate callback on purpose: a
+  // returning user has a review restored from localStorage above and has never
+  // pressed generate, and they should get the same clean output view.
+  useEffect(() => {
+    setHasReview(review !== null);
+  }, [review, setHasReview]);
 
   const handleReviewGenerated = (newReview: CaseReviewResponse, newExperienceGroups: string[]) => {
     setReview(newReview);
@@ -62,17 +74,38 @@ export default function PortfolioToolClient() {
 
   const content = (
     <ErrorBoundary>
+      {/* Strip, then H1, then the input — nothing between the H1 and the box.
+          The H1 stands down once a review exists because ReviewDisplay renders
+          the generated case title as the page's <h1> from then on, and two
+          <h1>s would split the topic signal the quiet one exists to give.
+
+          The strip appears in both page states, per spec §2: above the H1 here,
+          and again at the top of the output below. Two instances, one visible at
+          a time, both opening the single modal held by ReferralModalProvider —
+          stacking both at once would put two identical bars 20px apart. */}
+      {!review && (
+        <>
+          <ReferralStrip className="mb-5" />
+          <h1 className="mb-4 text-[18px] font-semibold leading-snug tracking-tight text-heading">
+            Free GP portfolio tool: AI clinical case review generator
+          </h1>
+        </>
+      )}
 
       <section className="card">
         {!review ? (
           <CaseForm onReviewGenerated={handleReviewGenerated} />
         ) : (
-          <ReviewDisplay
-            review={review}
-            experienceGroups={experienceGroups}
-            onNewCase={handleNewCase}
-            onUpdate={handleReviewUpdate}
-          />
+          <>
+            {/* Repeated instance: top of the output, above the case title. */}
+            <ReferralStrip className="mb-6" />
+            <ReviewDisplay
+              review={review}
+              experienceGroups={experienceGroups}
+              onNewCase={handleNewCase}
+              onUpdate={handleReviewUpdate}
+            />
+          </>
         )}
       </section>
       {review && <FeedbackWidget />}
