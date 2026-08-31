@@ -33,7 +33,8 @@ export const metadata: Metadata = pageMetadata({
  * BelowFoldGate hides the block (without unmounting it) once a review is on
  * screen — including one restored from localStorage for a returning user.
  *
- * ReferralModalProvider wraps both so the strip's two instances share one modal.
+ * ReferralModalProvider wraps both so the banner and the below-fold block share
+ * one modal.
  */
 export default function GpPortfolioToolPage() {
     return (

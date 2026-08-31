@@ -2,6 +2,7 @@
 
 import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
@@ -144,8 +145,21 @@ export default function AppNavbar() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 120, damping: 20 }}
       >
-        {/* Wordmark */}
-        <Link href="/dashboard" className="flex items-center cursor-pointer">
+        {/* Wordmark. The lotus is cropped out of the full lockup rather than
+            being a second drawing of it, so the two can never drift apart; it is
+            square and transparent, so `h-` alone sizes it without squashing.
+            Decorative — the adjacent text is already the accessible name, and a
+            duplicate alt would have a screen reader say the brand twice. */}
+        <Link href="/dashboard" className="flex items-center gap-2 cursor-pointer">
+          <Image
+            src="/mark.png"
+            alt=""
+            width={256}
+            height={256}
+            priority
+            aria-hidden="true"
+            className="h-[18px] w-[18px] flex-shrink-0"
+          />
           <span className="text-[14px] font-semibold text-heading tracking-tight">
             Fourteen Fisherman
           </span>

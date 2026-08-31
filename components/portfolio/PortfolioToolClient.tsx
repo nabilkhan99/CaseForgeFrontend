@@ -8,8 +8,7 @@ import { CaseForm } from '@/components/CaseForm';
 import { ReviewDisplay } from '@/components/ReviewDisplay';
 import type { CaseReviewResponse } from '@/lib/types';
 import ErrorBoundary from '@/components/ErrorBoundary';
-import PortfolioGuaranteeBanner from '@/components/portfolio/PortfolioGuaranteeBanner';
-import ReferralStrip from '@/components/portfolio/ReferralStrip';
+import ReferralBanner from '@/components/portfolio/ReferralBanner';
 import { usePortfolioReviewState } from '@/components/portfolio/PortfolioReviewState';
 import { analytics } from '@/lib/analytics';
 import { FeedbackWidget } from '@/components/FeedbackWidget';
@@ -74,38 +73,31 @@ export default function PortfolioToolClient() {
 
   const content = (
     <ErrorBoundary>
-      {/* Strip, then H1, then the input — nothing between the H1 and the box.
-          The H1 stands down once a review exists because ReviewDisplay renders
-          the generated case title as the page's <h1> from then on, and two
-          <h1>s would split the topic signal the quiet one exists to give.
+      {/* H1, then the input — nothing between them. The H1 stands down once a
+          review exists because ReviewDisplay renders the generated case title as
+          the page's <h1> from then on, and two <h1>s would split the topic
+          signal the quiet one exists to give.
 
-          The strip appears in both page states, per spec §2: above the H1 here,
-          and again at the top of the output below. Two instances, one visible at
-          a time, both opening the single modal held by ReferralModalProvider —
-          stacking both at once would put two identical bars 20px apart. */}
+          The referral strip that used to sit here, and its twin at the top of
+          the output, are both gone: ReferralBanner lives in the page shell
+          above, so it is on screen in either state and a copy in here would be
+          the two-identical-bars problem the strip's own comment warned about. */}
       {!review && (
-        <>
-          <ReferralStrip className="mb-5" />
-          <h1 className="mb-4 text-[18px] font-semibold leading-snug tracking-tight text-heading">
-            Free GP portfolio tool: AI clinical case review generator
-          </h1>
-        </>
+        <h1 className="mb-4 text-[18px] font-semibold leading-snug tracking-tight text-heading">
+          Free GP portfolio tool: AI clinical case review generator
+        </h1>
       )}
 
       <section className="card">
         {!review ? (
           <CaseForm onReviewGenerated={handleReviewGenerated} />
         ) : (
-          <>
-            {/* Repeated instance: top of the output, above the case title. */}
-            <ReferralStrip className="mb-6" />
-            <ReviewDisplay
-              review={review}
-              experienceGroups={experienceGroups}
-              onNewCase={handleNewCase}
-              onUpdate={handleReviewUpdate}
-            />
-          </>
+          <ReviewDisplay
+            review={review}
+            experienceGroups={experienceGroups}
+            onNewCase={handleNewCase}
+            onUpdate={handleReviewUpdate}
+          />
         )}
       </section>
       {review && <FeedbackWidget />}
@@ -121,7 +113,7 @@ export default function PortfolioToolClient() {
               the navbar above it, as in the design. The bar it replaced was
               edge-to-edge, which is why it sat outside this container. */}
           <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
-            <PortfolioGuaranteeBanner />
+            <ReferralBanner />
           </div>
           <main className="pt-8 pb-16 px-6">
             <div className="max-w-[900px] mx-auto space-y-8">
@@ -138,7 +130,7 @@ export default function PortfolioToolClient() {
       <LandingNavbar user={user} />
       <div className="pt-20">
         <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
-          <PortfolioGuaranteeBanner />
+          <ReferralBanner />
         </div>
         <div className="pt-8 max-w-7xl mx-auto space-y-8 px-4 sm:px-6 lg:px-8">
           {content}
