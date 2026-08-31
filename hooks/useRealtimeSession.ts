@@ -979,6 +979,15 @@ export function useRealtimeSession({
      */
     const resolveRespondDecision = useCallback(
         (said: string, dropped: boolean) => {
+            // The consultation is over. A transcript can still arrive after the
+            // buzzer — captureFinalTurn holds the transport open precisely so
+            // that it does — and answering it would have the patient speak
+            // after time was called. The fallback timer already checked this;
+            // this path did not, and the grace window is what made it reachable.
+            if (endedRef.current) {
+                logDebug('respond:withheld', { said, reason: 'ended' });
+                return;
+            }
             if (pendingCommitsRef.current === 0) return;
             pendingCommitsRef.current -= 1;
 
