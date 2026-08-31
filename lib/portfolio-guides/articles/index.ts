@@ -2,6 +2,11 @@ import type { PortfolioArticle } from '@/lib/portfolio-guides/articleTypes';
 import { usingAiForEportfolioEntries } from '@/lib/portfolio-guides/articles/using-ai-for-eportfolio-entries';
 import { howToWriteAClinicalCaseReview } from '@/lib/portfolio-guides/articles/how-to-write-a-clinical-case-review';
 import { rcgpCapabilitiesExplained } from '@/lib/portfolio-guides/articles/rcgp-capabilities-explained';
+import { clinicalCaseReviewExamples } from '@/lib/portfolio-guides/articles/clinical-case-review-examples';
+import { eportfolioArcpPreparation } from '@/lib/portfolio-guides/articles/eportfolio-arcp-preparation';
+import { whatToWriteAbout } from '@/lib/portfolio-guides/articles/what-to-write-about';
+import { eportfolioToSca } from '@/lib/portfolio-guides/articles/eportfolio-to-sca';
+import { eportfolioSt1ToSt3 } from '@/lib/portfolio-guides/articles/eportfolio-st1-to-st3';
 
 /**
  * Registry of the ePortfolio cluster, in the build order given by section 7 of
@@ -16,6 +21,11 @@ export const portfolioArticles: PortfolioArticle[] = [
     usingAiForEportfolioEntries,
     howToWriteAClinicalCaseReview,
     rcgpCapabilitiesExplained,
+    clinicalCaseReviewExamples,
+    eportfolioArcpPreparation,
+    whatToWriteAbout,
+    eportfolioToSca,
+    eportfolioSt1ToSt3,
 ];
 
 export const portfolioArticlesBySlug: Record<string, PortfolioArticle> = Object.fromEntries(
