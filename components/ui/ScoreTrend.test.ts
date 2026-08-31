@@ -1,32 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { clientXToViewX, nearestPointIndex, rollingMean } from './ScoreTrend';
+import { clientXToViewX, nearestPointIndex } from './ScoreTrend';
 
 /**
- * The three bits of arithmetic the scrub depends on, none of which are visible
- * when they are wrong — a cursor that lands one case to the left is a readout
+ * The two bits of arithmetic the cursor depends on, neither of which is visible
+ * when it is wrong — a cursor that lands one case to the left is a readout
  * confidently describing the wrong consultation.
  */
-
-describe('rollingMean', () => {
-  it('is not the raw series — which is the whole reason the readout is explicit', () => {
-    const raw = [4, 4, 10];
-    expect(rollingMean(raw, 3)).toEqual([4, 4, 6]);
-    expect(rollingMean(raw, 3)[2]).not.toBe(raw[2]);
-  });
-
-  it('averages only what exists at the start of the series', () => {
-    expect(rollingMean([6, 8, 10, 12], 3)).toEqual([6, 7, 8, 10]);
-  });
-
-  it('returns the series itself at a window of one', () => {
-    expect(rollingMean([1, 2, 3], 1)).toEqual([1, 2, 3]);
-  });
-
-  it('has an entry per input, including none for none', () => {
-    expect(rollingMean([], 3)).toEqual([]);
-    expect(rollingMean([5], 3)).toEqual([5]);
-  });
-});
 
 describe('clientXToViewX — the viewBox is fixed at 520, the rendered width is not', () => {
   it('scales a client pixel into viewBox units', () => {

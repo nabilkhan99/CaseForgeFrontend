@@ -1,12 +1,19 @@
 'use client';
 
-import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import { format } from 'date-fns';
 import { motion, useReducedMotion } from 'framer-motion';
 import OutcomeGlyph from '@/components/ui/OutcomeGlyph';
 import type { SessionHistoryItem } from '@/lib/supabase/queries/dashboard';
+import type { DomainKey } from '@/lib/clinical-master/types';
 import { MAX_WEIGHTED_SCORE } from '@/lib/clinical-master/types';
 import { passMarkFor, fmtMark } from '@/lib/clinical-master/scoring';
+import {
+  DOMAIN_DISPLAY_NAMES,
+  DOMAIN_MAX_POINTS,
+  DOMAIN_ORDER,
+  type DomainCasePoints,
+} from '@/lib/development/domainAverages';
 
 /** Below this there is no shape to show, only noise. */
 const MIN_POINTS = 4;
@@ -17,18 +24,6 @@ const MIN_POINTS = 4;
  */
 const WINDOW = 400;
 
-/**
- * Rolling average width for a given history length. Grows with the history:
- * three cases of smoothing reads honestly over a dozen points but turns two
- * months of practice into a scribble, while an eight-case mean over ten points
- * would just be the total average drawn twice.
- */
-export function smoothWidthFor(count: number): number {
-  if (count < 12) return 3;
-  if (count < 30) return 5;
-  return 8;
-}
-
 const VIEW_W = 520;
 const VIEW_H = 170;
 const PAD_TOP = 24;
@@ -38,19 +33,8 @@ const PAD_X = 14;
 /** Plot width in viewBox units — the span the points are laid out across. */
 const PLOT_W = VIEW_W - PAD_X * 2;
 
-/**
- * A trailing mean of the last `window` values, one per input value.
- *
- * Extracted and exported because the scrub readout has to be explicit about
- * which of two numbers it is showing, and `rolling[i] !== values[i]` is the
- * whole reason that question exists.
- */
-export function rollingMean(values: readonly number[], window: number): number[] {
-  return values.map((_, i) => {
-    const slice = values.slice(Math.max(0, i - (window - 1)), i + 1);
-    return slice.reduce((sum, v) => sum + v, 0) / slice.length;
-  });
-}
+/** Gap between the cursor and the readout beside it, in percent of the chart. */
+const READOUT_GAP_PCT = 2.5;
 
 /**
  * Client pixels to viewBox units.
@@ -82,58 +66,55 @@ export function nearestPointIndex(viewX: number, count: number): number {
 interface ScoreTrendProps {
   /** Newest-first, as the history page holds them. */
   sessions: SessionHistoryItem[];
+  /**
+   * Per-domain weighted points, keyed by session id, for the hover readout.
+   *
+   * Optional and incomplete by design: the query behind it reads whole result
+   * blobs, so it is windowed to the recent cases rather than the whole bank. A
+   * point with no entry shows its mark and no breakdown — see DomainSplit.
+   */
+  domainCases?: readonly DomainCasePoints[];
 }
 
 /**
  * M4 — "am I getting better?", which a flat list of identical rows cannot answer.
  *
- * Plots the rolling average rather than raw scores: one bad case in an otherwise
- * rising run should not read as a collapse.
+ * WHAT IS PLOTTED. Each case's own mark, in the order they were sat. An earlier
+ * version drew a rolling mean of the last 3–8, on the reasoning that one bad
+ * case in a rising run should not read as a collapse. It bought that at too high
+ * a price: the height of a dot was a number that appeared nowhere else in the
+ * product, so the chart had to keep explaining which of two numbers it meant,
+ * and the reader had to hold the distinction to read their own scores. Raw marks
+ * need no caption. The line between them is a connector, not a claim.
  *
- * The headline adapts and the chart does not. An earlier draft hid the chart
- * when the trend was flat or falling, which is worse than unkind — it withholds
- * someone's own data at exactly the moment they most need to see it. So the
- * data always shows; only the framing changes. Rising gets "up X since you
- * started"; anything else gets a neutral title and no verdict, because a
- * candidate can read a downward line perfectly well without being told.
+ * The chart is bare on purpose. No headline, no delta, no verdict — those are
+ * the trend report's job further down the page, written from a model that has
+ * read the consultations, and a second opinion computed off two endpoints was
+ * both weaker and louder than the real one.
  *
- * SCRUB — drag along the chart and the headline becomes that case.
- *
- * WHICH NUMBER THE READOUT SHOWS. Two different numbers exist at every point:
- * the case's own mark, and the rolling mean of it and the two before it, which
- * is what the dot's height actually is. The readout leads with the case's own
- * mark — that is the number the row further down the page shows, the number the
- * feedback report shows, and the only one the reader means by "how did I do on
- * that one". Printing 6.5 at the height of 5.4 would be a lie, so two things
- * stop it being one: the cursor is a full-height vertical line rather than a
- * point, so nothing claims a height for the mark; and the caption under the
- * chart names the line's own value at the cursor while you are there. The
- * distinction is stated rather than smoothed over.
- *
- * WHICH SESSION. `scored` is reversed relative to `sessions` so the chart reads
- * oldest to newest. Everything the readout needs is on the reversed row itself,
- * so the cursor indexes `scored` directly and there is no second array to fall
- * out of step with — the same identity that keys the circles.
+ * HOVER. Move across and a readout names that case: its mark, and how the mark
+ * splits across the three domains. The split is the thing a single number
+ * cannot tell you — 5.5 built on a failed Clinical Management is a different
+ * problem from 5.5 spread evenly — and it is per attempt, not averaged.
  *
  * TOUCH. Pointer events with capture, so a drag that leaves the chart keeps
- * scrubbing. `touch-action: pan-y` rather than `none`: the chart is ~290px tall
- * at the dashboard measure, and `none` would make that a block of the page a
- * thumb cannot scroll past. `pan-y` gives the browser the vertical axis and
- * keeps the horizontal one, which is the axis this gesture uses — a vertical
- * swipe scrolls the page and cancels the scrub, a horizontal one inspects.
+ * reporting. `touch-action: pan-y` rather than `none`: the chart is a couple of
+ * hundred px tall at the dashboard measure, and `none` would make that a block
+ * of the page a thumb cannot scroll past. `pan-y` gives the browser the
+ * vertical axis and keeps the horizontal one — a vertical swipe scrolls and
+ * cancels, a horizontal one inspects.
  *
- * KEYBOARD. One tab stop, arrows along the series, same as the station board.
- * `role="slider"` because that is what a one-dimensional cursor over an ordered
- * series is, and it is the role screen readers announce a `aria-valuetext` for
- * on every move — so arrowing across reads out each case rather than silence.
+ * KEYBOARD. One tab stop, arrows along the series. `role="slider"` because that
+ * is what a one-dimensional cursor over an ordered series is, and it is the role
+ * screen readers announce `aria-valuetext` for on every move — so arrowing
+ * across reads out each case rather than silence.
  *
  * The svg is aria-hidden and carries no `role="img"`. It used to: `role="img"`
  * prunes every descendant from the accessibility tree, which is fine for a
  * static picture and fatal next to anything interactive. The sentence that was
- * its label is now a visually-hidden paragraph, where it is read in document
- * order instead of being attached to a graphic nobody can reach into.
+ * its label is now a visually-hidden paragraph, read in document order.
  */
-export default function ScoreTrend({ sessions }: ScoreTrendProps) {
+export default function ScoreTrend({ sessions, domainCases = [] }: ScoreTrendProps) {
   const shouldReduceMotion = useReducedMotion();
   const frameRef = useRef<HTMLDivElement>(null);
   /**
@@ -148,8 +129,6 @@ export default function ScoreTrend({ sessions }: ScoreTrendProps) {
   /** null until something moves it — clamped on render, never trusted raw. */
   const [cursor, setCursor] = useState<number | null>(null);
   const [inspecting, setInspecting] = useState(false);
-  /** Which hint to offer. A keyboard user has nothing to "release". */
-  const [mode, setMode] = useState<'pointer' | 'key'>('pointer');
 
   const scored = sessions
     .filter((s) => s.outcome === 'scored')
@@ -162,42 +141,71 @@ export default function ScoreTrend({ sessions }: ScoreTrendProps) {
   const maxScore = scored[0]?.maxScore || MAX_WEIGHTED_SCORE;
   const passMark = passMarkFor(maxScore);
 
-  const smooth = smoothWidthFor(scored.length);
-  const rolling = rollingMean(
-    scored.map((s) => s.weightedScore),
-    smooth,
-  );
+  const marks = scored.map((s) => s.weightedScore);
 
   const plotH = VIEW_H - PAD_TOP - PAD_BOTTOM;
   const x = (i: number) => PAD_X + (count === 1 ? PLOT_W / 2 : (i / (count - 1)) * PLOT_W);
   const y = (v: number) => PAD_TOP + (1 - Math.max(0, Math.min(1, v / maxScore))) * plotH;
 
-  const points = rolling.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const points = marks.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
   const passY = y(passMark);
-
-  const delta = rolling[rolling.length - 1] - rolling[0];
-  const rising = delta >= 0.3;
 
   // Clamped here rather than in state: the page loads more rows as you page,
   // and a stale cursor must never point past the end of the window.
   const active = Math.min(cursor ?? count - 1, count - 1);
   const activeSession = scored[active];
-  const activeRolling = rolling[active];
+  const activeSplit = domainCases.find((entry) => entry.sessionId === activeSession.id)?.points;
 
-  const summarySentence = `Rolling average score across your ${count} marked cases, from ${rolling[0].toFixed(1)} to ${rolling[count - 1].toFixed(1)} out of ${fmtMark(maxScore)}. The pass mark is ${fmtMark(passMark)}.`;
+  const summarySentence = `Your mark on each of your ${count} marked cases, oldest first, from ${marks[0].toFixed(1)} to ${marks[count - 1].toFixed(1)} out of ${fmtMark(maxScore)}. The pass mark is ${fmtMark(passMark)}.`;
 
   const stamp = activeSession.completedAt ? new Date(activeSession.completedAt) : null;
-  const stampLabel = stamp && Number.isFinite(stamp.getTime()) ? format(stamp, 'EEE HH:mm') : null;
+  const stampLabel = stamp && Number.isFinite(stamp.getTime()) ? format(stamp, 'd MMM') : null;
+
+  const splitText = activeSplit
+    ? ' ' +
+      DOMAIN_ORDER.filter((domain) => typeof activeSplit[domain] === 'number')
+        .map(
+          (domain) =>
+            `${DOMAIN_DISPLAY_NAMES[domain]} ${activeSplit[domain]!.toFixed(1)} of ${DOMAIN_MAX_POINTS[domain]}.`,
+        )
+        .join(' ')
+    : '';
 
   const valueText = `Case ${active + 1} of ${count}. ${activeSession.stationTitle}${
     stampLabel ? `, ${stampLabel}` : ''
   }, ${activeSession.weightedScore.toFixed(1)} out of ${fmtMark(activeSession.maxScore)}, ${
     activeSession.passed ? 'passed' : 'not passed'
-  }. Rolling average here ${activeRolling.toFixed(1)}.`;
+  }.${splitText}`;
 
-  function moveTo(index: number, next: 'pointer' | 'key') {
+  /**
+   * The readout goes beside the cursor, never over it.
+   *
+   * Centring it on the point buried the one dot the reader is asking about
+   * under the card describing it. So it takes whichever side has more room —
+   * right of the cursor in the first half of the series, left of it in the
+   * second — and is anchored by that edge, which also keeps it inside the chart
+   * at both ends without needing to guess its width.
+   *
+   * Percent rather than viewBox units because the card is HTML over the svg and
+   * scales with the container, which the fixed viewBox does not.
+   */
+  const cursorPct = (x(active) / VIEW_W) * 100;
+  const readoutOnRight = active < (count - 1) / 2;
+  /**
+   * Custom properties rather than `left`/`right` directly, because the phone
+   * layout is different and an inline style cannot carry a media query. Below
+   * `sm` the card spans the chart — a 280px card beside a cursor on a 295px
+   * plot is not "beside" anything, and a finger is already covering the point —
+   * and from `sm` up these take over. The unused edge is `auto` so whichever
+   * side wins does not fight a stale value from the other.
+   */
+  const readoutStyle = {
+    '--readout-left': readoutOnRight ? `${cursorPct + READOUT_GAP_PCT}%` : 'auto',
+    '--readout-right': readoutOnRight ? 'auto' : `${100 - cursorPct + READOUT_GAP_PCT}%`,
+  } as CSSProperties;
+
+  function moveTo(index: number) {
     setCursor(index);
-    setMode(next);
     setInspecting(true);
   }
 
@@ -207,6 +215,18 @@ export default function ScoreTrend({ sessions }: ScoreTrendProps) {
     const viewX = clientXToViewX(clientX, frame.getBoundingClientRect());
     if (viewX === null) return null;
     return nearestPointIndex(viewX, count);
+  }
+
+  /**
+   * Hover, not just drag. A mouse crossing the chart inspects it with nothing
+   * pressed; `draggingRef` still matters for touch, where the only way to track
+   * a finger is a captured pointer.
+   */
+  function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
+    if (event.pointerType !== 'mouse' && !draggingRef.current) return;
+    const index = indexFromClientX(event.clientX);
+    if (index === null) return;
+    moveTo(index);
   }
 
   function handlePointerDown(event: PointerEvent<HTMLDivElement>) {
@@ -220,13 +240,7 @@ export default function ScoreTrend({ sessions }: ScoreTrendProps) {
       // The pointer is already gone; the move handlers simply never fire.
     }
     draggingRef.current = true;
-    moveTo(index, 'pointer');
-  }
-
-  function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
-    if (!draggingRef.current) return;
-    const index = indexFromClientX(event.clientX);
-    if (index !== null) setCursor(index);
+    moveTo(index);
   }
 
   function handlePointerEnd(event: PointerEvent<HTMLDivElement>) {
@@ -237,13 +251,20 @@ export default function ScoreTrend({ sessions }: ScoreTrendProps) {
       // Never captured, or already released.
     }
     draggingRef.current = false;
+    // A mouse keeps its readout until it leaves; a finger has nothing hovering
+    // once it lifts, so the readout goes with it.
+    if (event.pointerType !== 'mouse') setInspecting(false);
+  }
+
+  function handlePointerLeave() {
+    if (draggingRef.current) return;
     setInspecting(false);
   }
 
   function handleFocus() {
     // A press focuses the frame too; the drag already owns the interaction.
     if (draggingRef.current) return;
-    moveTo(active, 'key');
+    moveTo(active);
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -272,51 +293,11 @@ export default function ScoreTrend({ sessions }: ScoreTrendProps) {
     // Swallowed even at an edge, so ArrowDown on the first case does not scroll
     // the chart out from under the cursor.
     event.preventDefault();
-    moveTo(next, 'key');
+    moveTo(next);
   }
 
   return (
     <div className="mb-5 rounded-[10px] border border-hairline bg-surface-raised px-4 py-3.5">
-      <div className="mb-3 flex items-baseline justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.13em] text-muted">
-            {inspecting
-              ? `${stampLabel ? `${stampLabel} · ` : ''}case ${active + 1} of ${count}`
-              : `Your ${count} marked cases`}
-          </div>
-          <div className="mt-0.5 flex items-baseline gap-1.5 text-[15px] font-semibold text-heading">
-            {inspecting ? (
-              <>
-                <span className="truncate">{activeSession.stationTitle}</span>
-                <span className="text-muted">&mdash;</span>
-                <span className="font-mono tabular-nums">
-                  {activeSession.weightedScore.toFixed(1)}
-                </span>
-                {activeSession.passed && (
-                  <OutcomeGlyph kind="pass" className="self-center flex-shrink-0" />
-                )}
-              </>
-            ) : (
-              <span>
-                {rising ? `Up ${delta.toFixed(1)} since you started` : 'How your average is moving'}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {inspecting ? (
-          <span className="flex-shrink-0 font-mono text-[11px] text-muted">
-            {mode === 'key' ? '← → to move' : 'release to see your average'}
-          </span>
-        ) : (
-          rising && (
-            <span className="flex-shrink-0 font-mono text-[13px] font-medium text-success">
-              &#8599; improving
-            </span>
-          )
-        )}
-      </div>
-
       {/* The sentence that used to be the svg's aria-label. Read in place,
           rather than hanging off a graphic whose role hides its contents. */}
       <p className="sr-only">{summarySentence}</p>
@@ -334,6 +315,7 @@ export default function ScoreTrend({ sessions }: ScoreTrendProps) {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
         onPointerCancel={handlePointerEnd}
+        onPointerLeave={handlePointerLeave}
         onKeyDown={handleKeyDown}
         onFocus={handleFocus}
         onBlur={() => setInspecting(false)}
@@ -349,7 +331,13 @@ export default function ScoreTrend({ sessions }: ScoreTrendProps) {
             strokeWidth="1"
             strokeDasharray="4 4"
           />
-          <text x="0" y={passY - 7} fontFamily="JetBrains Mono, monospace" fontSize="10" fill="#8A817A">
+          <text
+            x="0"
+            y={passY - 7}
+            fontFamily="JetBrains Mono, monospace"
+            fontSize="10"
+            fill="#8A817A"
+          >
             {fmtMark(passMark)} pass mark
           </text>
 
@@ -371,7 +359,7 @@ export default function ScoreTrend({ sessions }: ScoreTrendProps) {
             }
           />
 
-          {rolling.map((v, i) => (
+          {marks.map((v, i) => (
             <motion.circle
               key={scored[i].id}
               cx={x(i)}
@@ -386,15 +374,17 @@ export default function ScoreTrend({ sessions }: ScoreTrendProps) {
             />
           ))}
 
-          {/* The cursor. A full-height rule, not a dot: the case's own mark and
-              the line's value sit at two different heights, and a rule does not
-              claim either of them. Position is set directly rather than
-              animated, so it tracks the finger instead of chasing it — only the
-              fade in and out is motion, and reduced motion takes even that. */}
+          {/* The cursor. A rule the full height of the plot, plus a ring on the
+              point itself — the dot's height IS the case's mark now, so unlike
+              the rolling-average chart this ring can sit on it without
+              claiming a number the readout does not show. */}
           <motion.g
             initial={false}
             animate={{ opacity: inspecting ? 1 : 0 }}
-            transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.12 }}
+            // Fades in, but leaves at once: the readout card unmounts rather
+            // than fading, and a ring still visible over a chart with nothing
+            // labelling it reads as a stuck cursor.
+            transition={shouldReduceMotion || !inspecting ? { duration: 0 } : { duration: 0.12 }}
           >
             <line
               x1={x(active)}
@@ -406,7 +396,7 @@ export default function ScoreTrend({ sessions }: ScoreTrendProps) {
             />
             <circle
               cx={x(active)}
-              cy={y(activeRolling)}
+              cy={y(activeSession.weightedScore)}
               r="7"
               fill="none"
               stroke="#B45309"
@@ -414,13 +404,78 @@ export default function ScoreTrend({ sessions }: ScoreTrendProps) {
             />
           </motion.g>
         </svg>
-      </div>
 
-      <p className="mt-2 font-mono text-[11px] text-muted">
-        {inspecting
-          ? `Line here ${activeRolling.toFixed(1)} · rolling average of your last ${smooth}`
-          : `Rolling average of your last ${smooth} · drag across to see each case`}
-      </p>
+        {/* The readout, over the chart rather than in a row of its own: a card
+            that reserved space would leave a hole whenever nothing is hovered,
+            and one that pushed the page around on hover would be worse. Never
+            takes the pointer — catching it would end the hover that made it. */}
+        {inspecting && (
+          <div
+            role="status"
+            className="pointer-events-none absolute inset-x-0 top-1 z-10 rounded-[10px] border border-hairline bg-surface-raised px-3 py-2.5 shadow-elevation-4 sm:inset-x-auto sm:left-[var(--readout-left)] sm:right-[var(--readout-right)] sm:w-max sm:max-w-[280px]"
+            style={readoutStyle}
+          >
+            <div className="flex items-baseline gap-2">
+              <span className="truncate text-[12px] font-medium text-heading">
+                {activeSession.stationTitle}
+              </span>
+              {stampLabel && (
+                <span className="flex-shrink-0 font-mono text-[10px] text-muted">{stampLabel}</span>
+              )}
+            </div>
+            <div className="mt-1 flex items-center gap-1.5">
+              <span className="font-mono text-[15px] font-bold tabular-nums text-heading">
+                {activeSession.weightedScore.toFixed(1)}
+              </span>
+              <span className="font-mono text-[11px] text-muted">
+                of {fmtMark(activeSession.maxScore)}
+              </span>
+              {activeSession.passed && <OutcomeGlyph kind="pass" className="flex-shrink-0" />}
+            </div>
+            <DomainSplit split={activeSplit} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * How one case's mark was made up, as three bars.
+ *
+ * Renders nothing at all when the case has no stored breakdown. That is a real
+ * state, not an error: the query feeding this reads whole result blobs and so
+ * covers only the recent window, and older cases predate the field entirely.
+ * A row of empty bars would read as three zeroes, which is a different and
+ * much worse claim than saying nothing.
+ */
+function DomainSplit({ split }: { split?: Partial<Record<DomainKey, number>> }) {
+  if (!split) return null;
+  const rows = DOMAIN_ORDER.filter((domain) => typeof split[domain] === 'number');
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="mt-2.5 space-y-1.5 border-t border-hairline pt-2">
+      {rows.map((domain) => {
+        const value = split[domain]!;
+        const max = DOMAIN_MAX_POINTS[domain];
+        return (
+          <div key={domain} className="flex items-center gap-2">
+            <span className="w-[118px] flex-shrink-0 text-[10.5px] leading-tight text-muted">
+              {DOMAIN_DISPLAY_NAMES[domain]}
+            </span>
+            <div className="h-1 flex-1 overflow-hidden rounded-full bg-black/[0.06]">
+              <div
+                className="h-full rounded-full bg-primary"
+                style={{ width: `${Math.min(100, (value / max) * 100)}%` }}
+              />
+            </div>
+            <span className="flex-shrink-0 font-mono text-[10px] tabular-nums text-muted">
+              {value.toFixed(1)}/{max}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
