@@ -8,7 +8,6 @@ import ReferralWelcome from '@/components/landing/ReferralWelcome';
 import {
   Hero,
   GuaranteeCard,
-  TrustBar,
   VideoProof,
   CompleteCourse,
   Testimonials,
@@ -33,8 +32,7 @@ export default function LandingPage() {
       <ReferralWelcome />
       <main className="flex flex-col pb-16 sm:pb-20">
         <Hero />
-        <GuaranteeCard />
-        <TrustBar />
+        <GuaranteeCard proof />
         <VideoProof />
         <CompleteCourse />
         <Testimonials />
