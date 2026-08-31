@@ -91,6 +91,18 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
           >
             Study Budget
           </Link>
+          {/* Straight to the plans on the landing page rather than a page of
+              their own. Written as `/#pricing`, not `#pricing`: this nav also
+              renders on /sca-cases and the portfolio tool, where a bare hash
+              would scroll to nothing. /pricing still exists — it is where a
+              signed-in customer renews or upgrades, and it knows which plan
+              they hold, which this section does not. */}
+          <Link
+            href="/#pricing"
+            className="text-[13px] text-body hover:text-heading transition-colors duration-150"
+          >
+            Pricing
+          </Link>
           <Link
             href="/gp-portfolio-tool"
             className="text-[13px] text-body hover:text-heading transition-colors duration-150 flex items-baseline gap-2"
@@ -99,15 +111,6 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
             <span className="text-[9px] font-semibold px-2 py-[3px] rounded-full bg-primary/10 text-primary border border-primary/15 leading-none inline-flex items-center gap-1">
               <span className="text-[8px]">✦</span> The original
             </span>
-          </Link>
-          {/* A quiet route for the ready-to-buy visitor: without it the only
-              path to a price was scrolling the whole landing page. A text
-              link, not a button — the free mock stays the nav's one ask. */}
-          <Link
-            href="/pricing"
-            className="text-[13px] text-body hover:text-heading transition-colors duration-150"
-          >
-            Pricing
           </Link>
           {!hideAuth && (
             <>
@@ -208,6 +211,13 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
               Study Budget
             </Link>
             <Link
+              href="/#pricing"
+              onClick={() => setMobileOpen(false)}
+              className="min-h-[44px] flex items-center px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
+            >
+              Pricing
+            </Link>
+            <Link
               href="/gp-portfolio-tool"
               onClick={() => setMobileOpen(false)}
               className="min-h-[44px] flex items-baseline px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150 gap-2"
@@ -216,13 +226,6 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
               <span className="text-[9px] font-semibold px-2 py-[3px] rounded-full bg-primary/10 text-primary border border-primary/15 leading-none inline-flex items-center gap-1">
                 <span className="text-[8px]">✦</span> The original
               </span>
-            </Link>
-            <Link
-              href="/pricing"
-              onClick={() => setMobileOpen(false)}
-              className="min-h-[44px] flex items-center px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
-            >
-              Pricing
             </Link>
             {!hideAuth && (
               <>
