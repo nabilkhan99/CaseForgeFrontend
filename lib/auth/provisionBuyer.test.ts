@@ -330,6 +330,22 @@ describe('provisionBuyerAccount — the account exists, only the email is owed',
     expect(writes[1].guarded).toBe(false)
   })
 
+  it('hands the claim back when the send THROWS, not just when it returns false', async () => {
+    // A throw would otherwise skip the release and leave the row reading
+    // "already emailed" for a mail that never went — the stranded buyer this
+    // whole compare-and-swap exists to prevent.
+    mocks.deliver.mockRejectedValue(new Error('brevo exploded'))
+    const { store, writes } = makeStore({
+      read: { data: OWED, error: null },
+      guardedUpdate: [{ data: [{ id: 'p1' }], error: null }],
+    })
+
+    await provisionBuyerAccount(store, ARGS)
+
+    expect(writes).toHaveLength(2)
+    expect(writes[1]).toEqual({ values: { set_password_sent_at: null }, guarded: false })
+  })
+
   it('sends nothing when the claim write itself errors', async () => {
     const { store } = makeStore({
       read: { data: OWED, error: null },

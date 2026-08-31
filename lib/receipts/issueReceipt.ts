@@ -78,21 +78,30 @@ export async function issueReceipt(
   supabase: ReceiptAdmin,
   args: IssueReceiptArgs,
 ): Promise<IssuedReceipt | null> {
-  const { data, error } = await supabase.rpc('issue_receipt', {
-    p_stripe_event_key: args.stripeEventKey,
-    p_preorder_id: args.preorderId,
-    p_email: args.email,
-    p_customer_name: args.customerName,
-    p_plan: args.planKey,
-    p_amount_pence: args.amountPence,
-    p_currency: args.currency,
-    p_payment_method: args.paymentMethod,
-    p_paid_at: args.paidAt.toISOString(),
-    p_period_start: args.periodStart?.toISOString() ?? null,
-    p_period_end: args.periodEnd?.toISOString() ?? null,
-    p_coaching_day_label: args.coachingDayLabel ?? null,
-    p_kind: args.kind,
-  })
+  // supabase-js normally reports failures in `error`, but a transport-level
+  // fault can still reject. This runs while the caller holds the send claim, so
+  // an escaping throw would strand the buyer — see provisionBuyer.
+  let data: unknown
+  let error: unknown
+  try {
+    ({ data, error } = await supabase.rpc('issue_receipt', {
+      p_stripe_event_key: args.stripeEventKey,
+      p_preorder_id: args.preorderId,
+      p_email: args.email,
+      p_customer_name: args.customerName,
+      p_plan: args.planKey,
+      p_amount_pence: args.amountPence,
+      p_currency: args.currency,
+      p_payment_method: args.paymentMethod,
+      p_paid_at: args.paidAt.toISOString(),
+      p_period_start: args.periodStart?.toISOString() ?? null,
+      p_period_end: args.periodEnd?.toISOString() ?? null,
+      p_coaching_day_label: args.coachingDayLabel ?? null,
+      p_kind: args.kind,
+    }))
+  } catch (thrown: unknown) {
+    error = thrown
+  }
 
   if (error || !data) {
     console.error('[receipt] could not allocate a receipt number', {

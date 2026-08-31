@@ -179,6 +179,20 @@ describe('failures never take the webhook down with them', () => {
     expect(mocks.renderReceipt).not.toHaveBeenCalled()
   })
 
+  it('returns null when the allocation RPC throws rather than reporting an error', async () => {
+    // supabase-js normally reports failures in `error`, but a transport fault
+    // can reject. The caller is holding the send claim while this runs, so an
+    // escaping throw would strand the buyer.
+    const supabase = {
+      rpc: async () => {
+        throw new Error('socket hang up')
+      },
+    } as never
+
+    expect(await issueReceipt(supabase, PURCHASE)).toBeNull()
+    expect(mocks.renderReceipt).not.toHaveBeenCalled()
+  })
+
   it('returns null rather than throwing when the PDF will not render', async () => {
     // The number is issued and recorded either way — it is not reused, and the
     // row is the audit trail this can be re-rendered from by hand.

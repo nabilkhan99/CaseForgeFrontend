@@ -148,7 +148,17 @@ async function deliverUnderClaim(
     }
   }
 
-  const result = await deliver({ setupUrl });
+  // The send is wrapped, not just checked. We are holding the claim, so ANY
+  // exit from here that is not a successful send has to hand it back — and a
+  // THROWN error would otherwise skip the release below and leave the row
+  // reading "already emailed" for a mail that never went. That is exactly the
+  // stranded buyer the whole compare-and-swap exists to prevent.
+  let result: { sent: boolean; error?: string }
+  try {
+    result = await deliver({ setupUrl });
+  } catch (error: unknown) {
+    result = { sent: false, error: error instanceof Error ? error.message : String(error) };
+  }
   if (result.sent) return;
 
   console.error('[stripe-webhook] receipt email failed', { sessionId, preorderId, result });
