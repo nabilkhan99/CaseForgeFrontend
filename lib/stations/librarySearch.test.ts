@@ -5,7 +5,6 @@ import {
     groupStationsByDomain,
     isFilterActive,
     matchesQuery,
-    nextForYouReason,
     parseStatus,
     pickNextForYou,
     stationStatus,
@@ -257,25 +256,5 @@ describe('pickNextForYou', () => {
         const seed = dailySeed(new Date(2026, 8, 1), 'user-1')
         const reversed = [...bank].reverse()
         expect(pickNextForYou(reversed, seed)!.id).toBe(pickNextForYou(bank, seed)!.id)
-    })
-})
-
-describe('nextForYouReason', () => {
-    it('states the one thing the picker actually selected on', () => {
-        expect(nextForYouReason(station({ id: 'a' }))).toBe('because you haven’t tried this one yet')
-    })
-
-    it('is true of every case the picker can return', () => {
-        const bank = ['a', 'b', 'c', 'd', 'e'].map(id =>
-            station({ id, attempts: id === 'c' ? [] : [{}] }),
-        )
-        for (let i = 0; i < 30; i++) {
-            const pick = pickNextForYou(bank, dailySeed(new Date(2026, 8, 1 + i), 'u'))!
-            expect(nextForYouReason(pick)).not.toBeNull()
-        }
-    })
-
-    it('claims nothing about a case that has been attempted', () => {
-        expect(nextForYouReason(station({ id: 'a', attempts: [{}] }))).toBeNull()
     })
 })

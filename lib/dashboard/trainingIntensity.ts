@@ -65,8 +65,6 @@ export interface IntensityLedger {
    * callers formatting the same number two ways.
    */
   dailyAvg: string;
-  /** Share of elapsed days with at least one consultation, as a whole percent. */
-  daysPct: number;
   /** Longest run of consecutive active days in the window. */
   longest: number;
   /** Run of active days ending today — or ending yesterday, see below. */
@@ -221,7 +219,6 @@ export function buildIntensityCalendar(
     ledger: {
       total,
       dailyAvg: round1(total / elapsed.length),
-      daysPct: Math.round((activeDays / elapsed.length) * 100),
       longest,
       current,
     },

@@ -9,28 +9,20 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { BlurFade } from '@/components/magicui/blur-fade';
 import { NumberTicker } from '@/components/magicui/number-ticker';
 import PrimaryButton from '@/components/ui/PrimaryButton';
-import SessionOutcome from '@/components/ui/SessionOutcome';
 import TrainingHeatmap from '@/components/dashboard/TrainingHeatmap';
-import {
-  getUserStats,
-  getSessionHistory,
-  getDailyActivityTimestamps,
-} from '@/lib/supabase/queries/dashboard';
+import { getUserStats, getDailyActivityTimestamps } from '@/lib/supabase/queries/dashboard';
 import { getRandomStation, getStationIndex } from '@/lib/supabase/queries/station-library';
 import type { Station } from '@/lib/supabase/queries/station-library';
 import { saveExamDate } from '@/lib/supabase/queries/profile';
-import { dailySeed, nextForYouReason, pickNextForYou } from '@/lib/stations/librarySearch';
+import { dailySeed, pickNextForYou } from '@/lib/stations/librarySearch';
 import {
   buildIntensityCalendar,
   intensityWindowStart,
   type IntensityCalendar,
 } from '@/lib/dashboard/trainingIntensity';
 import type { UserStats } from '@/lib/dashboard/types';
-import type { SessionHistoryItem } from '@/lib/supabase/queries/dashboard';
 import type { SubscriptionResponse } from '@/app/api/subscription/route';
 import { claimTrialSessionsOnce } from '@/lib/trial/claimOnce';
-import { fmtMark, passMarkFor } from '@/lib/clinical-master/scoring';
-import { MAX_WEIGHTED_SCORE } from '@/lib/clinical-master/types';
 
 const defaultStats: UserStats = {
   currentStreak: 0,
@@ -40,32 +32,10 @@ const defaultStats: UserStats = {
   examDate: null,
 };
 
-/**
- * The recommended case, plus the clause that says why it was picked.
- *
- * `reason` is whatever nextForYouReason() will vouch for and nothing else — the
- * random fallback below carries none, because there is no rationale behind a
- * station chosen at random and inventing one would be the page's only lie.
- */
-interface UpNext {
-  station: Station;
-  reason: string | null;
-}
-
 const DAY_MS = 86_400_000;
 
 /** How long before expiry the renewal nudge appears. */
 const RENEWAL_WARNING_DAYS = 7;
-
-function formatAccessDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-GB', {
-    // The window ends at 23:59 UTC; format in UTC or BST shows the next day.
-    timeZone: 'UTC',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
-}
 
 function daysUntil(iso: string): number {
   return Math.ceil((new Date(iso).getTime() - Date.now()) / DAY_MS);
@@ -95,7 +65,6 @@ const REVEAL = {
   quickStart: 0.12,
   intensity: 0.18,
   guarantee: 0.24,
-  footer: 0.3,
 } as const;
 
 /**
@@ -145,8 +114,7 @@ function DashboardContent() {
   // there — you're on the free tier" at paying customers on every load.
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [stats, setStats] = useState<UserStats>(defaultStats);
-  const [lastSession, setLastSession] = useState<SessionHistoryItem | null>(null);
-  const [upNext, setUpNext] = useState<UpNext | null>(null);
+  const [upNext, setUpNext] = useState<Station | null>(null);
   const [calendar, setCalendar] = useState<IntensityCalendar | null>(null);
   // Pass progress for the guarantee line, counted off the station index the
   // picker already fetches — no extra query. null when the index came back
@@ -196,9 +164,8 @@ function DashboardContent() {
         // recommendation is seeded on and the calendar all have to agree, and a
         // render that straddled midnight would build them from two dates.
         const today = new Date();
-        const [statsData, recentData, stationIndex, activity, accessRes] = await Promise.all([
+        const [statsData, stationIndex, activity, accessRes] = await Promise.all([
           getUserStats(user.id),
-          getSessionHistory(user.id, 1, 0),
           getStationIndex(user.id),
           getDailyActivityTimestamps(user.id, intensityWindowStart(today).toISOString()),
           fetch('/api/subscription').then((r) => (r.ok ? r.json() : null)),
@@ -206,7 +173,6 @@ function DashboardContent() {
 
         setStats(statsData);
         setExamDraft(statsData.examDate ?? '');
-        setLastSession(recentData[0] ?? null);
         setCalendar(buildIntensityCalendar(activity, today));
         setPassProgress(
           stationIndex.length > 0
@@ -216,16 +182,10 @@ function DashboardContent() {
         setAccess(accessRes?.state ? (accessRes as SubscriptionResponse) : null);
 
         // The picker only ever offers a station the user has never attempted,
-        // so it runs out once the bank is exhausted. A random case is still a
-        // case to practise, and it arrives without a reason clause because
-        // there is no reason behind it — see nextForYouReason.
+        // so it runs out once the bank is exhausted; a random case is still a
+        // case to practise.
         const recommended = pickNextForYou(stationIndex, dailySeed(today, user.id));
-        const station = recommended ?? (await getRandomStation());
-        setUpNext(
-          station
-            ? { station, reason: recommended ? nextForYouReason(recommended) : null }
-            : null,
-        );
+        setUpNext(recommended ?? (await getRandomStation()));
       } catch (error) {
         console.error('[dashboard] failed to load dashboard data', error);
       } finally {
@@ -331,24 +291,16 @@ function DashboardContent() {
             <h1 className="text-[24px] font-bold text-heading tracking-[-0.02em]">
               {greeting}, {firstName}
             </h1>
-            <p className="text-[13px] text-muted mt-1">
-              {stats.completedStations > 0 ? (
-                <>
-                  {/* Only the figure counts up \u2014 the sentence around it stays put.
-                      The streak has left this line: it is a headline number on the
-                      board below, and saying it twice on one screen made the
-                      smaller of the two mentions look like a different statistic. */}
-                  <Tally value={stats.completedStations} className={TICKER_INLINE} /> consultation
-                  {stats.completedStations !== 1 ? 's' : ''} &middot; passing means{' '}
-                  {fmtMark(passMarkFor())} of {fmtMark(MAX_WEIGHTED_SCORE)}
-                </>
-              ) : (
-                /* Nothing to count yet, and the pass mark is spelled out in the
-                   "How it works" rows directly below, so the first-run line
-                   stays an instruction rather than a tally of zero. */
-                'Start your first consultation to begin tracking progress'
-              )}
-            </p>
+            {/* The tally and the pass mark have gone. The count is a headline
+                figure on the board below and the pass mark is printed on every
+                report, so on a page opened daily this line only restated two
+                numbers the reader already had. The first-run instruction stays:
+                it is the one case with nothing else on screen to say it. */}
+            {stats.completedStations === 0 && (
+              <p className="text-[13px] text-muted mt-1">
+                Start your first consultation to begin tracking progress
+              </p>
+            )}
           </div>
 
           {/* The countdown, or the question that produces one.
@@ -491,20 +443,10 @@ function DashboardContent() {
           </motion.div>
         );
       })()}
-      {access?.state === 'active' && access.planName && (
-        <motion.div
-          className="mb-6 tall:mb-8 text-[13px] text-muted"
-          initial={{ opacity: 0, y: -4 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          {access.planName}
-          {access.isMonthly
-            ? ' · renews monthly'
-            : access.expiresAt
-              ? ` · access until ${formatAccessDate(access.expiresAt)}`
-              : ''}
-        </motion.div>
-      )}
+      {/* The plan name and access-until date used to stand here. They belong to
+          Settings → Plan, which already carries both alongside the billing
+          controls; on the home page they were a fact restated every visit. The
+          expiry prompts above stay — those are deadlines, not status. */}
 
       {/* Getting started onboarding for new users */}
       {stats.completedStations === 0 && (
@@ -603,23 +545,15 @@ function DashboardContent() {
                 Up next
               </div>
               <div className="mb-1 mt-2 text-[24px] font-bold leading-[1.2] tracking-[-0.025em] text-heading">
-                {upNext.station.title}
+                {upNext.title}
               </div>
               <div className="text-[13px] text-muted">
-                {upNext.station.domain_name} &middot;{' '}
-                {Math.round(upNext.station.consultation_duration_seconds / 60)} min
-                {/* Only ever the clause the picker can support; the fallback
-                    station arrives with none and the sentence simply ends. */}
-                {upNext.reason && (
-                  <>
-                    {' '}
-                    &middot; <span className="text-primary">{upNext.reason}</span>
-                  </>
-                )}
+                {upNext.domain_name} &middot;{' '}
+                {Math.round(upNext.consultation_duration_seconds / 60)} min
               </div>
             </div>
             <div className="flex flex-shrink-0 items-center gap-4">
-              <Link href={`/clinical-master/station/${upNext.station.id}`}>
+              <Link href={`/clinical-master/station/${upNext.id}`}>
                 <PrimaryButton size="sm">Start consultation &rarr;</PrimaryButton>
               </Link>
               <Link
@@ -708,27 +642,6 @@ function DashboardContent() {
         </Reveal>
       )}
 
-      {/* One quiet line back into the last thing you did.
-          The three-row recent list and its "View all history" link are gone —
-          past attempts live on the Library's topic pages, and a second list of
-          sessions on the home page was a worse version of it. This is the one row that answers "did my
-          feedback land?", which is the only reason anyone opened that list from
-          here. */}
-      {lastSession && (
-        <Reveal delay={REVEAL.footer} className="border-t border-hairline pt-4">
-          <Link
-            href={`/clinical-master/feedback/${lastSession.id}`}
-            className="-mx-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[10px] px-2 py-2 transition-colors hover:bg-black/[0.02]"
-          >
-            <span className="text-[13px] text-muted">
-              Last session &middot;{' '}
-              <span className="font-medium text-heading">{lastSession.stationTitle}</span>
-            </span>
-            {/* Shared with the history page so the two can't drift apart. */}
-            <SessionOutcome session={lastSession} />
-          </Link>
-        </Reveal>
-      )}
     </div>
   );
 }

@@ -141,7 +141,6 @@ describe('buildIntensityCalendar — the ledger', () => {
 
     expect(calendar.ledger.total).toBe(3);
     expect(calendar.ledger.dailyAvg).toBe('0.0');
-    expect(calendar.ledger.daysPct).toBe(1);
   });
 
   it('reports the longest run of consecutive active days', () => {
@@ -256,7 +255,6 @@ describe('buildIntensityCalendar — no data at all', () => {
     expect(calendar.ledger).toEqual({
       total: 0,
       dailyAvg: '0.0',
-      daysPct: 0,
       longest: 0,
       current: 0,
     });
