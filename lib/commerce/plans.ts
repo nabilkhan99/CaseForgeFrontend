@@ -117,6 +117,30 @@ export const PLANS: readonly Plan[] = [
   },
 ] as const
 
+/**
+ * The FORMAL name of each plan: what it is called on a receipt, in a
+ * post-purchase email, and on an advocate's referral ledger.
+ *
+ * Deliberately not `Plan.name`. That is the marketing label on the pricing page
+ * ("Complete", "Self-Study (monthly)") and it is tuned for a page where the
+ * price sits beside it and the context is obvious. A receipt has neither: it is
+ * read months later by a deanery finance team who have never seen the pricing
+ * page, so it says "Complete SCA Course". These strings come from the receipt
+ * spec and must match it exactly.
+ *
+ * Intensive has no entry: it is sold on a call and never issues a receipt.
+ */
+export const PLAN_LABELS: Record<string, string> = {
+  complete: 'Complete SCA Course',
+  self_study: 'Self-Study',
+  self_study_monthly: 'Self-Study, monthly',
+}
+
+/** The formal plan name, falling back to the key so nothing renders blank. */
+export function planLabel(key: string): string {
+  return PLAN_LABELS[key] ?? key
+}
+
 export function getPlan(key: string): Plan | undefined {
   return PLANS.find((p) => p.key === key)
 }
