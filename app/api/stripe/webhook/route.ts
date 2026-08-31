@@ -1058,10 +1058,11 @@ async function deliverRenewalReceipt(
     // What this invoice actually took, which is not necessarily the list price.
     amountPence: invoice.amount_paid ?? 0,
     currency: invoice.currency ?? 'gbp',
-    paymentMethod: paymentMethodLabel(
-      (invoice as unknown as { payment_settings?: { payment_method_types?: string[] | null } })
-        .payment_settings?.payment_method_types,
-    ),
+    // An invoice records the types it was ALLOWED to use, not the one it did.
+    // On our subscriptions that is null (it inherits the customer default), so
+    // this falls through to "Card" — correct today, because card is all we take.
+    // If a bank-transfer subscription is ever sold, read the charge instead.
+    paymentMethod: paymentMethodLabel(invoice.payment_settings?.payment_method_types),
     paidAt: chargedAt,
     periodStart: period.startsAt ? new Date(period.startsAt) : null,
     periodEnd: period.endsAt ? new Date(period.endsAt) : null,
