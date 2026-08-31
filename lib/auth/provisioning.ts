@@ -7,18 +7,18 @@ import { SITE_URL } from '@/lib/seo/site';
 /**
  * Purchase → account provisioning (self-service from 1 Sept 2026).
  *
- * Called from the Stripe webhook for a paid order that has not yet been sent a
- * set-password email (`preorders.set_password_sent_at is null`): creates the
- * auth user under the buying email (buying email = account email, by product
- * decision) and sends a set-password email. The link carries a recovery
- * `token_hash`, which /auth/set-password verifies client-side via verifyOtp —
- * deliberately not `generateLink().action_link`, whose implicit flow does not
- * survive this app's PKCE browser client.
+ * Called from the Stripe webhook for a paid order: creates the auth user under
+ * the buying email (buying email = account email, by product decision).
  *
- * Idempotent: an existing user is left untouched and no email is sent, so
- * Stripe retries and repeat purchases never spam the buyer. Every outcome that
- * leaves a buyer without an email returns an `error`, so the webhook logs it
- * rather than stranding them silently.
+ * This module owns the ACCOUNT only. Minting the setup link and sending the
+ * mail that carries it belong to lib/auth/provisionBuyer, which does both
+ * behind its compare-and-swap on `set_password_sent_at` — so exactly one of two
+ * concurrent Stripe deliveries can mint a link, and a link is never minted
+ * (invalidating the previous one) by a delivery that will not go on to send it.
+ *
+ * Idempotent: an existing user is left untouched. Every outcome that leaves a
+ * buyer without an account returns an `error`, so the webhook logs it rather
+ * than stranding them silently.
  *
  * Emailed links always point at {@link SITE_URL}, never the webhook request's
  * own origin: a Stripe endpoint pointed at a preview or apex host would
@@ -38,7 +38,6 @@ export interface ProvisionResult {
    * "already had an account" from "Brevo ate their link".
    */
   alreadyExisted: boolean;
-  emailSent: boolean;
   /**
    * The auth user this purchase now belongs to, on both the created and the
    * already-existed path — so the caller can attach anything the buyer did
@@ -69,31 +68,76 @@ export function setPasswordUrl(origin: string, tokenHash: string, email: string)
 }
 
 /**
- * Mint a fresh recovery token for an existing auth user and email the house
- * set-password link. Shared by provisioning and the self-service resend route
- * (/api/auth/resend-set-password) so both hand out the same device-independent
- * `token_hash` link — a PKCE `code` link only works in the browser that asked
- * for it, which breaks the laptop-requests / phone-opens case.
+ * Mint a fresh, single-use recovery link for an existing auth user.
+ *
+ * Split out from {@link sendSetPasswordLink} so the link can be carried by an
+ * email this module does not own. The Stripe webhook now sends ONE mail on a
+ * purchase — the receipt, with the setup link as its button — and it needs the
+ * URL, not a send.
+ *
+ * The token is a recovery `token_hash`, which /auth/set-password verifies
+ * client-side via verifyOtp. Deliberately not `generateLink().action_link`,
+ * whose implicit flow does not survive this app's PKCE browser client, and
+ * deliberately not the browser client's `resetPasswordForEmail`, whose PKCE
+ * `code_verifier` lives in the requesting browser and so breaks the
+ * laptop-requests / phone-opens case.
+ *
+ * ⚠️ EXPIRY. Minting a new link INVALIDATES the previous one for that user, and
+ * the lifetime is GoTrue's `MAILER_OTP_EXP`, which Supabase caps at 24 hours —
+ * not the 7 days the receipt spec asks for. Nothing here can extend it: a
+ * longer window needs a bespoke token table, which is not a thing to build on
+ * the eve of launch. The emails therefore state 24 hours, and the self-serve
+ * resend at /api/auth/resend-set-password is the recovery path.
+ */
+export async function mintSetPasswordLink(args: {
+  email: string;
+}): Promise<{ url: string | null; error?: string }> {
+  const supabase = getAdminAuthClient();
+  const email = args.email.toLowerCase().trim();
+
+  // Wrapped, not just error-checked. GoTrue reports most failures in `error`,
+  // but a transport-level fault rejects — and this runs while the caller holds
+  // the send claim, so an escaping throw would leave `set_password_sent_at`
+  // written for a mail that never went and no retry would ever revisit the
+  // buyer. Always resolve; never throw.
+  try {
+    const { data: link, error: linkError } = await supabase.auth.admin.generateLink({
+      type: 'recovery',
+      email,
+    });
+    if (linkError || !link?.properties?.hashed_token) {
+      return { url: null, error: linkError?.message ?? 'no token in link' };
+    }
+    return { url: setPasswordUrl(SITE_URL, link.properties.hashed_token, email) };
+  } catch (error: unknown) {
+    console.error('[provisioning] generateLink threw', { error });
+    return { url: null, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/**
+ * Mint a link and email the house set-password mail.
+ *
+ * This is now the SELF-SERVICE path only — /api/auth/resend-set-password, for a
+ * buyer whose link expired. The purchase path no longer calls it: a buyer who
+ * has just paid gets the receipt email carrying the same link instead, so they
+ * receive one mail rather than two. Kept intact, and still exported, because
+ * the resend route is the spec's answer to an expired link and must keep
+ * working exactly as it does today.
  */
 export async function sendSetPasswordLink(args: {
   email: string;
   fullName?: string | null;
 }): Promise<{ sent: boolean; error?: string }> {
-  const supabase = getAdminAuthClient();
   const email = args.email.toLowerCase().trim();
 
-  const { data: link, error: linkError } = await supabase.auth.admin.generateLink({
-    type: 'recovery',
-    email,
-  });
-  if (linkError || !link?.properties?.hashed_token) {
-    return { sent: false, error: linkError?.message ?? 'no token in link' };
-  }
+  const { url, error } = await mintSetPasswordLink({ email });
+  if (!url) return { sent: false, error };
 
   const sent = await sendSetPasswordEmail({
     toEmail: email,
     toName: args.fullName,
-    setPasswordUrl: setPasswordUrl(SITE_URL, link.properties.hashed_token, email),
+    setPasswordUrl: url,
   });
   return sent.sent ? { sent: true } : { sent: false, error: sent.skipped };
 }
@@ -146,13 +190,15 @@ export async function provisionAccountForPurchase(args: {
     const alreadyExists =
       createError.code === 'email_exists' || /already/i.test(createError.message);
     if (alreadyExists) {
-      // An existing account keeps its password, so we deliberately send nothing.
-      // Still an error: the caller has recorded no send for this buyer, and a
-      // silent skip is exactly how the stranded-buyer case stayed invisible.
+      // An existing account keeps its password, so it is owed no setup link.
+      // It IS owed a receipt — see provisionBuyer, which sends one either way.
+      //
+      // Still reported as an error, because the caller has recorded no send for
+      // this buyer and a silent skip is exactly how the stranded-buyer case
+      // stayed invisible.
       return {
         created: false,
         alreadyExisted: true,
-        emailSent: false,
         userId: await findUserIdByEmail(supabase, email),
         error: 'account_already_exists',
       };
@@ -160,18 +206,14 @@ export async function provisionAccountForPurchase(args: {
     return {
       created: false,
       alreadyExisted: false,
-      emailSent: false,
       userId: null,
       error: createError.message,
     };
   }
 
-  const result = await sendSetPasswordLink({ email, fullName: args.fullName });
   return {
     created: true,
     alreadyExisted: false,
-    emailSent: result.sent,
     userId: created?.user?.id ?? null,
-    error: result.error,
   };
 }

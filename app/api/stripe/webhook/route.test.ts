@@ -21,7 +21,8 @@ vi.mock('@/lib/commerce/stripe', () => ({
 }))
 
 vi.mock('@/lib/email/referralEmail', () => ({ sendReferralEmail: vi.fn() }))
-vi.mock('@/lib/email/purchaseEmail', () => ({ sendPurchaseEmail: vi.fn() }))
+vi.mock('@/lib/email/receiptEmail', () => ({ sendReceiptEmail: vi.fn() }))
+vi.mock('@/lib/receipts/issueReceipt', () => ({ issueReceipt: vi.fn(async () => null) }))
 vi.mock('@/lib/marketing/preorderContact', () => ({ pushPreorderContactToBrevo: vi.fn() }))
 vi.mock('@/lib/auth/provisionBuyer', () => ({ provisionBuyerAccount: vi.fn() }))
 

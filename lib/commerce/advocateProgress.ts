@@ -9,6 +9,7 @@
  * Money is pence. Every value returned is a fresh snapshot.
  */
 
+import { planLabel } from './plans'
 import { payableFrom } from './referrals'
 
 /** One attributed purchase, as the advocate's own tracker shows it. */
@@ -54,12 +55,6 @@ export interface AdvocateProgress {
   didNotQualify: number
 }
 
-const PLAN_LABELS: Record<string, string> = {
-  complete: 'Complete SCA Course',
-  self_study: 'Self-Study',
-  self_study_monthly: 'Self-Study, monthly',
-}
-
 /**
  * Why a referral fell through, in words an advocate can act on. A refund is the
  * one an advocate genuinely needs to see: their friend bought and changed their
@@ -98,7 +93,7 @@ export function buildAdvocateProgress(
       const stage = stageFor(r.status)
       return {
         who: r.referee_email,
-        what: PLAN_LABELS[r.plan] ?? r.plan,
+        what: planLabel(r.plan),
         amount: r.reward_amount,
         stage,
         voidLabel: stage === 'void' ? (VOID_LABELS[r.void_reason ?? ''] ?? 'Didn\u2019t qualify') : null,
