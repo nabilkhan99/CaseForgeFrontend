@@ -84,3 +84,42 @@ export function validateNewCode(input: NewCodeInput): NewCodeResult {
 
   return { ok: true, value: { code, ownerName, ownerEmail, rewardOverridePence } }
 }
+
+/** Cleaned values for a self-serve code minted from an email address alone. */
+export interface ValidatedSelfServeCode {
+  code: string
+  ownerEmail: string
+}
+
+/** Discriminated result for {@link validateSelfServeCode}. */
+export type SelfServeCodeResult =
+  | { ok: true; value: ValidatedSelfServeCode }
+  | { ok: false; error: string }
+
+/**
+ * Validate a PUBLIC "send me my link" request, where the only thing collected is
+ * an email address.
+ *
+ * A separate function rather than a relaxed {@link validateNewCode}: the admin
+ * path genuinely wants a name (an affiliate deal is negotiated with a person,
+ * and the admin table is unusable without one), so loosening the shared
+ * validator would weaken a rule that still earns its keep. Here there is no name
+ * to have, and inventing one from the email local-part would put a fabricated
+ * "Nabil.khan" into `owner_name`, the admin table and the greeting line of every
+ * email we send them. `owner_name` is nullable, so the honest value is null.
+ *
+ * The local-part is still used for the code PREFIX, which is the one place it
+ * genuinely helps: `nabil.khan@nhs.net` yields a link like /r/NABKXY7Q rather
+ * than an anonymous /r/FFXY7Q. {@link generateReferralCode} strips everything
+ * outside the unambiguous alphabet and falls back to 'FF', so a local-part of
+ * '123' or '....' degrades safely.
+ */
+export function validateSelfServeCode(input: { ownerEmail?: string }): SelfServeCodeResult {
+  const ownerEmail = (input.ownerEmail ?? '').trim().toLowerCase()
+  if (!EMAIL_RE.test(ownerEmail)) {
+    return { ok: false, error: 'A valid email is required' }
+  }
+
+  const localPart = ownerEmail.split('@')[0] ?? ''
+  return { ok: true, value: { code: generateReferralCode(localPart), ownerEmail } }
+}

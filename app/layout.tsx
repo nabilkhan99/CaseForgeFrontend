@@ -41,7 +41,11 @@ export const metadata: Metadata = {
     template: '%s | Fourteen Fisherman',
   },
   description: 'AI practice on 200 stations, 8 hours of on-demand lectures and a full-day Small-Group Coaching session. Fail your SCA after passing all 200 stations, and we pay you £500.',
-  keywords: 'SCA exam, RCGP, GP training, medical simulation, clinical assessment, AI patient, consultation practice',
+  // No `keywords`. The meta-keywords tag has been ignored by every major engine
+  // for well over a decade, and because it lived on the ROOT layout it stamped
+  // the SCA keyword set onto every page including /gp-portfolio-tool, where the
+  // topic is ePortfolios. Removing it here removes it site-wide, which is the
+  // intent: the tag was inert everywhere, and off-topic on some pages.
   icons: {
     icon: [
       { url: '/favicon-48x48.png', type: 'image/png', sizes: '48x48' },

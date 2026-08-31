@@ -5,10 +5,13 @@ import {
   MIN_QUALIFYING_SPEND_BY_PLAN,
   REFEREE_REWARD_BY_PLAN,
   PAYOUT_FLOOR_DATE,
+  REFERRAL_LINKS_CLOSE,
+  REFERRAL_LINKS_CLOSE_LABEL,
   QUALIFICATION_WINDOW_DAYS,
   REFERRAL_COOKIE,
   REWARD_BY_PLAN,
   decideReferral,
+  formatPence,
   generateReferralCode,
   isPastQualificationWindow,
   qualificationCutoff,
@@ -588,5 +591,32 @@ describe('min-spend override (test rig)', () => {
     expect(parseMinSpendOverride('abc')).toBeNull()
     expect(parseMinSpendOverride('-5')).toBeNull()
     expect(parseMinSpendOverride('1.5')).toBeNull()
+  })
+})
+
+describe('formatPence', () => {
+  it('renders whole pounds bare', () => {
+    expect(formatPence(10000)).toBe('£100')
+    expect(formatPence(5000)).toBe('£50')
+    expect(formatPence(0)).toBe('£0')
+  })
+
+  it('renders part-pounds to two decimals', () => {
+    expect(formatPence(2550)).toBe('£25.50')
+    expect(formatPence(99)).toBe('£0.99')
+  })
+})
+
+describe('REFERRAL_LINKS_CLOSE', () => {
+  it('is midnight London at the end of 26 September 2026 (23:00 UTC, BST)', () => {
+    expect(REFERRAL_LINKS_CLOSE.toISOString()).toBe('2026-09-26T23:00:00.000Z')
+  })
+
+  it('has a label the copy can quote', () => {
+    expect(REFERRAL_LINKS_CLOSE_LABEL).toBe('26 September')
+  })
+
+  it('closes after the payout floor opens, so links outlive launch', () => {
+    expect(REFERRAL_LINKS_CLOSE.getTime()).toBeGreaterThan(PAYOUT_FLOOR_DATE.getTime())
   })
 })
