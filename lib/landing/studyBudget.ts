@@ -459,7 +459,12 @@ export function buildEmailBody(
     ':\n\n' +
     'Complete SCA Course, £599 for a fixed 3-month course term, paid once with no renewal. A structured course with 3 months of access: 8 hours of on-demand lectures, a full-day small-group coaching session (9am to 5pm, max class size 6), and consultation practice across 200 stations built from the RCGP curriculum, mapped to the three SCA marking domains. Full course specification: fourteenfisherman.com/course-spec\n\n' +
     extra +
-    'I have discussed this with my Educational Supervisor and added SCA preparation to my PDP. Could you confirm whether this would be approved, or let me know what else you need?\n\n' +
+    // The email no longer says the sender has discussed this with their ES and
+    // put it on their PDP. It is a claim about something the reader may not have
+    // done, in a message they are about to send under their own name to the
+    // office that funds them — and neither half of it is the deanery's to be
+    // told here anyway. What is left is the ask.
+    'Could you confirm whether this would be approved, or let me know what else you need?\n\n' +
     'Many thanks,\n[Your name], GPST3, [Scheme]'
   );
 }
