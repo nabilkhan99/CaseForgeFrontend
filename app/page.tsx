@@ -11,6 +11,7 @@ import {
   GuaranteeCard,
   VideoProof,
   CompleteCourse,
+  LecturePreview,
   Testimonials,
   Faq,
 } from '@/components/landing/v5';
@@ -36,6 +37,7 @@ export default function LandingPage() {
         <GuaranteeCard proof />
         <VideoProof />
         <CompleteCourse />
+        <LecturePreview />
         <Testimonials />
         <PricingTable />
         <Faq />

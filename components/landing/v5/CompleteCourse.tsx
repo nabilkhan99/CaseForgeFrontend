@@ -349,20 +349,6 @@ export default function CompleteCourse() {
             </p>
           </div>
         </motion.div>
-
-        {/* Closing strip */}
-        <motion.div {...fadeUp} className="mt-10 border-t-[0.5px] border-[#D8CBB0] pt-8 text-center sm:mt-14 sm:pt-12">
-          <p className="font-[family-name:var(--font-display)] text-[1.7rem] font-bold leading-[1.15] tracking-[-0.02em] text-heading sm:text-4xl lg:text-5xl">
-            Then sit your SCA.
-            <span className="mt-1.5 block sm:mt-2.5">
-              Pass, or claim your{' '}
-              <span className="whitespace-nowrap rounded-xl bg-[#E7F1D6] px-2.5 py-0.5 text-[#4A6B1F] sm:rounded-2xl sm:px-4">
-                £500
-              </span>
-              .
-            </span>
-          </p>
-        </motion.div>
       </div>
     </section>
   );
