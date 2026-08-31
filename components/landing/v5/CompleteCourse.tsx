@@ -268,8 +268,8 @@ export default function CompleteCourse() {
         <motion.div {...fadeUp} className="text-center">
           <Pill>The Complete Course</Pill>
           <h2 className="mx-auto mt-7 max-w-2xl text-3xl font-medium leading-[1.14] tracking-tight text-heading sm:text-5xl">
-            3 months of unlimited AI stations and lectures, from the day you buy.{' '}
-            <Accent>Plus one live coaching day, on a date you choose.</Accent>
+            3 months of unlimited AI stations and lectures.{' '}
+            <Accent>Plus one live coaching day.</Accent>
           </h2>
           <p className="mx-auto mt-7 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-[15px] font-medium text-heading sm:text-lg">
             {['Unlimited AI Practice', '8 Hours of On-Demand Lectures', 'One Full-Day Coaching Session'].map(
