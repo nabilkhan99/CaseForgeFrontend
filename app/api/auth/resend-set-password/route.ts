@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendSetPasswordLink } from '@/lib/auth/provisioning';
-import { ACCESS_LAUNCH_DATE, computeEntitlement } from '@/lib/commerce/entitlements';
 
 /**
  * "Email me a fresh link" for a buyer whose set-password link has expired.
@@ -120,7 +119,7 @@ export async function POST(request: Request) {
   const supabase = getSupabaseAdmin();
   const { data: purchase, error: lookupError } = await supabase
     .from('preorders')
-    .select('id, full_name, plan, created_at')
+    .select('id, full_name')
     .eq('email', email)
     .eq('status', 'paid')
     .limit(1)
@@ -137,20 +136,11 @@ export async function POST(request: Request) {
   // No purchase: answer exactly as if there were one. Nothing is sent.
   if (!purchase) return NextResponse.json(GENERIC_OK);
 
-  // A real buyer whose access has not opened yet. There is nothing to sign
-  // into, and the launch-day mail is already promised in their confirmation,
-  // so a link here would only invite the same dead end twice. Answered with
-  // the same generic body: a different reply would leak that the address has
-  // a purchase, which is exactly what this route refuses to reveal.
-  if (
-    computeEntitlement(
-      [{ plan: purchase.plan, status: 'paid', created_at: purchase.created_at }],
-      new Date(),
-      ACCESS_LAUNCH_DATE,
-    ).state !== 'active'
-  ) {
-    return NextResponse.json(GENERIC_OK);
-  }
+  // The pre-launch refusal that used to sit here is gone with the one in
+  // provisionBuyer: access is open, so a paid buyer asking for a link is owed
+  // one, and the refusal had become the reason a tester could not get a link at
+  // all. Everything else about this route is unchanged — the generic body, and
+  // the detached send below.
 
   // Detached on purpose, and the response never depends on how it goes.
   // Awaiting it leaked twice over: a hit did two upstream round-trips (GoTrue

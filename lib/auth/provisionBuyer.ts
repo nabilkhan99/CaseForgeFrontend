@@ -2,7 +2,6 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { claimTrialSessionsForUser } from './claimTrialSessions';
 import { provisionAccountForPurchase, sendSetPasswordLink } from './provisioning';
-import { ACCESS_LAUNCH_DATE, computeEntitlement } from '@/lib/commerce/entitlements';
 
 /**
  * Turning a paid purchase into an account the buyer can sign into, and
@@ -45,7 +44,7 @@ export async function provisionBuyerAccount(
 
   const { data: row, error: readError } = await supabase
     .from('preorders')
-    .select('status, plan, created_at, provisioned_at, set_password_sent_at')
+    .select('status, provisioned_at, set_password_sent_at')
     .eq('id', preorderId)
     .maybeSingle();
 
@@ -71,13 +70,14 @@ export async function provisionBuyerAccount(
   const now = new Date().toISOString();
 
   try {
-    // Nothing to sign into yet: create the account, say nothing. A buyer told
-    // to "set a password and start practising" three weeks before the course
-    // opens goes looking for a way in, and there isn't one.
-    if (!hasAccessOpened(row.plan, row.created_at)) {
-      await createAccountWithoutLink(supabase, args, now);
-      return;
-    }
+    // No launch-date gate here any more. It existed for the pre-order window,
+    // when someone could pay three weeks before the course opened and be told
+    // to "set a password and start practising" with nowhere to go. Access is
+    // open, so every paid row is owed its link the moment it lands, and the
+    // gate had become nothing but a wall between a tester and a working
+    // purchase flow. `provisioned_at` still carries the pre-launch shape: rows
+    // provisioned then have it set with the send stamp null, and those take the
+    // resend branch below.
     if (row.provisioned_at) {
       await resendOwedLink(supabase, args, now);
       return;
@@ -85,70 +85,6 @@ export async function provisionBuyerAccount(
     await createAccountAndSend(supabase, args, now);
   } catch (error: unknown) {
     console.error('[stripe-webhook] account provisioning threw', { sessionId, preorderId, error });
-  }
-}
-
-/**
- * Has this purchase's access window opened?
- *
- * Deliberately measured against {@link ACCESS_LAUNCH_DATE} — the real launch
- * day — and never `effectiveLaunchDate()`. A preview deployment sets
- * NEXT_PUBLIC_ACCESS_OPENS_OVERRIDE so testers can practise early, and that
- * override once reached a real buyer: a preview wired to live Stripe events
- * believed the course was open, mailed her a set-password link, and the page
- * it pointed at does not exist on production. What a paying customer is told
- * must not depend on which deployment happened to process their payment.
- *
- * Routed through `computeEntitlement` rather than comparing dates here so
- * there is one definition of "access is live", and so an unrecognised plan
- * fails closed (no entitlement, therefore no email) instead of open.
- */
-function hasAccessOpened(plan: unknown, createdAt: unknown): boolean {
-  if (typeof plan !== 'string' || typeof createdAt !== 'string') return false;
-  const entitlement = computeEntitlement(
-    [{ plan, status: 'paid', created_at: createdAt }],
-    new Date(),
-    ACCESS_LAUNCH_DATE,
-  );
-  return entitlement.state === 'active';
-}
-
-/**
- * Create the account and send nothing.
- *
- * `provisioned_at` is stamped so launch day is a pure send, and
- * `set_password_sent_at` is deliberately left null: that null is the list of
- * everyone still owed a login when the window opens.
- */
-async function createAccountWithoutLink(
-  supabase: PreorderAdmin,
-  args: ProvisionBuyerArgs,
-  now: string,
-): Promise<void> {
-  const { preorderId, email, name, sessionId } = args;
-
-  const result = await provisionAccountForPurchase({ email, fullName: name, sendLink: false });
-  if (!result.created && !result.alreadyExisted) {
-    console.error('[stripe-webhook] pre-launch account creation failed', {
-      sessionId,
-      preorderId,
-      error: result.error,
-    });
-    return;
-  }
-
-  const { error } = await supabase
-    .from('preorders')
-    .update({ provisioned_at: now })
-    .eq('id', preorderId)
-    .is('provisioned_at', null)
-    .select('id');
-  if (error) {
-    console.error('[stripe-webhook] pre-launch provisioned stamp failed', {
-      sessionId,
-      preorderId,
-      error,
-    });
   }
 }
 

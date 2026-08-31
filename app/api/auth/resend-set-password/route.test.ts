@@ -202,25 +202,3 @@ describe('throttling', () => {
     expect(mocks.sendSetPasswordLink).not.toHaveBeenCalled()
   })
 })
-
-describe('a buyer whose access has not opened yet', () => {
-  /**
-   * They already have a confirmation email promising their login on launch
-   * day. A link here would point at a set-password page that production does
-   * not have yet, which is the exact dead end this route exists to rescue
-   * people from.
-   */
-  it('is answered identically but sent nothing', async () => {
-    mocks.lookup.mockResolvedValue({
-      data: { ...OPEN_PURCHASE, created_at: '2026-08-23T09:58:00Z' },
-      error: null,
-    })
-    vi.setSystemTime(new Date('2026-08-23T10:30:00Z'))
-
-    const { status, body } = await post('preorder@x.com', '9.9.9.9')
-
-    expect(status).toBe(200)
-    expect(body).toEqual(GENERIC_OK)
-    expect(mocks.sendSetPasswordLink).not.toHaveBeenCalled()
-  })
-})
