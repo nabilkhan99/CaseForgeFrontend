@@ -1035,6 +1035,11 @@ async function deliverRenewalReceipt(
     .select('id, email, full_name')
     .eq('stripe_subscription_id', subscription.id)
     .neq('status', 'refunded')
+    // A subscription has exactly one order by construction, but `maybeSingle`
+    // ERRORS on a second row rather than picking one — and a duplicate here
+    // would cost a paying subscriber their receipt. Both rows would be the
+    // same customer anyway, so take one rather than fail.
+    .limit(1)
     .maybeSingle();
 
   if (error || !order?.email) {
