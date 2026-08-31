@@ -201,6 +201,28 @@ function asMs(value: unknown): number | undefined {
 }
 
 /**
+ * Compact one-line view of a `rate_limits.updated` payload.
+ *
+ * Azure re-sends the full budget for every limiter after each turn, so the raw
+ * event is both large and mostly unchanged — storing it whole would flood the
+ * 4000-entry ring. Only the headroom matters, so each entry collapses to
+ * "name remaining/limit".
+ *
+ * This is the per-consultation token-headroom telemetry: a session that ran
+ * near the ceiling shows up here as shrinking remaining counts, rather than
+ * later as an unexplained mid-consultation failure.
+ */
+function summariseRateLimits(raw: unknown): string {
+    if (!Array.isArray(raw)) return '';
+    return raw
+        .map((entry) => {
+            const e = (entry ?? {}) as { name?: unknown; remaining?: unknown; limit?: unknown };
+            return `${String(e.name ?? '?')} ${String(e.remaining ?? '?')}/${String(e.limit ?? '?')}`;
+        })
+        .join(' · ');
+}
+
+/**
  * A synchronization source older than this has no bearing on what the mic is
  * hearing now. getSynchronizationSources() reports the most recent packet per
  * SSRC and keeps entries for ~10s, so without this check a level from before a
@@ -265,6 +287,9 @@ interface TokenResponse {
     model: string;
     voice: string;
     durationSeconds: number;
+    /** Which Azure region minted the key — 'primary' or 'fallback'. Absent on
+     *  responses from a deployment predating regional failover. */
+    origin?: string;
 }
 
 /**
@@ -1374,6 +1399,8 @@ export function useRealtimeSession({
                     if (t === 'error') logDebug('rx:error', evt.error);
                     else if (/transcript(ion)?\.(completed|done)$/.test(t))
                         logDebug(`rx:${t}`, String(evt.transcript ?? ''));
+                    else if (t === 'rate_limits.updated')
+                        logDebug('rx:rate_limits', summariseRateLimits(evt.rate_limits));
                     else logDebug(`rx:${t}`);
                 }
             }
@@ -1609,7 +1636,12 @@ export function useRealtimeSession({
                 const body = await res.json().catch(() => ({}));
                 throw new Error(body.error || `Token request failed: ${res.statusText}`);
             }
-            const { ephemeralKey, callsUrl, durationSeconds }: TokenResponse = await res.json();
+            const { ephemeralKey, callsUrl, durationSeconds, origin }: TokenResponse =
+                await res.json();
+            // Which region served this consultation. Recorded so a session that
+            // ran on the standby lane can be told apart afterwards — the standby
+            // transcribes with a different model, so it is worth knowing.
+            logDebug('connect:token', { origin: origin ?? 'unknown' });
 
             // 2. Microphone — classified separately so a denied mic gets
             // recovery instructions rather than "Connection problem".
