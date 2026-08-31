@@ -104,14 +104,20 @@ export default function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.18 }}
           >
+            {/* "2d" treatment — quiet outline: ink keyline on cream, amber arrow disc */}
             <motion.a
               href="/try"
               whileHover={{ y: -2 }}
               whileTap={{ scale: 0.98 }}
-              className="inline-flex items-center gap-2 rounded-lg bg-[#B45309] px-7 py-4 text-base font-medium text-white shadow-[0_10px_24px_-14px_rgba(180,83,9,0.7)] sm:text-[16.5px]"
+              className="inline-flex items-center gap-3.5 rounded-full border-[3px] border-[#1C1917] bg-[#FFFDFA] py-2.5 pl-7 pr-2.5 text-lg font-bold tracking-[-0.01em] text-[#1C1917] sm:gap-4 sm:py-3 sm:pl-9 sm:pr-3 sm:text-xl"
             >
               Try Free Mock Station
-              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              <span
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-[#B45309] text-[#FFF8EF] sm:h-[52px] sm:w-[52px]"
+                aria-hidden="true"
+              >
+                <ArrowRight className="h-5 w-5 sm:h-6 sm:w-6" />
+              </span>
             </motion.a>
             <p className="mt-4 text-xs text-[#78716C] sm:text-sm">12 minutes · no card</p>
           </motion.div>
