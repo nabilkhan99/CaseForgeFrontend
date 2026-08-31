@@ -8,6 +8,7 @@ import {
   VERDICT_THEMES,
   buildEmailBody,
   getDeanery,
+  outOfPocketFor,
   type DeaneryPolicy,
 } from '@/lib/landing/studyBudget';
 import { trackEvent } from '@/lib/analytics';
@@ -277,6 +278,11 @@ function Verdict({ deanery, hasResat, surface, onResitChange }: VerdictProps) {
   const body = showResit ? deanery.resit!.body : deanery.body;
   const isPlaceholder = deanery.id === PLACEHOLDER_ID;
 
+  // Deliberately not shown on the placeholder: until someone picks a region we
+  // do not know their cap, and "£0" against "not sure yet" would be a funding
+  // claim we cannot stand behind.
+  const youPay = outOfPocketFor(deanery, hasResat);
+
   return (
     <div className="rounded-2xl bg-[#FAFAF9] p-6 shadow-elevation-3 sm:p-7">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -298,6 +304,20 @@ function Verdict({ deanery, hasResat, surface, onResitChange }: VerdictProps) {
           </p>
         )}
       </div>
+
+      {!isPlaceholder && (
+        <div className="mt-5 flex items-baseline gap-3">
+          <span
+            className="font-[family-name:var(--font-display)] text-[44px] font-semibold leading-none tracking-[-0.03em] text-[#B45309] sm:text-[52px]"
+            aria-label={`£${youPay} out of pocket`}
+          >
+            £{youPay}
+          </span>
+          <span className="text-[13px] uppercase tracking-[0.12em] text-muted">
+            out of pocket
+          </span>
+        </div>
+      )}
 
       {deanery.resit && (
         <p className="mt-3 text-sm text-body">

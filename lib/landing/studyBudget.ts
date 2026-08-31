@@ -52,6 +52,8 @@ export interface ResitPosition {
   verdict: Verdict;
   title: string;
   body: string;
+  /** Overrides {@link DeaneryPolicy.youPay} on the resit path. See that field. */
+  youPay?: number;
 }
 
 export interface DeaneryPolicy {
@@ -73,6 +75,25 @@ export interface DeaneryPolicy {
   doc: string;
   policyUrl: string;
   resit?: ResitPosition;
+  /**
+   * What a trainee is left paying on a £599 Complete course once their
+   * deanery's funding is applied, in whole pounds. Omitted means £0.
+   *
+   * Only set where the region's own published cap cannot reach £599: the
+   * North West caps at £500, and the North East expects 50% self funding on
+   * its discretionary route. Everywhere else the cap covers the fee.
+   *
+   * This is the arithmetic of the published cap against our price, NOT a
+   * prediction that the claim will be approved. Approval is the deanery's,
+   * which is why the figure sits next to the verdict rather than replacing it.
+   */
+  youPay?: number;
+}
+
+/** Out-of-pocket figure for a deanery, honouring the resit branch. */
+export function outOfPocketFor(deanery: DeaneryPolicy, hasResat: boolean): number {
+  if (hasResat && deanery.resit?.youPay !== undefined) return deanery.resit.youPay;
+  return deanery.youPay ?? 0;
 }
 
 export const DEANERIES: readonly DeaneryPolicy[] = [
@@ -187,6 +208,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
     usesGpCode: false,
     contact: 'england.gpstudyleave@nhs.net',
     body: 'Your school funds one SCA course per exam, up to £500. Complete is £599, so up to £500 of the fee can be covered, with a small remainder (£99) self funded. The email below asks for full funding first, with funding up to £500 plus self funding the rest as the alternative.',
+    youPay: 99,
     quote: 'one course attendance per RD to a maximum of £500',
     doc: 'NW GP School study leave guidelines, March 2026',
     policyUrl: 'https://www.nwpgmd.nhs.uk/gpst-study-leave',
@@ -199,6 +221,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
     title: 'Strong case: two routes to funding in your region',
     usesGpCode: false,
     contact: '[your programme office, via madeinheene.hee.nhs.uk]',
+    youPay: 300,
     body: 'Your deanery runs two funding routes and this course could fall under either. Route one is the automatic approved course list, which covers accredited SCA courses and educational packages. Route two is the discretionary route for other courses, decided by the Primary Care Dean or an Associate Director. The email below asks your programme office to confirm which applies and the funding available.',
     quote:
       'RCGP provided or accredited AKT and SCA courses including AKT and SCA educational packages: one course attendance during training for... the SCA',
