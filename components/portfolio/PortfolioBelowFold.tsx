@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { portfolioArticles } from '@/lib/portfolio-guides/articles';
+import { portfolioArticlePath } from '@/lib/portfolio-guides/articleTypes';
 import { ABOUT_PARAGRAPHS, COMMON_QUESTIONS } from './belowFoldContent';
 
 /**
@@ -18,8 +20,10 @@ import { ABOUT_PARAGRAPHS, COMMON_QUESTIONS } from './belowFoldContent';
  * section competing for attention. Nothing here is meant for a returning user,
  * which is why the whole block is hidden once a review is on screen.
  *
- * §6c (article links) is deliberately absent. The spec says not to build it
- * until at least three articles are live; two links look abandoned.
+ * §6c (article links) lists the cluster in registry order. The spec gates it on
+ * at least three articles being live, because two links look abandoned; all
+ * eight now are, and the block renders only while the registry is non-empty so
+ * that gate holds on its own if the cluster is ever emptied.
  */
 
 const summaryClass =
@@ -73,6 +77,27 @@ export default function PortfolioBelowFold() {
                     </details>
                 ))}
             </div>
+
+            {/* Article links (§6c). Plain text list: no cards, no thumbnails. */}
+            {portfolioArticles.length >= 3 && (
+                <>
+                    <h2 className="mb-1 mt-14 text-[13px] font-medium uppercase tracking-[0.14em] text-muted">
+                        More on the GP ePortfolio
+                    </h2>
+                    <ul className="border-b border-hairline">
+                        {portfolioArticles.map(article => (
+                            <li key={article.slug} className="border-t border-hairline">
+                                <Link
+                                    href={portfolioArticlePath(article.slug)}
+                                    className="block py-3.5 text-[15px] text-body transition-colors hover:text-heading"
+                                >
+                                    {article.heading}
+                                </Link>
+                            </li>
+                        ))}
+                    </ul>
+                </>
+            )}
 
             {/* Footer line (§6d) */}
             <p className="mt-14 text-[14px] leading-relaxed text-muted">
