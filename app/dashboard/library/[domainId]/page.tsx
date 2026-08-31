@@ -113,17 +113,21 @@ function DomainDetailContent({ domainId }: { domainId: string }) {
       )
     : 0;
 
+  // Only ever the case count, and only before the first attempt.
+  //
+  // The subtitle used to run "0 of 4 passed · 3 attempts · Best-attempt
+  // average: 19%", which was three figures in a middot chain saying what the
+  // rest of the header already said: the average is the score badge to its
+  // right, and the passed count is the squares strip directly below. Once
+  // someone has attempted anything, that strip carries both figures and the
+  // header carries none.
+  //
   // "0 of 10 passed · 0 attempted" is the greeting the dashboard explicitly
   // refuses to give; before the first attempt the count is the only honest
-  // thing to say.
-  //
-  // Sessions, not cases: the page now lists every attempt, so a count of cases
-  // touched would be smaller than the number of history lines below it.
-  const subtitle = stations.length === 0
+  // thing to say, and no strip figures render either.
+  const subtitle = stations.length === 0 || completedCount > 0
     ? undefined
-    : completedCount === 0
-      ? `${stations.length} case${stations.length !== 1 ? 's' : ''}`
-      : `${passedCount} of ${stations.length} passed · ${attemptCount} attempt${attemptCount !== 1 ? 's' : ''}${avgScore > 0 ? ` · Best-attempt average: ${avgScore}%` : ''}`;
+    : `${stations.length} case${stations.length !== 1 ? 's' : ''}`;
 
   return (
     <div>
@@ -157,6 +161,7 @@ function DomainDetailContent({ domainId }: { domainId: string }) {
           <DomainProgressStrip
             stations={stations}
             passedCount={passedCount}
+            attemptCount={attemptCount}
             status={filters.status}
           />
 
