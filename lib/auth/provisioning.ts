@@ -95,15 +95,24 @@ export async function mintSetPasswordLink(args: {
   const supabase = getAdminAuthClient();
   const email = args.email.toLowerCase().trim();
 
-  const { data: link, error: linkError } = await supabase.auth.admin.generateLink({
-    type: 'recovery',
-    email,
-  });
-  if (linkError || !link?.properties?.hashed_token) {
-    return { url: null, error: linkError?.message ?? 'no token in link' };
+  // Wrapped, not just error-checked. GoTrue reports most failures in `error`,
+  // but a transport-level fault rejects — and this runs while the caller holds
+  // the send claim, so an escaping throw would leave `set_password_sent_at`
+  // written for a mail that never went and no retry would ever revisit the
+  // buyer. Always resolve; never throw.
+  try {
+    const { data: link, error: linkError } = await supabase.auth.admin.generateLink({
+      type: 'recovery',
+      email,
+    });
+    if (linkError || !link?.properties?.hashed_token) {
+      return { url: null, error: linkError?.message ?? 'no token in link' };
+    }
+    return { url: setPasswordUrl(SITE_URL, link.properties.hashed_token, email) };
+  } catch (error: unknown) {
+    console.error('[provisioning] generateLink threw', { error });
+    return { url: null, error: error instanceof Error ? error.message : String(error) };
   }
-
-  return { url: setPasswordUrl(SITE_URL, link.properties.hashed_token, email) };
 }
 
 /**

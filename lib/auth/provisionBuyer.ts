@@ -93,45 +93,121 @@ export async function provisionBuyerAccount(
 
   const now = new Date().toISOString();
 
+  // ONE claim, taken before anything is created, minted or sent.
+  //
+  // It sits above the branch rather than inside the send, and that placement is
+  // load-bearing. Two concurrent Stripe deliveries of a NEW purchase both find
+  // `provisioned_at` null and both call `admin.createUser`; exactly one gets
+  // `created`, the other gets `alreadyExisted`. Which of them then won the send
+  // was an unrelated race — and if the `alreadyExisted` one won, it sent "you
+  // already have an account, just sign in" to a buyer whose account had just
+  // been created with no password, and the stamp was set for good. Claiming
+  // first means only one delivery ever reaches createUser, so `alreadyExisted`
+  // means what it says: the account genuinely predates this purchase.
+  const claimed = await claimSendStamp(supabase, preorderId, now, sessionId);
+  if (!claimed) return;
+
+  // From here we own the send, so EVERY exit that is not a successful send has
+  // to hand the claim back — including a thrown one. A stamp written for a mail
+  // that never went is the stranded buyer this whole mechanism exists to
+  // prevent, and no later retry would revisit them.
+  let result: { sent: boolean; error?: string };
   try {
-    if (row.provisioned_at) {
-      // The account exists from an earlier attempt; only the mail is owed.
-      await deliverUnderClaim(supabase, args, now, { mintLink: true });
-      return;
-    }
-    await createAccountAndSend(supabase, args, now);
+    result = row.provisioned_at
+      ? // The account exists from an earlier attempt; only the mail is owed.
+        await mintAndDeliver(args, { mintLink: true })
+      : await createAccountThenDeliver(supabase, args, now);
   } catch (error: unknown) {
     console.error('[stripe-webhook] account provisioning threw', { sessionId, preorderId, error });
+    result = { sent: false, error: error instanceof Error ? error.message : String(error) };
   }
+
+  if (result.sent) return;
+
+  console.error('[stripe-webhook] receipt email not sent — handing the claim back', {
+    sessionId,
+    preorderId,
+    result,
+  });
+  await releaseSendStamp(supabase, preorderId, sessionId);
 }
 
-/**
- * Claim the send, then make it. The lock for the whole delivery.
- *
- * The stamp is CLAIMED BEFORE the send, not written after it. Two Stripe
- * deliveries can sit here at once and nothing downstream separates them: both
- * would email, and — worse — the second `generateLink` would invalidate the
- * first, so the buyer opens whichever mail arrived first and is told it
- * expired. The guarded update is the lock, and whoever wins it owns the send.
- *
- * Minting happens INSIDE the claim for exactly that reason: a delivery that is
- * not going to send must never mint, because minting is what invalidates the
- * link the winner just sent.
- *
- * If the send then fails the stamp is handed straight back, so the next retry
- * picks the buyer up again. A link recorded as sent but never sent is precisely
- * the stranded buyer this whole mechanism exists to prevent.
- */
-async function deliverUnderClaim(
+/** First attempt for this buyer: create the auth user, then send. */
+async function createAccountThenDeliver(
   supabase: PreorderAdmin,
   args: ProvisionBuyerArgs,
   now: string,
-  options: { mintLink: boolean },
-): Promise<void> {
-  const { preorderId, email, sessionId, deliver } = args;
+): Promise<{ sent: boolean; error?: string }> {
+  const { preorderId, email, name, sessionId } = args;
 
-  const claimed = await claimSendStamp(supabase, preorderId, now, sessionId);
-  if (!claimed) return;
+  const result = await provisionAccountForPurchase({ email, fullName: name });
+
+  if (!result.created && !result.alreadyExisted) {
+    // No account, so no send: Stripe's retry has to come back and try again,
+    // and it can only do that if the claim goes back. Our caller does that.
+    console.error('[stripe-webhook] account provisioning failed — nothing sent, awaiting retry', {
+      sessionId,
+      preorderId,
+      result,
+    });
+    return { sent: false, error: result.error };
+  }
+
+  if (result.alreadyExisted) {
+    console.warn('[stripe-webhook] buyer already had an account — receipt only, no set-password link', {
+      sessionId,
+      preorderId,
+    });
+  }
+
+  // Record that the account exists BEFORE sending, so a send that fails takes
+  // the next retry down the resend branch rather than re-attempting createUser.
+  // `alreadyExisted` stamps too — the column is documented as "created (OR
+  // FOUND TO ALREADY EXIST)", and a repeat buyer has to reach a terminal state.
+  await stampProvisioned(supabase, preorderId, now, sessionId);
+
+  // The moment an account exists is the only moment we can be sure the buyer's
+  // free mock and their new account are the same person: the purchase, the
+  // verified trial lead and the auth user all key off the same address. Run on
+  // BOTH paths — a repeat buyer (`alreadyExisted`) is exactly the person most
+  // likely to have sat the free station first.
+  //
+  // Deliberately swallowed: a buyer's account and their receipt are what this
+  // function owes them, and neither may be put at risk by a nice-to-have that
+  // reattaches an old consultation.
+  if (result.userId) {
+    try {
+      const claimed = await claimTrialSessionsForUser(supabase, result.userId, email);
+      if (claimed > 0) {
+        console.info('[stripe-webhook] claimed guest trial sessions for new account', {
+          sessionId,
+          preorderId,
+          claimed,
+        });
+      }
+    } catch (error: unknown) {
+      console.error('[stripe-webhook] trial claim threw', { sessionId, preorderId, error });
+    }
+  }
+
+  // A buyer who already had an account keeps their password and is owed no
+  // link — only the receipt.
+  return mintAndDeliver(args, { mintLink: !result.alreadyExisted });
+}
+
+/**
+ * Mint the link (when one is owed) and send the mail.
+ *
+ * Only ever reached by the delivery holding the claim. That matters for the
+ * mint specifically: minting INVALIDATES the previous link, so a delivery that
+ * is not going to send must never mint, or it would kill the link the winner
+ * just emailed and the buyer would be told theirs had expired.
+ */
+async function mintAndDeliver(
+  args: ProvisionBuyerArgs,
+  options: { mintLink: boolean },
+): Promise<{ sent: boolean; error?: string }> {
+  const { preorderId, email, sessionId, deliver } = args;
 
   let setupUrl: string | null = null;
   if (options.mintLink) {
@@ -148,21 +224,7 @@ async function deliverUnderClaim(
     }
   }
 
-  // The send is wrapped, not just checked. We are holding the claim, so ANY
-  // exit from here that is not a successful send has to hand it back — and a
-  // THROWN error would otherwise skip the release below and leave the row
-  // reading "already emailed" for a mail that never went. That is exactly the
-  // stranded buyer the whole compare-and-swap exists to prevent.
-  let result: { sent: boolean; error?: string }
-  try {
-    result = await deliver({ setupUrl });
-  } catch (error: unknown) {
-    result = { sent: false, error: error instanceof Error ? error.message : String(error) };
-  }
-  if (result.sent) return;
-
-  console.error('[stripe-webhook] receipt email failed', { sessionId, preorderId, result });
-  await releaseSendStamp(supabase, preorderId, sessionId);
+  return deliver({ setupUrl });
 }
 
 /** Compare-and-swap on the send stamp. True = this call now owns the send. */
@@ -204,68 +266,6 @@ async function releaseSendStamp(
       error,
     });
   }
-}
-
-/** First attempt for this buyer: create the auth user, then record the outcome. */
-async function createAccountAndSend(
-  supabase: PreorderAdmin,
-  args: ProvisionBuyerArgs,
-  now: string,
-): Promise<void> {
-  const { preorderId, email, name, sessionId } = args;
-
-  const result = await provisionAccountForPurchase({ email, fullName: name });
-
-  if (result.alreadyExisted) {
-    console.warn('[stripe-webhook] buyer already had an account — receipt only, no set-password link', {
-      sessionId,
-      preorderId,
-    });
-  } else if (result.error) {
-    // No account, so no send and no stamps: Stripe's retry has to come back and
-    // try again, and it can only do that if the row still reads "owed".
-    console.error('[stripe-webhook] account provisioning failed — nothing sent, awaiting retry', {
-      sessionId,
-      preorderId,
-      result,
-    });
-    return;
-  }
-
-  // The account exists. Record that before the send, so a send that fails takes
-  // the next retry down the resend branch rather than re-attempting createUser
-  // for three days. `alreadyExisted` stamps too — the column is documented as
-  // "created (OR FOUND TO ALREADY EXIST)", and a repeat buyer has to reach a
-  // terminal state.
-  await stampProvisioned(supabase, preorderId, now, sessionId);
-
-  // The moment an account exists is the only moment we can be sure the buyer's
-  // free mock and their new account are the same person: the purchase, the
-  // verified trial lead and the auth user all key off the same address. Run on
-  // BOTH paths — a repeat buyer (`alreadyExisted`) is exactly the person most
-  // likely to have sat the free station first.
-  //
-  // Deliberately swallowed: a buyer's account and their receipt are what this
-  // function owes them, and neither may be put at risk by a nice-to-have that
-  // reattaches an old consultation.
-  if (result.userId) {
-    try {
-      const claimed = await claimTrialSessionsForUser(supabase, result.userId, email);
-      if (claimed > 0) {
-        console.info('[stripe-webhook] claimed guest trial sessions for new account', {
-          sessionId,
-          preorderId,
-          claimed,
-        });
-      }
-    } catch (error: unknown) {
-      console.error('[stripe-webhook] trial claim threw', { sessionId, preorderId, error });
-    }
-  }
-
-  // A buyer who already had an account keeps their password and is owed no
-  // link — only the receipt.
-  await deliverUnderClaim(supabase, args, now, { mintLink: !result.alreadyExisted });
 }
 
 async function stampProvisioned(

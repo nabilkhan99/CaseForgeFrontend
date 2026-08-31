@@ -120,37 +120,37 @@ beforeEach(() => {
 })
 
 describe('provisionBuyerAccount — first attempt (no stamps yet)', () => {
-  it('creates the account, stamps it, then claims the send and delivers', async () => {
+  it('claims the send FIRST, then creates the account, stamps it and delivers', async () => {
     const { store, writes } = makeStore({ read: { data: PAID, error: null } })
 
     await provisionBuyerAccount(store, ARGS)
 
+    // The claim comes before createUser, not after it. See the concurrency
+    // test at the bottom of this describe for why that ordering is the fix.
+    expect(writes.map((w) => Object.keys(w.values)[0])).toEqual([
+      'set_password_sent_at',
+      'provisioned_at',
+    ])
+    expect(writes[0].guarded).toBe(true)
     expect(mocks.provisionAccountForPurchase).toHaveBeenCalledWith({
       email: 'buyer@x.com',
       fullName: 'Jane Doe',
     })
-    // Two writes, in this order and both guarded: the account exists, then the
-    // send is claimed. They are separate because they mean different things —
-    // losing the send stamp strands a buyer, losing the other costs one retry.
-    expect(writes).toHaveLength(2)
-    expect(writes[0]).toEqual({ values: { provisioned_at: expect.any(String) }, guarded: true })
-    expect(writes[1]).toEqual({ values: { set_password_sent_at: expect.any(String) }, guarded: true })
-    // And the mail carried the freshly minted link.
     expect(mocks.deliver).toHaveBeenCalledWith({ setupUrl: SETUP_URL })
   })
 
-  it('mints the link only after winning the claim', async () => {
-    // Minting is what INVALIDATES the previous link, so a delivery that is not
-    // going to send must never mint: it would kill the link the winner just
-    // emailed and the buyer would be told theirs had expired.
+  it('does nothing at all when a concurrent delivery already owns the send', async () => {
+    // Minting is what INVALIDATES the previous link, and createUser decides
+    // what the mail says — so a delivery that lost the claim must not reach
+    // either.
     const { store } = makeStore({
       read: { data: PAID, error: null },
-      // First write (provisioned_at) succeeds, the send claim finds zero rows.
-      guardedUpdate: [{ data: [{ id: 'p1' }], error: null }, { data: [], error: null }],
+      guardedUpdate: [{ data: [], error: null }],
     })
 
     await provisionBuyerAccount(store, ARGS)
 
+    expect(mocks.provisionAccountForPurchase).not.toHaveBeenCalled()
     expect(mocks.mintSetPasswordLink).not.toHaveBeenCalled()
     expect(mocks.deliver).not.toHaveBeenCalled()
   })
@@ -163,11 +163,48 @@ describe('provisionBuyerAccount — first attempt (no stamps yet)', () => {
 
     await provisionBuyerAccount(store, ARGS)
 
-    expect(writes[0].values).toHaveProperty('provisioned_at')
-    // Claimed, then released — so `set_password_sent_at is null` still means
-    // "still owed" when Stripe comes back.
-    expect(writes[1].values).toEqual({ set_password_sent_at: expect.any(String) })
+    expect(writes.map((w) => Object.keys(w.values)[0])).toEqual([
+      'set_password_sent_at',
+      'provisioned_at',
+      'set_password_sent_at',
+    ])
+    // Released unguarded: we hold the claim, so there is nothing to race with.
     expect(writes[2]).toEqual({ values: { set_password_sent_at: null }, guarded: false })
+  })
+
+  it('hands the claim back when the account could not be created at all', async () => {
+    mocks.provisionAccountForPurchase.mockResolvedValue({
+      created: false,
+      alreadyExisted: false,
+      userId: null,
+      error: 'fetch failed',
+    })
+    const { store, writes } = makeStore({ read: { data: PAID, error: null } })
+
+    await provisionBuyerAccount(store, ARGS)
+
+    expect(mocks.deliver).not.toHaveBeenCalled()
+    // Claimed, then released — nothing was sent, so the retry must find it owed.
+    expect(writes.map((w) => Object.keys(w.values)[0])).toEqual([
+      'set_password_sent_at',
+      'set_password_sent_at',
+    ])
+    expect(writes[1].values).toEqual({ set_password_sent_at: null })
+  })
+
+  it('hands the claim back when MINTING throws, not just when the send does', async () => {
+    // The mint sits between the claim and the send. An escaping throw there
+    // would leave the stamp written for a mail that never went, and no later
+    // retry would revisit the buyer.
+    mocks.mintSetPasswordLink.mockRejectedValue(new Error('gotrue exploded'))
+    const { store, writes } = makeStore({ read: { data: PAID, error: null } })
+
+    await provisionBuyerAccount(store, ARGS)
+
+    expect(writes[writes.length - 1]).toEqual({
+      values: { set_password_sent_at: null },
+      guarded: false,
+    })
   })
 
   it('sends a repeat buyer their receipt, with no set-password link', async () => {
@@ -186,10 +223,9 @@ describe('provisionBuyerAccount — first attempt (no stamps yet)', () => {
 
     expect(mocks.mintSetPasswordLink).not.toHaveBeenCalled()
     expect(mocks.deliver).toHaveBeenCalledWith({ setupUrl: null })
-    // Still terminal: both stamps down, so no later retry re-mails them.
     expect(writes.map((w) => Object.keys(w.values)[0])).toEqual([
-      'provisioned_at',
       'set_password_sent_at',
+      'provisioned_at',
     ])
   })
 
@@ -203,18 +239,39 @@ describe('provisionBuyerAccount — first attempt (no stamps yet)', () => {
     expect(mocks.deliver).toHaveBeenCalledWith({ setupUrl: null })
   })
 
-  it('writes nothing when the account could not be created at all', async () => {
-    mocks.provisionAccountForPurchase.mockResolvedValue({
-      created: false,
-      alreadyExisted: false,
-      userId: null,
-      error: 'fetch failed',
+  it('never tells a brand-new buyer they already have an account', async () => {
+    // The race this ordering exists to kill. Two concurrent deliveries of a NEW
+    // purchase both used to reach createUser: one got `created`, the other
+    // `alreadyExisted`, and whichever won the send was a separate coin flip. If
+    // the `alreadyExisted` one won, the buyer was told to "just sign in" to an
+    // account that had no password — with the stamp set for good.
+    //
+    // Only the claim winner now reaches createUser, so the loser cannot send
+    // the wrong mail. Here the loser is the one whose createUser would have
+    // said `alreadyExisted`.
+    mocks.provisionAccountForPurchase
+      .mockResolvedValueOnce({ created: true, alreadyExisted: false, userId: 'user-1' })
+      .mockResolvedValueOnce({
+        created: false,
+        alreadyExisted: true,
+        userId: 'user-1',
+        error: 'account_already_exists',
+      })
+
+    const winner = makeStore({ read: { data: PAID, error: null } })
+    const loser = makeStore({
+      read: { data: PAID, error: null },
+      guardedUpdate: [{ data: [], error: null }],
     })
-    const { store, writes } = makeStore({ read: { data: PAID, error: null } })
 
-    await provisionBuyerAccount(store, ARGS)
+    await Promise.all([
+      provisionBuyerAccount(winner.store, ARGS),
+      provisionBuyerAccount(loser.store, ARGS),
+    ])
 
-    expect(writes).toEqual([])
+    // One mail, and it carries a real setup link.
+    expect(mocks.deliver).toHaveBeenCalledTimes(1)
+    expect(mocks.deliver).toHaveBeenCalledWith({ setupUrl: SETUP_URL })
   })
 })
 
@@ -275,8 +332,8 @@ describe('provisionBuyerAccount — attaching the buyer\'s free mock', () => {
 
     expect(mocks.deliver).toHaveBeenCalledTimes(1)
     expect(writes.map((w) => Object.keys(w.values)[0])).toEqual([
-      'provisioned_at',
       'set_password_sent_at',
+      'provisioned_at',
     ])
   })
 })
