@@ -249,23 +249,47 @@ async function claimSendStamp(
   return (data?.length ?? 0) > 0;
 }
 
+/**
+ * Hand the claim back. Retried once, because this is the write that decides
+ * whether a buyer is recoverable.
+ *
+ * It is the compensating write for a claim we took and could not honour, and
+ * if it never lands the buyer is stranded for good: `set_password_sent_at`
+ * stays stamped, `provisionBuyerAccount`'s early return blocks every future
+ * Stripe retry, and when the thing that failed was `createUser` there is not
+ * even an auth user for the self-serve resend to mint a link against — so that
+ * escape hatch is closed too.
+ *
+ * One retry is not a guarantee and is not meant to be. The realistic cause is a
+ * transient blip on a connection that worked moments earlier for the claim, and
+ * a second attempt costs one round trip against that. A genuine outage still
+ * ends in the CRITICAL log below, which is the ops signal to resend by hand.
+ */
 async function releaseSendStamp(
   supabase: PreorderAdmin,
   preorderId: string,
   sessionId: string,
 ): Promise<void> {
-  const { error } = await supabase
-    .from('preorders')
-    .update({ set_password_sent_at: null })
-    .eq('id', preorderId);
+  for (const attempt of [1, 2]) {
+    const { error } = await supabase
+      .from('preorders')
+      .update({ set_password_sent_at: null })
+      .eq('id', preorderId);
 
-  if (error) {
-    console.error('[stripe-webhook] could not release the send stamp — buyer needs a manual resend', {
+    if (!error) return;
+
+    console.error('[stripe-webhook] send stamp release failed', {
       sessionId,
       preorderId,
+      attempt,
       error,
     });
   }
+
+  console.error(
+    '[stripe-webhook] CRITICAL: could not release the send stamp — this buyer is stranded and needs a manual resend',
+    { sessionId, preorderId },
+  );
 }
 
 async function stampProvisioned(

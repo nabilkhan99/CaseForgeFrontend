@@ -49,10 +49,11 @@ interface Write {
 function makeStore(responses: {
   read?: Result
   guardedUpdate?: Result[]
-  plainUpdate?: Result
+  plainUpdate?: Result[]
 }) {
   const writes: Write[] = []
   const guarded = [...(responses.guardedUpdate ?? [])]
+  const plain = [...(responses.plainUpdate ?? [])]
 
   function updateBuilder(values: Record<string, unknown>) {
     const write: Write = { values, guarded: false }
@@ -71,7 +72,7 @@ function makeStore(responses: {
       // Awaiting the builder without `.is()` is the un-guarded release write.
       then: (resolve: (r: Result) => unknown) => {
         writes.push(write)
-        return Promise.resolve(responses.plainUpdate ?? { error: null }).then(resolve)
+        return Promise.resolve(plain.shift() ?? { error: null }).then(resolve)
       },
     }
     return builder
@@ -354,6 +355,40 @@ describe('provisionBuyerAccount — the account exists, only the email is owed',
     // One write, and it is the claim — guarded, and only the send stamp.
     expect(writes).toHaveLength(1)
     expect(writes[0]).toEqual({ values: { set_password_sent_at: expect.any(String) }, guarded: true })
+  })
+
+  it('retries the release once when handing the claim back fails', async () => {
+    // This is the write that decides whether a buyer is recoverable at all: if
+    // it never lands, the stamp blocks every future Stripe retry, and when the
+    // failure was createUser there is no auth user for the self-serve resend to
+    // mint a link against either.
+    mocks.deliver.mockResolvedValue({ sent: false, error: 'brevo_error' })
+    const { store, writes } = makeStore({
+      read: { data: OWED, error: null },
+      guardedUpdate: [{ data: [{ id: 'p1' }], error: null }],
+      plainUpdate: [{ error: { message: 'blip' } }, { error: null }],
+    })
+
+    await provisionBuyerAccount(store, ARGS)
+
+    // Claim, then two release attempts — the second one lands.
+    expect(writes).toHaveLength(3)
+    expect(writes[1].values).toEqual({ set_password_sent_at: null })
+    expect(writes[2].values).toEqual({ set_password_sent_at: null })
+  })
+
+  it('says loudly when the release never lands, because that buyer is stranded', async () => {
+    mocks.deliver.mockResolvedValue({ sent: false, error: 'brevo_error' })
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { store } = makeStore({
+      read: { data: OWED, error: null },
+      guardedUpdate: [{ data: [{ id: 'p1' }], error: null }],
+      plainUpdate: [{ error: { message: 'down' } }, { error: { message: 'down' } }],
+    })
+
+    await provisionBuyerAccount(store, ARGS)
+
+    expect(error.mock.calls.flat().join(' ')).toContain('stranded')
   })
 
   it('sends nothing when a concurrent delivery already claimed the send', async () => {

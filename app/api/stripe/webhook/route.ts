@@ -1107,21 +1107,30 @@ async function deliverRenewalReceipt(
     return;
   }
 
-  const sent = await sendReceiptEmail({
-    toEmail: order.email,
-    toName: order.full_name ?? null,
-    firstName: order.full_name ?? null,
-    planKey: plan,
-    nextBillingDate: receipt.periodEnd ? formatReceiptDate(receipt.periodEnd) : null,
-    // What this invoice actually took, so the copy cannot drift from the charge.
-    renewalAmount: formatAmount(invoice.amount_paid ?? 0),
-    // A month in, they have had an account for a month.
-    hasSetupLink: false,
-    setupUrl: null,
-    isRenewal: true,
-    pdf: receipt.pdf,
-    fileName: receipt.fileName,
-  });
+  // Wrapped for the same reason the purchase path's delivery is: we are holding
+  // a claim, so a THROWN error has to hand it back too, not just a false. The
+  // callee is already hardened, which makes this defence in depth rather than a
+  // live fix — but the asymmetry is exactly how the purchase-path bug survived.
+  let sent: { sent: boolean; error?: string };
+  try {
+    sent = await sendReceiptEmail({
+      toEmail: order.email,
+      toName: order.full_name ?? null,
+      firstName: order.full_name ?? null,
+      planKey: plan,
+      nextBillingDate: receipt.periodEnd ? formatReceiptDate(receipt.periodEnd) : null,
+      // What this invoice actually took, so the copy cannot drift from the charge.
+      renewalAmount: formatAmount(invoice.amount_paid ?? 0),
+      // A month in, they have had an account for a month.
+      hasSetupLink: false,
+      setupUrl: null,
+      isRenewal: true,
+      pdf: receipt.pdf,
+      fileName: receipt.fileName,
+    });
+  } catch (error: unknown) {
+    sent = { sent: false, error: error instanceof Error ? error.message : String(error) };
+  }
 
   if (!sent.sent) {
     console.error('[stripe-webhook] renewal receipt email failed — handing the claim back', {
