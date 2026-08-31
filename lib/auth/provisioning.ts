@@ -20,7 +20,7 @@ import { SITE_URL } from '@/lib/seo/site';
  * buyer without an account returns an `error`, so the webhook logs it rather
  * than stranding them silently.
  *
- * Emailed links always point at {@link SITE_URL}, never the webhook request's
+ * Emailed links point at {@link authLinkOrigin}, never the webhook request's
  * own origin: a Stripe endpoint pointed at a preview or apex host would
  * otherwise email buyers a set-password link on a host they can't sign in from.
  */
@@ -58,6 +58,45 @@ function getAdminAuthClient() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } },
   );
+}
+
+/**
+ * Which host an emailed auth link points at.
+ *
+ * Defaults to {@link SITE_URL}, so production needs no configuration and
+ * behaves exactly as it did when this was hardcoded. SITE_URL itself stays
+ * hardcoded on purpose — it is the SEO constant behind canonical tags, og:url
+ * and JSON-LD, all of which must name the production domain whatever host
+ * rendered them. This function exists because an emailed auth link is the one
+ * consumer with the opposite requirement: to be testable, it has to be able to
+ * point somewhere else.
+ *
+ * Set `AUTH_LINK_ORIGIN` on a preview environment to receive links you can
+ * actually open there. Server-only, never NEXT_PUBLIC_: this runs in the Stripe
+ * webhook and in the resend route, and nothing in the browser should be able to
+ * influence where an account-recovery link points.
+ *
+ * ⚠️ The token is minted against the real Supabase project whatever this is set
+ * to, so a preview host verifies a live recovery token and signs you into the
+ * real account. Test with a throwaway address, never a customer's.
+ *
+ * Anything unparseable falls back to SITE_URL rather than throwing: a typo in
+ * an env var must not be able to strand a buyer who has already paid.
+ */
+export function authLinkOrigin(): string {
+  const override = process.env.AUTH_LINK_ORIGIN?.trim();
+  if (!override) return SITE_URL;
+  try {
+    const url = new URL(override);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+      console.warn('[provisioning] AUTH_LINK_ORIGIN is not http(s); using SITE_URL', { override });
+      return SITE_URL;
+    }
+    return url.origin;
+  } catch {
+    console.warn('[provisioning] AUTH_LINK_ORIGIN is not a URL; using SITE_URL', { override });
+    return SITE_URL;
+  }
 }
 
 export function setPasswordUrl(origin: string, tokenHash: string, email: string): string {
@@ -108,7 +147,7 @@ export async function mintSetPasswordLink(args: {
     if (linkError || !link?.properties?.hashed_token) {
       return { url: null, error: linkError?.message ?? 'no token in link' };
     }
-    return { url: setPasswordUrl(SITE_URL, link.properties.hashed_token, email) };
+    return { url: setPasswordUrl(authLinkOrigin(), link.properties.hashed_token, email) };
   } catch (error: unknown) {
     console.error('[provisioning] generateLink threw', { error });
     return { url: null, error: error instanceof Error ? error.message : String(error) };

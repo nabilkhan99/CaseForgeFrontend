@@ -39,13 +39,19 @@ vi.mock('@/lib/email/accountEmail', () => ({
   sendSetPasswordEmail: mocks.sendSetPasswordEmail,
 }))
 
-const { provisionAccountForPurchase, mintSetPasswordLink, sendSetPasswordLink, setPasswordUrl } =
-  await import('./provisioning')
+const {
+  provisionAccountForPurchase,
+  mintSetPasswordLink,
+  sendSetPasswordLink,
+  setPasswordUrl,
+  authLinkOrigin,
+} = await import('./provisioning')
 
 const TOKEN = 'hashed-token-abc'
 
 beforeEach(() => {
   vi.clearAllMocks()
+  delete process.env.AUTH_LINK_ORIGIN
   mocks.createUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
   mocks.generateLink.mockResolvedValue({
     data: { properties: { hashed_token: TOKEN } },
@@ -182,6 +188,14 @@ describe('mintSetPasswordLink', () => {
     expect(url).toContain(`token_hash=${TOKEN}`)
   })
 
+  it('honours AUTH_LINK_ORIGIN, which is how a preview gets a link it can open', async () => {
+    process.env.AUTH_LINK_ORIGIN = 'https://preview-abc.vercel.app'
+
+    const { url } = await mintSetPasswordLink({ email: 'buyer@x.com' })
+
+    expect(url?.startsWith('https://preview-abc.vercel.app/auth/set-password')).toBe(true)
+  })
+
   it('sends nothing — minting is not delivery', async () => {
     await mintSetPasswordLink({ email: 'buyer@x.com' })
 
@@ -204,6 +218,44 @@ describe('mintSetPasswordLink', () => {
       url: null,
       error: 'no token in link',
     })
+  })
+})
+
+describe('authLinkOrigin', () => {
+  /**
+   * The whole point is that production needs no configuration: an unset or
+   * broken env var must land on the canonical site, never on nothing. A buyer
+   * who has already paid cannot be stranded by a typo in a dashboard.
+   */
+  it('is the canonical site when nothing is set', () => {
+    expect(authLinkOrigin()).toBe(SITE_URL)
+  })
+
+  it('takes an override, so a preview can mail links it can open', () => {
+    process.env.AUTH_LINK_ORIGIN = 'https://preview-abc.vercel.app'
+    expect(authLinkOrigin()).toBe('https://preview-abc.vercel.app')
+  })
+
+  it('keeps only the origin, so a path or query cannot ride along', () => {
+    process.env.AUTH_LINK_ORIGIN = 'https://preview-abc.vercel.app/uk?x=1'
+    expect(authLinkOrigin()).toBe('https://preview-abc.vercel.app')
+  })
+
+  it('allows http, because a local dev server is not https', () => {
+    process.env.AUTH_LINK_ORIGIN = 'http://localhost:3000'
+    expect(authLinkOrigin()).toBe('http://localhost:3000')
+  })
+
+  it('falls back rather than minting a javascript: or data: link', () => {
+    process.env.AUTH_LINK_ORIGIN = 'javascript:alert(1)'
+    expect(authLinkOrigin()).toBe(SITE_URL)
+  })
+
+  it('falls back on anything unparseable, including whitespace', () => {
+    process.env.AUTH_LINK_ORIGIN = 'not a url'
+    expect(authLinkOrigin()).toBe(SITE_URL)
+    process.env.AUTH_LINK_ORIGIN = '   '
+    expect(authLinkOrigin()).toBe(SITE_URL)
   })
 })
 
