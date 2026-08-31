@@ -4,6 +4,20 @@ import { mintEphemeralKey, unreliableEchoCancellation } from '@/lib/clinical-mas
 import { voiceForStation } from '@/lib/clinical-master/realtimeSession';
 import { rejectIfSignedIn } from '@/lib/trial/guestOnly';
 
+
+/**
+ * Vercel's default is 10s, and the mint is a network round-trip to Azure that
+ * can hang rather than refuse. On 31 Aug 2026 the eastus2 realtime outage
+ * produced 25 kills at exactly that wall between 07:30 and 09:37 UTC, and a
+ * killed mint means the consultation never starts at all.
+ *
+ * This matters more now the standby-region fallback exists: a primary that
+ * hangs burns most of the budget before the fallback is even attempted, so at
+ * 10s the safety net could not reliably deploy. 20s gives it room. The Hobby
+ * plan caps this at 60.
+ */
+export const maxDuration = 20;
+
 /**
  * Mint an Azure gpt-realtime ephemeral key for a guest (free-trial) consultation.
  * Replaces the former /api/try/livekit-token route. No JWT — validates that the
