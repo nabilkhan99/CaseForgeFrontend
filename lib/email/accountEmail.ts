@@ -1,9 +1,14 @@
 import { BrevoClient } from '@getbrevo/brevo'
+import { BRAND, button, emailShell, paragraph, row } from './chrome'
 
 /**
- * "Your account is ready — set your password" email, sent by purchase
- * provisioning (lib/auth/provisioning.ts). Same house chrome as the purchase
- * confirmation; one job, one button.
+ * "Your account is ready — set your password".
+ *
+ * This is now the SELF-SERVICE path only: /api/auth/resend-set-password, for a
+ * buyer whose link expired. The purchase path no longer sends it — a new buyer
+ * gets the receipt email with the same link as its button, so they receive one
+ * mail rather than two. Kept because the resend route is the answer to an
+ * expired link and has to keep working exactly as it does.
  */
 
 export interface SetPasswordEmailCopy {
@@ -12,7 +17,23 @@ export interface SetPasswordEmailCopy {
   greeting: string
   lines: string[]
   cta: string
+  /** The small print under the button. */
+  expiryNote: string
 }
+
+/**
+ * How long a set-password link actually lasts.
+ *
+ * ⚠️ 24 hours, not the 7 days the receipt spec asks for, and this is a real
+ * constraint rather than a choice. The link is a Supabase GoTrue recovery
+ * token, whose lifetime is `MAILER_OTP_EXP` — which Supabase caps at 24 hours.
+ * Nothing in this codebase can extend it; 7 days would need a bespoke token
+ * table. So the emails state what is true, and the self-serve resend at
+ * /api/auth/resend-set-password is the recovery path for anyone who misses it.
+ */
+export const SET_PASSWORD_LINK_EXPIRY = '24 hours'
+
+export const SET_PASSWORD_EXPIRY_NOTE = `This link can only be used once and expires in ${SET_PASSWORD_LINK_EXPIRY}. If it has expired, the sign-in page will send you a fresh one.`
 
 export function buildSetPasswordEmailCopy(firstNameRaw?: string | null): SetPasswordEmailCopy {
   const firstName = firstNameRaw?.trim().split(' ')[0] || 'there'
@@ -22,9 +43,10 @@ export function buildSetPasswordEmailCopy(firstNameRaw?: string | null): SetPass
     greeting: `Hi ${firstName},`,
     lines: [
       'Your Fourteen Fisherman account has been created — set a password and you can start practising.',
-      'The button below signs you in securely and asks you to choose your password. If it has expired by the time you click it, the page will send you a fresh link.',
+      'The button below signs you in securely and asks you to choose your password.',
     ],
     cta: 'Set my password',
+    expiryNote: SET_PASSWORD_EXPIRY_NOTE,
   }
 }
 
@@ -48,56 +70,31 @@ export async function sendSetPasswordEmail({
   }
 
   const copy = buildSetPasswordEmailCopy(toName)
-  const paragraph = (text: string) =>
-    `<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;color:#44403C;">${text}</p>`
 
-  const htmlContent = `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-    <meta name="color-scheme" content="light">
-    <meta name="supported-color-schemes" content="light">
-    <title>${copy.subject}</title>
-  </head>
-  <body style="margin:0;padding:0;background-color:#F5F0EB;font-family:-apple-system,BlinkMacSystemFont,'Plus Jakarta Sans','Segoe UI',Roboto,sans-serif;color:#1C1917;-webkit-font-smoothing:antialiased;">
-    <div style="display:none;font-size:1px;color:#F5F0EB;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">Set your password and start practising.</div>
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#F5F0EB;">
-      <tr>
-        <td align="center" style="padding:40px 16px;">
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:560px;background-color:#FFFCF8;border-radius:18px;border:1px solid rgba(28,25,23,0.06);box-shadow:0 1px 2px rgba(28,25,23,0.04);">
-            <tr>
-              <td style="padding:36px 40px 8px 40px;">
-                <img src="https://www.fourteenfisherman.com/fourteenfishermann-dark.png" alt="Fourteen Fisherman" width="200" height="30" style="display:block;border:0;outline:none;text-decoration:none;">
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:24px 40px 0 40px;">
-                <h1 style="margin:0;font-size:30px;line-height:1.15;font-weight:700;letter-spacing:-0.02em;color:#1C1917;">${copy.heading}</h1>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:20px 40px 8px 40px;">
-                ${paragraph(copy.greeting)}
-                ${copy.lines.map(paragraph).join('\n                ')}
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 40px 36px 40px;">
-                <a href="${setPasswordUrl}" style="display:inline-block;background-color:#B45309;color:#FFFFFF;font-size:16px;font-weight:600;line-height:1;text-decoration:none;padding:16px 28px;border-radius:12px;">${copy.cta}</a>
-              </td>
-            </tr>
-          </table>
-          <p style="margin:24px 0 0 0;font-size:13px;color:#78716C;">Fourteen Fisherman · fourteenfisherman.com</p>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>`
+  const htmlContent = emailShell({
+    title: copy.subject,
+    preheader: 'Set your password and start practising.',
+    heading: copy.heading,
+    rows: [
+      row(
+        [paragraph(copy.greeting), ...copy.lines.map(paragraph)].join('\n                '),
+        '20px 40px 8px 40px',
+      ),
+      row(
+        `${button(setPasswordUrl, copy.cta)}
+                <p style="margin:14px 0 0 0;font-size:13px;line-height:1.5;color:#78716C;">${copy.expiryNote}</p>`,
+        '0 40px 36px 40px',
+      ),
+    ],
+    footerHtml: `<p style="margin:0;font-size:13px;color:#78716C;">${BRAND.senderName} · fourteenfisherman.com</p>`,
+  })
 
   try {
     await new BrevoClient({ apiKey: brevoKey }).transactionalEmails.sendTransacEmail({
-      sender: { name: 'Fourteen Fisherman', email: 'hello@fourteenfisherman.com' },
+      sender: { name: BRAND.senderName, email: BRAND.senderEmail },
+      // The buyer asked for this link; if something is wrong with it, their
+      // reply has to reach a person rather than Brevo's bounce address.
+      replyTo: { name: BRAND.senderName, email: BRAND.senderEmail },
       to: [{ email: toEmail, ...(toName ? { name: toName } : {}) }],
       subject: copy.subject,
       htmlContent,
