@@ -60,7 +60,12 @@ function toFeedback(
     row: SessionResultRow,
     stationId: string | undefined,
     stationTitle: string | undefined,
-    clinicalLearningPoints: string | null | undefined
+    clinicalLearningPoints: string | null | undefined,
+    markScheme: {
+        data_gathering?: string | null;
+        clinical_management?: string | null;
+        relating_to_others?: string | null;
+    } | null
 ): ConsultationFeedback {
     return {
         session_id: sessionId,
@@ -82,6 +87,13 @@ function toFeedback(
         station_id: stationId,
         station_title: stationTitle ?? 'Station Feedback',
         clinical_learning_points: clinicalLearningPoints ?? null,
+        mark_scheme: markScheme
+            ? {
+                  data_gathering: markScheme.data_gathering ?? null,
+                  clinical_management: markScheme.clinical_management ?? null,
+                  relating_to_others: markScheme.relating_to_others ?? null,
+              }
+            : null,
     };
 }
 
@@ -137,12 +149,20 @@ export async function POST(request: NextRequest) {
                 // clinical_learning_points rides along so the report can show the
                 // same teaching notes as the public case page, instead of sending
                 // people off to find their case in another tab.
-                .select('station_id, transcript, stations(title, clinical_learning_points)')
+                .select(
+                    'station_id, transcript, stations(title, clinical_learning_points, data_gathering, clinical_management, relating_to_others)'
+                )
                 .eq('id', sessionId)
                 .single();
 
             const station = session?.stations as
-                | { title?: string; clinical_learning_points?: string | null }
+                | {
+                      title?: string;
+                      clinical_learning_points?: string | null;
+                      data_gathering?: string | null;
+                      clinical_management?: string | null;
+                      relating_to_others?: string | null;
+                  }
                 | null;
             return NextResponse.json({
                 status: 'ready',
@@ -151,7 +171,8 @@ export async function POST(request: NextRequest) {
                     existingResults as SessionResultRow,
                     session?.station_id as string | undefined,
                     station?.title,
-                    station?.clinical_learning_points
+                    station?.clinical_learning_points,
+                    station
                 ),
                 transcript: Array.isArray(session?.transcript) ? session.transcript : [],
             });

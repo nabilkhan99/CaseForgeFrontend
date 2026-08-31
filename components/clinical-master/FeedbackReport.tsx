@@ -28,6 +28,7 @@ import {
 } from '@/lib/clinical-master/types';
 import PassCelebration from '@/components/clinical-master/PassCelebration';
 import { LearningPointsDisplay } from '@/components/cases/LearningPoints';
+import { MarkSchemeDomains } from '@/components/cases/MarkScheme';
 import {
   TONE_BAR_CLASS,
   TONE_COLOUR,
@@ -602,6 +603,130 @@ function DomainTabs({
         />
       ))}
     </div>
+  );
+}
+
+type CaseNoteTab = 'learning' | 'markscheme';
+
+/**
+ * The case's own teaching material, tabbed.
+ *
+ * Both halves used to live only on the public case page, so trainees finished a
+ * consultation and then went hunting for the same case under /sca-cases to read
+ * them — the free cases and the AI stations are the same rows, so the notes were
+ * always attached to the case they had just sat. Rendered as one flat section
+ * this ran to several screens; tabs keep it to one.
+ *
+ * The learning points and the mark scheme render through the same components as
+ * the public case page, so the two surfaces cannot drift apart.
+ */
+function CaseNotes({ feedback }: { feedback: ConsultationFeedback }) {
+  const learning = feedback.clinical_learning_points ?? null;
+  const scheme = feedback.mark_scheme ?? null;
+  const hasScheme = Boolean(
+    scheme && (scheme.data_gathering || scheme.clinical_management || scheme.relating_to_others)
+  );
+
+  const tabs = useMemo(
+    () =>
+      [
+        ...(learning ? ([{ id: 'learning', label: 'Learning points' }] as const) : []),
+        ...(hasScheme ? ([{ id: 'markscheme', label: 'Mark scheme' }] as const) : []),
+      ] as { id: CaseNoteTab; label: string }[],
+    [learning, hasScheme]
+  );
+
+  const [active, setActive] = useState<CaseNoteTab>(learning ? 'learning' : 'markscheme');
+  const buttons = useRef<Partial<Record<CaseNoteTab, HTMLButtonElement | null>>>({});
+  const baseId = useId();
+  const tabIdFor = (id: CaseNoteTab) => `${baseId}-tab-${id}`;
+  const panelIdFor = (id: CaseNoteTab) => `${baseId}-panel-${id}`;
+
+  if (tabs.length === 0) return null;
+
+  function move(index: number, event: React.KeyboardEvent<HTMLButtonElement>) {
+    let next: number;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = (index + 1) % tabs.length;
+    else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp')
+      next = (index - 1 + tabs.length) % tabs.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = tabs.length - 1;
+    else return;
+
+    event.preventDefault();
+    const id = tabs[next].id;
+    setActive(id);
+    buttons.current[id]?.focus();
+  }
+
+  return (
+    <section>
+      <h2 className="text-[24px] font-semibold text-heading">The case itself</h2>
+      <p className="mt-1 max-w-[720px] text-[15px] leading-[1.65] text-stone-600">
+        The clinical ground this station covers, and the indicators it was marked
+        against — worth reading now, while the consultation is fresh.
+      </p>
+
+      <div role="tablist" aria-label="Case notes" className="mt-5 flex flex-wrap gap-2">
+        {tabs.map((tab, index) => {
+          const selected = active === tab.id;
+          return (
+            <button
+              key={tab.id}
+              id={tabIdFor(tab.id)}
+              role="tab"
+              type="button"
+              aria-selected={selected}
+              aria-controls={panelIdFor(tab.id)}
+              tabIndex={selected ? 0 : -1}
+              ref={(element) => {
+                buttons.current[tab.id] = element;
+              }}
+              onClick={() => setActive(tab.id)}
+              onKeyDown={(event) => move(index, event)}
+              className={`min-h-[44px] rounded-[10px] border px-4 py-2.5 text-[14px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 ${
+                selected
+                  ? 'border-primary/30 bg-primary/[0.07] text-heading'
+                  : 'border-hairline bg-surface-raised text-muted hover:text-body'
+              }`}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Both panels stay mounted so the checkbox state on the mark scheme
+          survives a trip to the learning points and back. */}
+      {learning && (
+        <div
+          id={panelIdFor('learning')}
+          role="tabpanel"
+          aria-labelledby={tabIdFor('learning')}
+          tabIndex={0}
+          hidden={active !== 'learning'}
+          className="mt-5 rounded-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+        >
+          <LearningPointsDisplay content={learning} />
+        </div>
+      )}
+      {hasScheme && scheme && (
+        <div
+          id={panelIdFor('markscheme')}
+          role="tabpanel"
+          aria-labelledby={tabIdFor('markscheme')}
+          tabIndex={0}
+          hidden={active !== 'markscheme'}
+          className="mt-5 rounded-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+        >
+          <MarkSchemeDomains
+            dataGathering={scheme.data_gathering}
+            clinicalManagement={scheme.clinical_management}
+            relatingToOthers={scheme.relating_to_others}
+          />
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -1643,26 +1768,12 @@ export default function FeedbackReport({
           </section>
         </Reveal>
 
-        {/* The teaching notes for the case they just sat, in the same numbered
-            colour-coded form as the public case page. Trainees were finishing a
-            consultation and then opening /sca-cases in another tab to read
-            exactly this, so it belongs here — after the marks, before the
-            evidence. Absent notes render their own empty state, so no guard
-            beyond "we were given the column" is needed. */}
-        {feedback.clinical_learning_points && (
-          <Reveal delay={REVEAL.learning} className="mt-12 md:mt-16">
-            <section>
-              <h2 className="text-[24px] font-semibold text-heading">Learning points</h2>
-              <p className="mt-1 text-[14px] text-muted">
-                The clinical ground this case covers — worth reading now, while the
-                consultation is fresh.
-              </p>
-              <div className="mt-5">
-                <LearningPointsDisplay content={feedback.clinical_learning_points} />
-              </div>
-            </section>
-          </Reveal>
-        )}
+        {/* The case's own teaching material, after the marks and before the
+            evidence. CaseNotes renders nothing when the station carries neither
+            half, so it needs no guard here. */}
+        <Reveal delay={REVEAL.learning} className="mt-12 md:mt-16">
+          <CaseNotes feedback={feedback} />
+        </Reveal>
 
         {transcript.length > 0 && (
           <TranscriptPanel

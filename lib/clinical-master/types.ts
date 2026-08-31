@@ -142,6 +142,16 @@ export interface ConsultationFeedback {
    * consultation rather than sending people to look the case up elsewhere.
    */
   clinical_learning_points?: string | null;
+  /**
+   * The RCGP indicators this consultation was judged against, per domain, as
+   * markdown tables. Shown beside the learning points so a candidate can read
+   * the actual criteria rather than inferring them from their score.
+   */
+  mark_scheme?: {
+    data_gathering: string | null;
+    clinical_management: string | null;
+    relating_to_others: string | null;
+  } | null;
 }
 
 /** Verdict band helpers shared by the feedback UI. */
