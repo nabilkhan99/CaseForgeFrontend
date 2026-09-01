@@ -113,7 +113,7 @@ export default function PortfolioToolClient() {
               the navbar above it, as in the design. The bar it replaced was
               edge-to-edge, which is why it sat outside this container. */}
           <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
-            <ReferralBanner />
+            <ReferralBanner placement="portfolio-authed" />
           </div>
           <main className="pt-8 pb-16 px-6">
             <div className="max-w-[900px] mx-auto space-y-8">
@@ -130,7 +130,7 @@ export default function PortfolioToolClient() {
       <LandingNavbar user={user} />
       <div className="pt-20">
         <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
-          <ReferralBanner />
+          <ReferralBanner placement="portfolio-anon" />
         </div>
         <div className="pt-8 max-w-7xl mx-auto space-y-8 px-4 sm:px-6 lg:px-8">
           {content}

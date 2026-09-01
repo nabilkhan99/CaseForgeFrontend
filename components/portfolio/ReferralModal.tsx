@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AnimatePresence, motion } from 'framer-motion';
+import { trackEvent } from '@/lib/analytics';
 import {
     DISCLOSURE,
     HOW_IT_WORKS,
@@ -95,8 +96,18 @@ export default function ReferralModal({ isOpen, onClose }: ReferralModalProps) {
                 const data = await res.json().catch(() => null);
                 if (!res.ok || !data?.referralUrl) {
                     setError(data?.error ?? 'Something went wrong. Please try again.');
+                    trackEvent('referral_link_failed', {
+                        reason: data?.error ?? `http_${res.status}`,
+                    });
                 } else {
                     setIssued(data as IssuedLink);
+                    // The email is the point: it identifies the sharer, so a
+                    // click on their code can be traced back to a person.
+                    trackEvent('referral_link_requested', {
+                        email: trimmed.toLowerCase(),
+                        existing: Boolean(data.existing),
+                        email_sent: Boolean(data.emailSent),
+                    });
                 }
             } catch {
                 setError('Could not reach us just then. Please try again.');
@@ -112,6 +123,9 @@ export default function ReferralModal({ isOpen, onClose }: ReferralModalProps) {
             await navigator.clipboard.writeText(issued.referralUrl);
             setCopied(true);
             window.setTimeout(() => setCopied(false), 2000);
+            // The closest signal to an actual share — they have the link in
+            // hand and are on their way to paste it somewhere.
+            trackEvent('referral_link_copied', {});
         } catch {
             // Clipboard blocked (insecure context, permissions): the link is on
             // screen and selectable, so there is nothing to recover from.

@@ -1,6 +1,8 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { ArrowRight } from 'lucide-react';
+import { trackEvent } from '@/lib/analytics';
 import { useReferralModal } from './ReferralModalProvider';
 import { COMPLETE_SHARER_REWARD, SPLIT_POT } from './referralCopy';
 
@@ -29,8 +31,22 @@ import { COMPLETE_SHARER_REWARD, SPLIT_POT } from './referralCopy';
  * tool, so it stays put when a review replaces the form — which is what the
  * strip's second instance used to be for.
  */
-export default function ReferralBanner() {
+/**
+ * `placement` distinguishes the two mount points (the signed-in tool shell and
+ * the anonymous one) so the funnel can tell which audience engages. Only one of
+ * them renders per page, so the view event never double-fires.
+ */
+export default function ReferralBanner({ placement = 'portfolio' }: { placement?: string }) {
   const { open } = useReferralModal();
+  const viewLogged = useRef(false);
+
+  // The banner is the first thing in the page shell, above the H1, so mounting
+  // and being seen are the same moment — no observer needed for an honest view.
+  useEffect(() => {
+    if (viewLogged.current) return;
+    viewLogged.current = true;
+    trackEvent('referral_banner_viewed', { placement });
+  }, [placement]);
 
   return (
     <div className="rounded-[1.75rem] bg-[#FDF9F1] px-4 py-3.5 shadow-[0_1px_2px_rgba(31,26,20,0.04)] sm:rounded-[2rem] sm:px-6 sm:py-4 lg:px-9 lg:py-6">
@@ -52,7 +68,10 @@ export default function ReferralBanner() {
             link: the details live in the modal this page already holds. */}
         <button
           type="button"
-          onClick={open}
+          onClick={() => {
+            trackEvent('referral_banner_clicked', { placement });
+            open();
+          }}
           className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 sm:px-5 sm:text-sm lg:gap-2.5 lg:rounded-2xl lg:px-8 lg:py-4 lg:text-xl"
         >
           How it works
