@@ -61,6 +61,7 @@ function daysUntilExamDate(value: string): number | null {
  */
 const REVEAL = {
   welcome: 0,
+  coachingDay: 0.06,
   onboarding: 0.06,
   quickStart: 0.12,
   intensity: 0.18,
@@ -447,6 +448,51 @@ function DashboardContent() {
           Settings → Plan, which already carries both alongside the billing
           controls; on the home page they were a fact restated every visit. The
           expiry prompts above stay — those are deadlines, not status. */}
+
+      {/* Coaching day.
+          The purchase receipt tells every Complete buyer their joining link
+          "will appear on your dashboard under Coaching day", and there was no
+          such place — a booked day existed only in Stripe metadata and the
+          confirmation email. This is that place. It is a deadline rather than
+          status, so it sits with the expiry prompts above rather than in
+          Settings, and it stays for the whole run-up: one line of type, and
+          the single most time-bound thing a Complete customer owns.
+
+          Complete with a date only. The not-yet-booked case is the picker,
+          which Settings already links to, and Self-Study has no coaching day
+          at all — telling them about one is the /thanks bug in a new place. */}
+      {(() => {
+        if (access?.plan !== 'complete' || !access.coachingDay) return null;
+        // Stored as YYYY-MM-DD, so read it in UTC or a BST evening shows the
+        // next day — the same reason the expiry dates above format in UTC.
+        const days = daysUntil(access.coachingDay);
+        if (days < 0) return null;
+        const when = new Date(access.coachingDay).toLocaleDateString('en-GB', {
+          timeZone: 'UTC',
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+        });
+        const countdown = days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `In ${days} days`;
+        return (
+          <Reveal
+            delay={REVEAL.coachingDay}
+            className="mb-10 tall:mb-14 border-y border-hairline py-6 tall:py-8"
+          >
+            <div className="text-[11px] font-semibold text-primary uppercase tracking-[0.1em] mb-3">
+              Coaching day
+            </div>
+            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+              <div className="text-[22px] font-semibold text-heading tracking-[-0.01em]">{when}</div>
+              <div className="text-[15px] text-primary font-medium">{countdown}</div>
+            </div>
+            <p className="mt-2 text-[13px] leading-relaxed text-muted">
+              09:00 to 17:00, online, in a class of six. Your joining link arrives by email a few
+              days beforehand and will appear here too.
+            </p>
+          </Reveal>
+        );
+      })()}
 
       {/* Getting started onboarding for new users */}
       {stats.completedStations === 0 && (
