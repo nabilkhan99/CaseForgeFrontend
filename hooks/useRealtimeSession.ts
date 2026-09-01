@@ -5,6 +5,7 @@ import { MicError, classifyMicError, type SessionErrorKind } from '@/lib/clinica
 import { TranscriptItem } from '@/lib/clinical-master/types';
 import { unreliableEchoCancellation } from '@/lib/clinical-master/echoCancellation';
 import { isIncompleteDoctorTurn } from '@/lib/clinical-master/doctorTurn';
+import { END_OF_TURN_SILENCE_MS } from '@/lib/clinical-master/realtimeSession';
 import {
     extensionForMimeType,
     startSessionRecorder,
@@ -50,9 +51,10 @@ const DT_WARMUP_MS = 1500;
 const DT_COUPLING_EMA = 0.05;
 /** Sustained voice frames (~250ms) before we open a doctor turn. */
 const DT_MIN_SPEECH_FRAMES = 5;
-/** Silence frames (~900ms) that close the doctor's turn — mirrors the old
- *  server-VAD silence_duration_ms. */
-const DT_END_SILENCE_FRAMES = 18;
+/** Silence frames that close the doctor's turn. Derived from the single
+ *  END_OF_TURN_SILENCE_MS so this path and server VAD cannot drift apart —
+ *  700ms / 50ms = 14 frames. */
+const DT_END_SILENCE_FRAMES = Math.round(END_OF_TURN_SILENCE_MS / DT_FRAME_MS);
 /**
  * Guard window after patient audio ends (natural stop OR barge-in). The
  * mic keeps hearing the echo tail for hundreds of ms (Safari output
@@ -104,14 +106,14 @@ const DT_COUPLING_MAX = 8;
  * noise averaged 0.0134 against a DT_MIC_FLOOR of 0.01, so quiet rooms are
  * intermittently "voiced". A logged session opened a turn at mic 0.0156 and its
  * silence run went 4 → 1 → 3 → 6, reset by spikes every time; it never reached
- * 18, so nothing was ever committed and the patient never spoke again for the
- * rest of the consultation.
+ * the commit threshold, so nothing was ever committed and the patient never
+ * spoke again for the rest of the consultation.
  *
  * A flat time cap would be wrong: a doctor explaining a management plan speaks
  * continuously for far longer than a few seconds, and cutting in on them would
  * trade one bug for another. The freeze has a signature a real turn does not —
  * lots of elapsed time, very little voice in it. Within a genuinely spoken turn
- * density is near 1 (a 900ms gap closes the turn anyway); the frozen turn was
+ * density is near 1 (a 700ms gap closes the turn anyway); the frozen turn was
  * mostly silence punctuated by blips.
  */
 const TURN_WATCHDOG_MS = 5000;
@@ -125,7 +127,7 @@ const TURN_VOICED_DENSITY_MIN = 0.35;
  * doctor mid-explanation at 0.77 voiced density. "Longer than any single
  * uninterrupted doctor utterance" was my assumption and it does not survive
  * contact with the management phase, where explaining a diagnosis and a plan
- * runs well past half a minute without a 900ms gap.
+ * runs well past half a minute without a 700ms gap.
  *
  * The freeze this whole watchdog exists for is caught by the density arm, which
  * needs only 5s. So the ceiling can be far out of the way of real speech: two
@@ -428,7 +430,7 @@ export function useRealtimeSession({
     /**
      * Committed doctor turns still waiting on a transcript before we decide
      * whether they earn a patient response. A COUNT, not a flag: commits are
-     * only ~1.15s apart (250ms speech + 900ms silence) while transcripts land
+     * only ~0.95s apart (250ms speech + 700ms silence) while transcripts land
      * 483–1771ms later, so "okay" and the real question that follows it can
      * both be in flight at once. Transcripts arrive in item order, so each one
      * resolves one pending commit.
@@ -1043,7 +1045,7 @@ export function useRealtimeSession({
      * calibrated echo prediction), and from that drive the whole turn
      * lifecycle — barge-in while the patient speaks, opening a doctor turn
      * in silence, and committing the turn + requesting the response after
-     * ~900ms of quiet. The server never decides anything, so the patient's
+     * ~700ms of quiet. The server never decides anything, so the patient's
      * echo can never become a phantom doctor turn.
      */
     const detectorTick = useCallback(() => {
@@ -1229,7 +1231,7 @@ export function useRealtimeSession({
                 silenceFramesRef.current += 1;
                 if (silenceFramesRef.current >= DT_END_SILENCE_FRAMES) {
                     // End of the doctor's turn — hand the audio to the model,
-                    // but not yet the instruction to reply. 900ms of quiet
+                    // but not yet the instruction to reply. 700ms of quiet
                     // cannot tell "I'm done" from "I'm thinking", and commit
                     // does not itself create a response, so the reply waits for
                     // the transcript (armRespondDecision → doctorTurn.ts).
@@ -1441,7 +1443,7 @@ export function useRealtimeSession({
      *
      * Speech is not streamed — it accumulates in a server-side buffer and is
      * only transcribed once the turn is COMMITTED, which normally happens after
-     * ~900ms of silence. Ending the consultation therefore used to discard the
+     * ~700ms of silence. Ending the consultation therefore used to discard the
      * sentence in progress outright: never committed, never transcribed, absent
      * from the transcript the marking engine reads. Measured across 108
      * consultations that ran to the timer, 69% lost 6s or more of candidate
@@ -1956,7 +1958,7 @@ export function useRealtimeSession({
                                         type: 'server_vad',
                                         threshold: 0.75,
                                         prefix_padding_ms: 300,
-                                        silence_duration_ms: 900,
+                                        silence_duration_ms: END_OF_TURN_SILENCE_MS,
                                         interrupt_response: false,
                                     },
                                 },
