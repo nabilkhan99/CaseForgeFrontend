@@ -2,13 +2,14 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import type { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 import { getStationIndex, type Station } from '@/lib/supabase/queries/station-library';
 import PageHeader from '@/components/ui/PageHeader';
 import { getDomainColor } from '@/lib/constants/domains';
 import StationBoard from '@/components/library/StationBoard';
+import StationRow from '@/components/library/StationRow';
 import { useLibraryFilters } from '@/components/library/useLibraryFilters';
 import { summariseDomains } from '@/lib/stations/librarySearch';
 import { useCohortAllowlist } from '@/hooks/useCohortAllowlist';
@@ -42,6 +43,7 @@ function StationLibraryContent() {
   // null for everyone without a trainer-pilot seat, and until the answer
   // arrives — so nobody watches their library flash as locked on load.
   const allowlist = useCohortAllowlist();
+  const shouldReduceMotion = useReducedMotion();
 
   useEffect(() => {
     const supabase = createClient();
@@ -98,6 +100,30 @@ function StationLibraryContent() {
         ? `${assignedPassed} of your ${allowlist.size} assigned cases passed`
         : `${passedTotal} of ${stations.length} passed across ${domains.length} topic areas`;
 
+  /**
+   * The cohort student's own cases, pulled to the top of the page.
+   *
+   * Without this the five assigned cases are five marks scattered across two
+   * hundred, and on a phone they are not even that: the board is hidden below
+   * `sm` (an 18px square cannot be a touch target), so the mobile roll-up shows
+   * twenty-eight topic names with nothing to say which of them a student may
+   * actually open. Finding their own work meant opening topics one at a time.
+   *
+   * Shown at every width rather than `sm:hidden`. It is not only a mobile
+   * workaround — "which five are mine" is the first question at any size, and
+   * the board below still does its own job of showing them in the context of
+   * the bank they are a slice of. One list, no media query, no second layout to
+   * keep in step.
+   *
+   * Empty for everyone else, so this renders nothing at all for a paying user —
+   * `allowlist` is null both for them and until the answer lands, which is the
+   * same null-until-known rule the locks follow.
+   */
+  const assigned = useMemo(
+    () => (allowlist ? stations.filter((station) => allowlist.has(station.id)) : []),
+    [stations, allowlist],
+  );
+
   return (
     <div>
       {/* The board's summary line, promoted to the subtitle: the board is now
@@ -109,6 +135,34 @@ function StationLibraryContent() {
         <LibrarySpinner />
       ) : (
         <>
+          {/* Cohort students only — see `assigned`. Rules rather than a card,
+              and the same StationRow the topic pages use, so a case reads
+              identically wherever it is met and keeps its attempt history. */}
+          {assigned.length > 0 && (
+            <motion.section
+              aria-labelledby="assigned-cases-heading"
+              className="mb-8 border-y border-hairline py-4"
+              initial={shouldReduceMotion ? false : { opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.2 }}
+            >
+              <h2
+                id="assigned-cases-heading"
+                className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted"
+              >
+                Your cases
+              </h2>
+              <div className="mt-1">
+                {assigned.map((station) => (
+                  // The domain is worth naming here in a way it is not on a
+                  // topic page: this list crosses topics, so without it five
+                  // rows arrive with no sense of what they cover.
+                  <StationRow key={station.id} station={station} showDomain />
+                ))}
+              </div>
+            </motion.section>
+          )}
+
           {/* The page, above `sm`. Its own chips carry the progress filter. */}
           <StationBoard
             stations={stations}
