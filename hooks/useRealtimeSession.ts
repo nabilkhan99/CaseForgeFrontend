@@ -968,6 +968,15 @@ export function useRealtimeSession({
      *
      * With the flag off the reducer stays in `idle` and returns no actions, so
      * every call here is an early return.
+     *
+     * THE INVARIANT THIS SIDE OWES THE REDUCER: every `turn-committed` is
+     * structurally preceded by its `doctor-resumed` equivalent — `speech_started`
+     * before `speech_stopped` on the server-VAD path, `turn-open` (or `BARGE-IN`)
+     * before `turn-commit` on the client detector. The reducer holds ONE
+     * speculation slot and treats a commit arriving in `sent` as a no-op because
+     * of it. Any future path that commits a turn without first signalling that
+     * the doctor resumed would silently violate that; see the header of
+     * speculativeReply.ts.
      */
     const dispatchSpeculativeRef = useRef<((event: SpeculativeEvent) => boolean) | null>(null);
 
@@ -1051,11 +1060,20 @@ export function useRealtimeSession({
         respondFallbackTimerRef.current = setTimeout(() => {
             respondFallbackTimerRef.current = null;
             if (pendingCommitsRef.current === 0 || endedRef.current) return;
-            // A speculative reply is already in flight for this turn — the
-            // patient is answering, the transcript just hasn't confirmed it
-            // yet. Firing here would be a second voice, which is the exact
-            // failure the whole respond gate exists to avoid. Unreachable with
-            // the flag off (the machine never leaves `idle`).
+            // A speculative reply is already in flight — the patient is
+            // answering, the transcript just hasn't confirmed it yet. Firing
+            // here would be a second voice, which is the exact failure the whole
+            // respond gate exists to avoid. Unreachable with the flag off (the
+            // machine never leaves `idle`).
+            //
+            // NB this reads GLOBAL machine state, not this timer's own turn:
+            // there is a single speculation slot, so `sent` means "some
+            // unverified reply is in flight", which is the right thing to
+            // suppress on regardless of which commit armed it. It is safe to
+            // return without re-arming because that in-flight reply resolves
+            // through the machine (transcript, `doctor-resumed`, or the
+            // correlated `response.done`), and each of those paths does the
+            // pending-commit bookkeeping this timer would otherwise do.
             if (speculativeStateRef.current.kind === 'sent') return;
             // Fail open, but never over the doctor. If they are mid-utterance
             // when this fires (a slow transcript on a long explanation), stay
@@ -1833,17 +1851,38 @@ export function useRealtimeSession({
                 case 'response.created': {
                     const responseId = (evt.response as { id?: string } | undefined)?.id;
                     activeResponseIdRef.current = responseId ? String(responseId) : null;
+                    // Name the response an unverified speculation created, so
+                    // its `response.done` can be told apart from that of an
+                    // earlier response we already cancelled.
+                    if (responseId) {
+                        dispatchSpeculative({
+                            type: 'response-created',
+                            responseId: String(responseId),
+                        });
+                    }
                     break;
                 }
                 case 'response.done': {
                     const responseId = (evt.response as { id?: string } | undefined)?.id;
                     if (responseId && responseId === activeResponseIdRef.current) {
                         activeResponseIdRef.current = null;
+                        // Nothing is in flight any more, verified or not.
+                        // Without this a transcript that never arrived would
+                        // leave the machine armed to cancel some later,
+                        // legitimate reply.
+                        //
+                        // Correlated on purpose, and INSIDE the id match: a
+                        // cancelled response still emits `response.done` later,
+                        // and an uncorrelated settle let response X's late done
+                        // stand down a live speculation Y — after which Y's
+                        // "withhold" transcript had nothing to cancel and the
+                        // wrong audio played out in full. The reducer checks the
+                        // id a second time against the one it latched.
+                        dispatchSpeculative({
+                            type: 'response-settled',
+                            responseId: String(responseId),
+                        });
                     }
-                    // Nothing is in flight any more, verified or not. Without
-                    // this a transcript that never arrived would leave the
-                    // machine armed to cancel some later, legitimate reply.
-                    dispatchSpeculative({ type: 'response-settled' });
                     break;
                 }
                 case 'response.output_item.added': {

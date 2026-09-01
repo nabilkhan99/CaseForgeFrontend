@@ -161,7 +161,7 @@ describe('speculative reply — timer fires first', () => {
         const { state, actions } = run([committed, elapsedClear]);
         expect(actionTypes(actions)).toEqual(['start-timer', 'log', 'send-create']);
         expect(logs(actions)).toEqual([['spec:sent', undefined]]);
-        expect(state).toEqual({ kind: 'sent', audioStarted: false });
+        expect(state).toEqual({ kind: 'sent', audioStarted: false, responseId: null });
     });
 
     it('is confirmed by a transcript that earns a reply, and sends nothing more', () => {
@@ -331,6 +331,99 @@ describe('speculative reply — guards at the moment the timer fires', () => {
     });
 });
 
+describe('speculative reply — response-id correlation', () => {
+    it('latches the id of the response the speculation created', () => {
+        const { state } = run([
+            committed,
+            elapsedClear,
+            { type: 'response-created', responseId: 'resp_A' },
+        ]);
+        expect(state).toEqual({ kind: 'sent', audioStarted: false, responseId: 'resp_A' });
+    });
+
+    it('ignores a later response-created rather than re-pointing', () => {
+        const { state } = run([
+            committed,
+            elapsedClear,
+            { type: 'response-created', responseId: 'resp_A' },
+            { type: 'response-created', responseId: 'resp_B' },
+        ]);
+        expect(state).toEqual({ kind: 'sent', audioStarted: false, responseId: 'resp_A' });
+    });
+
+    it('settled with a NON-MATCHING id is ignored while sent', () => {
+        const { state, actions } = run([
+            committed,
+            elapsedClear,
+            { type: 'response-created', responseId: 'resp_Y' },
+            { type: 'response-settled', responseId: 'resp_X' },
+        ]);
+        // Still armed to police resp_Y — the whole point.
+        expect(state).toEqual({ kind: 'sent', audioStarted: false, responseId: 'resp_Y' });
+        expect(actionTypes(actions)).not.toContain('release-pending');
+    });
+
+    it('the full regression: a cancelled X must not stand down a live Y', () => {
+        // X sent -> doctor resumes -> X cancelled -> follow-up turn commits ->
+        // Y sent -> X's LATE response.done arrives -> Y's transcript withholds.
+        // Y must still be cancelled.
+        const { state, actions } = run([
+            committed,
+            elapsedClear,
+            { type: 'response-created', responseId: 'resp_X' },
+            { type: 'doctor-resumed' },
+            committed,
+            elapsedClear,
+            { type: 'response-created', responseId: 'resp_Y' },
+            { type: 'response-settled', responseId: 'resp_X' },
+            { type: 'transcript', verdict: { reply: false, reason: 'incomplete' } },
+        ]);
+        expect(state).toEqual({ kind: 'idle' });
+        // Two cancels: X on the resume, Y on its own withholding transcript.
+        expect(actionTypes(actions).filter((t) => t === 'cancel-response')).toHaveLength(2);
+        expect(logs(actions).map(([e]) => e)).toEqual([
+            'spec:sent',
+            'spec:cancelled',
+            'spec:sent',
+            'spec:cancelled',
+        ]);
+        expect(logs(actions)[3]).toEqual([
+            'spec:cancelled',
+            { reason: 'incomplete', audioStarted: false },
+        ]);
+    });
+
+    it('a matching settle still stands the machine down', () => {
+        const { state } = run([
+            committed,
+            elapsedClear,
+            { type: 'response-created', responseId: 'resp_Y' },
+            { type: 'response-settled', responseId: 'resp_Y' },
+        ]);
+        expect(state).toEqual({ kind: 'idle' });
+    });
+
+    it('a null-id settle is ignored once an id has been latched', () => {
+        const { state } = run([
+            committed,
+            elapsedClear,
+            { type: 'response-created', responseId: 'resp_Y' },
+            { type: 'response-settled', responseId: null },
+        ]);
+        expect(state).toEqual({ kind: 'sent', audioStarted: false, responseId: 'resp_Y' });
+    });
+
+    it('response-created outside a speculation changes nothing', () => {
+        // The greeting, and every ordinary transcript-gated reply.
+        const result = reduceSpeculative(INITIAL_SPECULATIVE_STATE, {
+            type: 'response-created',
+            responseId: 'resp_greeting',
+        });
+        expect(result.next).toEqual({ kind: 'idle' });
+        expect(result.actions).toEqual([]);
+    });
+});
+
 describe('speculative reply — housekeeping', () => {
     it('re-arms on a second commit so the delay runs from the doctor’s last words', () => {
         const { state, actions } = run([committed, committed]);
@@ -341,11 +434,29 @@ describe('speculative reply — housekeeping', () => {
     it('does not arm a second speculation while one is in flight', () => {
         const { state, actions } = run([committed, elapsedClear, committed]);
         expect(actionTypes(actions)).toEqual(['start-timer', 'log', 'send-create']);
-        expect(state).toEqual({ kind: 'sent', audioStarted: false });
+        expect(state).toEqual({ kind: 'sent', audioStarted: false, responseId: null });
     });
 
     it('releases the pending state when the response finishes without a transcript', () => {
-        const { state } = run([committed, elapsedClear, { type: 'response-settled' }]);
+        const { state, actions } = run([
+            committed,
+            elapsedClear,
+            { type: 'response-created', responseId: 'resp_Y' },
+            { type: 'response-settled', responseId: 'resp_Y' },
+        ]);
+        expect(state).toEqual({ kind: 'idle' });
+        // No transcript ever did the bookkeeping, so the settle must.
+        expect(actionTypes(actions)).toContain('release-pending');
+    });
+
+    it('settles on an uncorrelated done only when no id was ever latched', () => {
+        // `response.created` never arrived, so there is nothing to compare
+        // against and the hook has already matched the live response.
+        const { state } = run([
+            committed,
+            elapsedClear,
+            { type: 'response-settled', responseId: 'resp_whatever' },
+        ]);
         expect(state).toEqual({ kind: 'idle' });
     });
 
@@ -363,7 +474,8 @@ describe('speculative reply — housekeeping', () => {
             elapsedClear,
             { type: 'doctor-resumed' },
             { type: 'audio-started' },
-            { type: 'response-settled' },
+            { type: 'response-settled', responseId: 'resp_1' },
+            { type: 'response-created', responseId: 'resp_1' },
             { type: 'transcript', verdict: { reply: true } },
         ];
         for (const event of noop) {
@@ -375,11 +487,11 @@ describe('speculative reply — housekeeping', () => {
     });
 
     it('never mutates the state it is handed', () => {
-        const state: SpeculativeState = { kind: 'sent', audioStarted: false };
+        const state: SpeculativeState = { kind: 'sent', audioStarted: false, responseId: 'r1' };
         const frozen = Object.freeze({ ...state });
         const result = reduceSpeculative(frozen, { type: 'audio-started' });
-        expect(frozen).toEqual({ kind: 'sent', audioStarted: false });
-        expect(result.next).toEqual({ kind: 'sent', audioStarted: true });
+        expect(frozen).toEqual({ kind: 'sent', audioStarted: false, responseId: 'r1' });
+        expect(result.next).toEqual({ kind: 'sent', audioStarted: true, responseId: 'r1' });
         expect(result.next).not.toBe(frozen);
     });
 });

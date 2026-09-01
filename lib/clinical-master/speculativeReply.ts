@@ -41,6 +41,22 @@
  * This module is pure. It owns no timers, sends no events and reads no refs —
  * the hook supplies the guards (`ended`, `doctorResumed`, `responseActive`) at
  * the instant they are needed and performs the actions it is handed back.
+ *
+ * INVARIANT THIS REDUCER RELIES ON, AND WHICH ONLY THE HOOK CAN KEEP:
+ * every commit path is structurally preceded by its doctor-resumed equivalent,
+ * because the doctor cannot commit a second turn without having started to
+ * speak again first —
+ *
+ *   server VAD path   : `speech_started`            precedes `speech_stopped`
+ *   client detector   : `turn-open` (or `BARGE-IN`) precedes `turn-commit`
+ *
+ * so `turn-committed` can never reach the `sent` state: the `doctor-resumed`
+ * that must come first has already returned it to `idle`. That is why `sent`
+ * treats a commit as a no-op instead of trying to queue a second speculation,
+ * and why a second pending commit can never coexist with an unverified reply.
+ * If a future change ever commits a turn WITHOUT a preceding resume signal
+ * (a new watchdog, a synthetic commit), that assumption breaks and this reducer
+ * needs a real queue rather than a single slot.
  */
 
 import { isIncompleteDoctorTurn } from './doctorTurn';
@@ -97,11 +113,15 @@ export function respondVerdict(
  * armed — a turn is committed and the breath is running.
  * sent  — a speculative `response.create` is in flight, unverified.
  *         `audioStarted` records whether the doctor could actually hear it.
+ *         `responseId` is the server's id for it, latched from `response.created`
+ *         and null until that arrives. It exists so a LATE `response.done` for
+ *         some earlier, already-cancelled response cannot be mistaken for this
+ *         one settling — see the `response-settled` branch.
  */
 export type SpeculativeState =
     | { kind: 'idle' }
     | { kind: 'armed' }
-    | { kind: 'sent'; audioStarted: boolean };
+    | { kind: 'sent'; audioStarted: boolean; responseId: string | null };
 
 export const INITIAL_SPECULATIVE_STATE: SpeculativeState = { kind: 'idle' };
 
@@ -116,12 +136,16 @@ export type SpeculativeEvent =
     | { type: 'doctor-resumed' }
     /** `output_audio_buffer.started` — the patient became audible. */
     | { type: 'audio-started' }
+    /** `response.created` — the server has named the response we just asked
+     *  for. Latched so the settle below can be correlated. */
+    | { type: 'response-created'; responseId: string }
     /** The transcript landed and the ordinary gate has ruled on it. */
     | { type: 'transcript'; verdict: RespondVerdict }
-    /** `response.done` — nothing is in flight any more, whatever happened to
-     *  the transcript. Without this a transcript that never arrives would leave
-     *  the machine armed to cancel some later, legitimate reply. */
-    | { type: 'response-settled' }
+    /** `response.done` for the response named by `responseId` — nothing is in
+     *  flight any more, whatever happened to the transcript. Without this a
+     *  transcript that never arrives would leave the machine armed to cancel
+     *  some later, legitimate reply. */
+    | { type: 'response-settled'; responseId: string | null }
     /** Teardown / end of consultation. */
     | { type: 'reset' };
 
@@ -189,7 +213,7 @@ function onDelayElapsed(
         };
     }
     return {
-        next: { kind: 'sent', audioStarted: false },
+        next: { kind: 'sent', audioStarted: false, responseId: null },
         actions: [{ type: 'log', event: 'spec:sent' }, { type: 'send-create' }],
         handled: false,
     };
@@ -277,7 +301,19 @@ export function reduceSpeculative(
         case 'sent':
             switch (event.type) {
                 case 'audio-started':
-                    return { next: { kind: 'sent', audioStarted: true }, ...NOTHING };
+                    return { next: { ...state, audioStarted: true }, ...NOTHING };
+                case 'response-created':
+                    // First create after entering `sent` is ours: nothing else
+                    // can be asking for a response while one is unverified (the
+                    // fallback timer stands down, and the transcript path is
+                    // short-circuited). Ignore any later one rather than
+                    // re-pointing at a response we did not send.
+                    return state.responseId === null
+                        ? {
+                              next: { ...state, responseId: event.responseId },
+                              ...NOTHING,
+                          }
+                        : { next: state, ...NOTHING };
                 case 'transcript':
                     return onVerifiedTranscript(state, event.verdict);
                 case 'doctor-resumed':
@@ -290,11 +326,33 @@ export function reduceSpeculative(
                     // barge-in needs audible playback to fire).
                     return cancel(state, 'doctor-resumed');
                 case 'response-settled':
-                    return { next: { kind: 'idle' }, ...NOTHING };
+                    // ONLY the response this speculation created may settle it.
+                    // Otherwise: speculative X is sent, the doctor resumes and X
+                    // is cancelled, the follow-up turn commits and speculative Y
+                    // is sent — and X's late `response.done` would stand Y down,
+                    // leaving Y with nothing to cancel it when its transcript
+                    // says "withhold". The wrong audio then plays out in full.
+                    // A null id means `response.created` never reached us, and
+                    // the hook has already matched this against the live
+                    // response, so accept it rather than strand the machine.
+                    if (state.responseId !== null && event.responseId !== state.responseId) {
+                        return { next: state, ...NOTHING };
+                    }
+                    // The response ran to completion and no transcript ever came
+                    // to do the bookkeeping, so release this turn's pending
+                    // commit here — otherwise the counter drifts up for the rest
+                    // of the consultation.
+                    return {
+                        next: { kind: 'idle' },
+                        actions: [{ type: 'release-pending' }],
+                        handled: false,
+                    };
                 default:
-                    // A second commit while one speculation is unverified. It
-                    // cannot happen without a `doctor-resumed` first, so there
-                    // is nothing to arm; leave the in-flight reply alone.
+                    // A second commit while one speculation is unverified —
+                    // unreachable while the hook keeps the precedes-invariant in
+                    // the file header, since the `doctor-resumed` that must come
+                    // first would already have left this state. Nothing to arm;
+                    // leave the in-flight reply alone.
                     return { next: state, ...NOTHING };
             }
     }
