@@ -455,12 +455,20 @@ function LoadingState({ compact = false }: { compact?: boolean }) {
       </div>
     );
   }
+  // The live status renders ABOVE the body skeletons. With it underneath, a
+  // phone stacked ~1,100px of grey blocks first and the entire first screen
+  // said nothing — the one page a candidate reaches straight after speaking
+  // for twelve minutes. The skeleton grid stays as a preview of the report,
+  // but the words come first at every width.
   return (
     <div className="min-h-[100dvh] bg-surface px-5 py-10">
       <div className="mx-auto max-w-[1120px]">
         <div className="animate-pulse">
           <div className="mb-8 h-5 w-48 rounded-full bg-stone-200/70" />
-          <div className="mb-4 h-12 w-full max-w-[560px] rounded-[10px] bg-stone-200/70" />
+          <div className="h-12 w-full max-w-[560px] rounded-[10px] bg-stone-200/70" />
+        </div>
+        <MarkingProgress />
+        <div className="mt-10 animate-pulse" aria-hidden="true">
           <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
             <div className="h-72 rounded-[10px] bg-white/70" />
             <div className="h-72 rounded-[10px] bg-white/70" />
@@ -471,7 +479,6 @@ function LoadingState({ compact = false }: { compact?: boolean }) {
             <div className="h-28 rounded-[10px] bg-white/70" />
           </div>
         </div>
-        <MarkingProgress />
       </div>
     </div>
   );
