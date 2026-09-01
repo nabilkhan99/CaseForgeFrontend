@@ -11,6 +11,7 @@ import { getDomainColor } from '@/lib/constants/domains';
 import StationBoard from '@/components/library/StationBoard';
 import { useLibraryFilters } from '@/components/library/useLibraryFilters';
 import { summariseDomains } from '@/lib/stations/librarySearch';
+import { useCohortAllowlist } from '@/hooks/useCohortAllowlist';
 
 function LibrarySpinner() {
   return (
@@ -37,6 +38,10 @@ function StationLibraryContent() {
   // this page with the redesign, but `?status=` is a link people already hold,
   // and the hook is what keeps it in the URL.
   const { filters, setStatus } = useLibraryFilters();
+
+  // null for everyone without a trainer-pilot seat, and until the answer
+  // arrives — so nobody watches their library flash as locked on load.
+  const allowlist = useCohortAllowlist();
 
   useEffect(() => {
     const supabase = createClient();
@@ -69,19 +74,36 @@ function StationLibraryContent() {
     [stations],
   );
 
+  /**
+   * A cohort student's progress is progress through their five cases, not
+   * through the bank. "2 of 200 passed" would be true and useless — it counts a
+   * denominator they were never given.
+   */
+  const assignedPassed = useMemo(
+    () =>
+      allowlist
+        ? stations.reduce(
+            (total, station) =>
+              total + (allowlist.has(station.id) && station.passed ? 1 : 0),
+            0,
+          )
+        : 0,
+    [stations, allowlist],
+  );
+
+  const subtitle =
+    stations.length === 0
+      ? 'No cases available yet'
+      : allowlist
+        ? `${assignedPassed} of your ${allowlist.size} assigned cases passed`
+        : `${passedTotal} of ${stations.length} passed across ${domains.length} topic areas`;
+
   return (
     <div>
       {/* The board's summary line, promoted to the subtitle: the board is now
           the page, and a count of cases and domains restated above it would be
           the same sentence with the progress taken out. */}
-      <PageHeader
-        title="Case Library"
-        subtitle={
-          stations.length > 0
-            ? `${passedTotal} of ${stations.length} passed across ${domains.length} topic areas`
-            : 'No cases available yet'
-        }
-      />
+      <PageHeader title="Case Library" subtitle={subtitle} />
 
       {loading ? (
         <LibrarySpinner />
@@ -92,6 +114,7 @@ function StationLibraryContent() {
             stations={stations}
             status={filters.status}
             onStatusChange={setStatus}
+            allowlist={allowlist}
           />
 
           {/* Mobile only. The board is hidden below `sm` because an 18px square

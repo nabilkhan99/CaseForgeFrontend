@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerEntitlement } from '@/lib/commerce/serverEntitlement';
+import { cohortAllowsStation } from '@/lib/commerce/cohortAccess';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { mintEphemeralKey, unreliableEchoCancellation } from '@/lib/clinical-master/realtimeToken';
 import { voiceForStation } from '@/lib/clinical-master/realtimeSession';
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest) {
   // Server-side auth + entitlement: this is the endpoint that spends Azure
   // realtime minutes, so a signed-in account without a live plan must not
   // reach it even though the middleware never sees an API call.
-  const { user, allowed, entitlement } = await getServerEntitlement();
+  const { user, allowed, entitlement, cohort, cohortOnly } = await getServerEntitlement();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -44,6 +45,17 @@ export async function POST(req: NextRequest) {
   const { sessionId, stationId } = await req.json();
   if (!sessionId || !stationId) {
     return NextResponse.json({ error: 'sessionId and stationId are required' }, { status: 400 });
+  }
+
+  // Checked here as well as in create-session, not instead of it: this is the
+  // endpoint that spends Azure realtime minutes, and a session row for a
+  // locked case could exist already (created before the cohort's allowlist was
+  // narrowed, or by a client that skipped straight here).
+  if (cohortOnly && cohort && !cohortAllowsStation(cohort, stationId)) {
+    return NextResponse.json(
+      { error: 'not_in_cohort', state: entitlement.state, cohort: true },
+      { status: 403 },
+    );
   }
 
   const admin = getSupabaseAdmin();

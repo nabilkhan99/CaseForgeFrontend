@@ -14,6 +14,7 @@ import DomainProgressStrip from '@/components/library/DomainProgressStrip';
 import StatusChips from '@/components/library/StatusChips';
 import StationRow from '@/components/library/StationRow';
 import { useLibraryFilters } from '@/components/library/useLibraryFilters';
+import { isStationLocked, useCohortAllowlist } from '@/hooks/useCohortAllowlist';
 import { shouldShowDifficulty } from '@/lib/stations/difficulty';
 import { matchesStatus } from '@/lib/stations/librarySearch';
 import { MAX_WEIGHTED_SCORE } from '@/lib/clinical-master/types';
@@ -47,6 +48,10 @@ function DomainDetailContent({ domainId }: { domainId: string }) {
   // holds at most twelve cases, all of them on screen — but `?status=` is a
   // link people already hold, and the hook is what keeps it in the URL.
   const { filters, setStatus } = useLibraryFilters();
+
+  // null for everyone without a trainer-pilot seat, and until the answer
+  // arrives — so nobody watches their library flash as locked on load.
+  const allowlist = useCohortAllowlist();
 
   useEffect(() => {
     const supabase = createClient();
@@ -196,7 +201,11 @@ function DomainDetailContent({ domainId }: { domainId: string }) {
                   animate={{ opacity: matches ? 1 : 0.32, y: 0 }}
                   transition={{ delay: Math.min(i, 12) * 0.04, duration: 0.25 }}
                 >
-                  <StationRow station={station} showDifficulty={showDifficulty} />
+                  <StationRow
+                    station={station}
+                    showDifficulty={showDifficulty}
+                    locked={isStationLocked(allowlist, station.id)}
+                  />
                 </motion.div>
               );
             })}

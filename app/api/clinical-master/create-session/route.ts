@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerEntitlement } from '@/lib/commerce/serverEntitlement';
+import { cohortAllowsStation } from '@/lib/commerce/cohortAccess';
 
 export async function POST(req: NextRequest) {
-  const { supabase, user, allowed, entitlement } = await getServerEntitlement();
+  const { supabase, user, allowed, entitlement, cohort, cohortOnly } =
+    await getServerEntitlement();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -23,6 +25,18 @@ export async function POST(req: NextRequest) {
 
   if (!sessionId || !stationId) {
     return NextResponse.json({ error: 'sessionId and stationId are required' }, { status: 400 });
+  }
+
+  // A trainer-pilot seat buys a named handful of cases, not the bank. The
+  // library greys the rest out and the brief page swaps Start for an upsell,
+  // but both are decoration — this is the check that actually holds, because
+  // the station id arrives in the request body and nothing before this point
+  // has looked at it.
+  if (cohortOnly && cohort && !cohortAllowsStation(cohort, stationId)) {
+    return NextResponse.json(
+      { error: 'not_in_cohort', state: entitlement.state, cohort: true },
+      { status: 403 },
+    );
   }
 
   // Check if session already exists (idempotent)

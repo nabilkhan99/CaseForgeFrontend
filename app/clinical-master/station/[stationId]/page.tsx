@@ -13,6 +13,8 @@ import PrimaryButton from '@/components/ui/PrimaryButton';
 import DomainTag from '@/components/ui/DomainTag';
 import ConsultationTimer from '@/components/clinical-master/ConsultationTimer';
 import AudioSetupNotice from '@/components/clinical-master/AudioSetupNotice';
+import LockGlyph from '@/components/ui/LockGlyph';
+import { isStationLocked, useCohortAllowlist } from '@/hooks/useCohortAllowlist';
 
 interface StationData {
   id: string;
@@ -36,6 +38,13 @@ function ReadingPhaseContent() {
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [readingComplete, setReadingComplete] = useState(false);
+
+  // A cohort student can reach any brief in the bank; only their five assigned
+  // cases can be started. Everything above the CTA renders exactly as it does
+  // for a paying customer — the brief is the sample, and cutting it down would
+  // leave nothing to want.
+  const allowlist = useCohortAllowlist();
+  const locked = isStationLocked(allowlist, stationId);
 
   useEffect(() => {
     async function fetchStation() {
@@ -156,7 +165,9 @@ function ReadingPhaseContent() {
           >
             &larr; Back to Library
           </Link>
-          <ConsultationTimer
+          {/* No clock on a case that cannot be sat: the reading window is the
+              exam's, and running it above an upsell is theatre. */}
+          {!locked && <ConsultationTimer
             durationSeconds={station.reading_duration_seconds}
             label="Reading time"
             autoStart={true}
@@ -165,7 +176,7 @@ function ReadingPhaseContent() {
             // and yanking the page to the button loses the reader's place. The
             // CTA's pulse is the whole nudge; nothing else happens at zero.
             onComplete={() => setReadingComplete(true)}
-          />
+          />}
           <span className="hidden sm:inline text-[12px] text-muted">{station.title}</span>
         </div>
       </div>
@@ -174,9 +185,11 @@ function ReadingPhaseContent() {
       <div className="max-w-[640px] mx-auto px-6 py-8">
         {/* The clock is already running when this page paints, and nothing on
             screen said what happens when it hits zero. Say it once, plainly. */}
-        <p className="mb-5 text-[13px] leading-[1.65] text-muted">
-          {Math.round(station.reading_duration_seconds / 60)} minutes&rsquo; reading, as in the exam &mdash; nothing happens at zero, begin when you&rsquo;re ready.
-        </p>
+        {!locked && (
+          <p className="mb-5 text-[13px] leading-[1.65] text-muted">
+            {Math.round(station.reading_duration_seconds / 60)} minutes&rsquo; reading, as in the exam &mdash; nothing happens at zero, begin when you&rsquo;re ready.
+          </p>
+        )}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -249,25 +262,46 @@ function ReadingPhaseContent() {
               </motion.div>
             )}
 
-            {/* Audio setup guidance */}
-            <AudioSetupNotice />
+            {/* Audio setup guidance. Pointless above a locked case — there is
+                no microphone to set up for a consultation that cannot start. */}
+            {!locked && <AudioSetupNotice />}
 
-            {/* CTA */}
+            {/* CTA — or, for a case outside the cohort's five, the upsell that
+                takes its place. Deliberately quiet: a line and a link, no
+                panel, no price, and nothing about scores or feedback. This is
+                the pre-consultation view a paying customer sees, minus the one
+                button, which is exactly as much as we owe someone who cannot
+                sit it. */}
             <div>
-              <motion.div
-                animate={readingComplete ? { boxShadow: ['0 0 0 0 rgba(180,83,9,0)', '0 0 0 8px rgba(180,83,9,0.15)', '0 0 0 0 rgba(180,83,9,0)'] } : {}}
-                transition={readingComplete ? { duration: 2, repeat: Infinity } : {}}
-                className="rounded-xl"
-              >
-                <PrimaryButton
-                  fullWidth
-                  size="lg"
-                  disabled={starting}
-                  onClick={handleStartConsultation}
+              {locked ? (
+                <div className="border-t border-hairline pt-5">
+                  <p className="flex items-center gap-1.5 text-[14px] font-medium text-heading">
+                    <LockGlyph label="Locked" className="opacity-50" />
+                    Included with the full library
+                  </p>
+                  <Link
+                    href="/pricing"
+                    className="mt-2 inline-flex min-h-[44px] items-center text-[13px] font-semibold text-primary hover:underline focus-visible-ring"
+                  >
+                    Unlock all 200 cases &rarr;
+                  </Link>
+                </div>
+              ) : (
+                <motion.div
+                  animate={readingComplete ? { boxShadow: ['0 0 0 0 rgba(180,83,9,0)', '0 0 0 8px rgba(180,83,9,0.15)', '0 0 0 0 rgba(180,83,9,0)'] } : {}}
+                  transition={readingComplete ? { duration: 2, repeat: Infinity } : {}}
+                  className="rounded-xl"
                 >
-                  {starting ? 'Starting...' : 'Begin Consultation →'}
-                </PrimaryButton>
-              </motion.div>
+                  <PrimaryButton
+                    fullWidth
+                    size="lg"
+                    disabled={starting}
+                    onClick={handleStartConsultation}
+                  >
+                    {starting ? 'Starting...' : 'Begin Consultation →'}
+                  </PrimaryButton>
+                </motion.div>
+              )}
             </div>
           </Container>
         </motion.div>

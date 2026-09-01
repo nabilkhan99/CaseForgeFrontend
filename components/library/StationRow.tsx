@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import LockGlyph from '@/components/ui/LockGlyph';
 import ScoreBadge from '@/components/ui/ScoreBadge';
 import VerdictPill from '@/components/ui/VerdictPill';
 import { MAX_WEIGHTED_SCORE } from '@/lib/clinical-master/types';
@@ -38,6 +39,11 @@ interface StationRowProps {
     showDifficulty?: boolean;
     /** True in flat search results, where the domain is no longer implied. */
     showDomain?: boolean;
+    /**
+     * Outside a cohort student's five assigned cases. Marks the row rather than
+     * disabling it — the brief page behind it is where the upsell lives.
+     */
+    locked?: boolean;
 }
 
 /**
@@ -54,6 +60,12 @@ interface StationRowProps {
  * so titles truncated to about three words and three consecutive cases all
  * read "Woman with…".
  *
+ * LOCKED ROWS STAY LINKS. A cohort student's library shows the whole bank with
+ * everything outside their five cases marked — the row still opens its brief,
+ * which is where the "unlock all 200" line sits. Greying it into a dead div
+ * would hide the product from the person we are trying to sell it to, which is
+ * the same reasoning the navbar's locked tabs are built on.
+ *
  * HISTORY IS OPEN BY DEFAULT.
  * The library is taking over from the History tab, so a case's attempts are
  * part of what the page is for rather than a detail behind a disclosure — a
@@ -61,7 +73,7 @@ interface StationRowProps {
  * History tab's job by hand. The chevron still collapses a row, and cases with
  * no attempts have nothing to open and render no control at all.
  */
-export default function StationRow({ station, showDifficulty = false, showDomain = false }: StationRowProps) {
+export default function StationRow({ station, showDifficulty = false, showDomain = false, locked = false }: StationRowProps) {
     const [expanded, setExpanded] = useState(true);
     const hasAttempts = station.attempts.length > 0;
     const latestAttempt = hasAttempts ? station.attempts[0] : null;
@@ -80,6 +92,7 @@ export default function StationRow({ station, showDifficulty = false, showDomain
                 >
                     <div className="line-clamp-2 text-[15px] font-semibold leading-snug text-heading transition-colors group-hover:text-primary">
                         {station.title}
+                        {locked && <LockGlyph label="Not in your assigned cases" />}
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-muted">
                         <span>{station.patient_name}</span>
@@ -140,13 +153,18 @@ export default function StationRow({ station, showDifficulty = false, showDomain
                         <span className="hidden text-[12px] text-muted sm:inline">Not started</span>
                     )}
 
+                    {/* Muted and reading "Locked" rather than a primary-coloured
+                        "Start" that goes to a page with no Start on it. Still the
+                        same link: what is behind it is the upsell, not a refusal. */}
                     <Link
                         href={stationHref}
                         tabIndex={-1}
                         aria-hidden="true"
-                        className="hidden text-[12px] font-semibold text-primary hover:underline sm:inline"
+                        className={`hidden text-[12px] font-semibold hover:underline sm:inline ${
+                            locked ? 'text-muted' : 'text-primary'
+                        }`}
                     >
-                        {hasAttempts ? 'Try again' : 'Start'}
+                        {locked ? 'Locked' : hasAttempts ? 'Try again' : 'Start'}
                     </Link>
 
                     {/* Phones get a chevron instead of the "Start" label: the whole row

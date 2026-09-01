@@ -6,28 +6,23 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import LockGlyph from '@/components/ui/LockGlyph';
 
+/**
+ * `trainerOnly` tabs are absent for everyone else — unlike `lockable` ones,
+ * which stay visible behind a lock. The difference is whether the tab is
+ * something you could buy: Lectures is an upsell, a cohort of students is not,
+ * and showing "Students" to a trainee would advertise a thing that does not
+ * exist for them.
+ */
 const NAV_LINKS = [
   { label: 'Home', href: '/dashboard', exact: true },
   { label: 'Library', href: '/dashboard/library' },
   { label: 'Lectures', href: '/dashboard/lectures', lockable: true },
   { label: 'Development', href: '/dashboard/development' },
+  { label: 'Students', href: '/dashboard/students', trainerOnly: true },
   { label: 'Portfolio', href: '/portfolio' },
 ];
-
-/**
- * Quiet marker for a tab the plan doesn't include. The tab stays — hiding it
- * means a self-study trainee never learns the course exists; disabling it
- * reads as broken. The page behind it carries the upsell.
- */
-function LockGlyph() {
-  return (
-    <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-label="Included with Complete" className="ml-1 opacity-40 inline-block align-[-1px]">
-      <rect x="2.5" y="5.5" width="7" height="5" rx="1.2" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M4 5.5V4a2 2 0 1 1 4 0v1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  );
-}
 
 export default function AppNavbar() {
   const pathname = usePathname();
@@ -35,13 +30,18 @@ export default function AppNavbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   // null until known — never flash a lock at a Complete customer.
   const [hasLectures, setHasLectures] = useState<boolean | null>(null);
+  // Same null-until-known rule, opposite default: a tab that appears a beat
+  // late is a smaller wrong than one that appears for everybody and vanishes.
+  const [isTrainer, setIsTrainer] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     fetch('/api/subscription')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (!cancelled && data && typeof data.hasLectures === 'boolean') setHasLectures(data.hasLectures);
+        if (cancelled || !data) return;
+        if (typeof data.hasLectures === 'boolean') setHasLectures(data.hasLectures);
+        if (typeof data.isTrainer === 'boolean') setIsTrainer(data.isTrainer);
       })
       .catch(() => {});
     return () => {
@@ -49,6 +49,7 @@ export default function AppNavbar() {
     };
   }, []);
   const showLock = (link: { lockable?: boolean }) => Boolean(link.lockable) && hasLectures === false;
+  const visibleLinks = NAV_LINKS.filter((link) => !link.trainerOnly || isTrainer === true);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const { scrollYProgress } = useScroll();
 
@@ -167,7 +168,7 @@ export default function AppNavbar() {
 
         {/* Desktop nav links */}
         <div className="hidden md:flex items-center gap-1">
-          {NAV_LINKS.map((link) => (
+          {visibleLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}
@@ -178,7 +179,7 @@ export default function AppNavbar() {
               }`}
             >
               {link.label}
-              {showLock(link) && <LockGlyph />}
+              {showLock(link) && <LockGlyph label="Included with Complete" />}
             </Link>
           ))}
         </div>
@@ -283,7 +284,7 @@ export default function AppNavbar() {
             className="absolute top-14 left-0 right-0 mx-4 z-50 rounded-2xl p-4 flex flex-col gap-1 border border-hairline shadow-elevation-3 backdrop-blur-2xl"
             style={{ maxWidth: 'min(92%, 1200px)', margin: '0 auto', background: 'rgba(255,252,248,0.97)' }}
           >
-            {NAV_LINKS.map((link) => (
+            {visibleLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
@@ -295,7 +296,7 @@ export default function AppNavbar() {
                 }`}
               >
                 {link.label}
-                {showLock(link) && <LockGlyph />}
+                {showLock(link) && <LockGlyph label="Included with Complete" />}
               </Link>
             ))}
             <div className="my-1 border-t border-hairline" />

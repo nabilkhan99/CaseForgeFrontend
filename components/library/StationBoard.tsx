@@ -5,6 +5,7 @@ import { useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import Tooltip from '@/components/ui/Tooltip';
 import StatusChips from '@/components/library/StatusChips';
+import { isStationLocked } from '@/hooks/useCohortAllowlist';
 import {
     groupStationsByDomain,
     matchesStatus,
@@ -42,12 +43,32 @@ const NOT_STARTED_SELECTED_FILL = 'rgba(28,25,23,0.26)';
 /** Enough to push a square behind its neighbours without erasing it. */
 const DIMMED_OPACITY = 0.13;
 
+/**
+ * A case a cohort student was not assigned.
+ *
+ * Its own fill rather than the filter's opacity, because the two mean different
+ * things and can be true at once: dimming says "not what you asked to see",
+ * this says "not yours to open". A hollow square — the board's own outline
+ * weight, no fill — reads as an absence next to the solid greys, and keeps the
+ * five assigned cases the only marks with any weight in a row.
+ */
+const LOCKED_SQUARE = {
+    fill: 'transparent',
+    border: '1px dashed rgba(28,25,23,0.16)',
+} as const;
+
 interface StationBoardProps {
     /** The whole bank. Grouped here; no second fetch. */
     stations: Station[];
     /** The progress filter, owned by the page so `?status=` survives a reload. */
     status: LibraryStatus;
     onStatusChange: (value: LibraryStatus) => void;
+    /**
+     * A cohort student's assigned cases; null for everyone else and until the
+     * answer lands. Squares outside it draw as locked — still links, because
+     * their brief pages carry the upsell.
+     */
+    allowlist?: Set<string> | null;
 }
 
 /**
@@ -91,7 +112,12 @@ interface StationBoardProps {
  * accessible name, and the tooltip opens on focus as well as hover, so arrowing
  * across a row reads out the case titles.
  */
-export default function StationBoard({ stations, status, onStatusChange }: StationBoardProps) {
+export default function StationBoard({
+    stations,
+    status,
+    onStatusChange,
+    allowlist = null,
+}: StationBoardProps) {
     const rows = useMemo(() => groupStationsByDomain(stations), [stations]);
     const shouldReduceMotion = useReducedMotion();
 
@@ -184,7 +210,12 @@ export default function StationBoard({ stations, status, onStatusChange }: Stati
                         // nothing else. The tooltip stays the title alone, so
                         // focus reads "…, passed" then repeats the title rather
                         // than the whole sentence twice.
-                        const label = `${station.title} — ${square.label}`;
+                        const locked = isStationLocked(allowlist, station.id);
+                        // "locked" replaces the progress word rather than
+                        // joining it: a case you cannot open has no meaningful
+                        // progress to report, and "not started, locked" invites
+                        // the reader to wonder which one the colour means.
+                        const label = `${station.title} — ${locked ? 'locked' : square.label}`;
                         const isActive = rowIndex === activeRow && colIndex === activeCol;
 
                         return (
@@ -202,9 +233,12 @@ export default function StationBoard({ stations, status, onStatusChange }: Stati
                                     aria-label={label}
                                     className="block h-[18px] w-[18px] rounded-[4px] hover:scale-125 focus-visible-ring"
                                     style={{
-                                        backgroundColor: selectedNotStarted
-                                            ? NOT_STARTED_SELECTED_FILL
-                                            : square.fill,
+                                        backgroundColor: locked
+                                            ? LOCKED_SQUARE.fill
+                                            : selectedNotStarted
+                                              ? NOT_STARTED_SELECTED_FILL
+                                              : square.fill,
+                                        border: locked ? LOCKED_SQUARE.border : undefined,
                                         opacity: matches ? 1 : DIMMED_OPACITY,
                                         transition:
                                             'opacity 250ms ease, background-color 250ms ease, transform 100ms ease',
