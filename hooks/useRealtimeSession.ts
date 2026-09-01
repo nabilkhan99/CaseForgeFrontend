@@ -4,8 +4,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { MicError, classifyMicError, type SessionErrorKind } from '@/lib/clinical-master/micErrors';
 import { TranscriptItem } from '@/lib/clinical-master/types';
 import { unreliableEchoCancellation } from '@/lib/clinical-master/echoCancellation';
-import { isIncompleteDoctorTurn } from '@/lib/clinical-master/doctorTurn';
 import { END_OF_TURN_SILENCE_MS } from '@/lib/clinical-master/realtimeSession';
+import {
+    INITIAL_SPECULATIVE_STATE,
+    parseSpeculativeDelayMs,
+    reduceSpeculative,
+    respondVerdict,
+    type SpeculativeEvent,
+    type SpeculativeState,
+} from '@/lib/clinical-master/speculativeReply';
 import {
     extensionForMimeType,
     startSessionRecorder,
@@ -159,6 +166,23 @@ const FINAL_TURN_WAIT_MS = 3000;
  * answered — the old behaviour, not a new failure.
  */
 const RESPOND_FALLBACK_MS = 1500;
+
+/**
+ * Speculative reply: how long after a committed turn the patient starts
+ * answering WITHOUT waiting for the transcript. See speculativeReply.ts for the
+ * whole argument; in one line, the transcript costs 0.55s median on every turn
+ * and only ~5% of turns need it, so guess after a short breath and cancel the
+ * guess if the transcript disagrees.
+ *
+ * Read once, at module load. `NEXT_PUBLIC_VOICE_SPECULATIVE_MS` is inlined by
+ * Next at build time, so this is a constant in the bundle: unset -> 400ms,
+ * `0` -> speculation OFF and the transcript gate behaves exactly as it did
+ * before (the state machine never leaves `idle` and emits no action).
+ */
+const SPECULATIVE_REPLY_DELAY_MS = parseSpeculativeDelayMs(
+    process.env.NEXT_PUBLIC_VOICE_SPECULATIVE_MS
+);
+const SPECULATION_ENABLED = SPECULATIVE_REPLY_DELAY_MS > 0;
 
 /**
  * Frames of a hard-zero mic reading before the tap is presumed dead and rebuilt.
@@ -442,6 +466,9 @@ export function useRealtimeSession({
      */
     const finalTurnResolveRef = useRef<(() => void) | null>(null);
     const respondFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    /** Speculative-reply machine (speculativeReply.ts) and its breath timer. */
+    const speculativeStateRef = useRef<SpeculativeState>(INITIAL_SPECULATIVE_STATE);
+    const speculativeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     // --- voice flight recorder ---
     // The event ring ALWAYS records; ?voicedebug=1 only adds the on-page
     // overlay. The ring uploads to /api/clinical-master/voice-log on a 60s
@@ -937,6 +964,91 @@ export function useRealtimeSession({
     }, []);
 
     /**
+     * Run one speculative-reply transition and perform whatever it asks for.
+     *
+     * All the decisions live in the pure reducer; this is only the hands. It
+     * returns the reducer's `handled` flag — true when a transcript resolved an
+     * in-flight speculative reply, in which case the ordinary respond path must
+     * not also fire.
+     *
+     * With the flag off the reducer stays in `idle` and returns no actions, so
+     * every call here is an early return.
+     *
+     * THE INVARIANT THIS SIDE OWES THE REDUCER: every `turn-committed` is
+     * structurally preceded by its `doctor-resumed` equivalent — `speech_started`
+     * before `speech_stopped` on the server-VAD path, `turn-open` (or `BARGE-IN`)
+     * before `turn-commit` on the client detector. The reducer holds ONE
+     * speculation slot and treats a commit arriving in `sent` as a no-op because
+     * of it. Any future path that commits a turn without first signalling that
+     * the doctor resumed would silently violate that; see the header of
+     * speculativeReply.ts.
+     */
+    const dispatchSpeculativeRef = useRef<((event: SpeculativeEvent) => boolean) | null>(null);
+
+    const dispatchSpeculative = useCallback(
+        (event: SpeculativeEvent): boolean => {
+            const { next, actions, handled } = reduceSpeculative(
+                speculativeStateRef.current,
+                event
+            );
+            speculativeStateRef.current = next;
+            for (const action of actions) {
+                switch (action.type) {
+                    case 'start-timer':
+                        speculativeTimerRef.current = setTimeout(() => {
+                            speculativeTimerRef.current = null;
+                            // Guards are sampled HERE, not when the timer was
+                            // set: the whole point is what is true after the
+                            // breath, not before it.
+                            dispatchSpeculativeRef.current?.({
+                                type: 'delay-elapsed',
+                                ended: endedRef.current,
+                                doctorResumed:
+                                    turnOpenRef.current || doctorSpeakingRef.current,
+                                responseActive: activeResponseIdRef.current !== null,
+                            });
+                        }, SPECULATIVE_REPLY_DELAY_MS);
+                        break;
+                    case 'clear-timer':
+                        if (speculativeTimerRef.current) {
+                            clearTimeout(speculativeTimerRef.current);
+                            speculativeTimerRef.current = null;
+                        }
+                        break;
+                    case 'send-create':
+                        sendEvent({ type: 'response.create' });
+                        break;
+                    case 'cancel-response':
+                        // The existing barge-in plumbing: response.cancel +
+                        // conversation.item.truncate (so the model's context
+                        // matches what was actually heard) + output buffer
+                        // flush. Benign when nothing is in flight — those
+                        // errors are already filtered in handleServerEvent.
+                        interruptPatient();
+                        break;
+                    case 'clear-pending':
+                        pendingCommitsRef.current = 0;
+                        clearRespondTimers();
+                        break;
+                    case 'release-pending':
+                        pendingCommitsRef.current = Math.max(
+                            0,
+                            pendingCommitsRef.current - 1
+                        );
+                        if (pendingCommitsRef.current === 0) clearRespondTimers();
+                        break;
+                    case 'log':
+                        logDebug(action.event, action.data);
+                        break;
+                }
+            }
+            return handled;
+        },
+        [sendEvent, logDebug, clearRespondTimers, interruptPatient]
+    );
+    dispatchSpeculativeRef.current = dispatchSpeculative;
+
+    /**
      * A doctor turn has just been committed. Hold the response request until we
      * know what was in it, with a fail-open timer so a missing transcript can
      * never leave the patient mute.
@@ -953,6 +1065,21 @@ export function useRealtimeSession({
         respondFallbackTimerRef.current = setTimeout(() => {
             respondFallbackTimerRef.current = null;
             if (pendingCommitsRef.current === 0 || endedRef.current) return;
+            // A speculative reply is already in flight — the patient is
+            // answering, the transcript just hasn't confirmed it yet. Firing
+            // here would be a second voice, which is the exact failure the whole
+            // respond gate exists to avoid. Unreachable with the flag off (the
+            // machine never leaves `idle`).
+            //
+            // NB this reads GLOBAL machine state, not this timer's own turn:
+            // there is a single speculation slot, so `sent` means "some
+            // unverified reply is in flight", which is the right thing to
+            // suppress on regardless of which commit armed it. It is safe to
+            // return without re-arming because that in-flight reply resolves
+            // through the machine (transcript, `doctor-resumed`, or the
+            // correlated `response.done`), and each of those paths does the
+            // pending-commit bookkeeping this timer would otherwise do.
+            if (speculativeStateRef.current.kind === 'sent') return;
             // Fail open, but never over the doctor. If they are mid-utterance
             // when this fires (a slow transcript on a long explanation), stay
             // out of the way — they are still talking, so another commit is
@@ -984,12 +1111,26 @@ export function useRealtimeSession({
      */
     const resolveRespondDecision = useCallback(
         (said: string, dropped: boolean) => {
+            // The gate itself, lifted into speculativeReply.ts so this path and
+            // the speculative one can never disagree about the same turn. Every
+            // input is read in one instant, in the original order.
+            const verdict = respondVerdict(said, dropped, {
+                ended: endedRef.current,
+                doctorResumed: turnOpenRef.current || doctorSpeakingRef.current,
+            });
+
+            // A speculative reply may already be in flight for this turn. If so
+            // it is confirmed or cancelled here and there is nothing left for
+            // the ordinary path to do — including its pendingCommits
+            // bookkeeping, which the machine performs instead.
+            if (dispatchSpeculative({ type: 'transcript', verdict })) return;
+
             // The consultation is over. A transcript can still arrive after the
             // buzzer — captureFinalTurn holds the transport open precisely so
             // that it does — and answering it would have the patient speak
             // after time was called. The fallback timer already checked this;
             // this path did not, and the grace window is what made it reachable.
-            if (endedRef.current) {
+            if (verdict.reply === false && verdict.reason === 'ended') {
                 logDebug('respond:withheld', { said, reason: 'ended' });
                 return;
             }
@@ -1007,13 +1148,13 @@ export function useRealtimeSession({
             //
             // Nothing is lost: the item stays in the conversation and the
             // model sees it when their next turn commits.
-            if (turnOpenRef.current || doctorSpeakingRef.current) {
+            if (verdict.reply === false && verdict.reason === 'doctor-resumed') {
                 logDebug('respond:withheld', { said, reason: 'doctor-resumed' });
                 clearRespondTimers();
                 return;
             }
 
-            if (!dropped && !isIncompleteDoctorTurn(said)) {
+            if (verdict.reply) {
                 pendingCommitsRef.current = 0;
                 clearRespondTimers();
                 // If a response is already in flight the server produced one on
@@ -1036,7 +1177,7 @@ export function useRealtimeSession({
             // not. Every path out of here now waits for the doctor.
             clearRespondTimers();
         },
-        [clearRespondTimers, logDebug, sendEvent]
+        [clearRespondTimers, logDebug, sendEvent, dispatchSpeculative]
     );
 
     /**
@@ -1214,12 +1355,22 @@ export function useRealtimeSession({
                 });
                 interruptPatient();
                 sendEvent({ type: 'input_audio_buffer.clear' });
+                // Whatever we just silenced may have been an unverified
+                // speculative reply — record the clash and stand the machine
+                // down. interruptPatient has already done the cancelling.
+                dispatchSpeculative({ type: 'doctor-resumed' });
             } else if (
                 !speakingRef.current &&
                 !turnOpenRef.current &&
                 doubleTalkFramesRef.current >= DT_MIN_SPEECH_FRAMES
             ) {
                 turnOpenRef.current = true;
+                // The doctor is talking again. On this path barge-in only fires
+                // over AUDIBLE patient speech, so a speculative reply that has
+                // been requested but has not yet made a sound would otherwise
+                // arrive on top of the doctor — this is the only thing that
+                // cancels it.
+                dispatchSpeculative({ type: 'doctor-resumed' });
                 turnOpenedAtRef.current = now;
                 turnVoicedFramesRef.current = doubleTalkFramesRef.current;
                 logDebug('turn-open', { mic: micRms });
@@ -1240,6 +1391,10 @@ export function useRealtimeSession({
                     logDebug('turn-commit');
                     sendEvent({ type: 'input_audio_buffer.commit' });
                     armRespondDecision();
+                    dispatchSpeculative({
+                        type: 'turn-committed',
+                        enabled: SPECULATION_ENABLED,
+                    });
                 }
             }
         }
@@ -1264,6 +1419,12 @@ export function useRealtimeSession({
                 });
                 sendEvent({ type: 'input_audio_buffer.commit' });
                 armRespondDecision();
+                // Deliberately NOT speculative. The density arm of this
+                // watchdog fires on a turn that was mostly room noise, and the
+                // whole reason it is safe to force the commit is that such a
+                // turn transcribes to nothing and the patient stays quiet.
+                // Guessing here would spend that guarantee on the one path
+                // where the transcript is most likely to say "withhold".
             }
         }
     }, [
@@ -1274,6 +1435,7 @@ export function useRealtimeSession({
         attachPatientAnalyser,
         attachMicAnalyser,
         armRespondDecision,
+        dispatchSpeculative,
     ]);
 
     /** Arm the double-talk detector (unreliable-AEC browsers only). Called
@@ -1407,6 +1569,11 @@ export function useRealtimeSession({
         }
         pendingCommitsRef.current = 0;
         clearRespondTimers();
+        if (speculativeTimerRef.current) {
+            clearTimeout(speculativeTimerRef.current);
+            speculativeTimerRef.current = null;
+        }
+        speculativeStateRef.current = INITIAL_SPECULATIVE_STATE;
         if (audioCtxRef.current) {
             void audioCtxRef.current.close().catch(() => {
                 /* already closed */
@@ -1589,6 +1756,12 @@ export function useRealtimeSession({
             switch (evt.type) {
                 case 'input_audio_buffer.speech_started': {
                     doctorSpeakingRef.current = true;
+                    // The doctor is talking again. If a speculative reply was
+                    // pending it is abandoned; if one was already in flight it
+                    // is cancelled. On this path the server's own
+                    // `interrupt_response` (default true) has very likely
+                    // cancelled it first — the duplicate is a no-op.
+                    dispatchSpeculative({ type: 'doctor-resumed' });
                     const id = String(evt.item_id ?? '');
                     if (id) {
                         vadRef.current[id] = {
@@ -1603,6 +1776,10 @@ export function useRealtimeSession({
                     // Reliable-AEC path: the server has committed the buffer but
                     // create_response is false, so the reply is ours to decide.
                     armRespondDecision();
+                    dispatchSpeculative({
+                        type: 'turn-committed',
+                        enabled: SPECULATION_ENABLED,
+                    });
                     const id = String(evt.item_id ?? '');
                     if (id) {
                         vadRef.current[id] = {
@@ -1679,12 +1856,37 @@ export function useRealtimeSession({
                 case 'response.created': {
                     const responseId = (evt.response as { id?: string } | undefined)?.id;
                     activeResponseIdRef.current = responseId ? String(responseId) : null;
+                    // Name the response an unverified speculation created, so
+                    // its `response.done` can be told apart from that of an
+                    // earlier response we already cancelled.
+                    if (responseId) {
+                        dispatchSpeculative({
+                            type: 'response-created',
+                            responseId: String(responseId),
+                        });
+                    }
                     break;
                 }
                 case 'response.done': {
                     const responseId = (evt.response as { id?: string } | undefined)?.id;
                     if (responseId && responseId === activeResponseIdRef.current) {
                         activeResponseIdRef.current = null;
+                        // Nothing is in flight any more, verified or not.
+                        // Without this a transcript that never arrived would
+                        // leave the machine armed to cancel some later,
+                        // legitimate reply.
+                        //
+                        // Correlated on purpose, and INSIDE the id match: a
+                        // cancelled response still emits `response.done` later,
+                        // and an uncorrelated settle let response X's late done
+                        // stand down a live speculation Y — after which Y's
+                        // "withhold" transcript had nothing to cancel and the
+                        // wrong audio played out in full. The reducer checks the
+                        // id a second time against the one it latched.
+                        dispatchSpeculative({
+                            type: 'response-settled',
+                            responseId: String(responseId),
+                        });
                     }
                     break;
                 }
@@ -1718,6 +1920,11 @@ export function useRealtimeSession({
                     // letting a stale timer fire a second response.
                     pendingCommitsRef.current = 0;
                     clearRespondTimers();
+                    // If this is an unverified speculative reply, the doctor can
+                    // now hear it — so a later cancel is an audible clash rather
+                    // than a silent one. `spec:cancelled.audioStarted` is how
+                    // that is counted.
+                    dispatchSpeculative({ type: 'audio-started' });
                     setIsSpeaking(true);
                     break;
                 case 'output_audio_buffer.stopped':
@@ -1783,6 +1990,7 @@ export function useRealtimeSession({
             resolveRespondDecision,
             clearRespondTimers,
             armRespondDecision,
+            dispatchSpeculative,
         ]
     );
 
