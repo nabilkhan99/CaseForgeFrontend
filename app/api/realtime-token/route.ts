@@ -100,9 +100,9 @@ export async function POST(req: NextRequest) {
     }
 
     const durationSeconds = Number(station.consultation_duration_seconds) || 480;
-    // `result` carries `origin` ('primary' | 'fallback') — which Azure region
-    // minted the key. The client logs it to the flight recorder; keep it in the
-    // response.
+    // `result` carries `origin` ('primary' | 'fallback') — which slot minted
+    // the key — and `lane`, the Azure resource that slot pointed at. The client
+    // logs both to the flight recorder; keep them in the response.
     return NextResponse.json({ ...result, durationSeconds });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed to start realtime session';

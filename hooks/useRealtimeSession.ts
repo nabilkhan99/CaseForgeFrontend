@@ -296,9 +296,12 @@ interface TokenResponse {
     model: string;
     voice: string;
     durationSeconds: number;
-    /** Which Azure region minted the key — 'primary' or 'fallback'. Absent on
+    /** Which slot minted the key — 'primary' or 'fallback'. Absent on
      *  responses from a deployment predating regional failover. */
     origin?: string;
+    /** Which Azure resource minted it, e.g. 'fourteenfisherman-voice-us'.
+     *  Absent on responses from a deployment predating lane labelling. */
+    lane?: string;
 }
 
 /**
@@ -1817,12 +1820,14 @@ export function useRealtimeSession({
                 const body = await res.json().catch(() => ({}));
                 throw new Error(body.error || `Token request failed: ${res.statusText}`);
             }
-            const { ephemeralKey, callsUrl, durationSeconds, origin }: TokenResponse =
+            const { ephemeralKey, callsUrl, durationSeconds, origin, lane }: TokenResponse =
                 await res.json();
             // Which region served this consultation. Recorded so a session that
-            // ran on the standby lane can be told apart afterwards — the standby
-            // transcribes with a different model, so it is worth knowing.
-            logDebug('connect:token', { origin: origin ?? 'unknown' });
+            // ran on the standby lane can be told apart afterwards — the lanes
+            // transcribe with different models, so it is worth knowing. `origin`
+            // is only the slot; which resource is in that slot is an env var that
+            // changes when lanes are swapped, so `lane` names the resource.
+            logDebug('connect:token', { origin: origin ?? 'unknown', lane: lane ?? 'unknown' });
 
             // 2. Microphone — classified separately so a denied mic gets
             // recovery instructions rather than "Connection problem".
