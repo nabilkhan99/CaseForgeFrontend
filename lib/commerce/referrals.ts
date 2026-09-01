@@ -186,6 +186,33 @@ export const QUALIFICATION_WINDOW_DAYS = 5
  */
 export const PAYOUT_FLOOR_DATE = new Date('2026-09-01T00:00:00.000Z')
 
+/**
+ * Last day the public refer-a-friend links are live. Expressed as the exclusive
+ * cutoff instant: midnight London at the END of 26 September 2026, which is
+ * 23:00 UTC that day because the UK is on BST in September.
+ *
+ * Created here (rather than extracted from somewhere) because no end date
+ * existed anywhere in the codebase — the campaign date lived only in Brevo and
+ * in the founders' heads. Every piece of copy that quotes it derives from
+ * {@link REFERRAL_LINKS_CLOSE_LABEL}, so moving the campaign is a one-line edit.
+ */
+export const REFERRAL_LINKS_CLOSE = new Date('2026-09-26T23:00:00.000Z')
+
+/** Human label for {@link REFERRAL_LINKS_CLOSE}. Mirrors ACCESS_OPENS_LABEL. */
+export const REFERRAL_LINKS_CLOSE_LABEL = '26 September'
+
+/**
+ * Format pence as a pound string: whole pounds bare (10000 -> "£100"), anything
+ * with pence to two decimals (2550 -> "£25.50").
+ *
+ * Deliberately duplicated from `formatPounds` in lib/email/referralEmail.ts
+ * rather than imported: that module pulls in the Brevo SDK at the top level, and
+ * this one is imported by client components that must not ship it.
+ */
+export function formatPence(pence: number): string {
+  return pence % 100 === 0 ? `£${pence / 100}` : `£${(pence / 100).toFixed(2)}`
+}
+
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 
 /**

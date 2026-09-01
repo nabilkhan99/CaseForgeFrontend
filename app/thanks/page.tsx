@@ -2,7 +2,8 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 
 import { getStripe } from '@/lib/commerce/stripe';
-import { getPlan } from '@/lib/commerce/plans';
+import { getPlan, isRollingPlan } from '@/lib/commerce/plans';
+import { SET_PASSWORD_LINK_EXPIRY } from '@/lib/email/accountEmail';
 import PurchaseTracker from '@/components/common/PurchaseTracker';
 
 export const metadata: Metadata = {
@@ -75,18 +76,46 @@ export default async function ThanksPage({ searchParams }: ThanksPageProps) {
             is confirmed.
           </p>
         ) : (
-          <p className="text-body text-lg leading-relaxed mb-3">Your pre-order is confirmed.</p>
+          <p className="text-body text-lg leading-relaxed mb-3">Your order is confirmed.</p>
         )}
 
-        <p className="text-muted leading-relaxed mb-10">
+        {/* The one step between paying and getting in. A buyer has no password
+            yet — the account is created for them and the link that sets it
+            rides in on the receipt — and a page that only mentioned the receipt
+            left them with nothing to do. Stripe's checkout page already says
+            this at the point of payment; saying it again here is the whole job
+            of this paragraph. The expiry is imported rather than typed: it is a
+            Supabase cap, not our choice, and a number stated in two places
+            drifts. */}
+        <p className="text-body leading-relaxed mb-4">
+          Your receipt is on its way to{' '}
           {order?.email ? (
-            <>A receipt is on its way to <span className="font-medium text-body">{order.email}</span>. </>
+            <span className="font-medium text-heading">{order.email}</span>
           ) : (
-            <>A receipt is on its way to your inbox. </>
+            'your inbox'
           )}
-          This is a pre-order: your AI practice and on-demand lectures start on
-          1 September 2026, and your 3 months’ access runs from that date. Your coaching
-          day runs on the date you picked. We’ll email you everything you need before launch.
+          . It carries a <span className="font-medium text-heading">Set up your account</span>{' '}
+          button &mdash; that link is how you choose a password and get in.
+        </p>
+
+        <p className="text-muted leading-relaxed mb-10">
+          The link lasts {SET_PASSWORD_LINK_EXPIRY}; if it expires, the sign-in page will send
+          you a fresh one.{' '}
+          {/* The access term is read off the plan, not asserted. The rolling
+              monthly has no three-month window, and telling a monthly buyer
+              their access "starts today" for 3 months is a claim the billing
+              does not honour. The coaching day is not repeated here: the line
+              above already names it, and only for a plan that has one, which
+              the sentence this replaced did not check. */}
+          {order && !isRollingPlan(order.planKey) ? (
+            <>Your AI practice and lectures are ready as soon as you&rsquo;re in, and your 3
+              months&rsquo; access starts today.</>
+          ) : order ? (
+            <>Your AI practice and lectures are ready as soon as you&rsquo;re in, and your access
+              renews monthly until you cancel.</>
+          ) : (
+            <>Your AI practice and lectures are ready as soon as you&rsquo;re in.</>
+          )}
         </p>
 
         <Link

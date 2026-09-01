@@ -2,6 +2,7 @@
 
 import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
@@ -9,14 +10,45 @@ import { createClient } from '@/lib/supabase/client';
 const NAV_LINKS = [
   { label: 'Home', href: '/dashboard', exact: true },
   { label: 'Library', href: '/dashboard/library' },
-  { label: 'History', href: '/dashboard/history' },
+  { label: 'Lectures', href: '/dashboard/lectures', lockable: true },
+  { label: 'Development', href: '/dashboard/development' },
   { label: 'Portfolio', href: '/portfolio' },
 ];
+
+/**
+ * Quiet marker for a tab the plan doesn't include. The tab stays — hiding it
+ * means a self-study trainee never learns the course exists; disabling it
+ * reads as broken. The page behind it carries the upsell.
+ */
+function LockGlyph() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-label="Included with Complete" className="ml-1 opacity-40 inline-block align-[-1px]">
+      <rect x="2.5" y="5.5" width="7" height="5" rx="1.2" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M4 5.5V4a2 2 0 1 1 4 0v1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 export default function AppNavbar() {
   const pathname = usePathname();
   const [user, setUser] = useState<{ email?: string; name?: string } | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  // null until known — never flash a lock at a Complete customer.
+  const [hasLectures, setHasLectures] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/subscription')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data && typeof data.hasLectures === 'boolean') setHasLectures(data.hasLectures);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const showLock = (link: { lockable?: boolean }) => Boolean(link.lockable) && hasLectures === false;
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const { scrollYProgress } = useScroll();
 
@@ -45,6 +77,39 @@ export default function AppNavbar() {
 
   const initial = user?.name?.charAt(0).toUpperCase() || '?';
 
+  // A tap on a nav row navigates but leaves the panel mounted otherwise, and
+  // the browser back button doesn't unmount it either — close on every route
+  // change rather than relying on each link's own onClick.
+  useEffect(() => {
+    setMobileOpen(false);
+    setDropdownOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDropdownOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [dropdownOpen]);
+
+  // Lock the page behind the open menu. Without this the page scrolls under the
+  // panel on a phone, so closing the menu drops you somewhere you didn't choose.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMobileOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = previous;
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [mobileOpen]);
+
   function isActive(href: string, exact?: boolean) {
     if (exact) return pathname === href;
     return pathname?.startsWith(href);
@@ -57,17 +122,44 @@ export default function AppNavbar() {
   }
 
   return (
-    <div className="fixed top-4 left-0 right-0 z-50 flex justify-center px-4">
+    // The page sets viewportFit: 'cover', so on a notched phone the wordmark and
+    // hamburger would sit under the sensor housing in landscape and under the
+    // status bar in a home-screen launch without these insets.
+    <div className="fixed top-[max(1rem,env(safe-area-inset-top))] left-0 right-0 z-50 flex justify-center pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
+      {/* Click-catcher for the avatar dropdown. It sits outside <motion.nav>
+          deliberately: the nav is transformed by Framer, which makes it the
+          containing block for `position: fixed` children, so an inset-0 overlay
+          nested inside it would only ever cover the navbar. */}
+      {dropdownOpen && (
+        <div
+          className="hidden md:block fixed inset-0 z-40"
+          onClick={() => setDropdownOpen(false)}
+          aria-hidden="true"
+        />
+      )}
       <motion.nav
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         style={{ maxWidth: 'min(92%, 1200px)', backgroundColor: navBg, boxShadow: navShadow } as any}
-        className="w-full backdrop-blur-2xl border border-black/[0.06] rounded-[14px] px-5 py-2.5 flex items-center justify-between"
+        className="relative z-50 w-full backdrop-blur-2xl border border-hairline rounded-[14px] px-5 py-2.5 flex items-center justify-between"
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 120, damping: 20 }}
       >
-        {/* Wordmark */}
-        <Link href="/dashboard" className="flex items-center cursor-pointer">
+        {/* Wordmark. The lotus is cropped out of the full lockup rather than
+            being a second drawing of it, so the two can never drift apart; it is
+            square and transparent, so `h-` alone sizes it without squashing.
+            Decorative — the adjacent text is already the accessible name, and a
+            duplicate alt would have a screen reader say the brand twice. */}
+        <Link href="/dashboard" className="flex items-center gap-2 cursor-pointer">
+          <Image
+            src="/mark.png"
+            alt=""
+            width={256}
+            height={256}
+            priority
+            aria-hidden="true"
+            className="h-[18px] w-[18px] flex-shrink-0"
+          />
           <span className="text-[14px] font-semibold text-heading tracking-tight">
             Fourteen Fisherman
           </span>
@@ -86,6 +178,7 @@ export default function AppNavbar() {
               }`}
             >
               {link.label}
+              {showLock(link) && <LockGlyph />}
             </Link>
           ))}
         </div>
@@ -108,9 +201,9 @@ export default function AppNavbar() {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -4, scale: 0.98 }}
                 transition={{ type: 'spring', stiffness: 260, damping: 26 }}
-                className="absolute top-12 right-0 w-48 bg-surface-raised border border-black/[0.06] rounded-xl shadow-elevation-3 py-1 z-50"
+                className="absolute top-12 right-0 w-48 bg-surface-raised border border-hairline rounded-xl shadow-elevation-3 py-1 z-50"
               >
-                <div className="px-3 py-2 border-b border-black/[0.06]">
+                <div className="px-3 py-2 border-b border-hairline">
                   <div className="text-[13px] font-medium text-heading truncate">{user?.name}</div>
                   <div className="text-[11px] text-muted truncate">{user?.email}</div>
                 </div>
@@ -136,7 +229,9 @@ export default function AppNavbar() {
         <motion.button
           className="md:hidden min-w-[44px] min-h-[44px] flex flex-col items-center justify-center gap-[5px] cursor-pointer"
           onClick={() => setMobileOpen((o) => !o)}
-          aria-label="Toggle menu"
+          aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={mobileOpen}
+          aria-controls="app-mobile-menu"
         >
           <motion.span
             className="block w-5 h-[1.5px] bg-heading rounded-full origin-center"
@@ -159,13 +254,34 @@ export default function AppNavbar() {
       {/* Mobile menu */}
       <AnimatePresence>
         {mobileOpen && (
+          <>
+            {/* Full-screen backdrop. Tapping outside a menu is the universal
+                "close this" gesture on a phone; without an element to catch it
+                the tap fell through and fired whatever row was underneath, so
+                you ended up on a page you never chose with the menu still open. */}
+            <motion.div
+              // Not a button: the hamburger is already the labelled "Close
+              // menu" control and Escape closes it too, so a second focusable
+              // element with the same name is noise for a screen reader.
+              aria-hidden="true"
+              onClick={() => setMobileOpen(false)}
+              className="fixed inset-0 z-40 md:hidden cursor-default"
+              style={{ background: 'rgba(28,25,23,0.18)' }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+            />
           <motion.div
+            id="app-mobile-menu"
             initial={{ opacity: 0, y: -8, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 260, damping: 26 }}
-            className="absolute top-14 left-0 right-0 mx-4 glass-panel rounded-2xl p-4 flex flex-col gap-1"
-            style={{ maxWidth: 'min(92%, 1200px)', margin: '0 auto' }}
+            // Not `glass-panel`: at 0.65 alpha the page text read straight
+            // through the menu rows. Blur is a finish, not a legibility device.
+            className="absolute top-14 left-0 right-0 mx-4 z-50 rounded-2xl p-4 flex flex-col gap-1 border border-hairline shadow-elevation-3 backdrop-blur-2xl"
+            style={{ maxWidth: 'min(92%, 1200px)', margin: '0 auto', background: 'rgba(255,252,248,0.97)' }}
           >
             {NAV_LINKS.map((link) => (
               <Link
@@ -179,9 +295,10 @@ export default function AppNavbar() {
                 }`}
               >
                 {link.label}
+                {showLock(link) && <LockGlyph />}
               </Link>
             ))}
-            <div className="my-1 border-t border-black/[0.06]" />
+            <div className="my-1 border-t border-hairline" />
             <Link
               href="/dashboard/settings"
               onClick={() => setMobileOpen(false)}
@@ -196,6 +313,7 @@ export default function AppNavbar() {
               Sign out
             </button>
           </motion.div>
+          </>
         )}
       </AnimatePresence>
     </div>

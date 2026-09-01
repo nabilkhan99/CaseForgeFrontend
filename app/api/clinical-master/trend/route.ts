@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import type { TrendReport } from '@/lib/clinical-master/trendTypes';
+import { isTrendReportV2 } from '@/lib/clinical-master/trendTypes';
 
 /**
  * Trend report orchestrator. Returns the latest persisted trend_reports row for
@@ -11,6 +11,23 @@ import type { TrendReport } from '@/lib/clinical-master/trendTypes';
  * trend_reports is a new table; the generated Supabase types do not include it
  * until the 0003 migration + type regen at go-live, so access is cast.
  */
+// Hobby-plan ceiling: Vercel rejects anything above 60 at deploy time. The
+// after() callback awaits the ~1-2 min generate-trend round trip, so it is
+// severed at 60s — Azure still finishes the build and writes trend_reports;
+// a late failure just leaves the claim to expire via its TTL. Raise this if
+// the project moves to Fluid Compute / Pro (300s).
+export const maxDuration = 60;
+
+/** Mirrors MIN_CASES_FOR_PATTERNS in CaseForgeAzure/app/services/trend_service.py. */
+const MIN_CASES_FOR_TREND = 3;
+/**
+ * One trend build per candidate at a time, enforced by a claim row in
+ * trend_generation_claims (cross-instance — an in-memory Set only guards one
+ * Vercel instance). A claim older than this TTL is presumed dead and can be
+ * taken over, so a crashed build self-heals on a later visit.
+ */
+const CLAIM_TTL_MS = 3 * 60 * 1000;
+
 export async function POST(request: NextRequest) {
     try {
         const authSupabase = await createServerClient();
@@ -39,23 +56,112 @@ export async function POST(request: NextRequest) {
             .limit(1)
             .maybeSingle();
 
-        const haveReport = Boolean(latest);
+        /**
+         * A row in the v1 shape is not a report this product can render — its
+         * fields carry different meanings, and half of them no longer exist.
+         * Treating it as absent is what makes the migration self-healing: the
+         * page asks, the route finds nothing renderable, triggers a rebuild and
+         * answers 'generating', and the next row that lands is v2. Rendering it
+         * partially, or serving it and hoping, would pin an account to a report
+         * it can never move off.
+         */
+        const report = isTrendReportV2(latest) ? latest : null;
+        const haveReport = report !== null;
 
-        // Trigger a fresh build when none exists yet, or when explicitly refreshing.
+        // The trend engine needs MIN_CASES marked consultations before it can
+        // say anything. Answer that here rather than kicking off a build and
+        // letting the page poll for a minute to learn the same thing.
+        if (!haveReport) {
+            // session_results carries no user id; count completed sessions,
+            // which is what a result row hangs off.
+            const { count } = await supabase
+                .from('clinical_sessions')
+                .select('id', { count: 'exact', head: true })
+                .eq('user_id', user.id)
+                .eq('status', 'completed');
+            const marked = count ?? 0;
+            if (marked < MIN_CASES_FOR_TREND) {
+                return NextResponse.json({ status: 'insufficient_data', marked, required: MIN_CASES_FOR_TREND });
+            }
+        }
+
+        // Trigger a fresh build when none exists yet, or when explicitly
+        // refreshing — once per candidate at a time, so a polling page (or the
+        // same candidate on two devices) doesn't queue twenty LLM jobs for one
+        // report. Winning the claim insert (or taking over a stale one) is the
+        // licence to call the engine.
         if (!haveReport || refresh) {
             const markingUrl = process.env.MARKING_API_URL;
             const markingSecret = process.env.MARKING_SHARED_SECRET;
             if (markingUrl && markingSecret) {
-                fetch(`${markingUrl.replace(/\/+$/, '')}/api/generate-trend`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-marking-secret': markingSecret },
-                    body: JSON.stringify({ candidateId: user.id }),
-                }).catch((err) => console.error('Failed to trigger trend endpoint:', err));
+                const claimedAt = new Date().toISOString();
+                // Cast: trend_generation_claims postdates the generated types (0005).
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const { data: inserted } = await (supabase as any)
+                    .from('trend_generation_claims')
+                    .upsert(
+                        { candidate_id: user.id, started_at: claimedAt },
+                        { onConflict: 'candidate_id', ignoreDuplicates: true }
+                    )
+                    .select('candidate_id')
+                    .maybeSingle();
+
+                let claimed = Boolean(inserted);
+                if (!claimed) {
+                    const staleCutoff = new Date(Date.now() - CLAIM_TTL_MS).toISOString();
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const { data: retaken } = await (supabase as any)
+                        .from('trend_generation_claims')
+                        .update({ started_at: claimedAt })
+                        .eq('candidate_id', user.id)
+                        .lt('started_at', staleCutoff)
+                        .select('candidate_id')
+                        .maybeSingle();
+                    claimed = Boolean(retaken);
+                }
+
+                if (claimed) {
+                    const endpoint = `${markingUrl.replace(/\/+$/, '')}/api/generate-trend`;
+                    after(async () => {
+                        try {
+                            const res = await fetch(endpoint, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'x-marking-secret': markingSecret,
+                                },
+                                body: JSON.stringify({ candidateId: user.id }),
+                            });
+                            if (res.ok) {
+                                // Release our claim (and only ours — lte guards a
+                                // concurrent refresh's newer claim) so a future
+                                // refresh doesn't wait out the TTL.
+                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                await (supabase as any)
+                                    .from('trend_generation_claims')
+                                    .delete()
+                                    .eq('candidate_id', user.id)
+                                    .lte('started_at', claimedAt);
+                            } else {
+                                // Leave the claim: the TTL gates the retry so a
+                                // failing engine (rate limits) isn't hammered.
+                                const body = await res.text().catch(() => '');
+                                console.error('Trend endpoint returned an error', {
+                                    candidateId: user.id,
+                                    status: res.status,
+                                    body: body.slice(0, 500),
+                                });
+                            }
+                        } catch (err) {
+                            console.error('Failed to trigger trend endpoint:', err);
+                        }
+                    });
+                }
             }
         }
 
-        if (haveReport && !refresh) {
-            return NextResponse.json({ status: 'ready', report: latest as TrendReport });
+        if (report && !refresh) {
+            return NextResponse.json({ status: 'ready', report });
         }
         return NextResponse.json({ status: 'generating' });
     } catch (error) {

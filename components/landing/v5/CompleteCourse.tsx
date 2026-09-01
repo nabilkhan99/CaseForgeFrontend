@@ -59,7 +59,7 @@ const AI_PRACTICE_ROWS: FeatureRow[] = [
 const LECTURE_ROWS: FeatureRow[] = [
   {
     lead: 'Everything you need for the exam',
-    tail: 'the whole SCA, taught in 10 structured hours',
+    tail: 'the whole SCA, taught in 8 structured hours',
     icon: (
       <>
         <path d="M12 7c-2-1.5-4.5-2.1-8-2.1V18.4c3.5 0 6 .6 8 2.1 2-1.5 4.5-2.1 8-2.1V4.9c-3.5 0-6 .6-8 2.1z" />
@@ -268,11 +268,11 @@ export default function CompleteCourse() {
         <motion.div {...fadeUp} className="text-center">
           <Pill>The Complete Course</Pill>
           <h2 className="mx-auto mt-7 max-w-2xl text-3xl font-medium leading-[1.14] tracking-tight text-heading sm:text-5xl">
-            3 months of unlimited AI stations and lectures, from the day you buy.{' '}
-            <Accent>Plus one live coaching day, on a date you choose.</Accent>
+            3 months of unlimited AI stations and lectures.{' '}
+            <Accent>Plus one live coaching day.</Accent>
           </h2>
           <p className="mx-auto mt-7 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-[15px] font-medium text-heading sm:text-lg">
-            {['Unlimited AI Practice', '10 Hours of On-Demand Lectures', '8-Hour Coaching Day'].map(
+            {['Unlimited AI Practice', '8 Hours of On-Demand Lectures', 'One Full-Day Coaching Session'].map(
               (chip, index) => (
                 <span key={chip} className="contents">
                   {index > 0 && (
@@ -348,20 +348,6 @@ export default function CompleteCourse() {
               Max 6 · £599 value
             </p>
           </div>
-        </motion.div>
-
-        {/* Closing strip */}
-        <motion.div {...fadeUp} className="mt-10 border-t-[0.5px] border-[#D8CBB0] pt-8 text-center sm:mt-14 sm:pt-12">
-          <p className="font-[family-name:var(--font-display)] text-[1.7rem] font-bold leading-[1.15] tracking-[-0.02em] text-heading sm:text-4xl lg:text-5xl">
-            Then sit your SCA.
-            <span className="mt-1.5 block sm:mt-2.5">
-              Pass, or claim your{' '}
-              <span className="whitespace-nowrap rounded-xl bg-[#E7F1D6] px-2.5 py-0.5 text-[#4A6B1F] sm:rounded-2xl sm:px-4">
-                £500
-              </span>
-              .
-            </span>
-          </p>
         </motion.div>
       </div>
     </section>

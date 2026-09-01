@@ -58,15 +58,19 @@ export function Pill({
 export function Accent({
   children,
   dark = false,
+  className = '',
 }: {
   children: ReactNode;
   dark?: boolean;
+  /** Overrides the accent colour — needed on surfaces the two defaults were
+   *  not picked against, such as the amber guarantee card. */
+  className?: string;
 }) {
   return (
     <span
       className={`font-[family-name:var(--font-serif)] italic font-normal ${
         dark ? 'text-[#EF9F27]' : 'text-primary'
-      }`}
+      } ${className}`}
     >
       {children}
     </span>

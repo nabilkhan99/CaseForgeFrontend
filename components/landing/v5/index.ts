@@ -1,10 +1,10 @@
 export { default as Hero } from './Hero';
 export { default as GuaranteeCard } from './GuaranteeCard';
-export { default as TrustBar } from './TrustBar';
-export { default as ProductShowcase } from './ProductShowcase';
 export { default as VideoProof } from './VideoProof';
 export { default as CompleteCourse } from './CompleteCourse';
+export { default as LecturePreview } from './LecturePreview';
 export { default as Testimonials } from './Testimonials';
 export { default as NhsBanner } from './NhsBanner';
 export { default as StudyBudgetChecker } from './StudyBudgetChecker';
 export { default as Faq } from './Faq';
+export { default as AccessNotice } from './AccessNotice';

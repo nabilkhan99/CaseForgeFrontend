@@ -57,7 +57,8 @@ body {
 
 /* Glass panel — warm, light */
 .glass-panel {
-  background: rgba(255, 255, 255, 0.65);
+  /* Near-opaque: at 0.65 the page's text read straight through menu items. */
+  background: rgba(255, 252, 248, 0.96);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(0, 0, 0, 0.06);
@@ -200,11 +201,11 @@ body {
   }
 
   .case-form {
-    @apply bg-white shadow-lg rounded-xl p-8 border border-gray-100;
+    @apply bg-white shadow-lg rounded-xl p-8 border border-black/[0.06];
   }
 
   .case-textarea {
-    @apply shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-lg h-40 transition-all duration-200;
+    @apply shadow-sm focus:ring-2 focus:ring-primary/40 focus:border-primary block w-full sm:text-sm border-black/[0.12] rounded-lg h-40 transition-all duration-200;
   }
 
   .capability-select {
@@ -212,7 +213,7 @@ body {
   }
 
   .capability-option {
-    @apply relative flex items-start p-4 border border-gray-200 rounded-lg hover:border-blue-500 transition-all duration-200 cursor-pointer;
+    @apply relative flex items-start p-4 border border-black/[0.08] rounded-lg hover:border-primary transition-all duration-200 cursor-pointer;
   }
 
   .error-alert {
@@ -224,6 +225,33 @@ body {
   .glass-input.text-sm {
     @apply px-3 py-1.5;
     font-size: 14px;
+  }
+}
+
+/* ============================================
+   KEYBOARD FOCUS
+   ============================================
+
+   Every focusable control in the dashboard used to fall back to Chrome's
+   `1px auto rgb(0,95,204)` — a blue system ring in an amber product, and the
+   only keyboard affordance the app had. One base rule beats sprinkling
+   `focus-visible:` utilities per component: it covers rows, breadcrumbs and
+   inputs nobody remembered to annotate, and anything that genuinely wants its
+   own treatment opts out simply by setting `focus:outline-none` (a utility,
+   which outranks this base layer).
+
+   :focus-visible, not :focus — a mouse click on a button must not leave a ring. */
+@layer base {
+  a:focus-visible,
+  button:focus-visible,
+  summary:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [tabindex]:focus-visible,
+  [role='button']:focus-visible {
+    outline: 2px solid rgba(180, 83, 9, 0.55);
+    outline-offset: 2px;
   }
 }
 
@@ -248,7 +276,7 @@ body {
   .focus-visible-ring {
     @apply outline-none focus-visible:ring-2 focus-visible:ring-offset-2;
     --tw-ring-color: rgba(180, 83, 9, 0.5);
-    --tw-ring-offset-color: #FAF9F6;
+    --tw-ring-offset-color: #FAFAF7;
   }
 }
 

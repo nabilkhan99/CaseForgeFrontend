@@ -52,6 +52,8 @@ export interface ResitPosition {
   verdict: Verdict;
   title: string;
   body: string;
+  /** Overrides {@link DeaneryPolicy.youPay} on the resit path. See that field. */
+  youPay?: number;
 }
 
 export interface DeaneryPolicy {
@@ -73,11 +75,52 @@ export interface DeaneryPolicy {
   doc: string;
   policyUrl: string;
   resit?: ResitPosition;
+  /**
+   * What a trainee is left paying on a £599 Complete course once their
+   * deanery's funding is applied, in whole pounds. Omitted means £0.
+   *
+   * Only set where the region's own published cap cannot reach £599: the
+   * North West caps at £500, and the North East expects 50% self funding on
+   * its discretionary route. Everywhere else the cap covers the fee.
+   *
+   * This is the arithmetic of the published cap against our price, NOT a
+   * prediction that the claim will be approved. Approval is the deanery's,
+   * which is why the figure sits next to the verdict rather than replacing it.
+   */
+  youPay?: number;
+  /**
+   * The cap in one line, as the design canvas states it, e.g.
+   * "Up to £600 · code GP0001" or "Capped at £500". Set in mono beside the
+   * out-of-pocket figure so the number has its policy basis next to it.
+   */
+  cap?: string;
+  /**
+   * Status chip beside the figure: "Very likely approved", "Part-funded",
+   * "Approval needed" and so on. Describes how the money arrives, where the
+   * verdict pill describes how strong the case is. Both come from the canvas.
+   */
+  chip?: string;
+  /**
+   * The position in one line, as the canvas writes it. This is the card body:
+   * the canvas card is figure, cap, chip and this, and nothing else. `body`,
+   * `quote` and `doc` are the long form, and they belong to the /study-budget
+   * article surface rather than the homepage card.
+   */
+  detail?: string;
+}
+
+/** Out-of-pocket figure for a deanery, honouring the resit branch. */
+export function outOfPocketFor(deanery: DeaneryPolicy, hasResat: boolean): number {
+  if (hasResat && deanery.resit?.youPay !== undefined) return deanery.resit.youPay;
+  return deanery.youPay ?? 0;
 }
 
 export const DEANERIES: readonly DeaneryPolicy[] = [
   {
     id: 'london',
+    detail: "One SCA preparation course per trainee under GP0001, with prospective approval.",
+    cap: 'Up to £600 · code GP0001',
+    chip: 'Very likely approved',
     label: 'London',
     group: 'England',
     verdict: 'strong',
@@ -86,7 +129,7 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
     contact: null,
     portalUrl: 'https://lasepgmdesupport.hee.nhs.uk',
     portalLabel: 'LaSE support portal',
-    body: "Your deanery's approved course list funds one exam preparation course per sitting, up to £600 per SCA course under code GP0001, with no restriction on provider. Complete is £599, structured as a course.",
+    body: "Your deanery's approved course list funds one exam preparation course per sitting, up to £600 per SCA course under code GP0001, with no restriction on provider. Complete is £599, so it fits inside that cap.",
     quote:
       'Exam preparation course... max 1 per sitting; max £600 per SCA preparation course (GP0001)',
     doc: 'NHSE London approved study courses list, September 2025',
@@ -95,13 +138,16 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'kss',
+    detail: "One SCA preparation course per sitting, so a resit attracts its own funding.",
+    cap: 'Up to £600 per sitting · GP0001',
+    chip: 'Very likely approved',
     label: 'Kent, Surrey and Sussex',
     group: 'England',
     verdict: 'strong',
     title: 'Strong case: £600 per SCA course, one per sitting',
     usesGpCode: true,
     contact: '[your patch Faculty Administrator]',
-    body: "KSS's own approved list (code S-GP0001) funds one exam preparation course per sitting, up to £600 per SCA course, provider agnostic. Complete is £599, structured as a course.",
+    body: "KSS's own approved list (code S-GP0001) funds one exam preparation course per sitting, up to £600 per SCA course, provider agnostic. Complete is £599, so it fits inside that cap.",
     quote:
       'Exam preparation course... max 1 per sitting; Max £600 per SCA preparation course',
     doc: 'KSS General Practice approved list, revised March 2026',
@@ -109,6 +155,9 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'eoe',
+    detail: "Exam preparation is approved as an aspirational activity with TPD sign-off: one SCA course per programme.",
+    cap: 'No fixed cap · TPD sign-off',
+    chip: 'Covered with approval',
     label: 'East of England',
     group: 'England',
     verdict: 'strong',
@@ -123,6 +172,9 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'tv',
+    detail: "Regional and RCGP-accredited courses are prioritised first, so say which ones you tried and why the dates did not fit.",
+    cap: 'One SCA course in ST3',
+    chip: 'Covered with approval',
     label: 'Thames Valley',
     group: 'England',
     verdict: 'strong',
@@ -137,6 +189,9 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'wessex',
+    detail: "Regional and RCGP-accredited courses are considered first. Name the one whose dates did not work for your sitting.",
+    cap: 'One SCA course in ST3',
+    chip: 'Covered with approval',
     label: 'Wessex',
     group: 'England',
     verdict: 'strong',
@@ -151,6 +206,9 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'em',
+    detail: "Two SCA courses across the whole of training, with no published per-course cap.",
+    cap: 'Up to 2 courses · no per-course cap',
+    chip: 'Very likely approved',
     label: 'East Midlands',
     group: 'England',
     verdict: 'strong',
@@ -166,6 +224,9 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'wm',
+    detail: "Two SCA courses across the whole of training, with no published per-course cap.",
+    cap: 'Up to 2 courses · no per-course cap',
+    chip: 'Very likely approved',
     label: 'West Midlands',
     group: 'England',
     verdict: 'strong',
@@ -180,6 +241,9 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'nw',
+    detail: "Non-accredited courses are considered up to £500 with prior approval, leaving £99 to you.",
+    cap: 'Capped at £500',
+    chip: '£500 of £599 covered',
     label: 'North West',
     group: 'England',
     verdict: 'strong',
@@ -187,18 +251,23 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
     usesGpCode: false,
     contact: 'england.gpstudyleave@nhs.net',
     body: 'Your school funds one SCA course per exam, up to £500. Complete is £599, so up to £500 of the fee can be covered, with a small remainder (£99) self funded. The email below asks for full funding first, with funding up to £500 plus self funding the rest as the alternative.',
+    youPay: 99,
     quote: 'one course attendance per RD to a maximum of £500',
     doc: 'NW GP School study leave guidelines, March 2026',
     policyUrl: 'https://www.nwpgmd.nhs.uk/gpst-study-leave',
   },
   {
     id: 'ne',
+    detail: "Non-accredited courses are discretionary with 50% self-funding expected, around £300 each way.",
+    cap: 'Discretionary · 50% self-funding',
+    chip: 'Part-funded',
     label: 'North East and North Cumbria',
     group: 'England',
     verdict: 'strong',
     title: 'Strong case: two routes to funding in your region',
     usesGpCode: false,
     contact: '[your programme office, via madeinheene.hee.nhs.uk]',
+    youPay: 300,
     body: 'Your deanery runs two funding routes and this course could fall under either. Route one is the automatic approved course list, which covers accredited SCA courses and educational packages. Route two is the discretionary route for other courses, decided by the Primary Care Dean or an Associate Director. The email below asks your programme office to confirm which applies and the funding available.',
     quote:
       'RCGP provided or accredited AKT and SCA courses including AKT and SCA educational packages: one course attendance during training for... the SCA',
@@ -210,6 +279,9 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'yh',
+    detail: "One SCA course per exam attempt from a named approved list. Ask your TPD about an off-list course before booking.",
+    cap: 'Named list · one per attempt',
+    chip: 'Approval needed',
     label: 'Yorkshire and the Humber',
     group: 'England',
     verdict: 'reasonable',
@@ -224,6 +296,9 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'severn',
+    detail: "Detailed guidance is pending publication, so get prospective approval in writing before you pay.",
+    cap: 'Guidance pending · approval essential',
+    chip: 'Approval needed',
     label: 'Severn',
     group: 'England',
     verdict: 'longshot',
@@ -244,6 +319,9 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'peninsula',
+    detail: "Detailed guidance is pending publication, so get prospective approval in writing before you pay.",
+    cap: 'Guidance pending · approval essential',
+    chip: 'Approval needed',
     label: 'Peninsula',
     group: 'England',
     verdict: 'longshot',
@@ -264,6 +342,9 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'wales',
+    detail: "£600 per training year, and unused budget rolls over once to a maximum of £1,200.",
+    cap: '£600/yr · rolls over to £1,200',
+    chip: 'Very likely approved',
     label: 'Wales (HEIW)',
     group: 'Devolved nations',
     verdict: 'strong',
@@ -278,13 +359,16 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'scotland',
+    detail: "A nominal £600 per registrar per training year, with individual course fees fundable.",
+    cap: '£600 per training year',
+    chip: 'Very likely approved',
     label: 'Scotland (NES)',
     group: 'Devolved nations',
     verdict: 'strong',
     title: "Fundable at your TPD's discretion",
     usesGpCode: false,
     contact: '[your regional NES GP team]',
-    body: 'NES funding sits with your TPD, judged on educational need and curricular relevance against a £600 budget per training stage. Course fees are fundable for individual courses; annual subscriptions are not, and Complete is a course, not a subscription. Expensive courses may be part funded, so the email below asks for full funding with part funding as the fallback.',
+    body: 'NES funding sits with your TPD, judged on educational need and curricular relevance against a £600 budget per training stage. Course fees are fundable for individual courses; annual subscriptions are not. Expensive courses may be part funded, so the email below asks for full funding with part funding as the fallback.',
     quote:
       'NES will fund course fees for individual GP Continuing Professional Development courses',
     doc: 'NES study leave FAQs for GP registrars, July 2025',
@@ -293,6 +377,9 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'ni',
+    detail: "Funded through the SUCCESS programme after an unsuccessful attempt, at up to £750 per course.",
+    cap: 'After an unsuccessful attempt · up to £750',
+    chip: 'Conditional',
     label: 'Northern Ireland (NIMDTA)',
     group: 'Devolved nations',
     verdict: 'longshot',
@@ -312,6 +399,9 @@ export const DEANERIES: readonly DeaneryPolicy[] = [
   },
   {
     id: 'unsure',
+    detail: "Most English deaneries fund one SCA preparation course, typically up to £600 under GP0001. Rules differ by region, so check yours.",
+    cap: 'Up to £600 · code GP0001',
+    chip: 'Varies by deanery',
     label: 'Not sure yet',
     group: 'Other',
     verdict: 'local',
@@ -367,9 +457,14 @@ export function buildEmailBody(
     'I am an ST3 on the [scheme name] programme preparing for the SCA. Before booking, I would like to confirm eligibility for study budget reimbursement for the following as my SCA preparation course claim' +
     gpCode +
     ':\n\n' +
-    'Complete SCA Course, £599 one-off. A structured course with 3 months of access: 10 hours of on-demand lectures, a full-day small-group coaching session (9am to 5pm, max class size 6), and consultation practice across 200 stations built from the RCGP curriculum, mapped to the three SCA marking domains. Full course specification: fourteenfisherman.com/course-spec\n\n' +
+    'Complete SCA Course, £599 for a fixed 3-month course term, paid once with no renewal. A structured course with 3 months of access: 8 hours of on-demand lectures, a full-day small-group coaching session (9am to 5pm, max class size 6), and consultation practice across 200 stations built from the RCGP curriculum, mapped to the three SCA marking domains. Full course specification: fourteenfisherman.com/course-spec\n\n' +
     extra +
-    'I have discussed this with my Educational Supervisor and added SCA preparation to my PDP. Could you confirm whether this would be approved, or let me know what else you need?\n\n' +
+    // The email no longer says the sender has discussed this with their ES and
+    // put it on their PDP. It is a claim about something the reader may not have
+    // done, in a message they are about to send under their own name to the
+    // office that funds them — and neither half of it is the deanery's to be
+    // told here anyway. What is left is the ask.
+    'Could you confirm whether this would be approved, or let me know what else you need?\n\n' +
     'Many thanks,\n[Your name], GPST3, [Scheme]'
   );
 }

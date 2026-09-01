@@ -1,15 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowRight, Info } from 'lucide-react';
-import {
-  ACCESS_OPENS_LABEL,
-  BOOK_A_CALL_URL,
-  type BillingPeriod,
-  type PlanKey,
-} from '@/lib/commerce/plans';
+import { BOOK_A_CALL_URL, type PlanKey } from '@/lib/commerce/plans';
+import ManageBillingButton from '@/components/commerce/ManageBillingButton';
 import { trackEvent } from '@/lib/analytics';
 import { Pill } from './editorial';
 import PaymentMethodsRow from './PaymentMethodsRow';
@@ -34,7 +30,7 @@ const FEATURE_ROWS: readonly FeatureRow[] = [
   },
   {
     label: 'On-demand Lectures',
-    cells: [{ text: '', cross: true }, { text: '10 hours', sub: '£599 value' }, { text: '10 hours' }],
+    cells: [{ text: '', cross: true }, { text: '8 hours', sub: '£599 value' }, { text: '8 hours' }],
   },
   {
     label: 'Small-Group Coaching',
@@ -50,13 +46,64 @@ const FEATURE_ROWS: readonly FeatureRow[] = [
   },
 ];
 
+/**
+ * Which Self-Study offer the toggle is showing. A presentation concern, not a
+ * billing one: the course term is a one-off sale, the monthly plan a Stripe
+ * subscription. The plan catalogue owns the real billing shape
+ * (`Plan.billing`).
+ */
+type BillingChoice = 'three_month' | 'monthly';
+
 /** The warm tint behind the highlighted (Complete) column. */
 const HIGHLIGHT_BG = 'bg-[#FDF6E7]';
+
+/** Which column, if any, the signed-in visitor already owns. */
+type OwnedColumn = 'self_study' | 'complete' | 'intensive' | null;
+
+/**
+ * Both Self-Study billing shapes are the same *column*: someone on the rolling
+ * plan owns Self-Study, whichever way the toggle is set, and must not be sold
+ * it again.
+ */
+function ownedColumnFor(plan: string | null | undefined): OwnedColumn {
+  if (plan === 'self_study' || plan === 'self_study_monthly') return 'self_study';
+  if (plan === 'complete') return 'complete';
+  if (plan === 'intensive') return 'intensive';
+  return null;
+}
+
+export interface PricingTableProps {
+  /**
+   * The plan the signed-in visitor holds, if any. Drives the "Your plan" badge
+   * and makes that column's CTA inert — a paying customer being invited to
+   * "Pre-order now" the thing they already bought reads as a broken product.
+   */
+  ownedPlan?: string | null;
+  /**
+   * The account a purchase would attach to. Stated plainly, because
+   * entitlements match by email and buying under another address is the one
+   * mistake a buyer cannot undo themselves.
+   */
+  accountEmail?: string | null;
+  /** Server-decided: this visitor may buy Complete at the difference. */
+  canUpgrade?: boolean;
+}
+
+/** The "Your plan" marker, in the same slot the "Most popular" badge uses. */
+function OwnedBadge({ className = '' }: { className?: string }) {
+  return (
+    <span
+      className={`whitespace-nowrap rounded-full bg-heading px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white sm:text-[10px] ${className}`}
+    >
+      Your plan
+    </span>
+  );
+}
 
 /**
  * Kicks off Stripe checkout for whichever Self-Study plan the billing toggle has
  * selected (no coaching day needed either way). The plan key is passed in rather
- * than captured so one hook serves both the one-off and the rolling variant.
+ * than captured so one hook serves both the fixed-term and rolling variants.
  */
 function useSelfStudyCheckout() {
   const [submitting, setSubmitting] = useState(false);
@@ -74,7 +121,7 @@ function useSelfStudyCheckout() {
       });
       const data = (await res.json()) as { url?: string; error?: string };
       if (!res.ok || !data.url) {
-        setError(data.error ?? 'Something went wrong — please try again.');
+        setError(data.error ?? 'Something went wrong, please try again.');
         setSubmitting(false);
         return;
       }
@@ -82,7 +129,7 @@ function useSelfStudyCheckout() {
       await trackEvent('checkout_started', { plan });
       window.location.assign(data.url);
     } catch {
-      setError('Something went wrong — please try again.');
+      setError('Something went wrong, please try again.');
       setSubmitting(false);
     }
   }
@@ -91,7 +138,7 @@ function useSelfStudyCheckout() {
 }
 
 /** The Self-Study plan key behind each billing choice. */
-function selfStudyPlanFor(billing: BillingPeriod): PlanKey {
+function selfStudyPlanFor(billing: BillingChoice): PlanKey {
   return billing === 'monthly' ? 'self_study_monthly' : 'self_study';
 }
 
@@ -100,7 +147,7 @@ const SELF_STUDY_THREE_MONTH_PENCE = 29900;
 const SELF_STUDY_MONTHLY_PENCE = 12900;
 
 /**
- * What three months on the rolling plan would cost against the one-off price,
+ * What three months on the rolling plan would cost against the term price,
  * as a percentage. Computed, not typed: change either price above and the badge
  * follows. £299 vs 3 × £129 = £387 → 23%.
  */
@@ -110,15 +157,16 @@ const THREE_MONTH_SAVING_PERCENT = Math.round(
 
 /**
  * How the Self-Study column prices itself under each billing choice. The £299
- * plan is shown as its monthly equivalent (the headline £299 lands heavy), with
- * the one-off truth stated plainly underneath. Both charge on purchase.
+ * term is shown as its monthly equivalent (the headline £299 lands heavy), with
+ * the truth stated plainly underneath: one payment, and it does not renew. Both
+ * charge on purchase.
  */
-const SELF_STUDY_PRICING: Record<BillingPeriod, { pounds: string; pence?: string; suffix: string; tagline: string }> = {
+const SELF_STUDY_PRICING: Record<BillingChoice, { pounds: string; pence?: string; suffix: string; tagline: string }> = {
   three_month: {
     pounds: '£99',
     pence: '.66',
     suffix: '/month',
-    tagline: `Billed £299 one-off · 3 months' access`,
+    tagline: `One payment of £299 · 3-month term, nothing renews`,
   },
   monthly: {
     pounds: '£129',
@@ -128,17 +176,18 @@ const SELF_STUDY_PRICING: Record<BillingPeriod, { pounds: string; pence?: string
 };
 
 interface BillingToggleProps {
-  billing: BillingPeriod;
-  onChange: (billing: BillingPeriod) => void;
+  billing: BillingChoice;
+  onChange: (billing: BillingChoice) => void;
 }
 
 /**
- * Segmented 3-month / monthly switch. Only the Self-Study column responds — the
- * Complete course stays a one-off deliberately, because "course, not
- * subscription" is the wording that carries a study-budget claim.
+ * Segmented 3-month / monthly switch. Only the Self-Study column responds:
+ * Complete is sold as a fixed 3-month course term and has no rolling variant,
+ * because a course with a start, an end and a printed service period is what a
+ * study budget reimburses.
  */
 function BillingToggle({ billing, onChange }: BillingToggleProps) {
-  const options: readonly { key: BillingPeriod; label: string; hint?: string }[] = [
+  const options: readonly { key: BillingChoice; label: string; hint?: string }[] = [
     { key: 'three_month', label: '3 months', hint: `Save ${THREE_MONTH_SAVING_PERCENT}%` },
     { key: 'monthly', label: 'Monthly' },
   ];
@@ -161,7 +210,7 @@ function BillingToggle({ billing, onChange }: BillingToggleProps) {
                 onChange(option.key);
                 trackEvent('pricing_billing_toggled', { billing: option.key });
               }}
-              className={`relative isolate rounded-full px-4 py-2 text-[13px] font-semibold transition-colors sm:text-sm ${
+              className={`relative isolate inline-flex min-h-[44px] items-center rounded-full px-4 py-2 text-[13px] font-semibold transition-colors sm:text-sm ${
                 active ? 'text-heading' : 'text-muted hover:text-heading'
               }`}
             >
@@ -190,27 +239,84 @@ function BillingToggle({ billing, onChange }: BillingToggleProps) {
   );
 }
 
-function GuaranteeInfo({ align = 'left' }: { align?: 'left' | 'right' }) {
+/**
+ * The £500 guarantee's material condition, reachable on a phone.
+ *
+ * This was a hover popover plus a `title` attribute on a 14x14 button with no
+ * click handler — so on touch, where most of the traffic is, the one condition
+ * attached to a £500 promise ("you must first pass all 200 AI stations") could
+ * not be read at all.
+ *
+ * It is now an inline disclosure rather than a floating popover: tap or Enter
+ * expands a paragraph inside the guarantee strip itself, `aria-expanded`
+ * describes it, and the trigger is a 44px target. Inline matters — an absolute
+ * panel opened underneath the fixed navbar whenever the strip happened to be
+ * near the top of the viewport, and no z-index could lift it out of the
+ * transformed card that contains it.
+ *
+ * It owns the strip's layout so the paragraph can take a line of its own; the
+ * right-hand promise is passed as children.
+ */
+function GuaranteeInfo({
+  children,
+  align = 'between',
+}: {
+  children: ReactNode;
+  align?: 'between' | 'center';
+}) {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+  const panelRef = useRef<HTMLParagraphElement>(null);
+
+  // Expanding in flow can put the paragraph just past the fold when the strip
+  // sits at the bottom of the viewport. `block: 'nearest'` nudges only as far
+  // as it has to, and does nothing when the paragraph is already visible.
+  useEffect(() => {
+    if (!open) return;
+    const id = requestAnimationFrame(() =>
+      panelRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    );
+    return () => cancelAnimationFrame(id);
+  }, [open]);
+
   return (
-    <div className="group relative inline-flex items-center gap-1">
-      <p className="text-[11px] font-medium text-[#27500A] sm:text-sm">SCA Guarantee</p>
-      <button
-        type="button"
-        aria-label="About the SCA Guarantee: conditional on passing all 200 AI stations"
-        title="Conditional guarantee: to qualify you must first pass all 200 AI stations."
-        className="inline-flex shrink-0 items-center justify-center rounded-full text-[#27500A]/70 transition-colors hover:text-[#27500A] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#27500A]/40"
-      >
-        <Info className="h-3.5 w-3.5" aria-hidden="true" />
-      </button>
+    <div className="w-full">
       <div
-        role="tooltip"
-        className={`pointer-events-none absolute top-full z-20 mt-1 w-52 rounded-lg border border-heading/10 bg-white p-2.5 text-left text-[10px] leading-snug text-body opacity-0 shadow-elevation-3 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 sm:text-[11px] ${
-          align === 'right' ? 'right-0' : 'left-0'
+        className={`flex flex-wrap items-center gap-x-3 gap-y-1 ${
+          align === 'center' ? 'justify-center text-center' : 'justify-between'
         }`}
       >
-        This is a <span className="font-medium text-[#27500A]">conditional</span> guarantee — to qualify
-        you must first pass all 200 AI stations.
+        <span className="inline-flex items-center gap-1">
+          <span className="text-[11px] font-medium text-[#27500A] sm:text-sm">SCA Guarantee</span>
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}
+            aria-controls={panelId}
+            aria-label="About the SCA Guarantee: conditional on passing all 200 AI stations"
+            // -m-2 keeps the 44px target from changing the height of the strip.
+            className="-m-2 inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full p-2 text-[#27500A]/70 transition-colors hover:text-[#27500A]"
+          >
+            <Info className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        </span>
+        {children}
       </div>
+      {open && (
+        <motion.p
+          ref={panelRef}
+          id={panelId}
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.15 }}
+          className={`mt-2 text-[11px] leading-snug text-[#27500A]/90 ${
+            align === 'center' ? 'text-center' : 'text-left'
+          }`}
+        >
+          This is a <span className="font-medium text-[#27500A]">conditional</span> guarantee: to
+          qualify you must first pass all 200 AI stations.
+        </motion.p>
+      )}
     </div>
   );
 }
@@ -220,9 +326,44 @@ interface CtaButtonsProps {
   variant: 'self_study' | 'complete' | 'intensive';
   /** Which Self-Study plan the billing toggle currently has selected. */
   selfStudyPlan: PlanKey;
+  owned?: OwnedColumn;
+  canUpgrade?: boolean;
 }
 
-function PlanCta({ selfStudy, variant, selfStudyPlan }: CtaButtonsProps) {
+/** An owned plan's CTA: present, legible, and deliberately not clickable. */
+function OwnedCta() {
+  return (
+    <button
+      type="button"
+      disabled
+      className="w-full cursor-default rounded-full border border-heading/10 bg-transparent px-2 py-3 text-[13px] font-semibold text-muted sm:py-2.5 sm:text-sm"
+    >
+      Your current plan
+    </button>
+  );
+}
+
+function PlanCta({ selfStudy, variant, selfStudyPlan, owned, canUpgrade }: CtaButtonsProps) {
+  if (owned === variant) return <OwnedCta />;
+  if (variant === 'complete' && canUpgrade) {
+    // Dead while UPGRADEABLE_FROM is empty (canSwitchPlan always refuses, so
+    // `canUpgrade` never arrives true). Kept because re-populating that set is
+    // the whole of turning self-serve upgrades back on.
+    // A Self-Study customer would need a subscription: Stripe swaps its Price
+    // and invoices only the time left on their term. Sending them through
+    // /coaching-day would charge the full £599 for what they part-own.
+    return (
+      <ManageBillingButton
+        flow="subscription_update"
+        busyLabel="Opening Stripe…"
+        onStart={() => trackEvent('checkout_clicked', { plan: 'complete_switch' })}
+        className="cta-button w-full gap-1.5 !rounded-full px-2 py-3.5 text-[13px] disabled:opacity-60 sm:py-3 sm:text-sm"
+        errorClassName="mt-2 text-center text-[12px] font-medium text-danger"
+      >
+        Upgrade to Complete
+      </ManageBillingButton>
+    );
+  }
   if (variant === 'self_study') {
     const monthly = selfStudyPlan === 'self_study_monthly';
     return (
@@ -235,7 +376,7 @@ function PlanCta({ selfStudy, variant, selfStudyPlan }: CtaButtonsProps) {
         disabled={selfStudy.submitting}
         className="w-full rounded-full border border-heading/15 bg-white px-2 py-3 text-[13px] font-semibold text-heading transition-colors hover:bg-surface-warm disabled:opacity-60 sm:py-2.5 sm:text-sm"
       >
-        {selfStudy.submitting ? 'Redirecting…' : monthly ? 'Start monthly' : 'Pre-order now'}
+        {selfStudy.submitting ? 'Redirecting…' : monthly ? 'Start monthly' : 'Start practising'}
       </button>
     );
   }
@@ -274,11 +415,13 @@ function PlanName({ children }: { children: React.ReactNode }) {
 
 interface MobileCardsProps {
   selfStudy: ReturnType<typeof useSelfStudyCheckout>;
-  billing: BillingPeriod;
+  billing: BillingChoice;
+  owned: OwnedColumn;
+  canUpgrade: boolean;
 }
 
 /** Mobile: one full-width card per plan, same content as its desktop column. */
-function MobileCards({ selfStudy, billing }: MobileCardsProps) {
+function MobileCards({ selfStudy, billing, owned, canUpgrade }: MobileCardsProps) {
   const selfStudyPlan = selfStudyPlanFor(billing);
   const selfStudyPrice = SELF_STUDY_PRICING[billing];
   const cards = [
@@ -304,8 +447,8 @@ function MobileCards({ selfStudy, billing }: MobileCardsProps) {
       key: 'complete' as const,
       name: 'Complete SCA Course',
       price: '£599',
-      suffix: 'one-off',
-      tagline: "3 months' access",
+      suffix: '/ 3 months',
+      tagline: 'One payment · nothing renews',
       highlighted: true,
       badge: 'Most popular',
       valueLine: '£1,497 total value',
@@ -336,10 +479,14 @@ function MobileCards({ selfStudy, billing }: MobileCardsProps) {
           }`}
         >
           <div className="relative px-5 pb-4 pt-7 text-center">
-            {card.badge && (
-              <span className="absolute left-1/2 top-2 -translate-x-1/2 whitespace-nowrap rounded-full bg-primary px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white">
-                {card.badge}
-              </span>
+            {owned === card.key ? (
+              <OwnedBadge className="absolute left-1/2 top-2 -translate-x-1/2" />
+            ) : (
+              card.badge && (
+                <span className="absolute left-1/2 top-2 -translate-x-1/2 whitespace-nowrap rounded-full bg-primary px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white">
+                  {card.badge}
+                </span>
+              )
             )}
             <PlanName>{card.name}</PlanName>
             <motion.div
@@ -388,16 +535,23 @@ function MobileCards({ selfStudy, billing }: MobileCardsProps) {
             })}
 
             {/* Guarantee row */}
-            <div className="flex items-center justify-between gap-3 bg-[#EAF3DE] px-5 py-3.5">
-              <GuaranteeInfo />
-              <p className="text-right text-[11px] leading-snug text-[#27500A]">
-                Don’t pass? We pay you £500
-              </p>
+            <div className="bg-[#EAF3DE] px-5 py-3.5">
+              <GuaranteeInfo>
+                <p className="text-right text-[11px] leading-snug text-[#27500A]">
+                  Don’t pass? We pay you £500
+                </p>
+              </GuaranteeInfo>
             </div>
           </div>
 
           <div className="p-3">
-            <PlanCta selfStudy={selfStudy} variant={card.key} selfStudyPlan={selfStudyPlan} />
+            <PlanCta
+              selfStudy={selfStudy}
+              variant={card.key}
+              selfStudyPlan={selfStudyPlan}
+              owned={owned}
+              canUpgrade={canUpgrade}
+            />
           </div>
         </div>
       ))}
@@ -406,11 +560,12 @@ function MobileCards({ selfStudy, billing }: MobileCardsProps) {
 }
 
 /** The three-tier pricing table: matrix on desktop, stacked cards on mobile. */
-export default function PricingTable() {
+export default function PricingTable({ ownedPlan, accountEmail, canUpgrade = false }: PricingTableProps = {}) {
   const selfStudy = useSelfStudyCheckout();
+  const owned = ownedColumnFor(ownedPlan);
   // Three-month is the default: it is the better deal (£299 vs 3 × £129) and the
   // one a study budget will reimburse, so monthly is the deliberate opt-out.
-  const [billing, setBilling] = useState<BillingPeriod>('three_month');
+  const [billing, setBilling] = useState<BillingChoice>('three_month');
   const selfStudyPlan = selfStudyPlanFor(billing);
   const selfStudyPrice = SELF_STUDY_PRICING[billing];
 
@@ -428,22 +583,18 @@ export default function PricingTable() {
             <Pill>Choose your prep</Pill>
           </p>
 
-          <p className="mb-6 flex justify-center">
-            <span className="inline-flex items-center gap-2 rounded-full bg-[#FAEEDA] px-4 py-1.5 text-center text-xs font-semibold text-[#854F0B] sm:text-[13px]">
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#B45309]" aria-hidden="true" />
-              Pre-order — AI practice &amp; lectures start {ACCESS_OPENS_LABEL}
-            </span>
-          </p>
-
           <BillingToggle billing={billing} onChange={setBilling} />
 
-          <MobileCards selfStudy={selfStudy} billing={billing} />
+          <MobileCards selfStudy={selfStudy} billing={billing} owned={owned} canUpgrade={canUpgrade} />
 
           <div className="hidden overflow-hidden rounded-3xl border border-heading/[0.06] bg-white/80 shadow-elevation-2 backdrop-blur sm:block">
             <div className="grid grid-cols-[minmax(84px,170px)_repeat(3,minmax(0,1fr))]">
               {/* Plan headers */}
               <div />
-              <div className="px-3 pb-5 pt-9 text-center">
+              <div className="relative px-3 pb-5 pt-9 text-center">
+                {owned === 'self_study' && (
+                  <OwnedBadge className="absolute left-1/2 top-3 -translate-x-1/2" />
+                )}
                 <PlanName>Self-Study</PlanName>
                 {/* On 3 months the charge is still one £299 payment — the monthly
                     figure is framing, and the .66 is deliberately small and faint,
@@ -469,19 +620,27 @@ export default function PricingTable() {
                 </motion.div>
               </div>
               <div className={`relative ${HIGHLIGHT_BG} px-3 pb-5 pt-9 text-center`}>
-                <span className="absolute left-1/2 top-3 -translate-x-1/2 whitespace-nowrap rounded-full bg-primary px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white sm:text-[10px]">
-                  Most popular
-                </span>
+                {owned === 'complete' ? (
+                  <OwnedBadge className="absolute left-1/2 top-3 -translate-x-1/2" />
+                ) : (
+                  <span className="absolute left-1/2 top-3 -translate-x-1/2 whitespace-nowrap rounded-full bg-primary px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white sm:text-[10px]">
+                    Most popular
+                  </span>
+                )}
                 <PlanName>Complete SCA Course</PlanName>
                 <p className="mt-2.5 text-lg font-medium tracking-tight text-heading sm:text-3xl">
-                  £599 <span className="text-[10px] font-normal text-muted sm:text-xs">one-off</span>
+                  £599{' '}
+                  <span className="text-[10px] font-normal text-muted sm:text-xs">/ 3 months</span>
                 </p>
                 <p className="mt-1 text-[10px] text-muted sm:text-xs">
-                  3 months&rsquo; access ·{' '}
+                  One payment, nothing renews ·{' '}
                   <span className="line-through">£1,497 value</span>
                 </p>
               </div>
-              <div className="px-3 pb-5 pt-9 text-center">
+              <div className="relative px-3 pb-5 pt-9 text-center">
+                {owned === 'intensive' && (
+                  <OwnedBadge className="absolute left-1/2 top-3 -translate-x-1/2" />
+                )}
                 <PlanName>Intensive</PlanName>
                 <p className="mt-2.5 text-base font-medium tracking-tight text-heading sm:text-2xl">
                   From £2,999
@@ -529,27 +688,35 @@ export default function PricingTable() {
               {/* CTA row */}
               <div className="border-t border-heading/[0.06]" />
               <div className="border-t border-heading/[0.06] px-4 py-4">
-                <PlanCta selfStudy={selfStudy} variant="self_study" selfStudyPlan={selfStudyPlan} />
+                <PlanCta selfStudy={selfStudy} variant="self_study" selfStudyPlan={selfStudyPlan} owned={owned} canUpgrade={canUpgrade} />
               </div>
               <div className={`border-t border-heading/[0.06] ${HIGHLIGHT_BG} px-4 py-4`}>
-                <PlanCta selfStudy={selfStudy} variant="complete" selfStudyPlan={selfStudyPlan} />
+                <PlanCta selfStudy={selfStudy} variant="complete" selfStudyPlan={selfStudyPlan} owned={owned} canUpgrade={canUpgrade} />
               </div>
               <div className="border-t border-heading/[0.06] px-4 py-4">
-                <PlanCta selfStudy={selfStudy} variant="intensive" selfStudyPlan={selfStudyPlan} />
+                <PlanCta selfStudy={selfStudy} variant="intensive" selfStudyPlan={selfStudyPlan} owned={owned} canUpgrade={canUpgrade} />
               </div>
 
               {/* One guarantee strip for the whole table */}
-              <div className="col-span-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-[#EAF3DE] px-6 py-3.5 text-center">
-                <GuaranteeInfo />
-                <p className="text-[11px] text-[#27500A] sm:text-xs">
-                  Every plan — don&rsquo;t pass, and we pay you £500.
-                </p>
+              <div className="col-span-4 bg-[#EAF3DE] px-6 py-3.5">
+                <GuaranteeInfo align="center">
+                  <p className="text-[11px] text-[#27500A] sm:text-xs">
+                    Every plan: don&rsquo;t pass, and we pay you £500.
+                  </p>
+                </GuaranteeInfo>
               </div>
             </div>
           </div>
 
           {selfStudy.error && (
             <p className="mt-3 text-center text-sm font-medium text-danger">{selfStudy.error}</p>
+          )}
+
+          {accountEmail && (
+            <p className="mt-4 text-center text-[12px] text-muted sm:text-[13px]">
+              This purchase will be linked to{' '}
+              <span className="font-medium text-heading">{accountEmail}</span>.
+            </p>
           )}
 
           <PaymentMethodsRow />

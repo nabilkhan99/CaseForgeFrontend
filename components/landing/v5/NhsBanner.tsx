@@ -19,8 +19,11 @@ export default function NhsBanner() {
           aria-hidden="true"
         />
         <p className="text-xs leading-relaxed text-[#27500A] sm:text-base">
-          Eligible for the NHS England study budget. Most trainees pay nothing
-          out of pocket.{' '}
+          {/* No "most trainees pay nothing out of pocket": trainees pay £599 up
+              front and reclaim, and approval is the deanery's call, so the claim
+              is unsafe on ASA/CAP grounds. */}
+          Eligible for the NHS England study budget, subject to your
+          deanery&rsquo;s approval.{' '}
           {/* DEV-HANDOFF §9: keep the "check your deanery" reassurance on-site
               at the point of purchase instead of sending buyers to a PDF. */}
           <Link

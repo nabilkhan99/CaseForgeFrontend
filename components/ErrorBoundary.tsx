@@ -29,15 +29,28 @@ class ErrorBoundary extends Component<Props, State> {
   public render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-[100dvh] flex items-center justify-center bg-gray-50">
-          <div className="max-w-xl p-8 bg-white shadow-lg rounded-lg">
-            <h2 className="text-2xl font-bold text-red-600 mb-4">Something went wrong</h2>
-            <p className="text-gray-600 mb-4">
+        // A client-side crash used to drop the user onto default-Tailwind
+        // styling — grey card, red heading, blue button — which reads as a
+        // different application. Same surfaces and same amber as everything else.
+        <div className="min-h-[100dvh] flex items-center justify-center bg-surface px-6 font-sans">
+          <div className="w-full max-w-md text-center">
+            <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-full border border-black/[0.06] bg-surface-warm">
+              <svg width="18" height="18" viewBox="0 0 16 16" fill="none" className="text-primary" aria-hidden="true">
+                <path d="M8 5v4M8 11.5v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.5" />
+              </svg>
+            </div>
+            <h2 className="mb-2 text-[20px] font-semibold text-heading">Something went wrong</h2>
+            <p className="mb-6 text-[14px] leading-[1.65] text-muted">
               {this.state.error?.message || 'An unexpected error occurred'}
             </p>
             <button
               onClick={() => this.setState({ hasError: false, error: null })}
-              className="bg-blue-500 text-white px-4 py-2 min-h-[44px] rounded hover:bg-blue-600"
+              className="min-h-[44px] cursor-pointer rounded-xl px-6 py-3 text-[14px] font-semibold text-white transition-opacity hover:opacity-90"
+              style={{
+                background: 'linear-gradient(135deg, #B45309, #D97706)',
+                boxShadow: '0 4px 12px rgba(180,83,9,0.2)',
+              }}
             >
               Try again
             </button>

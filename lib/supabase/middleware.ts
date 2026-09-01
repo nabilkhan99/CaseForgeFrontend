@@ -1,4 +1,8 @@
 import { createServerClient } from '@supabase/ssr';
+import { decideAccess } from '@/lib/commerce/entitlements';
+import { exactEmailPattern } from '@/lib/commerce/emailFilter';
+import { effectiveLaunchDate } from '@/lib/commerce/launchDate';
+import { parseAdminEmails } from '@/lib/admin/guard';
 import { NextResponse, type NextRequest } from 'next/server';
 
 /** Carries a valid sign-up invite through the registration flow. */
@@ -91,30 +95,71 @@ export async function updateSession(request: NextRequest) {
     const isFeedbackRoute = request.nextUrl.pathname.startsWith('/clinical-master/feedback');
     const requiresSubscription =
         request.nextUrl.pathname.startsWith('/clinical-master') && !isFeedbackRoute;
+    let entitlementFailedOpen = false;
     if (requiresSubscription && user) {
         try {
-            const { data: subscription } = await supabase
-                .from('subscriptions')
-                .select('id')
-                .eq('user_id', user.id)
-                .eq('status', 'active')
-                .gt('expires_at', new Date().toISOString())
-                .limit(1)
-                .single();
-
-            if (!subscription) {
-                const url = request.nextUrl.clone();
-                url.pathname = '/pricing';
-                url.searchParams.set('upgrade', 'true');
-                return NextResponse.redirect(url);
+            // Purchases are matched by email (buying email = account email);
+            // the RLS policy "read own purchases by email" scopes this select.
+            // Staged deployments (develop preview) treat testers as entitled,
+            // and admins are never locked out of their own product.
+            // Belt and braces: RLS already scopes this select to the user's own
+            // email, but a dropped policy must degrade to "no rows", not "all rows".
+            // `.ilike` (not `.eq`) because the policy compares lower(email) —
+            // a case-sensitive filter would hide a hand-provisioned row like
+            // `Sarah@Nhs.net` and lock out someone who paid.
+            const { data: purchases, error: purchasesError } = await supabase
+                .from('preorders')
+                .select('plan, status, created_at, coaching_day, access_starts_at, access_ends_at')
+                .ilike('email', exactEmailPattern(user.email));
+            if (purchasesError) {
+                // supabase-js reports query failures as { error }, not a throw —
+                // without this branch a transient DB error reads as "no purchases"
+                // and bounces PAYING users to /pricing. Fail open, loudly — but
+                // by flagging and falling through, not by returning: the auth and
+                // trial-funnel rules below still have to run, and a future rule
+                // added under them must not silently stop applying here.
+                console.error('[entitlement] middleware fail-open', purchasesError);
+                entitlementFailedOpen = true;
+            } else {
+                const { entitlement, allowed } = decideAccess(purchases ?? [], {
+                    email: user.email,
+                    launchDate: effectiveLaunchDate(),
+                    admins: parseAdminEmails(process.env.ADMIN_EMAILS),
+                });
+                if (!allowed) {
+                    const url = request.nextUrl.clone();
+                    // state 'none' WITH a plan is a preorder whose window hasn't
+                    // opened — a paying customer. Sending them to /pricing reads
+                    // as "your purchase doesn't exist"; the dashboard explains
+                    // that access opens 1 Sept instead.
+                    if (entitlement.state === 'none' && entitlement.plan) {
+                        url.pathname = '/dashboard';
+                        url.search = '';
+                        // Carry the reason, so the dashboard can say why the
+                        // page they asked for came back here instead of
+                        // reloading under them with no explanation.
+                        url.searchParams.set('access', 'pending');
+                    } else {
+                        url.pathname = '/pricing';
+                        url.searchParams.set(entitlement.state === 'read_only' ? 'renew' : 'upgrade', 'true');
+                    }
+                    return NextResponse.redirect(url);
+                }
             }
         } catch {
             // Fail open — don't block paid users on transient DB errors
+            entitlementFailedOpen = true;
         }
     }
 
-    // If user is authenticated and trying to access auth pages, redirect to dashboard
-    const isAuthRoute = request.nextUrl.pathname.startsWith('/auth');
+    // If user is authenticated and trying to access auth pages, redirect to
+    // dashboard — EXCEPT the password-setting pages: a provisioned buyer who
+    // re-opens their set-password link already holds a session from verifyOtp,
+    // and bouncing them to /dashboard would mean the password never gets set.
+    const isPasswordRoute =
+        request.nextUrl.pathname.startsWith('/auth/set-password') ||
+        request.nextUrl.pathname.startsWith('/auth/reset-password');
+    const isAuthRoute = request.nextUrl.pathname.startsWith('/auth') && !isPasswordRoute;
     if (isAuthRoute && user) {
         const url = request.nextUrl.clone();
         url.pathname = '/dashboard';
@@ -134,6 +179,13 @@ export async function updateSession(request: NextRequest) {
         url.pathname = '/dashboard';
         url.search = '';
         return NextResponse.redirect(url);
+    }
+
+    // A navigation that got through ungated leaves a trace, so "the gate stopped
+    // gating" is visible in request logs rather than only in a console.error
+    // nobody is reading.
+    if (entitlementFailedOpen) {
+        supabaseResponse.headers.set('x-entitlement-fail-open', '1');
     }
 
     return supabaseResponse;

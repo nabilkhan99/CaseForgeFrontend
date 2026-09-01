@@ -22,9 +22,19 @@ const DESTINATIONS: readonly AdminDestination[] = [
     blurb: 'Advocates and their links, conversions, what you owe, and marking payouts.',
   },
   {
+    href: '/admin/progress',
+    title: 'Progress',
+    blurb: 'Who is passing stations — best attempt counts, per user, with the titles.',
+  },
+  {
     href: '/admin/recordings',
     title: 'Recordings',
     blurb: 'Listen back to real consultations — who sat what, and how it actually sounded.',
+  },
+  {
+    href: '/admin/lectures',
+    title: 'Lectures',
+    blurb: 'The Complete-tier course — add a lecture, upload its video, publish it.',
   },
 ] as const;
 

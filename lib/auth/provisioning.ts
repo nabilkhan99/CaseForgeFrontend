@@ -1,0 +1,294 @@
+import 'server-only';
+import { createClient } from '@supabase/supabase-js';
+import { sendSetPasswordEmail } from '@/lib/email/accountEmail';
+import { exactEmailPattern } from '@/lib/commerce/emailFilter';
+import { SITE_URL } from '@/lib/seo/site';
+
+/**
+ * Purchase → account provisioning (self-service from 1 Sept 2026).
+ *
+ * Called from the Stripe webhook for a paid order: creates the auth user under
+ * the buying email (buying email = account email, by product decision).
+ *
+ * This module owns the ACCOUNT only. Minting the setup link and sending the
+ * mail that carries it belong to lib/auth/provisionBuyer, which does both
+ * behind its compare-and-swap on `set_password_sent_at` — so exactly one of two
+ * concurrent Stripe deliveries can mint a link, and a link is never minted
+ * (invalidating the previous one) by a delivery that will not go on to send it.
+ *
+ * Idempotent: an existing user is left untouched. Every outcome that leaves a
+ * buyer without an account returns an `error`, so the webhook logs it rather
+ * than stranding them silently.
+ *
+ * Emailed links point at {@link authLinkOrigin} — the deployment's own branch
+ * URL on a preview, the canonical site otherwise — and never at the webhook
+ * request's own origin, which is caller-controlled.
+ */
+
+export interface ProvisionResult {
+  /** We created the auth user on this call. */
+  created: boolean;
+  /**
+   * The auth user was already there, so nothing was created and nothing sent —
+   * but the buyer is NOT stranded and owes no email.
+   *
+   * Distinct from `created` because the caller stamps on it: without a flag to
+   * hang that on, a repeat buyer left both stamps NULL forever, every Stripe
+   * retry for three days re-attempted `createUser`, and no ops query could tell
+   * "already had an account" from "Brevo ate their link".
+   */
+  alreadyExisted: boolean;
+  /**
+   * The auth user this purchase now belongs to, on both the created and the
+   * already-existed path — so the caller can attach anything the buyer did
+   * BEFORE they had an account (their guest free mock; see
+   * {@link ../auth/claimTrialSessions}).
+   *
+   * Null only when we genuinely don't know: a create that failed for a real
+   * reason, or an existing account with no `profiles` row to look the id up
+   * from. Callers must treat null as "skip", never as an error.
+   */
+  userId: string | null;
+  error?: string;
+}
+
+function getAdminAuthClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } },
+  );
+}
+
+/**
+ * Which host an emailed auth link points at.
+ *
+ * Resolved per deployment, so every branch mails links you can actually open:
+ *
+ *   1. `AUTH_LINK_ORIGIN`, when set. The escape hatch — local dev pointing at
+ *      localhost, or a preview you want aimed at a custom domain rather than
+ *      its generated alias.
+ *   2. On a PREVIEW deployment, that deployment's own branch URL. This is
+ *      `VERCEL_BRANCH_URL`, the branch alias, not `VERCEL_URL`, the per-deploy
+ *      one — the branch alias is stable across deploys, so a link minted by one
+ *      build still opens after the next.
+ *   3. Otherwise {@link SITE_URL}.
+ *
+ * SITE_URL itself stays hardcoded on purpose: it is the SEO constant behind
+ * canonical tags, og:url and JSON-LD, all of which must name the production
+ * domain whatever host rendered them. An emailed auth link is the one consumer
+ * with the opposite requirement, which is why it resolves separately here.
+ *
+ * ⚠️ Step 2 is written as an opt-IN — only a deployment that positively reports
+ * `VERCEL_ENV === 'preview'` may use its own URL. Inverting it (use the branch
+ * URL unless production) would mean an unset or misspelled VERCEL_ENV emailing
+ * paying customers a `vercel.app` link, which is both untrustworthy to receive
+ * and a support problem to explain. Every unknown lands on the canonical site.
+ *
+ * Never the request's own origin, on any branch: the Host header is caller-
+ * controlled, and an account-recovery link whose host comes from a request is
+ * the classic host-header poisoning shape. Every input here is set by the
+ * platform or by us.
+ *
+ * Server-only, never NEXT_PUBLIC_: this runs in the Stripe webhook and the
+ * resend route, and nothing in the browser should influence where an
+ * account-recovery link points.
+ *
+ * ⚠️ The token is minted against the real Supabase project whatever this
+ * returns, so a preview host verifies a live recovery token and signs you into
+ * the real account. Test with a throwaway address, never a customer's.
+ */
+export function authLinkOrigin(): string {
+  const override = originFrom(process.env.AUTH_LINK_ORIGIN, 'AUTH_LINK_ORIGIN');
+  if (override) return override;
+
+  if (process.env.VERCEL_ENV === 'preview') {
+    // VERCEL_BRANCH_URL carries no scheme, by Vercel's definition.
+    const branch = originFrom(`https://${process.env.VERCEL_BRANCH_URL?.trim() ?? ''}`);
+    if (branch) return branch;
+  }
+
+  return SITE_URL;
+}
+
+/**
+ * A candidate origin, or null when it is not one we will mail.
+ *
+ * Keeps only the origin, so a path or query on the env var cannot ride along
+ * into the link. Anything unparseable or non-http returns null rather than
+ * throwing: a typo in a dashboard must not be able to strand a buyer who has
+ * already paid, and the caller falls back to the canonical site.
+ */
+function originFrom(value: string | undefined, envName?: string): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed || trimmed === 'https://') return null;
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+      if (envName) console.warn(`[provisioning] ${envName} is not http(s); using SITE_URL`, { value });
+      return null;
+    }
+    return url.origin;
+  } catch {
+    if (envName) console.warn(`[provisioning] ${envName} is not a URL; using SITE_URL`, { value });
+    return null;
+  }
+}
+
+export function setPasswordUrl(origin: string, tokenHash: string, email: string): string {
+  const url = new URL('/auth/set-password', origin);
+  url.searchParams.set('token_hash', tokenHash);
+  url.searchParams.set('email', email);
+  return url.toString();
+}
+
+/**
+ * Mint a fresh, single-use recovery link for an existing auth user.
+ *
+ * Split out from {@link sendSetPasswordLink} so the link can be carried by an
+ * email this module does not own. The Stripe webhook now sends ONE mail on a
+ * purchase — the receipt, with the setup link as its button — and it needs the
+ * URL, not a send.
+ *
+ * The token is a recovery `token_hash`, which /auth/set-password verifies
+ * client-side via verifyOtp. Deliberately not `generateLink().action_link`,
+ * whose implicit flow does not survive this app's PKCE browser client, and
+ * deliberately not the browser client's `resetPasswordForEmail`, whose PKCE
+ * `code_verifier` lives in the requesting browser and so breaks the
+ * laptop-requests / phone-opens case.
+ *
+ * ⚠️ EXPIRY. Minting a new link INVALIDATES the previous one for that user, and
+ * the lifetime is GoTrue's `MAILER_OTP_EXP`, which Supabase caps at 24 hours —
+ * not the 7 days the receipt spec asks for. Nothing here can extend it: a
+ * longer window needs a bespoke token table, which is not a thing to build on
+ * the eve of launch. The emails therefore state 24 hours, and the self-serve
+ * resend at /api/auth/resend-set-password is the recovery path.
+ */
+export async function mintSetPasswordLink(args: {
+  email: string;
+}): Promise<{ url: string | null; error?: string }> {
+  const supabase = getAdminAuthClient();
+  const email = args.email.toLowerCase().trim();
+
+  // Wrapped, not just error-checked. GoTrue reports most failures in `error`,
+  // but a transport-level fault rejects — and this runs while the caller holds
+  // the send claim, so an escaping throw would leave `set_password_sent_at`
+  // written for a mail that never went and no retry would ever revisit the
+  // buyer. Always resolve; never throw.
+  try {
+    const { data: link, error: linkError } = await supabase.auth.admin.generateLink({
+      type: 'recovery',
+      email,
+    });
+    if (linkError || !link?.properties?.hashed_token) {
+      return { url: null, error: linkError?.message ?? 'no token in link' };
+    }
+    return { url: setPasswordUrl(authLinkOrigin(), link.properties.hashed_token, email) };
+  } catch (error: unknown) {
+    console.error('[provisioning] generateLink threw', { error });
+    return { url: null, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/**
+ * Mint a link and email the house set-password mail.
+ *
+ * This is now the SELF-SERVICE path only — /api/auth/resend-set-password, for a
+ * buyer whose link expired. The purchase path no longer calls it: a buyer who
+ * has just paid gets the receipt email carrying the same link instead, so they
+ * receive one mail rather than two. Kept intact, and still exported, because
+ * the resend route is the spec's answer to an expired link and must keep
+ * working exactly as it does today.
+ */
+export async function sendSetPasswordLink(args: {
+  email: string;
+  fullName?: string | null;
+}): Promise<{ sent: boolean; error?: string }> {
+  const email = args.email.toLowerCase().trim();
+
+  const { url, error } = await mintSetPasswordLink({ email });
+  if (!url) return { sent: false, error };
+
+  const sent = await sendSetPasswordEmail({
+    toEmail: email,
+    toName: args.fullName,
+    setPasswordUrl: url,
+  });
+  return sent.sent ? { sent: true } : { sent: false, error: sent.skipped };
+}
+
+/**
+ * The auth user id behind an address, for the account that already existed.
+ *
+ * `admin.createUser` hands back the new user on the create path, but says
+ * nothing useful when the account is already there, and the GoTrue admin API
+ * has no "get user by email". `public.profiles` is the map: a trigger on
+ * `auth.users` inserts one row per account carrying `id` and `email`, so it is
+ * complete by construction. Case-insensitive for the same reason every other
+ * email match in this codebase is.
+ *
+ * Best-effort. A miss returns null and the caller skips whatever it wanted the
+ * id for — this is a nice-to-have on top of provisioning, never a reason to
+ * fail a purchase.
+ */
+async function findUserIdByEmail(
+  supabase: ReturnType<typeof getAdminAuthClient>,
+  email: string,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id')
+    .ilike('email', exactEmailPattern(email))
+    .maybeSingle();
+
+  if (error) {
+    console.error('[provisioning] profile lookup failed', { error });
+    return null;
+  }
+  return (data as { id?: string } | null)?.id ?? null;
+}
+
+export async function provisionAccountForPurchase(args: {
+  email: string;
+  fullName?: string | null;
+}): Promise<ProvisionResult> {
+  const supabase = getAdminAuthClient();
+  const email = args.email.toLowerCase().trim();
+
+  const { data: created, error: createError } = await supabase.auth.admin.createUser({
+    email,
+    email_confirm: true,
+    user_metadata: args.fullName ? { full_name: args.fullName } : undefined,
+  });
+
+  if (createError) {
+    const alreadyExists =
+      createError.code === 'email_exists' || /already/i.test(createError.message);
+    if (alreadyExists) {
+      // An existing account keeps its password, so it is owed no setup link.
+      // It IS owed a receipt — see provisionBuyer, which sends one either way.
+      //
+      // Still reported as an error, because the caller has recorded no send for
+      // this buyer and a silent skip is exactly how the stranded-buyer case
+      // stayed invisible.
+      return {
+        created: false,
+        alreadyExisted: true,
+        userId: await findUserIdByEmail(supabase, email),
+        error: 'account_already_exists',
+      };
+    }
+    return {
+      created: false,
+      alreadyExisted: false,
+      userId: null,
+      error: createError.message,
+    };
+  }
+
+  return {
+    created: true,
+    alreadyExisted: false,
+    userId: created?.user?.id ?? null,
+  };
+}

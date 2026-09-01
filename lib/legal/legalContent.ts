@@ -32,9 +32,9 @@ Contact: hello@fourteenfisherman.com
 
 3.1 Depending on the plan you purchase, we provide some or all of: access to AI voice consultation practice stations, on-demand recorded lectures, small-group coaching sessions, and one-to-one coaching.
 
-3.2 Plan contents, prices and access periods are as described on the pricing page at the time of purchase. All plans are one-off purchases for a fixed course, not subscriptions.
+3.2 Plan contents, prices and access periods are as described on the pricing page at the time of purchase. The Self-Study and Complete plans are sold as a fixed 3-month course term: you make one payment, the term does not renew, and no further charge is made. The monthly Self-Study plan is a rolling monthly plan that renews until you cancel it.
 
-3.3 Course access runs for the access period stated at purchase, starting from the date your access is activated.
+3.3 Course access runs for the access period stated at purchase, starting from the date of purchase, unless we agree a later start date with you in writing.
 
 3.4 We may improve, update or replace individual stations, lectures or materials during your access period. We will not materially reduce what you purchased.
 
@@ -139,6 +139,24 @@ Contact: hello@fourteenfisherman.com
 13.3 If any part of these terms is found unenforceable, the rest remains in force.
 
 13.4 These terms are governed by the law of England and Wales, and the courts of England and Wales have jurisdiction. If you live in Scotland or Northern Ireland you may also bring proceedings in your local courts.
+
+### 14. Referral scheme
+
+14.1 If you share your personal referral link and someone joins through it, we pay you a referral fee: £100 where they join the Complete SCA Course, and £50 where they join either Self-Study plan. The person you refer receives the same amount.
+
+14.2 **This is a fee paid to you personally. It is not a discount, rebate or reduction of any course price.** The person you refer pays the full advertised price and receives a receipt and invoice for the full amount they paid. Nothing about the referral changes the price of their course or what their receipt shows.
+
+14.3 We pay by bank transfer once the referred person's order is confirmed and any cancellation period has passed. We will ask you for your bank details at that point. We do not pay referral fees as a refund against a card payment.
+
+14.4 A referral qualifies when the person you refer is new to us, uses your link before purchasing, and completes payment. You cannot refer yourself, another account you control, or someone who has already purchased. One referral fee is payable per person referred, however many links they use.
+
+14.5 A referral fee is not payable, and may be reclaimed if already paid, where the referred purchase is refunded, charged back, or made in breach of clause 14.4.
+
+14.6 There is no limit on how many people you may refer. Referral links are live until 26 September 2026. Referrals completed before that date are honoured after it.
+
+14.7 A referral fee is your income. You are responsible for declaring it and for any tax due on it. If your employer, deanery or training programme places restrictions on payments of this kind, complying with those restrictions is your responsibility.
+
+14.8 We may amend or withdraw the scheme, or decline or reverse a payment where we reasonably believe a referral is not genuine or the scheme is being misused. Changes do not affect referrals already completed.
 
 Fourteen Fisherman is operated by Phenolabs Limited, a company registered in England and Wales (company number 17022434). References to "we", "us" and "our" mean Phenolabs Limited. References to "the platform" mean fourteenfisherman.com and all services provided through it.
 

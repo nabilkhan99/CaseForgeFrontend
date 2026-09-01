@@ -34,7 +34,7 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
   const navBg = useTransform(
     scrollYProgress,
     [0, 0.08],
-    ['rgba(255,250,238,0.78)', 'rgba(255,250,238,0.94)']
+    ['rgba(255,250,238,0.92)', 'rgba(255,250,238,0.97)']
   );
   const navShadow = useTransform(
     scrollYProgress,
@@ -91,6 +91,18 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
           >
             Study Budget
           </Link>
+          {/* Straight to the plans on the landing page rather than a page of
+              their own. Written as `/#pricing`, not `#pricing`: this nav also
+              renders on /sca-cases and the portfolio tool, where a bare hash
+              would scroll to nothing. /pricing still exists — it is where a
+              signed-in customer renews or upgrades, and it knows which plan
+              they hold, which this section does not. */}
+          <Link
+            href="/#pricing"
+            className="text-[13px] text-body hover:text-heading transition-colors duration-150"
+          >
+            Pricing
+          </Link>
           <Link
             href="/gp-portfolio-tool"
             className="text-[13px] text-body hover:text-heading transition-colors duration-150 flex items-baseline gap-2"
@@ -114,15 +126,26 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
                   </motion.div>
                 </Link>
               ) : (
-                <Link href={trialCta.href}>
-                  <motion.div
-                    className="primary-button text-[13px] !py-2 !px-5 !rounded-full"
-                    whileHover={{ y: -2 }}
-                    whileTap={{ scale: 0.98 }}
+                <>
+                  {/* Quiet, but present. Accounts are created by purchase, so
+                      the landing page had no way in at all for someone who has
+                      already bought — they had to know /auth/sign-in by heart. */}
+                  <Link
+                    href="/auth/sign-in"
+                    className="text-[13px] text-body hover:text-heading transition-colors duration-150"
                   >
-                    {trialCta.label}
-                  </motion.div>
-                </Link>
+                    Log in
+                  </Link>
+                  <Link href={trialCta.href}>
+                    <motion.div
+                      className="primary-button text-[13px] !py-2 !px-5 !rounded-full"
+                      whileHover={{ y: -2 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      {trialCta.label}
+                    </motion.div>
+                  </Link>
+                </>
               )}
             </>
           )}
@@ -188,6 +211,13 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
               Study Budget
             </Link>
             <Link
+              href="/#pricing"
+              onClick={() => setMobileOpen(false)}
+              className="min-h-[44px] flex items-center px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
+            >
+              Pricing
+            </Link>
+            <Link
               href="/gp-portfolio-tool"
               onClick={() => setMobileOpen(false)}
               className="min-h-[44px] flex items-baseline px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150 gap-2"
@@ -205,11 +235,20 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
                     <div className="primary-button text-[14px] w-full justify-center">Dashboard</div>
                   </Link>
                 ) : (
-                  <Link href={trialCta.href} onClick={() => setMobileOpen(false)}>
-                    <div className="primary-button text-[14px] w-full justify-center mt-1">
-                      {trialCta.label}
-                    </div>
-                  </Link>
+                  <>
+                    <Link
+                      href="/auth/sign-in"
+                      onClick={() => setMobileOpen(false)}
+                      className="min-h-[44px] flex items-center px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
+                    >
+                      Log in
+                    </Link>
+                    <Link href={trialCta.href} onClick={() => setMobileOpen(false)}>
+                      <div className="primary-button text-[14px] w-full justify-center mt-1">
+                        {trialCta.label}
+                      </div>
+                    </Link>
+                  </>
                 )}
               </>
             )}

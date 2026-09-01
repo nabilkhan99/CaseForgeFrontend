@@ -129,7 +129,10 @@ export async function PUT(req: NextRequest) {
   const size = Number(
     (object.metadata as { size?: number } | null)?.size ?? 0
   );
-  if (size && size < MIN_OBJECT_BYTES) {
+  // Zero or missing metadata must FAIL the floor, not skip it: the aborted
+  // upload that created an empty object is the exact case this check exists
+  // for, and `size &&` waved it through.
+  if (size < MIN_OBJECT_BYTES) {
     return NextResponse.json({ error: 'Recording too small' }, { status: 400 });
   }
 

@@ -1,82 +1,72 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { ACCESS_OPENS } from '@/lib/commerce/plans';
+import { isMonthlyPlan, type EntitlementState } from '@/lib/commerce/entitlements';
+import { getPlan } from '@/lib/commerce/plans';
+import { getServerEntitlement } from '@/lib/commerce/serverEntitlement';
 
-const DAY_MS = 86_400_000;
-
-/** 3 calendar months from launch day, last instant of the final day. */
-function preorderExpiry(purchasedAt: string): Date {
-  const launch = new Date(`${ACCESS_OPENS}T00:00:00Z`);
-  const start = new Date(purchasedAt) < launch ? launch : new Date(purchasedAt);
-  const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 3, start.getUTCDate()));
-  end.setUTCDate(end.getUTCDate() - 1);
-  end.setUTCHours(23, 59, 59, 999);
-  return end;
+export interface SubscriptionResponse {
+  /** Plan key of the purchase the access derives from, null when there is none. */
+  plan: string | null;
+  planName: string | null;
+  /**
+   * What was actually bought — never overwritten by a bypass, so the UI can
+   * say "Ended" and "you still have access" at the same time without lying
+   * about either. Pair with {@link bypass}.
+   */
+  state: EntitlementState;
+  /**
+   * Access granted without a live purchase: the ADMIN_EMAILS allowlist, a
+   * staged deployment, or a fail-open when the lookup itself broke. Consumers
+   * use it to suppress "buy a plan" nags, not to describe the plan.
+   */
+  bypass: boolean;
+  /** May start a consultation right now — `state === 'active' || bypass`. */
+  allowed: boolean;
+  /** ISO date access ends; null for monthly, which runs until it is canceled. */
+  expiresAt: string | null;
+  /**
+   * Monthly only: ISO date Stripe next charges. Display copy — a rolling plan
+   * has no end date, so this must never be treated as an expiry.
+   */
+  renewsAt: string | null;
+  isMonthly: boolean;
+  /** Lectures are Complete-only; true for an active Complete plan or a bypass. */
+  hasLectures: boolean;
+  /** Complete's coaching day (ISO date), when one was booked. */
+  coachingDay: string | null;
 }
 
 /**
- * Hotfix (22 Aug 2026): the retired `subscriptions` table is empty, so every
- * signed-in buyer read as "free tier". Recognise a paid `preorders` row under
- * the account's email. The full entitlement engine replaces this at the
- * develop → main merge on 1 Sept.
+ * The signed-in user's plan and expiry, as the rest of the product sees it.
+ *
+ * Reads the same entitlement the gate reads (purchases in `preorders`), not
+ * the retired `subscriptions` table, whose sprint/standard/mastery rows no
+ * checkout has written since the preorder launch — which is why the banners
+ * built on it had gone quiet.
  */
 export async function GET() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { user, entitlement, allowed, bypass, failedOpen } = await getServerEntitlement();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  if (user.email) {
-    const { data: preorder } = await supabase
-      .from('preorders')
-      .select('plan, status, created_at')
-      .ilike('email', user.email.replace(/[%_\\]/g, '\\$&'))
-      .eq('status', 'paid')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+  const plan = entitlement.plan ?? null;
+  const body: SubscriptionResponse = {
+    plan,
+    planName: plan ? getPlan(plan)?.name ?? null : null,
+    // The true state, not `allowed ? 'active' : ...`. Folding the bypass into
+    // the state made an admin whose own purchase had lapsed render as
+    // "Active · expires in -12 days". `bypass` carries that information on its
+    // own, so the UI can stop nagging without the API misreporting the plan.
+    state: entitlement.state,
+    bypass: bypass || failedOpen,
+    allowed,
+    expiresAt: entitlement.expiresAt?.toISOString() ?? null,
+    renewsAt: entitlement.renewsAt?.toISOString() ?? null,
+    isMonthly: plan ? isMonthlyPlan(plan) : false,
+    hasLectures: (entitlement.hasLectures && allowed) || bypass,
+    coachingDay: entitlement.coachingDay ?? null,
+  };
 
-    if (preorder) {
-      const expiresAt = preorderExpiry(preorder.created_at);
-      return NextResponse.json({
-        subscription: {
-          plan: preorder.plan,
-          status: 'active',
-          expires_at: expiresAt.toISOString(),
-          purchased_at: preorder.created_at,
-          days_remaining: Math.ceil((expiresAt.getTime() - Date.now()) / DAY_MS),
-        },
-      });
-    }
-  }
-
-  const { data: subscription } = await supabase
-    .from('subscriptions')
-    .select('plan, status, expires_at, purchased_at')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .gt('expires_at', new Date().toISOString())
-    .order('expires_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (!subscription) {
-    return NextResponse.json({ subscription: null });
-  }
-
-  const daysRemaining = Math.ceil(
-    (new Date(subscription.expires_at).getTime() - Date.now()) / DAY_MS
-  );
-
-  return NextResponse.json({
-    subscription: {
-      plan: subscription.plan,
-      status: subscription.status,
-      expires_at: subscription.expires_at,
-      purchased_at: subscription.purchased_at,
-      days_remaining: daysRemaining,
-    },
-  });
+  return NextResponse.json(body);
 }

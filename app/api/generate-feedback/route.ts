@@ -12,9 +12,35 @@ import type { ConsultationFeedback } from '@/lib/clinical-master/types';
  * been retired; marking now runs on Azure (GPT-5.x), guarded by a shared secret.
  */
 
+// Hobby-plan ceiling: Vercel rejects anything above 60 at deploy time. The
+// after() callback awaits the ~80-90s mark-consultation round trip, so it is
+// severed at 60s — Azure still finishes the run and writes session_results;
+// we just can't see a late failure to release the claim, which is what the
+// stale-claim TTL below covers. Raise this if the project moves to Fluid
+// Compute / Pro (300s), which also restores active failure handling.
 export const maxDuration = 60;
 
-const inFlightMarkingSessions = new Set<string>();
+/**
+ * A marking claim (clinical_sessions.marking_started_at) older than this is
+ * presumed dead and can be retaken, so a crashed run self-heals on the page's
+ * next trigger poll instead of sticking in 'processing' forever.
+ */
+const MARKING_CLAIM_STALE_MINUTES = 10;
+
+/**
+ * Past this age a session that still has no result is stuck, not slow. Marking
+ * takes 80 to 90 seconds; there are production sessions that have sat in
+ * 'processing' for two days because the trigger failed and nothing retried it.
+ * The page needs to be able to tell "still working" from "this run died".
+ */
+const STALLED_AFTER_MINUTES = 60;
+
+function minutesSince(iso: string | null | undefined): number | null {
+    if (!iso) return null;
+    const started = new Date(iso).getTime();
+    if (!Number.isFinite(started)) return null;
+    return Math.max(0, Math.round((Date.now() - started) / 60000));
+}
 
 interface SessionResultRow {
     verdict: string;
@@ -33,7 +59,13 @@ function toFeedback(
     sessionId: string,
     row: SessionResultRow,
     stationId: string | undefined,
-    stationTitle: string | undefined
+    stationTitle: string | undefined,
+    clinicalLearningPoints: string | null | undefined,
+    markScheme: {
+        data_gathering?: string | null;
+        clinical_management?: string | null;
+        relating_to_others?: string | null;
+    } | null
 ): ConsultationFeedback {
     return {
         session_id: sessionId,
@@ -54,6 +86,14 @@ function toFeedback(
         },
         station_id: stationId,
         station_title: stationTitle ?? 'Station Feedback',
+        clinical_learning_points: clinicalLearningPoints ?? null,
+        mark_scheme: markScheme
+            ? {
+                  data_gathering: markScheme.data_gathering ?? null,
+                  clinical_management: markScheme.clinical_management ?? null,
+                  relating_to_others: markScheme.relating_to_others ?? null,
+              }
+            : null,
     };
 }
 
@@ -106,18 +146,33 @@ export async function POST(request: NextRequest) {
         if (existingResults) {
             const { data: session } = await supabase
                 .from('clinical_sessions')
-                .select('station_id, transcript, stations(title)')
+                // clinical_learning_points rides along so the report can show the
+                // same teaching notes as the public case page, instead of sending
+                // people off to find their case in another tab.
+                .select(
+                    'station_id, transcript, stations(title, clinical_learning_points, data_gathering, clinical_management, relating_to_others)'
+                )
                 .eq('id', sessionId)
                 .single();
 
-            const stationTitle = (session?.stations as { title?: string } | null)?.title;
+            const station = session?.stations as
+                | {
+                      title?: string;
+                      clinical_learning_points?: string | null;
+                      data_gathering?: string | null;
+                      clinical_management?: string | null;
+                      relating_to_others?: string | null;
+                  }
+                | null;
             return NextResponse.json({
                 status: 'ready',
                 feedback: toFeedback(
                     sessionId,
                     existingResults as SessionResultRow,
                     session?.station_id as string | undefined,
-                    stationTitle
+                    station?.title,
+                    station?.clinical_learning_points,
+                    station
                 ),
                 transcript: Array.isArray(session?.transcript) ? session.transcript : [],
             });
@@ -126,23 +181,35 @@ export async function POST(request: NextRequest) {
         // 2. Need a transcript before we can mark.
         const { data: session, error: sessionError } = await supabase
             .from('clinical_sessions')
-            .select('id, transcript, status')
+            .select('id, transcript, status, started_at, completed_at, station_id, stations(title)')
             .eq('id', sessionId)
             .single();
 
         if (sessionError || !session) {
             return NextResponse.json({ error: 'Session not found' }, { status: 404 });
         }
+
+        // 'processing' rows never carry completed_at (it is stamped when the
+        // result row lands), so age has to fall back to started_at.
+        const ageMinutes = minutesSince(session.completed_at ?? session.started_at);
+        const terminal = session.status !== 'reading' && session.status !== 'live';
+        // Station details so the page can offer "practise this case again"
+        // rather than a dead end when the run can never produce feedback.
+        const stationId = (session.station_id as string | null) ?? undefined;
+        const stationTitle = (session.stations as { title?: string } | null)?.title;
+
         if (
             !session.transcript ||
             (Array.isArray(session.transcript) && session.transcript.length === 0)
         ) {
             // A session past the live stage with no transcript will never produce
             // feedback (mic failure / abandoned call) — tell the page to stop polling.
-            const terminal = session.status !== 'reading' && session.status !== 'live';
             return NextResponse.json({
                 status: terminal ? 'no_transcript' : 'generating',
                 triggerQueued: false,
+                ageMinutes,
+                stationId,
+                stationTitle,
             });
         }
 
@@ -156,40 +223,76 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        if (trigger && !inFlightMarkingSessions.has(sessionId)) {
-            const endpoint = `${markingUrl.replace(/\/+$/, '')}/api/mark-consultation`;
-            inFlightMarkingSessions.add(sessionId);
-            after(async () => {
-                try {
-                    const res = await fetch(endpoint, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'x-marking-secret': markingSecret,
-                        },
-                        body: JSON.stringify({ sessionId }),
-                    });
+        let triggerQueued = false;
+        if (trigger) {
+            // Cross-instance claim: only the request that flips marking_started_at
+            // from null (or stale) wins; concurrent polls from other Vercel
+            // instances see no row back and skip. An in-memory Set can't give
+            // this guarantee — parallel instances each start with an empty one.
+            // Cast: marking_started_at postdates the generated types (0005).
+            const staleCutoff = new Date(
+                Date.now() - MARKING_CLAIM_STALE_MINUTES * 60000
+            ).toISOString();
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data: claim } = await (supabase as any)
+                .from('clinical_sessions')
+                .update({ marking_started_at: new Date().toISOString() })
+                .eq('id', sessionId)
+                .or(`marking_started_at.is.null,marking_started_at.lt.${staleCutoff}`)
+                .select('id')
+                .maybeSingle();
 
-                    if (!res.ok) {
-                        const body = await res.text().catch(() => '');
-                        console.error('Marking endpoint returned an error', {
-                            sessionId,
-                            status: res.status,
-                            body: body.slice(0, 500),
+            if (claim) {
+                triggerQueued = true;
+                const endpoint = `${markingUrl.replace(/\/+$/, '')}/api/mark-consultation`;
+                const releaseClaim = async () => {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    await (supabase as any)
+                        .from('clinical_sessions')
+                        .update({ marking_started_at: null })
+                        .eq('id', sessionId)
+                        .then(null, (err: unknown) =>
+                            console.error('Failed to release marking claim', { sessionId, err })
+                        );
+                };
+                after(async () => {
+                    try {
+                        const res = await fetch(endpoint, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-marking-secret': markingSecret,
+                            },
+                            body: JSON.stringify({ sessionId }),
                         });
+
+                        if (!res.ok) {
+                            const body = await res.text().catch(() => '');
+                            console.error('Marking endpoint returned an error', {
+                                sessionId,
+                                status: res.status,
+                                body: body.slice(0, 500),
+                            });
+                            // Give the claim back so the page's next trigger poll retries.
+                            await releaseClaim();
+                        }
+                    } catch (err) {
+                        console.error('Failed to trigger marking endpoint:', err);
+                        await releaseClaim();
                     }
-                } catch (err) {
-                    console.error('Failed to trigger marking endpoint:', err);
-                } finally {
-                    inFlightMarkingSessions.delete(sessionId);
-                }
-            });
+                });
+            }
         }
 
         return NextResponse.json({
             status: 'generating',
-            triggerQueued: trigger,
-            alreadyInFlight: inFlightMarkingSessions.has(sessionId),
+            triggerQueued,
+            ageMinutes,
+            // A transcript exists and the session is terminal, so marking should
+            // have finished long ago. Say so instead of polling into silence.
+            stalled: terminal && ageMinutes !== null && ageMinutes >= STALLED_AFTER_MINUTES,
+            stationId,
+            stationTitle,
         });
     } catch (error) {
         console.error('Feedback route error:', error);

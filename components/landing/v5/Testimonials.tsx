@@ -1,68 +1,8 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { TESTIMONIALS } from '@/lib/testimonials';
 import { TILE } from './editorial';
-
-interface Testimonial {
-  name: string;
-  meta: string;
-  quote: string;
-  avatar: React.ReactNode;
-}
-
-const AmirAvatar = (
-  <img
-    src="/images/reviews/amir-hussain.jpeg"
-    alt="Dr Amir Hussain"
-    width={68}
-    height={68}
-    className="h-full w-full rounded-full object-cover"
-  />
-);
-
-const HarmeetAvatar = (
-  <img
-    src="/images/reviews/harmeet-makan.jpeg"
-    alt="Dr Harmeet Makan"
-    width={68}
-    height={68}
-    className="h-full w-full rounded-full object-cover"
-  />
-);
-
-const ZainAvatar = (
-  <img
-    src="/images/reviews/zain-chowdhary.jpeg"
-    alt="Dr Zain Chowdhary"
-    width={68}
-    height={68}
-    className="h-full w-full rounded-full object-cover object-top"
-  />
-);
-
-const TESTIMONIALS: Testimonial[] = [
-  {
-    name: 'Dr Amir Hussain',
-    meta: 'GP Registrar, Wessex',
-    avatar: AmirAvatar,
-    quote:
-      'Consulting a full mock in front of five other trainees was as grim as it sounds, at first. But there were only six of us, so the tutor had time to take my consultation apart properly, show me exactly where I was going wrong, and explain how to fix it. I picked up as much from watching the others as I did from having my own consultation reviewed in detail.',
-  },
-  {
-    name: 'Dr Harmeet Makan',
-    meta: 'GP Registrar, East Midlands',
-    avatar: HarmeetAvatar,
-    quote:
-      'I’d tried other AI tools before and wasn’t impressed, so I went in sceptical. But with Fourteen Fisherman, the AI patients felt like those in my own clinics, and the feedback felt specific enough to be like having my ES sit in on the consultation. It also made practising super flexible: no hassle arranging study partners, and it was ready whenever I had time.',
-  },
-  {
-    name: 'Dr Zain Chowdhary',
-    meta: 'GP Registrar, London',
-    avatar: ZainAvatar,
-    quote:
-      'I expected the usual exam-technique waffle from the lectures. Instead, they were genuinely high yield: the things that separate a pass from a fail in each domain, the small habits that cost people marks, and exactly how to improve them. I’ve carried so much of it into the way I structure consultations and communicate with patients in everyday practice.',
-  },
-];
 
 export default function Testimonials() {
   return (
@@ -82,7 +22,13 @@ export default function Testimonials() {
           >
             <div className="flex items-center gap-3">
               <span className="h-11 w-11 flex-shrink-0 overflow-hidden rounded-full">
-                {t.avatar}
+                <img
+                  src={t.image}
+                  alt={t.name}
+                  width={68}
+                  height={68}
+                  className={`h-full w-full rounded-full object-cover ${t.imageClass ?? ''}`}
+                />
               </span>
               <span>
                 <span className="block text-sm font-semibold text-heading">{t.name}</span>

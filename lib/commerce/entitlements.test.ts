@@ -1,0 +1,665 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  ACCESS_LAUNCH_DATE,
+  NO_ENTITLEMENT,
+  accessWindow,
+  computeEntitlement,
+  decideAccess,
+  preLaunchShiftMs,
+  stripeAccessWindow,
+  type AccessContext,
+  type EntitlementRow,
+} from './entitlements'
+import { parseAdminEmails } from '@/lib/admin/guard'
+import { ACCESS_OPENS } from './plans'
+
+const row = (over: Partial<EntitlementRow>): EntitlementRow => ({
+  plan: 'self_study',
+  status: 'paid',
+  created_at: '2026-09-05T10:00:00Z',
+  ...over,
+})
+
+const DURING = new Date('2026-09-20T00:00:00Z')
+
+/** The end `accessWindow`'s day transform produces for a raw instant. */
+function accessWindowEndFor(instant: string): string {
+  const day = new Date(instant)
+  day.setUTCDate(day.getUTCDate() - 1)
+  day.setUTCHours(23, 59, 59, 999)
+  return day.toISOString()
+}
+const AFTER_PREORDER_WINDOW = new Date('2026-12-15T00:00:00Z')
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
+describe('accessWindow', () => {
+  it('starts at purchase for post-launch buys and runs 3 calendar months', () => {
+    const { start, end } = accessWindow('2026-09-05T10:00:00Z')
+    expect(start.toISOString()).toBe('2026-09-05T10:00:00.000Z')
+    expect(end.toISOString()).toBe('2026-12-04T23:59:59.999Z')
+  })
+
+  it('opens a preorder-era buy at purchase, and still ends 3 months after launch', () => {
+    // The floor was retired at the START only. A 28 July buyer practises from
+    // 28 July, and their window still closes where it was sold to them: the
+    // last instant of 30 November, three months on from launch day.
+    const { start, end } = accessWindow('2026-07-28T09:00:00Z')
+    expect(start.toISOString()).toBe('2026-07-28T09:00:00.000Z')
+    expect(end.toISOString()).toBe('2026-11-30T23:59:59.999Z')
+  })
+
+  it('never shortens a window that was sold as 3 months from launch', () => {
+    // The property that makes retiring the floor safe for the buyers who
+    // pre-ordered: every pre-launch purchase date lands on the same end date,
+    // the one it had while the floor was in place.
+    for (const bought of ['2026-06-01T00:00:00Z', '2026-07-28T09:00:00Z', '2026-08-31T23:00:00Z']) {
+      expect(accessWindow(bought).end.toISOString()).toBe('2026-11-30T23:59:59.999Z')
+    }
+  })
+
+  it('takes launch day from the offer, so there is one source of truth', () => {
+    expect(ACCESS_LAUNCH_DATE.toISOString()).toBe(`${ACCESS_OPENS}T00:00:00.000Z`)
+  })
+
+  it('clamps to the last day of a shorter month', () => {
+    // 30 Nov + 3 months lands in February, which has no 30th: clamp to the 28th,
+    // then the inclusive end is the day before that.
+    expect(accessWindow('2026-11-30T09:00:00Z').end.toISOString()).toBe('2027-02-27T23:59:59.999Z')
+  })
+
+  it('grants 3 calendar months, not 3 months and a day', () => {
+    // The window a customer can count on a calendar: 1 Sept -> the last instant
+    // of 30 Nov. An inclusive end on the same day-of-month would hand out 92
+    // days against a promise of three months.
+    const { start, end } = accessWindow('2026-09-01T00:00:00Z')
+    expect(start.toISOString()).toBe('2026-09-01T00:00:00.000Z')
+    expect(end.toISOString()).toBe('2026-11-30T23:59:59.999Z')
+    // Access ends the instant 1 Dec begins.
+    expect(end.getTime() + 1).toBe(new Date('2026-12-01T00:00:00Z').getTime())
+  })
+
+  it('parses a Postgres-shaped timestamp', () => {
+    const { start } = accessWindow('2026-09-05 09:00:00.123456+00')
+    expect(start.toISOString()).toBe('2026-09-05T09:00:00.123Z')
+  })
+})
+
+describe('computeEntitlement', () => {
+  it('returns none with no purchases', () => {
+    expect(computeEntitlement([], DURING).state).toBe('none')
+  })
+
+  it('never hands back the shared NO_ENTITLEMENT object', () => {
+    const a = computeEntitlement([], DURING)
+    const b = computeEntitlement([], DURING)
+    expect(a).not.toBe(b)
+    expect(a).not.toBe(NO_ENTITLEMENT)
+    expect(Object.isFrozen(NO_ENTITLEMENT)).toBe(true)
+  })
+
+  it('self_study is active inside the window, without lectures', () => {
+    const e = computeEntitlement([row({})], DURING)
+    expect(e.state).toBe('active')
+    expect(e.hasLectures).toBe(false)
+    expect(e.expiresAt?.toISOString()).toBe('2026-12-04T23:59:59.999Z')
+  })
+
+  it('complete is active with lectures and its coaching day', () => {
+    const e = computeEntitlement(
+      [row({ plan: 'complete', coaching_day: '2026-09-20' })],
+      DURING,
+    )
+    expect(e).toMatchObject({ state: 'active', hasLectures: true, coachingDay: '2026-09-20' })
+  })
+
+  it('preorder buy (Sarah) starts 1 Sept and runs to 1 Dec', () => {
+    const e = computeEntitlement(
+      [row({ plan: 'complete', created_at: '2026-07-28T09:00:00Z' })],
+      DURING,
+    )
+    expect(e.state).toBe('active')
+    expect(e.expiresAt?.toISOString()).toBe('2026-11-30T23:59:59.999Z')
+  })
+
+  it('goes read-only after the window ends', () => {
+    const e = computeEntitlement([row({})], AFTER_PREORDER_WINDOW)
+    expect(e.state).toBe('read_only')
+    expect(e.hasLectures).toBe(false)
+  })
+
+  it('refunded rows grant nothing', () => {
+    expect(computeEntitlement([row({ status: 'refunded' })], DURING).state).toBe('none')
+  })
+
+  it('a monthly is live from the moment it is paid, launch day or not', () => {
+    // The 21 Aug 2026 ruling made every plan wait for 1 September; retiring the
+    // floor undoes it. Stripe bills a rolling plan from the purchase date, so
+    // it has to grant access from the purchase date too.
+    const beforeLaunch = new Date(ACCESS_LAUNCH_DATE.getTime() - 1)
+    const bought = row({ plan: 'self_study_monthly', created_at: '2026-08-22T00:00:00Z' })
+    expect(computeEntitlement([bought], beforeLaunch)).toMatchObject({
+      state: 'active',
+      plan: 'self_study_monthly',
+      hasLectures: false,
+    })
+    expect(computeEntitlement([bought], ACCESS_LAUNCH_DATE).state).toBe('active')
+  })
+
+  it('monthly is active while paid, has no lectures and no expiry', () => {
+    const e = computeEntitlement([row({ plan: 'self_study_monthly' })], DURING)
+    expect(e).toMatchObject({ state: 'active', hasLectures: false })
+    expect(e.expiresAt).toBeUndefined()
+  })
+
+  it('canceled monthly is read-only (Stripe ends it at period end)', () => {
+    const e = computeEntitlement(
+      [row({ plan: 'self_study_monthly', status: 'canceled' })],
+      DURING,
+    )
+    expect(e.state).toBe('read_only')
+  })
+
+  it('an active row beats an expired one', () => {
+    const e = computeEntitlement(
+      [row({ created_at: '2026-09-05T10:00:00Z' }), row({ created_at: '2026-12-10T00:00:00Z' })],
+      new Date('2026-12-20T00:00:00Z'),
+    )
+    expect(e.state).toBe('active')
+    expect(e.expiresAt?.toISOString()).toBe('2027-03-09T23:59:59.999Z')
+  })
+
+  it('active complete beats active self_study regardless of order', () => {
+    const a = computeEntitlement([row({}), row({ plan: 'complete' })], DURING)
+    const b = computeEntitlement([row({ plan: 'complete' }), row({})], DURING)
+    expect(a.hasLectures).toBe(true)
+    expect(b.hasLectures).toBe(true)
+  })
+
+  // ── Finding 2: the window has a start, and it gates ──
+
+  it('a purchase made before launch is live at once, keeping its sold end date', () => {
+    const e = computeEntitlement(
+      [row({ plan: 'complete', created_at: '2026-07-28T09:00:00Z' })],
+      new Date('2026-08-20T22:00:00Z'),
+    )
+    expect(e.state).toBe('active')
+    expect(e.hasLectures).toBe(true)
+    expect(e.plan).toBe('complete')
+    expect(e.expiresAt?.toISOString()).toBe('2026-11-30T23:59:59.999Z')
+  })
+
+  it('turns active the instant the purchase lands, not on launch day', () => {
+    const rows = [row({ created_at: '2026-07-28T09:00:00Z' })]
+    // A start still gates — it is just the purchase now, not a fixed date.
+    expect(computeEntitlement(rows, new Date('2026-07-28T08:59:59.999Z')).state).toBe('none')
+    expect(computeEntitlement(rows, new Date('2026-07-28T09:00:00Z')).state).toBe('active')
+    // And it was live long before the retired 1 September floor.
+    expect(computeEntitlement(rows, new Date(ACCESS_LAUNCH_DATE.getTime() - 1)).state).toBe('active')
+  })
+
+  // ── Finding 9: multi-purchase resolution must not depend on row order ──
+
+  it('the later end date wins between two live one-offs, in either order', () => {
+    const early = row({ created_at: '2026-09-02T00:00:00Z' }) // ends 2 Dec
+    const late = row({ created_at: '2026-11-01T00:00:00Z' }) // ends 1 Feb
+    const forwards = computeEntitlement([early, late], new Date('2026-11-15T00:00:00Z'))
+    const backwards = computeEntitlement([late, early], new Date('2026-11-15T00:00:00Z'))
+    expect(forwards.expiresAt?.toISOString()).toBe('2027-01-31T23:59:59.999Z')
+    expect(backwards.expiresAt?.toISOString()).toBe('2027-01-31T23:59:59.999Z')
+  })
+
+  it('a live monthly outranks a one-off that ends, in either order', () => {
+    const oneOff = row({ created_at: '2026-09-05T10:00:00Z' })
+    const monthly = row({ plan: 'self_study_monthly' })
+    expect(computeEntitlement([oneOff, monthly], DURING).plan).toBe('self_study_monthly')
+    expect(computeEntitlement([monthly, oneOff], DURING).plan).toBe('self_study_monthly')
+  })
+
+  // ── Finding 10: unknown plans must fail closed ──
+
+  it('grants nothing for an unrecognised plan string, and says so', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const e = computeEntitlement([row({ plan: 'lectures_only_typo' })], DURING)
+    expect(e.state).toBe('none')
+    expect(e.plan).toBeUndefined()
+    expect(spy).toHaveBeenCalled()
+  })
+
+  it('does not let an unknown plan mask a real purchase', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const e = computeEntitlement([row({ plan: 'lectures_only_typo' }), row({})], DURING)
+    expect(e.state).toBe('active')
+    expect(e.plan).toBe('self_study')
+    expect(spy).toHaveBeenCalled()
+  })
+
+  // ── Finding 15: exact boundaries ──
+
+  it('access runs to the last millisecond of the final day', () => {
+    const rows = [row({})]
+    const end = accessWindow('2026-09-05T10:00:00Z').end
+    expect(computeEntitlement(rows, new Date(end.getTime() - 1)).state).toBe('active')
+    expect(computeEntitlement(rows, end).state).toBe('active')
+    expect(computeEntitlement(rows, new Date(end.getTime() + 1)).state).toBe('read_only')
+  })
+
+  it('handles a Postgres-shaped created_at', () => {
+    const e = computeEntitlement([row({ created_at: '2026-09-05 09:00:00.123456+00' })], DURING)
+    expect(e.state).toBe('active')
+    expect(e.expiresAt?.toISOString()).toBe('2026-12-04T23:59:59.999Z')
+  })
+
+  // ── A bought-but-not-open-yet purchase must not be masked by a lapsed one ──
+  //
+  // `none` carrying a plan means "paid, window opens later" — a better position
+  // than lapsed access, not a worse one. Ranking it under `read_only` (as a
+  // single `none` rank did) let a spent purchase win the fold and report ITS
+  // plan and ITS past expiry date for a customer who had just paid again.
+
+  it('a pending preorder beats an expired one-off, in either order', () => {
+    // Dates chosen to put the two states side by side rather than to describe a
+    // real customer: pre-1-Sept the reachable version of this is the churned
+    // monthly below. The rule being pinned is the precedence, not the calendar.
+    const spent = row({ plan: 'self_study', created_at: '2027-01-01T00:00:00Z' }) // ends 31 Mar
+    const pending = row({ plan: 'complete', created_at: '2027-06-01T00:00:00Z' }) // opens 1 Jun
+    const now = new Date('2027-05-01T00:00:00Z')
+
+    for (const rows of [
+      [spent, pending],
+      [pending, spent],
+    ]) {
+      const e = computeEntitlement(rows, now)
+      expect(e.state).toBe('none')
+      expect(e.plan).toBe('complete')
+      expect(e.expiresAt?.toISOString()).toBe('2027-08-31T23:59:59.999Z')
+    }
+  })
+
+  it('a deferred-start purchase beats a churned monthly, in either order', () => {
+    // A lapsed monthly subscriber buys Complete with a start date we agreed in
+    // writing (terms 3.3). Before the precedence fix they were shown
+    // self_study_monthly, read-only.
+    const churned = row({ plan: 'self_study_monthly', status: 'canceled' })
+    const deferred = row({ plan: 'complete', created_at: '2027-06-01T00:00:00Z' })
+    const now = new Date('2027-05-01T00:00:00Z')
+
+    for (const rows of [
+      [churned, deferred],
+      [deferred, churned],
+    ]) {
+      const e = computeEntitlement(rows, now)
+      expect(e.state).toBe('none')
+      expect(e.plan).toBe('complete')
+      expect(e.expiresAt?.toISOString()).toBe('2027-08-31T23:59:59.999Z')
+    }
+  })
+
+  it('still ranks a no-purchase none below a lapsed purchase', () => {
+    // The fold's empty seed is also state 'none'. It carries no plan, and must
+    // keep losing to every real row — including a spent one.
+    const e = computeEntitlement([row({ created_at: '2026-09-05T10:00:00Z' })], AFTER_PREORDER_WINDOW)
+    expect(e.state).toBe('read_only')
+    expect(e.plan).toBe('self_study')
+  })
+
+  it('before launch day, a paid monthly and an early one-off are both live', () => {
+    // The inverse of the 21 Aug 2026 ruling, which parked every plan until
+    // 1 September. Nothing waits now, so both rows are active and Complete
+    // wins the fold on lectures.
+    const monthly = row({ plan: 'self_study_monthly', created_at: '2026-08-01T00:00:00Z' })
+    const bought = row({ plan: 'complete', created_at: '2026-07-28T09:00:00Z' })
+    const beforeLaunch = new Date('2026-08-20T22:00:00Z')
+    for (const rows of [
+      [monthly, bought],
+      [bought, monthly],
+    ]) {
+      const e = computeEntitlement(rows, beforeLaunch)
+      expect(e.state).toBe('active')
+      expect(e.plan).toBe('complete')
+    }
+    expect(computeEntitlement([monthly, bought], ACCESS_LAUNCH_DATE).state).toBe('active')
+  })
+
+  it('a refund does not cancel a second, live purchase', () => {
+    const e = computeEntitlement(
+      [row({ status: 'refunded', plan: 'complete' }), row({})],
+      DURING,
+    )
+    expect(e.state).toBe('active')
+    expect(e.plan).toBe('self_study')
+  })
+
+
+  it('a one-off row still mid-provisioning grants nothing', () => {
+    // Only `paid` counts, so a buyer whose webhook has written `pending` is
+    // told they have no plan rather than "we are setting you up". Pinned so
+    // the copy question is a deliberate product call, not an accident.
+    expect(computeEntitlement([row({ status: 'pending' })], DURING).state).toBe('none')
+  })
+
+
+
+  it('intensive is complete-tier: active with lectures and its coaching day', () => {
+    const e = computeEntitlement(
+      [row({ plan: 'intensive', coaching_day: '2026-09-20' })],
+      DURING,
+    )
+    expect(e).toMatchObject({ state: 'active', hasLectures: true, coachingDay: '2026-09-20' })
+  })
+
+})
+
+// ── The Stripe billing period, and the pre-launch shift ──
+//
+// Stripe cannot charge today and start the period on 1 September (see
+// stripe-research.md §1c). So a pre-launch buyer's Stripe period starts the day
+// they pay while their ACCESS starts at launch — and without a correction they
+// simply lose the days in between, off a course they paid three months for.
+
+describe('stripeAccessWindow', () => {
+  it('shifts a pre-launch purchase so it keeps its full term', () => {
+    // The worked example: bought 22 Aug 2026, Stripe period 22 Aug -> 22 Nov,
+    // against a course sold as 3 months from 1 September. Access now opens on
+    // 22 Aug, and still runs to the last instant of 1 Dec, not 22 Nov: the ten
+    // days the shift adds were sold and are not taken back.
+    const { start, end } = stripeAccessWindow(
+      '2026-08-22T00:00:00Z',
+      '2026-11-22T00:00:00Z',
+    )
+    expect(start.toISOString()).toBe('2026-08-22T00:00:00.000Z')
+    expect(end.toISOString()).toBe('2026-12-01T23:59:59.999Z')
+  })
+
+  it('gives the shifted window the same length as the one Stripe billed', () => {
+    // 10 days were bought before launch; 10 days are added to the end. The
+    // customer is never short-changed for pre-ordering early.
+    const shift = preLaunchShiftMs('2026-08-22T00:00:00Z', ACCESS_LAUNCH_DATE)
+    expect(shift).toBe(10 * 86_400_000)
+    const { end } = stripeAccessWindow('2026-08-22T00:00:00Z', '2026-11-22T00:00:00Z')
+    // Unshifted, the same transform would have ended access on 21 Nov.
+    expect(accessWindowEndFor('2026-11-22T00:00:00Z')).toBe('2026-11-21T23:59:59.999Z')
+    expect(end.toISOString()).toBe('2026-12-01T23:59:59.999Z')
+  })
+
+  it('shifts nothing once launch has passed', () => {
+    expect(preLaunchShiftMs('2026-09-05T10:00:00Z', ACCESS_LAUNCH_DATE)).toBe(0)
+    expect(preLaunchShiftMs(ACCESS_LAUNCH_DATE.toISOString(), ACCESS_LAUNCH_DATE)).toBe(0)
+  })
+
+  it('agrees exactly with the calendar fallback for a post-launch buy', () => {
+    // Bought 5 Sept, Stripe period ends 5 Dec. Both paths must land on the same
+    // instant, or two customers who bought a day apart get different rules.
+    const stripeEnd = stripeAccessWindow('2026-09-05T10:00:00Z', '2026-12-05T10:00:00Z').end
+    expect(stripeEnd.toISOString()).toBe(accessWindow('2026-09-05T10:00:00Z').end.toISOString())
+  })
+
+  it('honours a brought-forward launch date', () => {
+    const early = new Date('2026-08-22T00:00:00Z')
+    const { start, end } = stripeAccessWindow(
+      '2026-08-22T00:00:00Z',
+      '2026-11-22T00:00:00Z',
+      early,
+    )
+    expect(start.toISOString()).toBe('2026-08-22T00:00:00.000Z')
+    expect(end.toISOString()).toBe('2026-11-21T23:59:59.999Z')
+  })
+})
+
+describe('computeEntitlement with a recorded Stripe period', () => {
+  const preLaunchStripeRow = (over: Partial<EntitlementRow> = {}): EntitlementRow => ({
+    plan: 'self_study',
+    status: 'paid',
+    created_at: '2026-08-22T00:00:00Z',
+    access_starts_at: '2026-08-22T00:00:00Z',
+    access_ends_at: '2026-11-22T00:00:00Z',
+    ...over,
+  })
+
+  it('grants a 22 August pre-order 1 September to 1 December', () => {
+    const e = computeEntitlement([preLaunchStripeRow()], new Date('2026-09-10T00:00:00Z'))
+    expect(e.state).toBe('active')
+    expect(e.expiresAt?.toISOString()).toBe('2026-12-01T23:59:59.999Z')
+  })
+
+  it('is live from the day the money moved, and keeps the shifted end', () => {
+    // Money moved on 22 August, so access runs from 22 August — and still to
+    // the last instant of 1 December, the end the term was sold with.
+    const e = computeEntitlement([preLaunchStripeRow()], new Date('2026-08-25T00:00:00Z'))
+    expect(e.state).toBe('active')
+    expect(e.plan).toBe('self_study')
+    expect(e.expiresAt?.toISOString()).toBe('2026-12-01T23:59:59.999Z')
+  })
+
+  it('lapses to read-only the instant the shifted window closes', () => {
+    const end = new Date('2026-12-01T23:59:59.999Z')
+    expect(computeEntitlement([preLaunchStripeRow()], end).state).toBe('active')
+    expect(computeEntitlement([preLaunchStripeRow()], new Date(end.getTime() + 1)).state).toBe(
+      'read_only',
+    )
+  })
+
+  it('falls back to calendar months for a legacy row with no period', () => {
+    // Sarah, Phyo and Pavi: hand-provisioned before the columns existed. They
+    // must keep the window they were sold.
+    const e = computeEntitlement(
+      [{ plan: 'complete', status: 'paid', created_at: '2026-07-28T09:00:00Z' }],
+      DURING,
+    )
+    expect(e.expiresAt?.toISOString()).toBe('2026-11-30T23:59:59.999Z')
+  })
+
+  it('ignores an unparseable period rather than granting a NaN window', () => {
+    const e = computeEntitlement([preLaunchStripeRow({ access_ends_at: 'not-a-date' })], DURING)
+    expect(e.state).toBe('active')
+    expect(e.expiresAt?.toISOString()).toBe('2026-11-30T23:59:59.999Z')
+  })
+
+  it('reports the rolling plan’s next payment without giving it an expiry', () => {
+    // A live rolling plan must keep outranking a fixed term in the fold, which
+    // it does only while it has no end date. The renewal date is display copy.
+    const e = computeEntitlement(
+      [
+        {
+          plan: 'self_study_monthly',
+          status: 'paid',
+          created_at: '2026-09-01T00:00:00Z',
+          access_ends_at: '2026-10-01T00:00:00Z',
+        },
+      ],
+      DURING,
+    )
+    expect(e.state).toBe('active')
+    expect(e.expiresAt).toBeUndefined()
+    expect(e.renewsAt?.toISOString()).toBe('2026-10-01T00:00:00.000Z')
+  })
+
+  it('still ranks a live rolling plan above a fixed term that ends', () => {
+    const monthly: EntitlementRow = {
+      plan: 'self_study_monthly',
+      status: 'paid',
+      created_at: '2026-09-01T00:00:00Z',
+      access_ends_at: '2026-10-01T00:00:00Z',
+    }
+    const term: EntitlementRow = {
+      plan: 'self_study',
+      status: 'paid',
+      created_at: '2026-09-01T00:00:00Z',
+      access_ends_at: '2026-12-01T00:00:00Z',
+    }
+    expect(computeEntitlement([monthly, term], DURING).plan).toBe('self_study_monthly')
+    expect(computeEntitlement([term, monthly], DURING).plan).toBe('self_study_monthly')
+  })
+
+  it('surfaces the coaching day on a pre-launch Complete, so it can be booked', () => {
+    // A Portal upgrade lands a `complete` row with no coaching day. The prompt
+    // to book one has to appear as soon as the purchase exists.
+    const withDay = computeEntitlement(
+      [preLaunchStripeRow({ plan: 'complete', coaching_day: '2026-09-12' })],
+      new Date('2026-08-25T00:00:00Z'),
+    )
+    expect(withDay.state).toBe('active')
+    expect(withDay.coachingDay).toBe('2026-09-12')
+
+    const without = computeEntitlement(
+      [preLaunchStripeRow({ plan: 'complete' })],
+      new Date('2026-08-25T00:00:00Z'),
+    )
+    expect(without.coachingDay).toBeNull()
+  })
+
+  // ── The end of a fixed term is a `canceled` subscription ──
+  //
+  // A fixed-term plan is sold by arming `cancel_at_period_end`, so Stripe
+  // emits `customer.subscription.deleted` the instant the paid period runs
+  // out and the webhook stamps the row `canceled`. That status is the NORMAL
+  // end of a term the customer paid for in full, not a failed payment — and
+  // for a pre-launch buyer it arrives while they still have the shifted days
+  // the term was extended by.
+
+  it('keeps a pre-launch buyer’s shifted days after Stripe ends the term', () => {
+    // Stripe's period ended 22 Nov and fired `deleted`; the access it paid for
+    // runs to the last instant of 1 Dec. Dropping the row here would take back
+    // the ten days `preLaunchShiftMs` exists to give them.
+    const e = computeEntitlement(
+      [preLaunchStripeRow({ status: 'canceled' })],
+      new Date('2026-11-25T00:00:00Z'),
+    )
+    expect(e.state).toBe('active')
+    expect(e.plan).toBe('self_study')
+    expect(e.expiresAt?.toISOString()).toBe('2026-12-01T23:59:59.999Z')
+  })
+
+  it('lapses that same row to read-only, never to “no purchase”', () => {
+    // After the window closes the customer must still read as a lapsed buyer:
+    // read-only keeps their history and their renew prompt. `none` with no
+    // plan would tell someone who paid £299 that they never bought anything.
+    const e = computeEntitlement(
+      [preLaunchStripeRow({ status: 'canceled' })],
+      new Date('2026-12-15T00:00:00Z'),
+    )
+    expect(e.state).toBe('read_only')
+    expect(e.plan).toBe('self_study')
+  })
+
+  it('grants Complete’s lectures for the whole shifted term, cancelled or not', () => {
+    const e = computeEntitlement(
+      [preLaunchStripeRow({ plan: 'complete', status: 'canceled', coaching_day: '2026-11-28' })],
+      new Date('2026-11-25T00:00:00Z'),
+    )
+    expect(e).toMatchObject({ state: 'active', hasLectures: true, coachingDay: '2026-11-28' })
+  })
+
+  it('still grants nothing on a refunded fixed-term row', () => {
+    // The one status that must keep revoking access outright.
+    expect(
+      computeEntitlement(
+        [preLaunchStripeRow({ status: 'refunded' })],
+        new Date('2026-11-25T00:00:00Z'),
+      ),
+    ).toEqual(NO_ENTITLEMENT)
+  })
+
+  it('still grants nothing on a row that never reached `paid`', () => {
+    expect(
+      computeEntitlement(
+        [preLaunchStripeRow({ status: 'pending' })],
+        new Date('2026-11-25T00:00:00Z'),
+      ).state,
+    ).toBe('none')
+  })
+})
+
+describe('decideAccess', () => {
+  const ctx = (over: Partial<AccessContext> = {}): AccessContext => ({
+    email: 'trainee@nhs.net',
+    admins: new Set<string>(),
+    now: DURING,
+    ...over,
+  })
+
+  it('lets an active complete purchase practise', () => {
+    const d = decideAccess([row({ plan: 'complete' })], ctx())
+    expect(d).toMatchObject({ allowed: true, bypass: false })
+    expect(d.entitlement.hasLectures).toBe(true)
+  })
+
+  it('lets an active monthly subscriber practise', () => {
+    const d = decideAccess([row({ plan: 'self_study_monthly' })], ctx())
+    expect(d.allowed).toBe(true)
+    expect(d.entitlement.state).toBe('active')
+  })
+
+  it('blocks a canceled monthly subscriber, read-only', () => {
+    const d = decideAccess([row({ plan: 'self_study_monthly', status: 'canceled' })], ctx())
+    expect(d.allowed).toBe(false)
+    expect(d.entitlement.state).toBe('read_only')
+  })
+
+  it('blocks an expired three-month purchase, read-only', () => {
+    const d = decideAccess([row({})], ctx({ now: AFTER_PREORDER_WINDOW }))
+    expect(d.allowed).toBe(false)
+    expect(d.entitlement.state).toBe('read_only')
+  })
+
+  it('blocks a refunded purchase with nothing at all', () => {
+    const d = decideAccess([row({ status: 'refunded' })], ctx())
+    expect(d.allowed).toBe(false)
+    expect(d.entitlement.state).toBe('none')
+  })
+
+  it('blocks a signed-in user who never bought', () => {
+    expect(decideAccess([], ctx())).toMatchObject({ allowed: false, bypass: false })
+  })
+
+  it('bypasses for admins, however lapsed their purchases', () => {
+    const d = decideAccess(
+      [row({ status: 'refunded' })],
+      ctx({ email: 'Owner@Fourteen.com', admins: new Set(['owner@fourteen.com']) }),
+    )
+    expect(d).toMatchObject({ allowed: true, bypass: true })
+    // The bypass grants access without rewriting what was actually bought.
+    expect(d.entitlement.state).toBe('none')
+  })
+
+  it('never bypasses for a non-admin, whatever the deployment', () => {
+    expect(decideAccess([], ctx())).toMatchObject({ allowed: false, bypass: false })
+  })
+
+  it('lets a purchase practise the day it is made, without a bypass', () => {
+    const bought = { plan: 'self_study', status: 'paid', created_at: '2026-08-22T12:00:00Z' }
+    const now = new Date('2026-08-23T12:00:00Z')
+    const d = decideAccess([bought], ctx({ now }))
+    expect(d).toMatchObject({ allowed: true, bypass: false })
+    // The end still runs 3 months from launch day, not from the earlier buy.
+    expect(d.entitlement.expiresAt?.toISOString()).toBe('2026-11-30T23:59:59.999Z')
+    // `launchDate` now only moves that anchor: bring it back to the purchase
+    // date and the end shortens to 3 months from the purchase itself.
+    const early = decideAccess([bought], ctx({ now, launchDate: new Date('2026-08-22T00:00:00Z') }))
+    expect(early.entitlement.state).toBe('active')
+    expect(early.entitlement.expiresAt?.toISOString()).toBe('2026-11-21T23:59:59.999Z')
+  })
+
+  it('does not treat a missing email as an admin match', () => {
+    const d = decideAccess([], ctx({ email: null, admins: new Set(['owner@fourteen.com']) }))
+    expect(d.allowed).toBe(false)
+  })
+
+  it('a blank admin entry would match a missing email — parseAdminEmails is what stops it', () => {
+    // decideAccess normalizes a null email to ''. An allowlist that contained
+    // '' would therefore hand an admin bypass to every account without an
+    // email — this is the failure mode:
+    expect(decideAccess([], ctx({ email: null, admins: new Set(['']) })).bypass).toBe(true)
+    // ...and this is the `.filter(Boolean)` in parseAdminEmails preventing it.
+    // ADMIN_EMAILS=',' is the shape that produces blanks (a stray comma, a
+    // trailing separator), so the two are asserted together: neither half is
+    // safe to change without the other.
+    expect(parseAdminEmails(',').size).toBe(0)
+    expect(
+      decideAccess([], ctx({ email: null, admins: parseAdminEmails(', ,') })).allowed,
+    ).toBe(false)
+  })
+})
+
