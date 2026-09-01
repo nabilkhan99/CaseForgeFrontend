@@ -125,6 +125,9 @@ export default function CohortSessionList({ entries, limit }: CohortSessionListP
                     sessionId={session.id}
                     studentName={studentName}
                     caseTitle={session.stationTitle}
+                    // The same stamp the row shows, so the dialog header and
+                    // the line it was opened from cannot disagree.
+                    date={stamp(session.date)}
                   />
                 ) : (
                   // Holds the column so the "Feedback" links stay in line
