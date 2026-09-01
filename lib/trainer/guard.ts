@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { exactEmailPattern } from '@/lib/commerce/emailFilter';
 
 /**
  * The cohort a signed-in educator owns, and who is in it.
@@ -40,9 +39,11 @@ interface MemberRow {
  * return. So the authority is this function, and the routes behind it are the
  * only things that may hold the students' data.
  *
- * Matched on `lower(trainer_email)` (via `.ilike` with the wildcards escaped,
- * exactly as purchases are matched) so a cohort seeded as `Trainer@Clinic.ca`
- * still resolves for an account signed in as `trainer@clinic.ca`.
+ * Matched by plain equality on an address lower-cased here first. `cohorts`
+ * requires the normal form by CHECK constraint, so a cohort can only ever be
+ * seeded as `trainer@clinic.ca` and an account signed in as `Trainer@Clinic.CA`
+ * still resolves — without the unindexable `lower()`/ILIKE dance that
+ * `preorders` needs, where Stripe controls the stored casing and we do not.
  *
  * Returns null for: no session, no email, no cohort owned, or any error at all.
  */
@@ -66,15 +67,21 @@ export async function getTrainerCohort(): Promise<TrainerCohort | null> {
   try {
     const admin = getSupabaseAdmin();
 
-    // Ordered and capped rather than a bare `.maybeSingle()`. Nothing stops
-    // two cohorts naming the same trainer — the pilot is seeded by hand — and
-    // an unordered maybeSingle would either error (PGRST116, which fails closed
-    // and looks like "you are not a trainer") or return whichever row Postgres
-    // felt like. Oldest wins, every time.
+    // `.eq` on an already-lower-cased address, not `.ilike`. The column carries
+    // a CHECK constraint requiring the normal form (see the migration), so this
+    // is exact AND it is the only shape `cohorts_trainer_email_idx` can serve —
+    // Postgres will not rewrite a wildcard-free ILIKE into an index lookup, so
+    // the careful-looking version was a guaranteed sequential scan.
+    //
+    // Ordered and capped rather than a bare `.maybeSingle()`. Nothing stops two
+    // cohorts naming the same trainer — the pilot is seeded by hand — and an
+    // unordered maybeSingle would either error (PGRST116, which fails closed and
+    // reads as "you are not a trainer") or return whichever row Postgres felt
+    // like. Oldest wins, every time.
     const { data: cohort, error: cohortError } = await admin
       .from('cohorts')
       .select('id, name, station_ids')
-      .ilike('trainer_email', exactEmailPattern(email))
+      .eq('trainer_email', email)
       .order('created_at', { ascending: true })
       .limit(1)
       .maybeSingle();

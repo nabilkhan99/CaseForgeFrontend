@@ -80,10 +80,13 @@ type LoadState =
  * student list before any query runs, so their practice never appears on this
  * page. Their own scores are on Development, where everyone else's are.
  *
- * READ-ONLY, DELIBERATELY. There is no way to reassign cases, message a student
- * or leave a note. This is a pilot: the trainer's feedback loop is a
- * conversation they are already having, and the product's job is to give them
- * something true to have it about.
+ * READ-ONLY, DELIBERATELY — and read-only in the billing sense too. There is no
+ * way to reassign cases, message a student or leave a note; and following a row
+ * into an unmarked case does not start the marking run, because that is a paid
+ * Azure call against somebody else's session (/api/generate-feedback suppresses
+ * the trigger for a trainer-authorised read). This is a pilot: the trainer's
+ * feedback loop is a conversation they are already having, and the product's
+ * job is to give them something true to have it about.
  */
 export default function StudentsPage() {
   const [state, setState] = useState<LoadState>({ kind: 'loading' });

@@ -42,12 +42,16 @@ interface CohortMemberRow {
  * enforcement downstream keys off "is this user cohort-only" — so a fail-open
  * would be a new way to be told your cases don't exist, not a way through.
  *
- * Takes the caller's client rather than making one, because the three callers
- * run in three runtimes: the edge middleware's request-scoped client, the
- * route handlers' cookie-scoped one, and the service-role client behind the
- * trainer guard. RLS (`read own cohort membership` / `read own cohort`) scopes
- * the first two; the explicit `user_id` filter is what scopes the third, and is
- * belt-and-braces for the other two exactly as the purchase reads are.
+ * Takes the caller's client rather than making one, because its two callers run
+ * in different runtimes: the edge middleware's request-scoped client, and
+ * `getServerEntitlement`'s cookie-scoped one. RLS (`read own cohort membership`
+ * / `read own cohort`) is what scopes both; the explicit `user_id` filter is
+ * belt-and-braces on top of it, exactly as the purchase reads are.
+ *
+ * The trainer guard is NOT a caller. It answers a different question — "whose
+ * work may this account see" rather than "what may this account open" — and
+ * needs rows across other people's accounts, which no own-data policy will ever
+ * return. It runs its own service-role queries in lib/trainer/guard.ts.
  */
 export async function loadCohortAccess(
   supabase: SupabaseClient,

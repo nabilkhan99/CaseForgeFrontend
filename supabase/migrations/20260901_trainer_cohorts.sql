@@ -14,10 +14,19 @@
 -- into a consultation). A station id that no longer exists simply matches
 -- nothing, which is the same outcome a deleted join row would have.
 --
--- EMAIL MATCHING. `trainer_email` is plain text and every comparison is done
--- through `lower()` in app code (lib/trainer/guard.ts), matching how
--- `preorders.email` is already matched — citext is not installed on this
--- project and adding an extension for one column is not worth it.
+-- EMAIL MATCHING. `trainer_email` is CONSTRAINED to lower case rather than
+-- normalised at read time. The alternative — store anything, compare through
+-- `lower()` — is how `preorders.email` works, and it is the right call there
+-- because those rows come from Stripe and cannot be dictated. These rows are
+-- seeded by hand, so the column can simply be required to hold the normal form,
+-- and then the lookup is a plain equality on a plain b-tree index.
+--
+-- That matters: the guard's filter is a wildcard-free comparison, and Postgres
+-- does NOT rewrite `ILIKE 'x'` or `lower(col) = 'x'`-style predicates into
+-- something a plain index can serve. An index on `lower(trainer_email)` paired
+-- with an `.ilike` filter looks careful and is never used. Constraint plus
+-- equality is the shape where the index and the query actually agree.
+-- lib/trainer/guard.ts lower-cases the signed-in address before comparing.
 --
 -- RLS. Members may read their own membership and the cohort row behind it, so
 -- the browser can be told which five cases it may open. Nothing else is
@@ -31,7 +40,7 @@
 CREATE TABLE IF NOT EXISTS public.cohorts (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL,
-  trainer_email text NOT NULL,
+  trainer_email text NOT NULL CHECK (trainer_email = lower(trainer_email)),
   station_ids uuid[] NOT NULL DEFAULT '{}',
   created_at timestamptz NOT NULL DEFAULT now()
 );
@@ -51,10 +60,11 @@ ALTER TABLE public.cohort_members ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS cohort_members_user_idx
   ON public.cohort_members (user_id);
 
--- The trainer guard resolves a signed-in email against the cohort it owns, and
--- always through lower(). A plain index on the raw column would never be used.
+-- The trainer guard resolves a signed-in email against the cohort it owns, as a
+-- plain equality — which is what the CHECK above buys, and what this index can
+-- actually serve.
 CREATE INDEX IF NOT EXISTS cohorts_trainer_email_idx
-  ON public.cohorts (lower(trainer_email));
+  ON public.cohorts (trainer_email);
 
 -- `create policy` has no `if not exists`, so drop first and keep this file
 -- re-runnable.
@@ -80,7 +90,7 @@ CREATE POLICY "read own cohort" ON public.cohorts
 COMMENT ON TABLE public.cohorts IS
   'Trainer pilot cohorts. Membership grants access to `station_ids` only, without a preorders purchase.';
 COMMENT ON COLUMN public.cohorts.trainer_email IS
-  'The educator who sees the Students tab. Matched case-insensitively in app code via lower().';
+  'The educator who sees the Students tab. Must be stored lower-cased (CHECK); the guard compares by plain equality.';
 COMMENT ON COLUMN public.cohorts.station_ids IS
   'The complete set of stations a member may open. Everything else in the bank is locked for a cohort-only user.';
 COMMENT ON TABLE public.cohort_members IS

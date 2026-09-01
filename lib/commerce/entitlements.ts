@@ -418,6 +418,12 @@ export interface AccessDecision {
    * both of those have the whole bank, and narrowing them to five cases because
    * they happen to sit in a pilot would be a regression, not a gate. This is the
    * flag every allowlist check keys off, never `cohort !== null`.
+   *
+   * Note what that does NOT carve out: the cohort's own trainer. He is a member
+   * of his own cohort and, in the pilot, has no purchase — so this is true for
+   * him and he practises the same five cases as his students. That is the
+   * intended design, not an oversight. Only a real purchase or ADMIN_EMAILS
+   * lifts the limit, for him exactly as for anybody else.
    */
   cohortOnly: boolean
 }

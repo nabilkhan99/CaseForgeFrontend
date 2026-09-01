@@ -114,6 +114,19 @@ export async function POST(request: NextRequest) {
 
         const supabase = getSupabaseAdmin();
 
+        /**
+         * This request is a trainer reading a student's report, not the student
+         * reading their own. It suppresses the marking trigger below.
+         *
+         * Marking is a paid Azure call, and the claim it takes
+         * (`marking_started_at`) is real state on someone else's session. The
+         * Students tab is documented and built as read-only, so a trainer
+         * clicking into an unmarked case must not be what spends the money or
+         * moves that row — they see the page's existing "not marked yet" state
+         * and the student's own next visit starts the run, as it always did.
+         */
+        let viaTrainer = false;
+
         if (user) {
             const { data: owned } = await supabase
                 .from('clinical_sessions')
@@ -134,8 +147,8 @@ export async function POST(request: NextRequest) {
                     // be is a student of theirs. The Students tab links straight
                     // to the normal feedback page, so the trainer's read arrives
                     // here exactly as the student's own does; this is the whole
-                    // of what makes that link work, and it is read-only because
-                    // nothing on that page writes.
+                    // of what makes that link work. Authorising here also sets
+                    // `viaTrainer`, which is what keeps the read read-only.
                     //
                     // Kept last and behind two cheap checks: it costs an auth +
                     // two queries, and the overwhelming majority of requests
@@ -150,6 +163,7 @@ export async function POST(request: NextRequest) {
                     if (!cohort?.studentIds.includes(sitter!.user_id as string)) {
                         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
                     }
+                    viaTrainer = true;
                 }
             }
         }
@@ -235,6 +249,11 @@ export async function POST(request: NextRequest) {
         }
 
         // 3. Trigger the Azure marking endpoint once; later polls pass trigger=false.
+        //    A trainer's read never triggers, whatever the client asked for —
+        //    see `viaTrainer`. Enforced here rather than by having the Students
+        //    tab send `trigger: false`, because a client-supplied flag is a
+        //    request, not a guarantee, and the server is the only thing that
+        //    knows this request was authorised as a trainer in the first place.
         const markingUrl = process.env.MARKING_API_URL;
         const markingSecret = process.env.MARKING_SHARED_SECRET;
         if (!markingUrl || !markingSecret) {
@@ -245,7 +264,7 @@ export async function POST(request: NextRequest) {
         }
 
         let triggerQueued = false;
-        if (trigger) {
+        if (trigger && !viaTrainer) {
             // Cross-instance claim: only the request that flips marking_started_at
             // from null (or stale) wins; concurrent polls from other Vercel
             // instances see no row back and skip. An in-memory Set can't give
