@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { isMonthlyPlan, type EntitlementState } from '@/lib/commerce/entitlements';
 import { getPlan } from '@/lib/commerce/plans';
 import { getServerEntitlement } from '@/lib/commerce/serverEntitlement';
+import { getTrainerCohort } from '@/lib/trainer/guard';
 
 export interface SubscriptionResponse {
   /** Plan key of the purchase the access derives from, null when there is none. */
@@ -33,6 +34,22 @@ export interface SubscriptionResponse {
   hasLectures: boolean;
   /** Complete's coaching day (ISO date), when one was booked. */
   coachingDay: string | null;
+  /**
+   * The trainer-pilot seat this access rests on, when it rests on one alone.
+   *
+   * Null for everybody else — including a cohort member who also bought a plan,
+   * and an admin. `stationIds` is then the WHOLE of what the client may open,
+   * which is what the library locks against. Null therefore reads as "no limit",
+   * and a cohort member with an empty allowlist reads as "no cases", which are
+   * the right defaults for both.
+   */
+  cohort: { id: string; stationIds: string[] } | null;
+  /**
+   * This account owns a cohort, so the Students tab exists for them. Separate
+   * from {@link cohort}: the trainer is normally a cohort member AND a
+   * purchaser, so their `cohort` is null while `isTrainer` is true.
+   */
+  isTrainer: boolean;
 }
 
 /**
@@ -44,11 +61,17 @@ export interface SubscriptionResponse {
  * built on it had gone quiet.
  */
 export async function GET() {
-  const { user, entitlement, allowed, bypass, failedOpen } = await getServerEntitlement();
+  const { user, entitlement, allowed, bypass, failedOpen, cohort, cohortOnly } =
+    await getServerEntitlement();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  // Every navbar render asks this route whether to show a lock, so it is also
+  // the cheapest place to answer "is this account a trainer" — the alternative
+  // was a second endpoint the navbar would have to call on every page anyway.
+  const trainerCohort = await getTrainerCohort();
 
   const plan = entitlement.plan ?? null;
   const body: SubscriptionResponse = {
@@ -66,6 +89,10 @@ export async function GET() {
     isMonthly: plan ? isMonthlyPlan(plan) : false,
     hasLectures: (entitlement.hasLectures && allowed) || bypass,
     coachingDay: entitlement.coachingDay ?? null,
+    // `cohortOnly`, not `cohort !== null` — see AccessDecision. A trainer sits
+    // in their own cohort and must not have their library cut to five cases.
+    cohort: cohortOnly && cohort ? { id: cohort.id, stationIds: cohort.stationIds } : null,
+    isTrainer: trainerCohort !== null,
   };
 
   return NextResponse.json(body);

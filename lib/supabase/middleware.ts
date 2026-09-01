@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { decideAccess } from '@/lib/commerce/entitlements';
+import { loadCohortAccess } from '@/lib/commerce/cohortAccess';
 import { exactEmailPattern } from '@/lib/commerce/emailFilter';
 import { effectiveLaunchDate } from '@/lib/commerce/launchDate';
 import { parseAdminEmails } from '@/lib/admin/guard';
@@ -107,10 +108,19 @@ export async function updateSession(request: NextRequest) {
             // `.ilike` (not `.eq`) because the policy compares lower(email) —
             // a case-sensitive filter would hide a hand-provisioned row like
             // `Sarah@Nhs.net` and lock out someone who paid.
-            const { data: purchases, error: purchasesError } = await supabase
-                .from('preorders')
-                .select('plan, status, created_at, coaching_day, access_starts_at, access_ends_at')
-                .ilike('email', exactEmailPattern(user.email));
+            // Both reads at once: they are independent, and this runs on every
+            // navigation into a consultation, so serialising them would put a
+            // second round trip in front of every page in the product's hot path.
+            // The cohort read fails closed inside loadCohortAccess — a trainer
+            // pilot student seeing the paywall is a far cheaper failure than a
+            // broken lookup handing five cases to everyone.
+            const [{ data: purchases, error: purchasesError }, cohort] = await Promise.all([
+                supabase
+                    .from('preorders')
+                    .select('plan, status, created_at, coaching_day, access_starts_at, access_ends_at')
+                    .ilike('email', exactEmailPattern(user.email)),
+                loadCohortAccess(supabase, user.id),
+            ]);
             if (purchasesError) {
                 // supabase-js reports query failures as { error }, not a throw —
                 // without this branch a transient DB error reads as "no purchases"
@@ -121,10 +131,16 @@ export async function updateSession(request: NextRequest) {
                 console.error('[entitlement] middleware fail-open', purchasesError);
                 entitlementFailedOpen = true;
             } else {
+                // A cohort member reaches every page here; WHICH cases they may
+                // actually sit is enforced at the two server chokepoints
+                // (create-session, realtime-token), not by path. That is
+                // deliberate: the case brief for a locked station is meant to be
+                // reachable — it is where the upsell lives.
                 const { entitlement, allowed } = decideAccess(purchases ?? [], {
                     email: user.email,
                     launchDate: effectiveLaunchDate(),
                     admins: parseAdminEmails(process.env.ADMIN_EMAILS),
+                    cohort,
                 });
                 if (!allowed) {
                     const url = request.nextUrl.clone();

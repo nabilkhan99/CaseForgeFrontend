@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { parseAdminEmails } from '@/lib/admin/guard'
 import { effectiveLaunchDate } from '@/lib/commerce/launchDate'
 import { decideAccess, NO_ENTITLEMENT, type AccessDecision } from './entitlements'
+import { loadCohortAccess } from './cohortAccess'
 import { exactEmailPattern } from './emailFilter'
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>
@@ -45,10 +46,17 @@ export async function getServerEntitlement(): Promise<ServerEntitlement> {
       user: null,
       entitlement: NO_ENTITLEMENT,
       bypass: false,
+      cohort: null,
+      cohortOnly: false,
       failedOpen: false,
       allowed: false,
     }
   }
+
+  // Outside the try below on purpose: `loadCohortAccess` fails closed on its
+  // own, and a cohort read that broke must not be able to take the purchase
+  // read down with it into the fail-open branch.
+  const cohort = await loadCohortAccess(supabase, user.id)
 
   try {
     // Belt and braces, exactly as the middleware does it: RLS already scopes
@@ -69,6 +77,7 @@ export async function getServerEntitlement(): Promise<ServerEntitlement> {
         email: user.email,
         launchDate: effectiveLaunchDate(),
         admins: parseAdminEmails(process.env.ADMIN_EMAILS),
+        cohort,
       }),
     }
   } catch (error: unknown) {
@@ -83,6 +92,11 @@ export async function getServerEntitlement(): Promise<ServerEntitlement> {
       user,
       entitlement: NO_ENTITLEMENT,
       bypass: false,
+      // The cohort read succeeded or returned null on its own terms; it is
+      // reported either way so a pilot student whose purchase lookup broke is
+      // still recognised as cohort-limited rather than silently given the bank.
+      cohort,
+      cohortOnly: cohort !== null,
       failedOpen: true,
       allowed: true,
     }

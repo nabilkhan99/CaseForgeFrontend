@@ -1,4 +1,5 @@
 import { ACCESS_OPENS, PLANS, isRollingPlan } from './plans'
+import type { CohortAccess } from './cohortAccess'
 
 /**
  * What a user's purchases entitle them to, and until when.
@@ -394,6 +395,11 @@ export interface AccessContext {
    * `effectiveLaunchDate`.
    */
   launchDate?: Date
+  /**
+   * The user's trainer-pilot seat, when they have one. Loaded by the caller
+   * (see lib/commerce/cohortAccess.ts) so this function stays pure and edge-safe.
+   */
+  cohort?: CohortAccess | null
 }
 
 export interface AccessDecision {
@@ -402,6 +408,18 @@ export interface AccessDecision {
   bypass: boolean
   /** May start a consultation. Read-only surfaces (history, feedback) ignore this. */
   allowed: boolean
+  /** The cohort behind a pilot seat, or null. Present whether or not it is what granted access. */
+  cohort: CohortAccess | null
+  /**
+   * Access rests on cohort membership ALONE — so it reaches
+   * `/clinical-master/*` but only for `cohort.stationIds`.
+   *
+   * False for a cohort member who also bought a plan, and false for an admin:
+   * both of those have the whole bank, and narrowing them to five cases because
+   * they happen to sit in a pilot would be a regression, not a gate. This is the
+   * flag every allowlist check keys off, never `cohort !== null`.
+   */
+  cohortOnly: boolean
 }
 
 /**
@@ -419,5 +437,13 @@ export function decideAccess(rows: EntitlementRow[], ctx: AccessContext): Access
   // before launch. Only the admin allowlist bypasses now; previews bring the
   // launch date forward instead (`ctx.launchDate`).
   const bypass = ctx.admins.has((ctx.email ?? '').trim().toLowerCase())
-  return { entitlement, bypass, allowed: entitlement.state === 'active' || bypass }
+  const purchased = entitlement.state === 'active'
+  const cohort = ctx.cohort ?? null
+  // A pilot seat is a third way in, ranked below both of the others rather
+  // than folded into the entitlement: it must not overwrite `state`, because a
+  // lapsed customer who joins a cohort still has a lapsed purchase and the UI
+  // has to be able to say so. It only ever ADDS access — a cohort member who
+  // also bought the full library keeps the full library.
+  const cohortOnly = !purchased && !bypass && cohort !== null
+  return { entitlement, bypass, cohort, cohortOnly, allowed: purchased || bypass || cohortOnly }
 }
