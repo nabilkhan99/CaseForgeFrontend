@@ -1,6 +1,7 @@
 import { after, NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { getTrainerCohort } from '@/lib/trainer/guard';
 import type { ConsultationFeedback } from '@/lib/clinical-master/types';
 
 /**
@@ -104,7 +105,8 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'sessionId required' }, { status: 400 });
         }
 
-        // Verify the caller owns this session (or it's a guest session).
+        // Verify the caller owns this session (or it's a guest session, or is
+        // the trainer whose cohort the sitter belongs to).
         const authSupabase = await createServerClient();
         const {
             data: { user },
@@ -123,12 +125,31 @@ export async function POST(request: NextRequest) {
             if (!owned) {
                 const { data: guest } = await supabase
                     .from('clinical_sessions')
-                    .select('id')
+                    .select('id, user_id')
                     .eq('id', sessionId)
                     .is('user_id', null)
                     .maybeSingle();
                 if (!guest) {
-                    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+                    // Not theirs and not a guest session — the last thing it can
+                    // be is a student of theirs. The Students tab links straight
+                    // to the normal feedback page, so the trainer's read arrives
+                    // here exactly as the student's own does; this is the whole
+                    // of what makes that link work, and it is read-only because
+                    // nothing on that page writes.
+                    //
+                    // Kept last and behind two cheap checks: it costs an auth +
+                    // two queries, and the overwhelming majority of requests
+                    // here are someone reading their own report. Fails closed —
+                    // `getTrainerCohort` returns null on any error at all.
+                    const { data: sitter } = await supabase
+                        .from('clinical_sessions')
+                        .select('user_id')
+                        .eq('id', sessionId)
+                        .maybeSingle();
+                    const cohort = sitter?.user_id ? await getTrainerCohort() : null;
+                    if (!cohort?.studentIds.includes(sitter!.user_id as string)) {
+                        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+                    }
                 }
             }
         }

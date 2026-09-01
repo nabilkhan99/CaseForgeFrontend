@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { parseAdminEmails } from '@/lib/admin/guard';
+import { getTrainerCohort } from '@/lib/trainer/guard';
 
 /**
  * Mint a short-lived signed URL for a consultation recording. The
@@ -9,7 +10,8 @@ import { parseAdminEmails } from '@/lib/admin/guard';
  * through here.
  *
  * Access mirrors who may read the feedback for that session:
- *   - a session with a user_id -> only that user, or an ADMIN_EMAILS admin;
+ *   - a session with a user_id -> only that user, an ADMIN_EMAILS admin, or
+ *     the trainer whose cohort that user is a student in;
  *   - a guest session (user_id null, the /try funnel) -> anyone holding the
  *     session id, exactly as the trial feedback page already works.
  *
@@ -64,7 +66,20 @@ export async function GET(
     const isOwner = viewerId === session.user_id;
     const isAdminViewer =
       Boolean(viewerEmail) && parseAdminEmails(process.env.ADMIN_EMAILS).has(viewerEmail!);
+
+    // Third branch: a trainer listening to their own student. Checked last
+    // because it is the only one that costs a round trip, and fail-closed by
+    // construction — `getTrainerCohort` returns null on any error, and the
+    // student list it returns has the trainer's own id removed, so this can
+    // only ever widen access to accounts that were deliberately put in the
+    // cohort.
+    let isCohortTrainer = false;
     if (!isOwner && !isAdminViewer) {
+      const cohort = await getTrainerCohort();
+      isCohortTrainer = Boolean(cohort?.studentIds.includes(session.user_id));
+    }
+
+    if (!isOwner && !isAdminViewer && !isCohortTrainer) {
       return NextResponse.json({ error: 'No recording for this session' }, { status: 404 });
     }
   }
