@@ -66,10 +66,17 @@ export async function getTrainerCohort(): Promise<TrainerCohort | null> {
   try {
     const admin = getSupabaseAdmin();
 
+    // Ordered and capped rather than a bare `.maybeSingle()`. Nothing stops
+    // two cohorts naming the same trainer — the pilot is seeded by hand — and
+    // an unordered maybeSingle would either error (PGRST116, which fails closed
+    // and looks like "you are not a trainer") or return whichever row Postgres
+    // felt like. Oldest wins, every time.
     const { data: cohort, error: cohortError } = await admin
       .from('cohorts')
       .select('id, name, station_ids')
       .ilike('trainer_email', exactEmailPattern(email))
+      .order('created_at', { ascending: true })
+      .limit(1)
       .maybeSingle();
     if (cohortError) throw cohortError;
     if (!cohort) return null;

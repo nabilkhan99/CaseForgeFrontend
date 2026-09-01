@@ -58,6 +58,10 @@ export async function loadCohortAccess(
       .from('cohort_members')
       .select('cohorts(id, station_ids, trainer_email)')
       .eq('user_id', userId)
+      // One cohort per user is the pilot's shape, not a constraint the schema
+      // enforces. Oldest wins so a second membership cannot silently change
+      // which five cases somebody has between two page loads.
+      .order('created_at', { ascending: true })
       .limit(1)
       .maybeSingle();
 
