@@ -80,6 +80,25 @@ export const DEFAULT_TRANSCRIPTION_MODEL = 'gpt-realtime-whisper';
 export const TRANSCRIPTION_LANGUAGE = 'en';
 
 /**
+ * End-of-turn silence: how long the doctor must be quiet before the turn is
+ * treated as over.
+ *
+ * ONE number for BOTH turn-taking paths, because they must not drift apart.
+ * The reliable-AEC path hands it to server VAD as `silence_duration_ms` below;
+ * the unreliable-AEC path counts it out in 50ms frames in the client detector
+ * (`DT_END_SILENCE_FRAMES` in useRealtimeSession.ts). A doctor on Safari and a
+ * doctor on Chrome should feel the same patient.
+ *
+ * 700ms, down from 900ms: this wait is dead air on the front of every single
+ * reply, so 200ms off it is the cheapest felt-latency saving available. The
+ * trade is that a thinking pause mid-question is now slightly more likely to be
+ * read as the end of a turn — survivable because committing a turn does not
+ * itself ask for a reply (`create_response: false`); the transcript gate in
+ * doctorTurn.ts still decides whether the patient answers.
+ */
+export const END_OF_TURN_SILENCE_MS = 700;
+
+/**
  * Function tools exposed to the model. Examination is intentionally NOT a tool:
  * per Build Package Section 1.1 (audio only, no live visual examination) and
  * Voice Actor Prompt 1 rule 8, the patient handles any examination request
@@ -118,7 +137,7 @@ export interface SessionConfigOptions {
    *    client-side double-talk detector in useRealtimeSession.ts owns turns
    *    instead (see DT_* constants there for the real thresholds).
    * Chrome-family browsers have reliable AEC and keep the defaults —
-   * server_vad at threshold 0.5 with 900ms silence, and barge-in.
+   * server_vad at threshold 0.5 with 700ms silence, and barge-in.
    *
    * NB this comment used to describe "VAD threshold 0.75 and
    * interrupt_response: false", which the code has not done since server VAD
@@ -168,9 +187,9 @@ export function buildSessionPayload(stationData: StationData | null, opts: Sessi
                 type: 'server_vad',
                 threshold: 0.5,
                 prefix_padding_ms: 300,
-                silence_duration_ms: 900,
+                silence_duration_ms: END_OF_TURN_SILENCE_MS,
                 // The server still detects turns and commits the buffer, but it
-                // does NOT get to decide that a reply is due. 900ms of quiet
+                // does NOT get to decide that a reply is due. 700ms of quiet
                 // cannot tell "I have finished my question" from "I am thinking
                 // mid-sentence", and on this path the patient was answering
                 // fillers and cutting in on half-finished questions — reported

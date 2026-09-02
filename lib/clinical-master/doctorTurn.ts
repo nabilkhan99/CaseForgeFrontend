@@ -1,8 +1,8 @@
 /**
  * Did the doctor finish a thought, or are they thinking out loud?
  *
- * The client detector commits a doctor turn after ~900ms of quiet, which cannot
- * tell "900ms because I'm done" from "900ms because I'm thinking". Committing is
+ * The client detector commits a doctor turn after ~700ms of quiet, which cannot
+ * tell "700ms because I'm done" from "700ms because I'm thinking". Committing is
  * harmless; asking the patient to REPLY to a half-thought is not. Ismat's
  * session: "Okay and um" was committed as a finished turn and the patient
  * answered it by volunteering the painkiller overuse — the diagnostic crux she
