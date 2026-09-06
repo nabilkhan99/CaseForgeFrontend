@@ -8,8 +8,9 @@
  * │                                                                           │
  * │    npx vite-node --config vitest.config.ts scripts/trial-emails/due.ts    │
  * │                                                                           │
- * │  That is a DRY RUN and is the default — it prints who is due what, with   │
- * │  the subject line each of them would get, and sends nothing. Read it.     │
+ * │  That is a DRY RUN and is the default (--dry-run is accepted and means    │
+ * │  the same thing) — it prints who is due what, with the subject line each  │
+ * │  of them would get, and sends nothing. Read it.                           │
  * │                                                                           │
  * │  To actually send, all three of these are required, together:             │
  * │                                                                           │
@@ -56,6 +57,7 @@ import {
   type TrialEmailCandidate,
   type TrialEmailSkipReason,
 } from './dueRules'
+import { assertSendable } from './sendGuard'
 
 // ── Env, the same way every script in this directory reads it ───────────────
 for (const line of readFileSync('.env.local', 'utf8').split('\n')) {
@@ -67,6 +69,13 @@ const args = process.argv.slice(2)
 const SEND = args.includes('--send')
 const YES = args.includes('--yes')
 const VERBOSE = args.includes('--verbose')
+/** Accepted and does nothing: a dry run is what happens without `--send` anyway. */
+const DRY_RUN = args.includes('--dry-run')
+
+if (SEND && DRY_RUN) {
+  console.error('--send and --dry-run contradict each other. Pick one.')
+  process.exit(1)
+}
 
 /**
  * THREE INDEPENDENT LOCKS on sending, and they are independent on purpose.
@@ -250,45 +259,6 @@ async function loadAlreadySent(): Promise<Map<string, TrialEmailKind[]>> {
     sent.set(row.user_id, list)
   }
   return sent
-}
-
-// ── The send guard ──────────────────────────────────────────────────────────
-
-/**
- * Escaping, written a second time on purpose.
- *
- * This guard exists to catch a template that has broken. Importing the
- * builder's own escape function would mean the check and the thing it is
- * checking share every bug, which is not a check at all.
- */
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
-
-/**
- * Refuse to send anything that does not look like the email we meant to build.
- *
- * Three cheap structural checks, each one standing in for a specific way this
- * has gone wrong in email tooling before: a template that returned an empty
- * string or a fragment; one that lost its body and became a shell; and one
- * addressed to the wrong person because a loop variable was reused. Throwing
- * here aborts that recipient, not the run.
- */
-function assertSendable(email: RenderedEmail, toEmail: string): void {
-  const html = email.html ?? ''
-  if (!html.toLowerCase().startsWith('<!doctype html')) {
-    throw new Error(`${toEmail}: html is not a document`)
-  }
-  if (html.length <= 2000) {
-    throw new Error(`${toEmail}: html is only ${html.length} chars — the body is missing`)
-  }
-  if (!html.includes(escapeHtml(email.greeting))) {
-    throw new Error(`${toEmail}: html does not carry this recipient's greeting`)
-  }
 }
 
 // ── Run ─────────────────────────────────────────────────────────────────────
