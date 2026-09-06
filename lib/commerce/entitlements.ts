@@ -1,5 +1,6 @@
 import { ACCESS_OPENS, PLANS, isRollingPlan } from './plans'
 import type { CohortAccess } from './cohortAccess'
+import type { TrialAccess } from './trialAccess'
 
 /**
  * What a user's purchases entitle them to, and until when.
@@ -400,6 +401,12 @@ export interface AccessContext {
    * (see lib/commerce/cohortAccess.ts) so this function stays pure and edge-safe.
    */
   cohort?: CohortAccess | null
+  /**
+   * Where the user's five-station free trial stands, when they have a grant.
+   * Loaded by the caller (see lib/commerce/trialAccess.ts) for the same reason
+   * the cohort is: this function must stay pure and edge-safe.
+   */
+  trial?: TrialAccess | null
 }
 
 export interface AccessDecision {
@@ -426,6 +433,22 @@ export interface AccessDecision {
    * lifts the limit, for him exactly as for anybody else.
    */
   cohortOnly: boolean
+  /**
+   * The five-station free trial behind this account, or null. Present whether
+   * or not it is what granted access, so a caller can tell a SPENT trial (the
+   * two-plan wall) apart from never having had one (the pricing page).
+   */
+  trial: TrialAccess | null
+  /**
+   * Access rests on a LIVE trial grant alone — so it reaches
+   * `/clinical-master/*`, with the whole bank, until the fifth marked
+   * consultation or the fifth day.
+   *
+   * False for anyone who has bought and for an admin, exactly as `cohortOnly`
+   * is, and false the moment the trial ends: at that point access rests on
+   * nothing, which is what puts the account behind the wall.
+   */
+  trialOnly: boolean
 }
 
 /**
@@ -445,11 +468,41 @@ export function decideAccess(rows: EntitlementRow[], ctx: AccessContext): Access
   const bypass = ctx.admins.has((ctx.email ?? '').trim().toLowerCase())
   const purchased = entitlement.state === 'active'
   const cohort = ctx.cohort ?? null
-  // A pilot seat is a third way in, ranked below both of the others rather
-  // than folded into the entitlement: it must not overwrite `state`, because a
-  // lapsed customer who joins a cohort still has a lapsed purchase and the UI
-  // has to be able to say so. It only ever ADDS access — a cohort member who
-  // also bought the full library keeps the full library.
-  const cohortOnly = !purchased && !bypass && cohort !== null
-  return { entitlement, bypass, cohort, cohortOnly, allowed: purchased || bypass || cohortOnly }
+  const trial = ctx.trial ?? null
+
+  // A trial is a third way in — and, like the cohort seat, it is composed here
+  // rather than folded into `entitlement`. It must not overwrite `state`,
+  // because a lapsed customer who is given a trial still has a lapsed purchase
+  // and the UI has to be able to say so. It only ever ADDS access.
+  //
+  // Note what `trialOnly` does NOT do: it is false the moment the trial ends,
+  // so a spent grant subtracts nothing from anybody. That is the property the
+  // peer shape exists to guarantee — the grant is not in the precedence fold,
+  // so no state it can reach can outrank or mask a purchase.
+  const trialOnly = !purchased && !bypass && trial?.state === 'trial'
+
+  // A pilot seat is a fourth way in, ranked below the others rather than
+  // folded into the entitlement, for the same reason.
+  //
+  // `!trialOnly` is what keeps `trialOnly` and `cohortOnly` mutually exclusive,
+  // and the ordering (trial wins while it is live) is deliberate. A cohort
+  // handed the trial is meant to open the WHOLE bank for five stations — its
+  // `station_ids` is left empty precisely because the grant, not the allowlist,
+  // is what is giving access — and an empty allowlist means "access to
+  // nothing", so letting `cohortOnly` win would tell a trainee their cases do
+  // not exist. Once the trial ends the account falls back to whatever the
+  // cohort assigns, which is the right ladder. For the existing pilot (cohort
+  // members with no grant) nothing changes at all: `trialOnly` is false for
+  // them, so this reduces to exactly the expression it replaced.
+  const cohortOnly = !purchased && !bypass && !trialOnly && cohort !== null
+
+  return {
+    entitlement,
+    bypass,
+    cohort,
+    cohortOnly,
+    trial,
+    trialOnly,
+    allowed: purchased || bypass || trialOnly || cohortOnly,
+  }
 }
