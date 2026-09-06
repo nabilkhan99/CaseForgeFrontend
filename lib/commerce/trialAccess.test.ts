@@ -2,13 +2,16 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   NO_TRIAL,
   TRIAL_ALLOWANCE,
+  TRIAL_OPEN_SESSION_MINUTES,
   TRIAL_WINDOW_DAYS,
   computeTrialAccess,
+  countOpenTrialSessions,
   countTrialConsumption,
   grantTrial,
   loadTrialAccess,
   loadTrialGrant,
   startTrialWindow,
+  startTrialWindowFor,
   trialRefusal,
   type TrialGrant,
 } from './trialAccess'
@@ -521,6 +524,121 @@ describe('before the migration is applied', () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
     expect(await loadTrialGrant(stubMissingTable('57014'), 'user-1')).toBeNull()
     expect(spy).toHaveBeenCalled()
+    spy.mockRestore()
+  })
+})
+
+describe('countOpenTrialSessions', () => {
+  /**
+   * The gap a derived count cannot see. Marking lands ~90 seconds after a
+   * consultation that runs up to 12 minutes, so for a quarter of an hour a
+   * started consultation contributes nothing to `used` — and N parallel mints
+   * would all read the same low number and all be allowed. This is the check
+   * that makes the cap hold in parallel as well as in sequence.
+   */
+  function stubOpen(rows: unknown[]) {
+    const neq = vi.fn().mockResolvedValue({ data: rows, error: null })
+    const cutoffs: string[] = []
+    const gte = vi.fn((_column: string, value: string) => {
+      cutoffs.push(value)
+      return { neq }
+    })
+    const inFilter = vi.fn(() => ({ gte }))
+    const eq = vi.fn(() => ({ in: inFilter }))
+    const select = vi.fn(() => ({ eq }))
+    return { client: { from: vi.fn(() => ({ select })) } as never, eq, inFilter, gte, neq, cutoffs }
+  }
+
+  it('counts only consultations that are actually running', async () => {
+    const { client, inFilter } = stubOpen([{ id: 'other' }])
+    expect(await countOpenTrialSessions(client, 'user-1', 'sess-1', NOW)).toBe(1)
+    // `reading` is excluded on purpose: it is written when the station BRIEF is
+    // opened, so counting it would stop a trainee who looked at three briefs
+    // from starting any of them.
+    expect(inFilter).toHaveBeenCalledWith('status', ['live', 'processing'])
+  })
+
+  it('excludes this session, so a reconnect is not a second consultation', async () => {
+    const { client, neq } = stubOpen([])
+    await countOpenTrialSessions(client, 'user-1', 'sess-1', NOW)
+    expect(neq).toHaveBeenCalledWith('id', 'sess-1')
+  })
+
+  it('forgets a session that has been open too long to still be running', async () => {
+    // A browser that crashed mid-consultation leaves a `live` row for ever.
+    // Without the recency window that row would lock the trainee out of the
+    // rest of their trial.
+    const { client, cutoffs } = stubOpen([])
+    await countOpenTrialSessions(client, 'user-1', 'sess-1', NOW)
+    const since = new Date(cutoffs[0])
+    expect((NOW.getTime() - since.getTime()) / 60_000).toBe(TRIAL_OPEN_SESSION_MINUTES)
+    // Comfortably longer than a 12-minute station plus ~90s of marking.
+    expect(TRIAL_OPEN_SESSION_MINUTES).toBeGreaterThan(13)
+  })
+
+  it('does not refuse an honest trainee when the check itself breaks', async () => {
+    // Fails OPEN, unlike the allowance. This is a cap on a rare abuse, not the
+    // allowance itself — which still holds — so a transient read must not stop
+    // somebody sitting down to practise.
+    const neq = vi.fn().mockResolvedValue({ data: null, error: { message: 'down' } })
+    const gte = vi.fn(() => ({ neq }))
+    const inFilter = vi.fn(() => ({ gte }))
+    const eq = vi.fn(() => ({ in: inFilter }))
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(
+      await countOpenTrialSessions({ from: () => ({ select: () => ({ eq }) }) } as never, 'u', 's', NOW),
+    ).toBe(0)
+    spy.mockRestore()
+  })
+})
+
+describe('startTrialWindowFor', () => {
+  function stubGrant(row: Record<string, unknown> | null) {
+    const update = vi.fn(() => ({
+      eq: () => ({ is: () => ({ select: async () => ({ data: [{}], error: null }) }) }),
+    }))
+    const select = vi.fn(() => ({ eq: () => ({ maybeSingle: async () => ({ data: row, error: null }) }) }))
+    return { client: { from: vi.fn(() => ({ select, update })) } as never, update, select }
+  }
+
+  const UNSTARTED = {
+    id: 'grant-1',
+    user_id: 'user-1',
+    email: 'gp@example.com',
+    allowance: 5,
+    window_days: 5,
+    source: 'signup',
+    started_at: null,
+    expires_at: null,
+    created_at: '2026-09-08T09:00:00Z',
+  }
+
+  it('stamps an unstarted grant', async () => {
+    const { client, update } = stubGrant(UNSTARTED)
+    await startTrialWindowFor(client, true, 'user-1')
+    expect(update).toHaveBeenCalledTimes(1)
+  })
+
+  it('does nothing at all for somebody who is not on a trial', async () => {
+    // Not just "does not stamp": it must not even read. This runs on every
+    // consultation start, for every customer.
+    const { client, select, update } = stubGrant(UNSTARTED)
+    await startTrialWindowFor(client, false, 'user-1')
+    expect(select).not.toHaveBeenCalled()
+    expect(update).not.toHaveBeenCalled()
+  })
+
+  it('leaves an already-open window alone', async () => {
+    const { client, update } = stubGrant({ ...UNSTARTED, started_at: '2026-09-09T09:00:00Z', expires_at: '2026-09-14T09:00:00Z' })
+    await startTrialWindowFor(client, true, 'user-1')
+    expect(update).not.toHaveBeenCalled()
+  })
+
+  it('never throws — a consultation must not die over a clock', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await expect(
+      startTrialWindowFor({ from: () => { throw new Error('boom') } } as never, true, 'user-1'),
+    ).resolves.toBeUndefined()
     spy.mockRestore()
   })
 })

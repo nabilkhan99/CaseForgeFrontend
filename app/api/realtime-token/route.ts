@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerEntitlement } from '@/lib/commerce/serverEntitlement';
 import { cohortAllowsStation } from '@/lib/commerce/cohortAccess';
-import { trialRefusal } from '@/lib/commerce/trialAccess';
+import {
+  TRIAL_OPEN_SESSION_MINUTES,
+  countOpenTrialSessions,
+  startTrialWindowFor,
+  trialRefusal,
+} from '@/lib/commerce/trialAccess';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { mintEphemeralKey, unreliableEchoCancellation } from '@/lib/clinical-master/realtimeToken';
 import { voiceForStation } from '@/lib/clinical-master/realtimeSession';
@@ -31,7 +36,8 @@ export async function POST(req: NextRequest) {
   // Server-side auth + entitlement: this is the endpoint that spends Azure
   // realtime minutes, so a signed-in account without a live plan must not
   // reach it even though the middleware never sees an API call.
-  const { user, allowed, entitlement, cohort, cohortOnly, trial } = await getServerEntitlement();
+  const { user, allowed, entitlement, cohort, cohortOnly, trial, trialOnly } =
+    await getServerEntitlement();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -72,6 +78,36 @@ export async function POST(req: NextRequest) {
 
   const admin = getSupabaseAdmin();
 
+  // ONE CONSULTATION AT A TIME, for a trial account only.
+  //
+  // The five-station cap is enforced from a DERIVED count of marked sessions,
+  // and a mark lands ~90 seconds after a consultation that itself runs up to 12
+  // minutes. For that quarter of an hour a started consultation is invisible to
+  // the count, so without this a client could fire N mints in parallel, every
+  // one of them reading the same low `used`, and spend N lots of Azure realtime
+  // minutes against a five-station grant. Sequential enforcement is not
+  // enforcement.
+  //
+  // Deliberately here and not in create-session: this is the endpoint that
+  // spends, and create-session merely records that a brief was opened.
+  // `sessionId` is excluded from the count so a reconnect — the browser
+  // re-minting a key for the same consultation after a dropped connection — is
+  // never mistaken for a second one.
+  if (trialOnly) {
+    const open = await countOpenTrialSessions(admin, user.id, sessionId);
+    if (open > 0) {
+      return NextResponse.json(
+        {
+          error: 'trial_session_in_progress',
+          trial: true,
+          state: entitlement.state,
+          retryAfterMinutes: TRIAL_OPEN_SESSION_MINUTES,
+        },
+        { status: 409 },
+      );
+    }
+  }
+
   // Load the full station for prompt building
   const { data: station, error: stationErr } = await admin
     .from('stations')
@@ -110,6 +146,14 @@ export async function POST(req: NextRequest) {
         started_at: new Date().toISOString(),
       });
     }
+
+    // The first consultation starts the five-day clock — here as well as in
+    // create-session, not instead of it. This endpoint inserts a session row of
+    // its own when it does not find one, so a client that only ever called it
+    // would spend Azure minutes against a grant whose window never opened, and
+    // a window that never opens never ends. The stamp is a compare-and-set, so
+    // the normal flow (create-session first) is unaffected.
+    await startTrialWindowFor(admin, trialOnly, user.id);
 
     const durationSeconds = Number(station.consultation_duration_seconds) || 480;
     // `result` carries `origin` ('primary' | 'fallback') — which slot minted

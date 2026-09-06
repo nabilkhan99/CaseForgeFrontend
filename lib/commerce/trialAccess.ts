@@ -20,6 +20,17 @@ export const TRIAL_ALLOWANCE = 5
 /** Days the window runs from the first consultation, unless the row says otherwise. */
 export const TRIAL_WINDOW_DAYS = 5
 
+/**
+ * How long a started consultation is treated as still running, for the
+ * one-at-a-time rule below.
+ *
+ * Longer than any station (12 minutes at most) plus the marking that follows it
+ * (~90 seconds), so a genuine consultation is never cut short by it — and short
+ * enough that a browser that crashed mid-consultation frees the slot in a
+ * quarter of an hour rather than stranding the trainee.
+ */
+export const TRIAL_OPEN_SESSION_MINUTES = 15
+
 const DAY_MS = 86_400_000
 
 /** Which door a grant came through. Mirrors the CHECK on `trial_grants.source`. */
@@ -354,6 +365,97 @@ export async function loadTrialAccess(
       state: 'trial_ended',
       reason: 'allowance',
     }
+  }
+}
+
+/**
+ * Consultations this trialist already has running, other than `exceptSessionId`.
+ *
+ * WHY THIS EXISTS. Consumption is derived from marks, and marking lands roughly
+ * 80–90 seconds AFTER a consultation that itself runs up to 12 minutes. So for
+ * about a quarter of an hour a started consultation is invisible to
+ * {@link countTrialConsumption} — and every concurrent request in that window
+ * reads the same low `used` and is allowed through. Five stations enforced
+ * purely on a derived count is therefore five stations SEQUENTIALLY and
+ * unbounded in parallel, each one spending real Azure realtime minutes.
+ *
+ * The fix is a concurrency cap, deliberately NOT a change to what counts as
+ * spent: the contract that an unmarkable or abandoned session costs nothing is
+ * the reason the "that was 20 seconds, run it properly?" case works at all, and
+ * counting in-flight sessions as used would break it.
+ *
+ * `reading` is excluded on purpose. That status is written by `create-session`,
+ * which the station BRIEF page calls — so counting it would mean a trainee who
+ * opened three briefs to choose between them could not start any of them. Only
+ * `live` and `processing` mean minutes are actually being spent or a mark is
+ * pending.
+ *
+ * `exceptSessionId` keeps a reconnect working: the browser re-mints a key for
+ * the SAME session after a dropped connection, and that must not be refused as
+ * a second consultation.
+ *
+ * Returns 0 on failure rather than throwing — this is a cap on a rare abuse,
+ * not the allowance itself, and failing it closed would refuse consultations to
+ * honest trainees over a transient read. The five-station count still holds.
+ */
+export async function countOpenTrialSessions(
+  supabase: SupabaseClient,
+  userId: string,
+  exceptSessionId: string,
+  now: Date = new Date(),
+): Promise<number> {
+  try {
+    const since = new Date(now.getTime() - TRIAL_OPEN_SESSION_MINUTES * 60_000)
+    const { data, error } = await supabase
+      .from('clinical_sessions')
+      .select('id')
+      .eq('user_id', userId)
+      .in('status', ['live', 'processing'])
+      .gte('started_at', since.toISOString())
+      .neq('id', exceptSessionId)
+    if (error) throw error
+    return (data ?? []).length
+  } catch (error: unknown) {
+    console.error('[trial] open-session check failed — not enforcing one-at-a-time', error)
+    return 0
+  }
+}
+
+/**
+ * Start the trial's five-day window on the first consultation, once.
+ *
+ * Shared by both server chokepoints rather than living in one of them.
+ * `create-session` is where the first consultation normally begins, but
+ * `realtime-token` is independently reachable — it inserts a session row of its
+ * own when it does not find one — and a client that only ever called that
+ * endpoint would spend Azure minutes against a grant whose clock never started,
+ * which is a five-day window that never ends. Calling it from both is free
+ * because the stamp is a compare-and-set.
+ *
+ * The grant is re-read with the SERVICE-ROLE client rather than reusing the one
+ * the entitlement path already loaded, for two reasons: `trial_grants` has no
+ * write policy at all, so the user's own client cannot update it; and the
+ * `started_at` that read saw is a snapshot a concurrent request may already
+ * have moved.
+ *
+ * Only for accounts running on the grant alone — somebody who has bought is not
+ * spending a trial, and starting their clock would put a countdown on a
+ * dashboard that has a plan on it.
+ *
+ * Never throws: a consultation must not fail to start because a clock could not
+ * be written, and an unstarted window is still capped at five stations.
+ */
+export async function startTrialWindowFor(
+  admin: SupabaseClient,
+  trialOnly: boolean,
+  userId: string,
+): Promise<void> {
+  if (!trialOnly) return
+  try {
+    const grant = await loadTrialGrant(admin, userId)
+    if (grant && !grant.startedAt) await startTrialWindow(admin, grant)
+  } catch (error: unknown) {
+    console.error('[trial] could not start the window', error)
   }
 }
 

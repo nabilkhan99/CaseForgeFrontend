@@ -15,6 +15,8 @@ import type { Entitlement } from '@/lib/commerce/entitlements'
 const getServerEntitlement = vi.fn()
 const getSupabaseAdmin = vi.fn()
 const mintEphemeralKey = vi.fn()
+const countOpenTrialSessions = vi.fn()
+const startTrialWindowFor = vi.fn()
 
 vi.mock('@/lib/commerce/serverEntitlement', () => ({
   getServerEntitlement: () => getServerEntitlement(),
@@ -22,6 +24,15 @@ vi.mock('@/lib/commerce/serverEntitlement', () => ({
 vi.mock('@/lib/supabase/admin', () => ({
   getSupabaseAdmin: () => getSupabaseAdmin(),
 }))
+vi.mock('@/lib/commerce/trialAccess', async (importOriginal) => {
+  // The refusal rules themselves stay real — only the two IO helpers are stubbed.
+  const actual = await importOriginal<typeof import('@/lib/commerce/trialAccess')>()
+  return {
+    ...actual,
+    countOpenTrialSessions: (...args: unknown[]) => countOpenTrialSessions(...args),
+    startTrialWindowFor: (...args: unknown[]) => startTrialWindowFor(...args),
+  }
+})
 vi.mock('@/lib/clinical-master/realtimeToken', () => ({
   mintEphemeralKey: (...args: unknown[]) => mintEphemeralKey(...args),
   unreliableEchoCancellation: () => false,
@@ -105,6 +116,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   getSupabaseAdmin.mockReturnValue(stubAdmin())
   mintEphemeralKey.mockResolvedValue({ key: 'ek_test', origin: 'primary', lane: 'lane-a' })
+  countOpenTrialSessions.mockResolvedValue(0)
+  startTrialWindowFor.mockResolvedValue(undefined)
 })
 
 describe('the realtime mint and a spent trial', () => {
@@ -147,5 +160,71 @@ describe('the realtime mint and a spent trial', () => {
       entitlement: { state: 'active', hasLectures: false },
     })
     expect((await POST(request())).status).toBe(200)
+  })
+})
+
+describe('one consultation at a time', () => {
+  /**
+   * The cap is enforced from a DERIVED count of marked sessions, and a mark
+   * lands ~90 seconds after a consultation that runs up to 12 minutes. For that
+   * quarter of an hour a started consultation is invisible to the count, so
+   * without this check N parallel mints all read the same low `used` and all
+   * succeed — five stations enforced sequentially and unbounded in parallel,
+   * each spending real Azure minutes.
+   */
+  it('refuses a second consultation while one is already running', async () => {
+    signedIn({ trial: computeTrialAccess(grant(), 1, NOW), allowed: true })
+    countOpenTrialSessions.mockResolvedValue(1)
+
+    const res = await POST(request())
+
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ error: 'trial_session_in_progress', trial: true })
+    expect(mintEphemeralKey).not.toHaveBeenCalled()
+  })
+
+  it('excludes this session, so a reconnect is never refused as a second one', async () => {
+    signedIn({ trial: computeTrialAccess(grant(), 1, NOW), allowed: true })
+    await POST(request())
+    // The browser re-mints for the SAME consultation after a dropped
+    // connection; counting its own row would make every reconnect a 409.
+    expect(countOpenTrialSessions.mock.calls[0][2]).toBe('sess-1')
+  })
+
+  it('does not cap somebody who has bought', async () => {
+    // The cap protects a free grant from parallel abuse. A customer paid for
+    // the bank and may run whatever they like.
+    signedIn({
+      trial: NO_TRIAL,
+      allowed: true,
+      entitlement: { state: 'active', hasLectures: false },
+    })
+    countOpenTrialSessions.mockResolvedValue(3)
+
+    expect((await POST(request())).status).toBe(200)
+    expect(countOpenTrialSessions).not.toHaveBeenCalled()
+  })
+})
+
+describe('starting the five-day window', () => {
+  it('stamps it here too, for a client that skipped create-session', async () => {
+    // This endpoint inserts a session row of its own when it finds none, so a
+    // client that only ever called it would spend Azure minutes against a grant
+    // whose window never opened — and a window that never opens never ends.
+    signedIn({ trial: computeTrialAccess(grant({ startedAt: null, expiresAt: null }), 0, NOW), allowed: true })
+
+    await POST(request())
+
+    expect(startTrialWindowFor).toHaveBeenCalledTimes(1)
+    expect(startTrialWindowFor.mock.calls[0][1]).toBe(true)
+  })
+
+  it('does not stamp when the mint failed', async () => {
+    // No consultation happened, so no clock should start.
+    signedIn({ trial: computeTrialAccess(grant(), 0, NOW), allowed: true })
+    mintEphemeralKey.mockRejectedValue(new Error('azure down'))
+
+    expect((await POST(request())).status).toBe(500)
+    expect(startTrialWindowFor).not.toHaveBeenCalled()
   })
 })

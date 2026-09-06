@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerEntitlement } from '@/lib/commerce/serverEntitlement';
 import { cohortAllowsStation } from '@/lib/commerce/cohortAccess';
-import { loadTrialGrant, startTrialWindow, trialRefusal } from '@/lib/commerce/trialAccess';
+import { startTrialWindowFor, trialRefusal } from '@/lib/commerce/trialAccess';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 export async function POST(req: NextRequest) {
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
     // session row whose window never started, and an unstarted window is a
     // trial that never expires. The stamp is a compare-and-set, so doing it
     // twice is free.
-    await startTrialWindowFor(trialOnly, user.id);
+    await startTrialWindowFor(getSupabaseAdmin(), trialOnly, user.id);
     return NextResponse.json({ status: 'exists', sessionId });
   }
 
@@ -92,37 +92,7 @@ export async function POST(req: NextRequest) {
   // After the insert, never before: the five days must run from a consultation
   // that actually exists, so a request that fell over on the way in cannot
   // start somebody's clock.
-  await startTrialWindowFor(trialOnly, user.id);
+  await startTrialWindowFor(getSupabaseAdmin(), trialOnly, user.id);
 
   return NextResponse.json({ status: 'created', sessionId });
-}
-
-/**
- * Start the trial's five-day window on the first consultation, once.
- *
- * The grant is re-read here with the SERVICE-ROLE client rather than reusing
- * the one the entitlement path already loaded, for two reasons: `trial_grants`
- * has no write policy at all (the user's own client cannot update it), and the
- * `started_at` the entitlement read saw is a snapshot that a concurrent request
- * may already have moved. `startTrialWindow` is a single conditional UPDATE on
- * `started_at is null`, so whichever call arrives second matches no rows and
- * the window is never extended.
- *
- * Only for accounts running on the trial alone: somebody who has bought is not
- * spending a grant, and starting their clock would put a countdown on a
- * dashboard that has a plan on it.
- *
- * Failures are swallowed inside `startTrialWindow` — a consultation must not
- * fail to start because a clock could not be written, and an unstarted window
- * is still capped at five stations by the derived count.
- */
-async function startTrialWindowFor(trialOnly: boolean, userId: string): Promise<void> {
-  if (!trialOnly) return;
-  try {
-    const admin = getSupabaseAdmin();
-    const grant = await loadTrialGrant(admin, userId);
-    if (grant && !grant.startedAt) await startTrialWindow(admin, grant);
-  } catch (error: unknown) {
-    console.error('[trial] could not start the window', error);
-  }
 }

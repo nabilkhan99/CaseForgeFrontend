@@ -18,8 +18,7 @@ import type { Entitlement } from '@/lib/commerce/entitlements'
 
 const getServerEntitlement = vi.fn()
 const getSupabaseAdmin = vi.fn()
-const loadTrialGrant = vi.fn()
-const startTrialWindow = vi.fn()
+const startTrialWindowFor = vi.fn()
 
 vi.mock('@/lib/commerce/serverEntitlement', () => ({
   getServerEntitlement: () => getServerEntitlement(),
@@ -33,8 +32,7 @@ vi.mock('@/lib/commerce/trialAccess', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/commerce/trialAccess')>()
   return {
     ...actual,
-    loadTrialGrant: (...args: unknown[]) => loadTrialGrant(...args),
-    startTrialWindow: (...args: unknown[]) => startTrialWindow(...args),
+    startTrialWindowFor: (...args: unknown[]) => startTrialWindowFor(...args),
   }
 })
 
@@ -97,8 +95,7 @@ function request(body: unknown = { sessionId: 'sess-1', stationId: 'st-1' }) {
 beforeEach(() => {
   vi.clearAllMocks()
   getSupabaseAdmin.mockReturnValue({})
-  loadTrialGrant.mockResolvedValue(null)
-  startTrialWindow.mockResolvedValue(true)
+  startTrialWindowFor.mockResolvedValue(undefined)
 })
 
 describe('the five-station cap', () => {
@@ -165,39 +162,21 @@ describe('the five-station cap', () => {
 
 describe('starting the five-day window', () => {
   it('stamps it on the first consultation', async () => {
-    const unstarted = grant()
-    loadTrialGrant.mockResolvedValue(unstarted)
-    signedIn({ trial: computeTrialAccess(unstarted, 0, NOW), allowed: true, trialOnly: true })
+    signedIn({ trial: computeTrialAccess(grant(), 0, NOW), allowed: true, trialOnly: true })
 
     await POST(request())
 
-    expect(startTrialWindow).toHaveBeenCalledTimes(1)
-    expect(startTrialWindow.mock.calls[0][1]).toBe(unstarted)
-  })
-
-  it('does not re-stamp a window that is already open', async () => {
-    // The compare-and-set in startTrialWindow is the real guarantee; this is
-    // the cheap early-out that keeps every consultation after the first from
-    // issuing a write that can only match zero rows.
-    const open = grant({
-      startedAt: new Date(NOW.getTime() - 2 * DAY),
-      expiresAt: new Date(NOW.getTime() + 3 * DAY),
-    })
-    loadTrialGrant.mockResolvedValue(open)
-    signedIn({ trial: computeTrialAccess(open, 2, NOW), allowed: true, trialOnly: true })
-
-    await POST(request())
-
-    expect(startTrialWindow).not.toHaveBeenCalled()
+    expect(startTrialWindowFor).toHaveBeenCalledTimes(1)
+    // `trialOnly` is the gate the helper applies; the compare-and-set on
+    // `started_at is null` is what makes a second call a no-op.
+    expect(startTrialWindowFor.mock.calls[0][1]).toBe(true)
   })
 
   it('stamps on a retry that finds the session already there', async () => {
     // Otherwise a create-session that failed after its insert leaves a session
     // whose window never started — and an unstarted window never expires.
-    const unstarted = grant()
-    loadTrialGrant.mockResolvedValue(unstarted)
     signedIn({
-      trial: computeTrialAccess(unstarted, 0, NOW),
+      trial: computeTrialAccess(grant(), 0, NOW),
       allowed: true,
       trialOnly: true,
       sessions: stubSessions({ id: 'sess-1' }),
@@ -206,11 +185,10 @@ describe('starting the five-day window', () => {
     const res = await POST(request())
 
     expect(await res.json()).toMatchObject({ status: 'exists' })
-    expect(startTrialWindow).toHaveBeenCalledTimes(1)
+    expect(startTrialWindowFor).toHaveBeenCalledTimes(1)
   })
 
   it('does not start a clock for somebody who has bought', async () => {
-    loadTrialGrant.mockResolvedValue(grant())
     signedIn({
       trial: computeTrialAccess(grant(), 0, NOW),
       allowed: true,
@@ -222,14 +200,12 @@ describe('starting the five-day window', () => {
 
     await POST(request())
 
-    expect(loadTrialGrant).not.toHaveBeenCalled()
-    expect(startTrialWindow).not.toHaveBeenCalled()
+    expect(startTrialWindowFor.mock.calls[0][1]).toBe(false)
   })
 
   it('does not start the clock when the session could not be created', async () => {
     // The five days must run from a consultation that exists. A request that
     // fell over on the way in cannot burn a day.
-    loadTrialGrant.mockResolvedValue(grant())
     signedIn({
       trial: computeTrialAccess(grant(), 0, NOW),
       allowed: true,
@@ -240,16 +216,7 @@ describe('starting the five-day window', () => {
     const res = await POST(request())
 
     expect(res.status).toBe(500)
-    expect(startTrialWindow).not.toHaveBeenCalled()
-  })
-
-  it('starts the consultation even when the stamp itself fails', async () => {
-    loadTrialGrant.mockRejectedValue(new Error('database down'))
-    signedIn({ trial: computeTrialAccess(grant(), 0, NOW), allowed: true, trialOnly: true })
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    expect((await POST(request())).status).toBe(200)
-    spy.mockRestore()
+    expect(startTrialWindowFor).not.toHaveBeenCalled()
   })
 })
 
