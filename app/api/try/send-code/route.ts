@@ -282,7 +282,10 @@ async function sendSignupCode(
   const code = generateVerificationCode();
   const now = new Date();
   const verification = {
-    first_name: firstName,
+    // Only written when it was actually given: the portfolio banner's one-field
+    // form has no name to offer, and blanking a name we already hold would cost
+    // every later email its greeting.
+    ...(firstName ? { first_name: firstName } : {}),
     verification_code_hash: hashVerificationCode(code, email),
     verification_expires_at: new Date(now.getTime() + CODE_TTL_MS).toISOString(),
     verification_attempts: 0,
@@ -307,7 +310,7 @@ async function sendSignupCode(
     return NextResponse.json({ error: 'Something went wrong — please try again' }, { status: 500 });
   }
 
-  const emailResult = await sendVerificationEmail({ toEmail: email, firstName, code });
+  const emailResult = await sendVerificationEmail({ toEmail: email, firstName: firstName || null, code });
   if (!emailResult.sent) {
     // Undo the throttle stamp so a failed send can be retried immediately, and
     // drop the hash so the dead code cannot be guessed at leisure.

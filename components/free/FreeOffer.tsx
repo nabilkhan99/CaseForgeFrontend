@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
 import LandingNavbar from '@/components/landing/LandingNavbar';
@@ -35,8 +36,14 @@ const TERMS: readonly string[] = [
   'Nothing to cancel. We never take a card for this.',
 ];
 
-export default function FreeOffer() {
+function FreeOfferInner() {
   const [user, setUser] = useState<{ id: string } | null>(null);
+  const params = useSearchParams();
+
+  // Carried by the portfolio tool's banner, which sends the code itself and
+  // hands the person over here rather than asking for the address twice.
+  const initialEmail = params.get('email') ?? undefined;
+  const codeAlreadySent = params.get('code') === 'sent';
 
   useEffect(() => {
     const supabase = createClient();
@@ -101,7 +108,7 @@ export default function FreeOffer() {
 
           {/* Right: the two doors */}
           <div className="lg:sticky lg:top-28 lg:self-start">
-            <FreeSignUpBox />
+            <FreeSignUpBox initialEmail={initialEmail} codeAlreadySent={codeAlreadySent} />
 
             <div className="my-6 flex items-center gap-4">
               <span className="h-px flex-1 bg-hairline" />
@@ -134,5 +141,14 @@ export default function FreeOffer() {
 
       <LandingFooter />
     </div>
+  );
+}
+
+/** useSearchParams needs a Suspense boundary for static prerendering. */
+export default function FreeOffer() {
+  return (
+    <Suspense fallback={null}>
+      <FreeOfferInner />
+    </Suspense>
   );
 }

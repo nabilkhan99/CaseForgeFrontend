@@ -47,9 +47,22 @@ interface VerifyBody {
   account?: { userId: string; created: boolean; signInUrl: string | null } | null;
 }
 
-export default function FreeSignUpBox() {
-  const [step, setStep] = useState<Step>('details');
-  const [email, setEmail] = useState('');
+export interface FreeSignUpBoxProps {
+  /** Pre-fills the address, e.g. when it was typed on another surface. */
+  initialEmail?: string;
+  /**
+   * Start on the code step because a code has ALREADY been sent — the portfolio
+   * tool's banner posts the address itself and hands the person over here, so
+   * asking for it a second time would waste the send and read as a bug.
+   */
+  codeAlreadySent?: boolean;
+}
+
+export default function FreeSignUpBox({ initialEmail, codeAlreadySent }: FreeSignUpBoxProps = {}) {
+  const [step, setStep] = useState<Step>(
+    initialEmail && codeAlreadySent ? 'code' : 'details',
+  );
+  const [email, setEmail] = useState(initialEmail ?? '');
   const [firstName, setFirstName] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);

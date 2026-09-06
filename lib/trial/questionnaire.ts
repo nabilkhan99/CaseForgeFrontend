@@ -276,6 +276,11 @@ export function validatePartialAnswers(
 /** What the /free sign-up box collects. Two fields, and that is the point. */
 export interface SignupAnswers {
   email: string
+  /**
+   * Empty when it was not asked for. The /free box requires it; the portfolio
+   * tool's one-field banner cannot ask for it without becoming a form, and the
+   * verification email already greets an unnamed lead as "there".
+   */
   firstName: string
 }
 
@@ -303,8 +308,10 @@ export function validateSignupAnswers(
   const email = str(input.email).toLowerCase()
   if (!EMAIL_RE.test(email)) return { ok: false, error: 'A valid email is required' }
 
+  // Optional here, unlike the guest validator. An address with no name is a
+  // lead worth having; refusing it would mean the portfolio banner's single
+  // field could not use this path at all.
   const firstName = str(input.firstName).slice(0, 60)
-  if (!firstName) return { ok: false, error: 'First name is required' }
 
   return { ok: true, value: { email, firstName } }
 }
