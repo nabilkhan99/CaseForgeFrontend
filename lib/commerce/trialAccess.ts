@@ -159,6 +159,31 @@ export function trialRefusal(trial: TrialAccess | null): TrialRefusal | null {
   }
 }
 
+/**
+ * Postgres / PostgREST codes for "this relation is not there yet".
+ *
+ * `PGRST205` is PostgREST's own "table not in the schema cache"; `42P01` and
+ * `42703` are Postgres's undefined_table and undefined_column.
+ */
+const MISSING_RELATION_CODES: ReadonlySet<string> = new Set(['PGRST205', '42P01', '42703'])
+
+/**
+ * True when the failure is simply that `trial_grants` has not been created yet.
+ *
+ * This is a REAL, EXPECTED state, not a defensive flourish: the migration is
+ * applied by hand after the merge (see the build plan's phase 3), so there is a
+ * window in which every deployment is running this code against a database
+ * without the table. Without this branch that window produces one console.error
+ * per entitlement check — which is every navigation into a consultation and
+ * every navbar poll of /api/subscription — and drowns the log that would show a
+ * real problem. The outcome is identical either way (no grant, no trial); only
+ * the noise differs.
+ */
+function isMissingRelation(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code
+  return typeof code === 'string' && MISSING_RELATION_CODES.has(code)
+}
+
 /** The `trial_grants` shape PostgREST returns. */
 interface TrialGrantRow {
   id: string
@@ -220,9 +245,13 @@ export async function loadTrialGrant(
     if (error) throw error
     return data ? parseGrant(data as TrialGrantRow) : null
   } catch (error: unknown) {
-    // Loud: a trialist hitting the paywall reads as a billing bug and will be
-    // reported as one.
-    console.error('[trial] grant lookup failed — no trial access', error)
+    // Loud, EXCEPT while the table simply does not exist yet — a trialist
+    // hitting the paywall reads as a billing bug and will be reported as one,
+    // but "the migration has not been applied" is a known deploy state and
+    // logging it on every gated navigation would bury the case that matters.
+    if (!isMissingRelation(error)) {
+      console.error('[trial] grant lookup failed — no trial access', error)
+    }
     return null
   }
 }

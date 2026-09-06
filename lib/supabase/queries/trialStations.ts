@@ -40,7 +40,13 @@ export async function getRecommendedStationIds(): Promise<string[]> {
     if (error) throw error;
     return (data ?? []).map((row) => (row as { id: string }).id);
   } catch (error: unknown) {
-    console.error('[library] recommended stations lookup failed', error);
+    // Quiet for the one failure that is an expected deploy state — the column
+    // does not exist until the migration is applied — and loud for anything
+    // else. Without the exemption, every library load between the deploy and
+    // the migration logs an error that means nothing.
+    if ((error as { code?: string } | null)?.code !== '42703') {
+      console.error('[library] recommended stations lookup failed', error);
+    }
     return [];
   }
 }

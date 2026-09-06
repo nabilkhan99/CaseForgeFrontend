@@ -7,6 +7,7 @@ import {
   countTrialConsumption,
   grantTrial,
   loadTrialAccess,
+  loadTrialGrant,
   startTrialWindow,
   trialRefusal,
   type TrialGrant,
@@ -491,5 +492,35 @@ describe('loadTrialAccess', () => {
     // The cost argument for putting this on the entitlement hot path: everybody
     // who has bought pays one indexed lookup and nothing more.
     expect(count).not.toHaveBeenCalled()
+  })
+})
+
+describe('before the migration is applied', () => {
+  /**
+   * The migration is applied by hand after the merge, so there is a real window
+   * in which this code runs against a database with no `trial_grants` table.
+   * Everything must behave exactly as it did before the feature existed — and
+   * quietly, because this path runs on every gated navigation and every navbar
+   * poll, and one console.error per request would bury the failures that matter.
+   */
+  function stubMissingTable(code: string) {
+    const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: { code, message: 'nope' } })
+    const eq = vi.fn(() => ({ maybeSingle }))
+    const select = vi.fn(() => ({ eq }))
+    return { from: vi.fn(() => ({ select })) } as never
+  }
+
+  it.each(['PGRST205', '42P01'])('reports no trial, silently, for %s', async (code) => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(await loadTrialGrant(stubMissingTable(code), 'user-1')).toBeNull()
+    expect(spy).not.toHaveBeenCalled()
+    spy.mockRestore()
+  })
+
+  it('still shouts about a failure that is not a missing table', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(await loadTrialGrant(stubMissingTable('57014'), 'user-1')).toBeNull()
+    expect(spy).toHaveBeenCalled()
+    spy.mockRestore()
   })
 })
