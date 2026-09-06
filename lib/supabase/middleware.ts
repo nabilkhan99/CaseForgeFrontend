@@ -164,7 +164,13 @@ export async function updateSession(request: NextRequest) {
                     // offer for someone who has just used their five stations is
                     // two plans chosen by their exam date, which lives on the
                     // dashboard. `?trial=ended` is what draws that wall.
-                    if (trialAccess?.state === 'trial_ended') {
+                    //
+                    // `!entitlement.plan` keeps that to people whose access
+                    // rested on the grant ALONE. Somebody who once bought and
+                    // lapsed has a purchase to renew and a plan name to be told
+                    // about, and their own story outranks the grant's here for
+                    // the same reason it does everywhere else.
+                    if (trialAccess?.state === 'trial_ended' && !entitlement.plan) {
                         url.pathname = '/dashboard';
                         url.search = '';
                         url.searchParams.set('trial', 'ended');

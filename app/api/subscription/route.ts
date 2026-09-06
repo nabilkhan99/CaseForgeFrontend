@@ -165,7 +165,18 @@ export async function GET() {
   // reported to them at all. `bypass` covers the fail-open too, where nobody
   // waived anything and the trial must not be counted down against a lookup
   // that broke.
-  const trialGoverns = trial !== null && trial.state !== 'none' && entitlement.state !== 'active' && !bypass && !failedOpen;
+  // A LIVE trial is always reported: it is what is letting them practise, and
+  // on a lapsed customer's dashboard it is the only line that explains why the
+  // stations still open. A SPENT one is reported only when there is no purchase
+  // to talk about instead — somebody who once bought has a plan name and a
+  // renew path, and their own story outranks the grant's, here as everywhere.
+  const trialGoverns =
+    trial !== null &&
+    trial.state !== 'none' &&
+    entitlement.state !== 'active' &&
+    !bypass &&
+    !failedOpen &&
+    (trial.state === 'trial' || !entitlement.plan);
   const trialBody: TrialSubscription | null = trialGoverns
     ? {
         state: trial.state as Exclude<TrialState, 'none'>,

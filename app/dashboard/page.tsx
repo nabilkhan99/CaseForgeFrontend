@@ -395,7 +395,11 @@ function DashboardContent() {
       {trialLive && trial && <TrialStrip trial={trial} />}
       {trialEnded && trial && <TrialWall trial={trial} examDate={stats.examDate} />}
 
-      {access?.state === 'none' && access.plan && !access.bypass && (
+      {/* Both plan banners below stand down while a live trial is granting
+          access. They are written for somebody who cannot practise, and saying
+          "your access hasn't opened yet" over a strip offering five stations
+          would contradict the page's own primary action. */}
+      {access?.state === 'none' && access.plan && !access.bypass && !trialLive && (
         /* Two different situations share this banner, and only one of them is
            an alert. Unbounced it is a standing status a preorder buyer reads
            on every load for weeks — that is a hairline row, not a tinted
@@ -424,7 +428,7 @@ function DashboardContent() {
           13px link, above a dashed box announcing a start date. The quick-start
           block below now carries that as the page's primary action, so saying it
           twice — quietly first — only competed with itself. */}
-      {access?.state === 'read_only' && !access.bypass && (
+      {access?.state === 'read_only' && !access.bypass && !trialLive && (
         /* Kept on a tinted surface. De-carding uniformly would have flattened
            the one message on this page that costs the reader money to miss:
            practice has stopped and only renewing restarts it. Same rgba values
