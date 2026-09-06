@@ -2,17 +2,19 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { motion, useReducedMotion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import type { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 import { getStationIndex, type Station } from '@/lib/supabase/queries/station-library';
 import PageHeader from '@/components/ui/PageHeader';
 import { getDomainColor } from '@/lib/constants/domains';
 import StationBoard from '@/components/library/StationBoard';
-import StationRow from '@/components/library/StationRow';
+import PinnedStations from '@/components/library/PinnedStations';
 import { useLibraryFilters } from '@/components/library/useLibraryFilters';
 import { summariseDomains } from '@/lib/stations/librarySearch';
 import { useCohortAllowlist } from '@/hooks/useCohortAllowlist';
+import { useTrialStatus } from '@/hooks/useTrialStatus';
+import { getRecommendedStationIds } from '@/lib/supabase/queries/trialStations';
 
 function LibrarySpinner() {
   return (
@@ -29,6 +31,10 @@ function LibrarySpinner() {
 function StationLibraryContent() {
   const [stations, setStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState(true);
+  // The recommended "Start here" cases, in order. Ids only — the board has
+  // already loaded every station, so these are looked up in that array rather
+  // than fetched a second time and risking two versions of the same case.
+  const [recommendedIds, setRecommendedIds] = useState<string[]>([]);
   // `undefined` = auth hasn't answered yet, `null` = genuinely signed out. The
   // data fetch waits for the difference: firing it on the initial null renders
   // a returning user's whole library as "Not started" before the progress
@@ -43,7 +49,9 @@ function StationLibraryContent() {
   // null for everyone without a trainer-pilot seat, and until the answer
   // arrives — so nobody watches their library flash as locked on load.
   const allowlist = useCohortAllowlist();
-  const shouldReduceMotion = useReducedMotion();
+  // Null for everybody who is not running on the five free stations, and until
+  // the answer arrives — same null-until-known rule as the allowlist above.
+  const trial = useTrialStatus();
 
   useEffect(() => {
     const supabase = createClient();
@@ -69,6 +77,20 @@ function StationLibraryContent() {
       cancelled = true;
     };
   }, [user]);
+
+  // Independent of the station fetch and of who is signed in: the recommended
+  // set is a property of the bank, not of the reader, and it fails soft to an
+  // empty list (the `free_trial_order` column does not exist until the
+  // migration is applied). Only rendered for trial accounts — see `recommended`.
+  useEffect(() => {
+    let cancelled = false;
+    getRecommendedStationIds().then((ids) => {
+      if (!cancelled) setRecommendedIds(ids);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const domains = useMemo(() => summariseDomains(stations), [stations]);
   const passedTotal = useMemo(
@@ -124,6 +146,31 @@ function StationLibraryContent() {
     [stations, allowlist],
   );
 
+  /**
+   * The recommended "Start here" cases, for somebody on the five free stations.
+   *
+   * Ordered by `free_trial_order` — the ids arrive in that order and are mapped
+   * back through the loaded station array, so the pairing Ishaq chose (a near
+   * miss, then a case where the same "one change" applies) survives. A flagged
+   * station missing from the index (staged, or deleted) drops out rather than
+   * rendering a hole.
+   *
+   * NOT A GATE. Nothing here locks the other cases: a trialist may sit any of
+   * the two hundred, and what limits them is the count, enforced at the server
+   * chokepoints. This is a recommendation, and the board below is unchanged —
+   * which is exactly why it does not pass an `allowlist`.
+   *
+   * Trial accounts only. For a customer three months into the bank, a "start
+   * here" list is a section about a decision they made weeks ago.
+   */
+  const recommended = useMemo(() => {
+    if (!trial) return [];
+    const byId = new Map(stations.map((station) => [station.id, station]));
+    return recommendedIds
+      .map((id) => byId.get(id))
+      .filter((station): station is Station => station !== undefined);
+  }, [stations, recommendedIds, trial]);
+
   return (
     <div>
       {/* The board's summary line, promoted to the subtitle: the board is now
@@ -135,33 +182,15 @@ function StationLibraryContent() {
         <LibrarySpinner />
       ) : (
         <>
-          {/* Cohort students only — see `assigned`. Rules rather than a card,
-              and the same StationRow the topic pages use, so a case reads
-              identically wherever it is met and keeps its attempt history. */}
-          {assigned.length > 0 && (
-            <motion.section
-              aria-labelledby="assigned-cases-heading"
-              className="mb-8 border-y border-hairline py-4"
-              initial={shouldReduceMotion ? false : { opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.2 }}
-            >
-              <h2
-                id="assigned-cases-heading"
-                className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted"
-              >
-                Your cases
-              </h2>
-              <div className="mt-1">
-                {assigned.map((station) => (
-                  // The domain is worth naming here in a way it is not on a
-                  // topic page: this list crosses topics, so without it five
-                  // rows arrive with no sense of what they cover.
-                  <StationRow key={station.id} station={station} showDomain />
-                ))}
-              </div>
-            </motion.section>
-          )}
+          {/* Cohort students only — see `assigned`. */}
+          <PinnedStations id="assigned-cases" heading="Your cases" stations={assigned} />
+
+          {/* Trial accounts only — see `recommended`. The same section, said
+              differently: a cohort student is being told which cases are
+              theirs, a trialist which of two hundred to spend a station on
+              first. Both render nothing for everybody else, so at most one of
+              them ever appears. */}
+          <PinnedStations id="start-here" heading="Start here" stations={recommended} />
 
           {/* The page, above `sm`. Its own chips carry the progress filter. */}
           <StationBoard

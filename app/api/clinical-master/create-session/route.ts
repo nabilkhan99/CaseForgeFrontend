@@ -1,13 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerEntitlement } from '@/lib/commerce/serverEntitlement';
 import { cohortAllowsStation } from '@/lib/commerce/cohortAccess';
+import { startTrialWindowFor, trialRefusal } from '@/lib/commerce/trialAccess';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 export async function POST(req: NextRequest) {
-  const { supabase, user, allowed, entitlement, cohort, cohortOnly } =
+  const { supabase, user, allowed, entitlement, cohort, cohortOnly, trial, trialOnly } =
     await getServerEntitlement();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // A spent trial answers before the generic refusal below, with its own code.
+  // `no_active_plan` would be true but useless here: it sends the client to
+  // renew-vs-buy, and the right destination for somebody who has just used
+  // their five stations is the two-plan wall. The two reasons are separated
+  // (`trial_allowance_used` / `trial_expired`) because the wall says different
+  // things about stations that ran out and days that did.
+  //
+  // `!entitlement.plan` matches the rule the middleware applies to the same
+  // pair of facts: somebody who once bought and lapsed has a purchase to renew,
+  // and the API must not name a different wall from the one a page navigation
+  // would have sent them to.
+  const refusal = entitlement.plan ? null : trialRefusal(trial);
+  if (!allowed && refusal) {
+    return NextResponse.json({ ...refusal, state: entitlement.state }, { status: 403 });
   }
 
   // The middleware only guards the page; without this an expired or
@@ -47,6 +65,12 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (existing) {
+    // Stamped on this path too, not only on a fresh insert. A client that
+    // retries create-session after a transient failure would otherwise reach a
+    // session row whose window never started, and an unstarted window is a
+    // trial that never expires. The stamp is a compare-and-set, so doing it
+    // twice is free.
+    await startTrialWindowFor(getSupabaseAdmin(), trialOnly, user.id);
     return NextResponse.json({ status: 'exists', sessionId });
   }
 
@@ -64,6 +88,11 @@ export async function POST(req: NextRequest) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  // After the insert, never before: the five days must run from a consultation
+  // that actually exists, so a request that fell over on the way in cannot
+  // start somebody's clock.
+  await startTrialWindowFor(getSupabaseAdmin(), trialOnly, user.id);
 
   return NextResponse.json({ status: 'created', sessionId });
 }
