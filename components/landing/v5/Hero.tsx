@@ -105,22 +105,41 @@ export default function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.18 }}
           >
-            {/* "2d" treatment — quiet outline: ink keyline on cream, amber arrow disc */}
+            {/*
+              Filled, not the old "2d" outline. The outline treatment was drawn
+              for a CTA competing with the receipt panel beside it; the offer is
+              now five marked stations rather than one mock, which is worth more
+              than the page's quietest button.
+            */}
             <motion.a
-              href="/try"
+              href="/free"
               whileHover={{ y: -2 }}
               whileTap={{ scale: 0.98 }}
-              className="inline-flex items-center gap-3.5 rounded-full border-[3px] border-[#1C1917] bg-[#FFFDFA] py-2.5 pl-7 pr-2.5 text-lg font-bold tracking-[-0.01em] text-[#1C1917] sm:gap-4 sm:py-3 sm:pl-9 sm:pr-3 sm:text-xl"
+              className="inline-flex items-center gap-3.5 rounded-full border-[3px] border-transparent py-2.5 pl-7 pr-2.5 text-lg font-bold tracking-[-0.01em] text-[#FFF8EF] shadow-[0_10px_28px_-14px_rgba(180,83,9,0.75)] sm:gap-4 sm:py-3 sm:pl-9 sm:pr-3 sm:text-xl"
+              style={{ background: 'linear-gradient(135deg, #B45309 0%, #D97706 100%)' }}
             >
-              Try Free Mock Station
+              Start 5 free stations
               <span
-                className="flex h-11 w-11 items-center justify-center rounded-full bg-[#B45309] text-[#FFF8EF] sm:h-[52px] sm:w-[52px]"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-[#FFF8EF] text-[#B45309] sm:h-[52px] sm:w-[52px]"
                 aria-hidden="true"
               >
                 <ArrowRight className="h-5 w-5 sm:h-6 sm:w-6" />
               </span>
             </motion.a>
-            <p className="mt-4 text-xs text-[#78716C] sm:text-sm">12 minutes · no card</p>
+            <p className="mt-4 text-xs text-[#78716C] sm:text-sm">
+              No card · five days · every station marked · your dashboard keeps the results
+            </p>
+            {/* Door (b), as a text link. Somebody who wants proof before an
+                address should be able to get it in one click; somebody who has
+                already decided should not have to read past it. */}
+            <p className="mt-2.5 text-xs sm:text-sm">
+              <a
+                href="/try/talk"
+                className="text-[#78716C] underline decoration-[#78716C]/40 underline-offset-4 transition-colors hover:text-[#1C1917]"
+              >
+                Or talk to a patient first · no sign-up, a live consultation now
+              </a>
+            </p>
           </motion.div>
         </div>
 

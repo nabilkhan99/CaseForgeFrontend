@@ -314,6 +314,23 @@ export default function CaseDetailPageClient({ caseData }: CaseDetailPageClientP
                             <CaseTimer totalSeconds={caseData.consultation_duration_seconds} />
                         </Container>
 
+                        {/* The page above is the case on paper: brief, script,
+                            mark scheme. This is the same case with a patient who
+                            answers back, and it starts on this station rather
+                            than on whichever one the funnel would have picked —
+                            somebody reading a chlamydia results case wants to
+                            sit a chlamydia results case.
+                            Door (b): no sign-up, the verdict comes before we ask
+                            for anything. */}
+                        <Link
+                            href={`/try/talk?station=${encodeURIComponent(caseData.id)}`}
+                            className="cta-button mt-4 w-full px-5 py-3.5 text-[15px]"
+                        >
+                            Practise this case free
+                        </Link>
+                        <p className="mt-2 text-xs leading-relaxed text-muted">
+                            A live 12-minute consultation with an AI patient, marked. No sign-up.
+                        </p>
                     </div>
 
                     {/* Main content */}

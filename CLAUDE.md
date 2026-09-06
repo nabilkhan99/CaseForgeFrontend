@@ -77,9 +77,17 @@ AZURE_OPENAI_REALTIME_ENDPOINT   # https://<resource>.openai.azure.com
 AZURE_OPENAI_REALTIME_API_KEY    # server-only; ephemeral keys minted from it
 AZURE_OPENAI_REALTIME_DEPLOYMENT # gpt-realtime-2
 GOOGLE_API_KEY                   # Gemini — /api/generate-feedback
+TRIAL_LINK_SECRET                # server-only; HMAC key for the five-station /auth/start links
 ```
 
 These three `AZURE_OPENAI_REALTIME_*` vars must also be set in Vercel for the deployed Clinical Master voice to work.
+
+`TRIAL_LINK_SECRET` signs the door-(c) trial links (`lib/auth/trialLink.ts` → `/auth/start?token=…`).
+Any long random string; rotating it invalidates every link in flight, which is the intended kill switch.
+It must be set in Vercel **Production and Preview** before the mint script or the "Open your dashboard"
+button can produce a working link — without it both fail closed and log loudly, and the sign-up and
+guest-reveal doors keep working because they sign in with a GoTrue recovery hash instead. Never
+`NEXT_PUBLIC_`: a client bundle would ship the signing key.
 
 ## Deployment
 
