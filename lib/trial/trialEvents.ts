@@ -1,4 +1,5 @@
 import { trackEvent } from '@/lib/analytics'
+import type { TrialSource } from '@/lib/commerce/trialAccess'
 
 /**
  * The five-station trial's analytics vocabulary, in one place.
@@ -23,8 +24,32 @@ export const TRIAL_STATION_COMPLETED = 'trial_station_completed'
 /** The trial ended and the two-plan wall was shown. */
 export const TRIAL_WALL_HIT = 'trial_wall_hit'
 
-/** Which door an account came through. Mirrors `trial_grants.source`. */
+/**
+ * Which door an account came through, in the ANALYTICS vocabulary.
+ *
+ * ⚠️ Deliberately not the same strings as `trial_grants.source`
+ * (`TrialSource` in lib/commerce/trialAccess.ts). The two were specified
+ * separately — the event property by the handoff's analytics table, the column
+ * by the build plan's data contract — and both are now fixed: the column has a
+ * CHECK constraint and the event name is what the PostHog insight will filter
+ * on. Use {@link doorForSource} to cross between them rather than passing one
+ * where the other belongs.
+ */
 export type TrialDoor = 'free' | 'guest' | 'invite' | 'cohort'
+
+/** The analytics door for a `trial_grants.source`. The one place the two vocabularies meet. */
+export function doorForSource(source: TrialSource): TrialDoor {
+  switch (source) {
+    case 'signup':
+      return 'free'
+    case 'guest_reveal':
+      return 'guest'
+    case 'link':
+      return 'invite'
+    case 'cohort':
+      return 'cohort'
+  }
+}
 
 /** Why the trial ended. Mirrors TrialAccess.reason. */
 export type TrialWallReason = 'allowance' | 'expiry'
