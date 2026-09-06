@@ -42,6 +42,38 @@ const UNAVAILABLE = '/free?guest=unavailable'
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * Did a person navigate here, or did a machine reach for the link?
+ *
+ * This route has a side effect — it opens a consultation and spends one of the
+ * three a browser gets in a day — and it is reached by GET, which browsers,
+ * crawlers and link-preview bots all feel free to do unasked. Next's own
+ * `<Link>` prefetches into the viewport in production, so a landing page
+ * carrying "talk to a patient first" would otherwise open a session for every
+ * visitor who merely scrolled past it, and a link pasted into Slack would open
+ * one for the unfurler.
+ *
+ * A denylist of the signals machines actually send, not an allowlist of
+ * `Sec-Fetch-Mode: navigate` — that header is absent on older browsers, and
+ * requiring it would refuse real people to catch bots.
+ */
+function isMachineFetch(req: NextRequest): boolean {
+  // HEAD is answered by this handler too (Next derives it from GET), and
+  // nobody navigates with one.
+  if ((req.method ?? 'GET').toUpperCase() === 'HEAD') return true
+
+  const headers = req.headers
+  if (headers.get('next-router-prefetch')) return true
+  if ((headers.get('sec-purpose') ?? '').includes('prefetch')) return true
+  const purpose = (
+    headers.get('purpose') ??
+    headers.get('x-purpose') ??
+    headers.get('x-moz') ??
+    ''
+  ).toLowerCase()
+  return purpose.includes('prefetch') || purpose.includes('preview')
+}
+
 function leave(req: NextRequest, path: string): NextResponse {
   const response = NextResponse.redirect(new URL(path, req.url), 307)
   response.headers.set('Cache-Control', 'no-store')
@@ -49,6 +81,12 @@ function leave(req: NextRequest, path: string): NextResponse {
 }
 
 export async function GET(req: NextRequest) {
+  // Nothing is opened for a prefetch. 204 rather than a redirect: there is no
+  // destination to offer a machine, and a real navigation never gets here.
+  if (isMachineFetch(req)) {
+    return new NextResponse(null, { status: 204, headers: { 'Cache-Control': 'no-store' } })
+  }
+
   // The middleware already turns signed-in visitors away from /try/*, but this
   // route writes a row nobody owns, so it says no itself as well. A redirect
   // rather than the 403 `rejectIfSignedIn` returns: this is a navigation, and

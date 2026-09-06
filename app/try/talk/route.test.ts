@@ -71,17 +71,19 @@ vi.mock('@/lib/supabase/admin', () => ({
 
 const { GET } = await import('./route')
 
-function request(search = '', cookie?: string) {
+function request(search = '', cookie?: string, headers: Record<string, string> = {}, method = 'GET') {
   const url = `https://fourteenfisherman.com/try/talk${search}`
   return {
     url,
+    method,
     nextUrl: new URL(url),
+    headers: new Headers(headers),
     cookies: { get: (name: string) => (cookie && name === 'ff_guest' ? { value: cookie } : undefined) },
   } as never
 }
 
-async function talk(search = '', cookie?: string) {
-  const response = await GET(request(search, cookie))
+async function talk(search = '', cookie?: string, headers?: Record<string, string>, method?: string) {
+  const response = await GET(request(search, cookie, headers, method))
   return {
     status: response.status,
     location: response.headers.get('location') ?? '',
@@ -170,6 +172,23 @@ describe('what it leaves behind', () => {
 
     const { location } = await talk('', signGuestCookie(cookie!)!)
     expect(location).toContain('/free?guest=limit')
+    expect(mocks.inserted).toHaveLength(0)
+  })
+
+  it.each([
+    ['a Next router prefetch', { 'next-router-prefetch': '1' }],
+    ['a speculation-rules prefetch', { 'sec-purpose': 'prefetch;anonymous-client-ip' }],
+    ['an older browser prefetch', { purpose: 'prefetch' }],
+    ["Safari's link preview", { 'x-purpose': 'preview' }],
+  ])('opens nothing for %s', async (_name, headers) => {
+    const { status } = await talk('', undefined, headers)
+    expect(status).toBe(204)
+    expect(mocks.inserted).toHaveLength(0)
+  })
+
+  it('opens nothing for a HEAD, which is how link unfurlers ask', async () => {
+    const { status } = await talk('', undefined, {}, 'HEAD')
+    expect(status).toBe(204)
     expect(mocks.inserted).toHaveLength(0)
   })
 
