@@ -9,6 +9,7 @@ import { GuaranteeCard } from '@/components/landing/v5';
 import EmailVerificationGate from '@/components/try/EmailVerificationGate';
 import TrialProof from '@/components/try/TrialProof';
 import VerdictReveal from '@/components/try/VerdictReveal';
+import OpenDashboardButton from '@/components/try/OpenDashboardButton';
 import StationsPassedBar from '@/components/progress/StationsPassedBar';
 import { trialStationsPassed, type StationsPassed } from '@/lib/stations/passedProgress';
 import {
@@ -130,6 +131,14 @@ export default function TryFeedbackPage() {
           <h2 className="mx-auto mt-2 max-w-xl text-2xl font-semibold tracking-tight text-heading sm:text-3xl">
             Keep practising until you pass — or we pay you £500.
           </h2>
+          {/* Verifying the address created the account and granted the five, so
+              the next four stations already exist — they just need a way in
+              that does not depend on this browser. Above the pricing table
+              deliberately: the free thing they already own comes before the
+              paid thing they might buy. */}
+          <div className="mt-7">
+            <OpenDashboardButton sessionId={sessionId} />
+          </div>
         </div>
       </div>
 
