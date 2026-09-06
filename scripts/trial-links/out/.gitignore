@@ -1,0 +1,5 @@
+# Minted links are bearer credentials: every URL in a file here signs its
+# holder into that person's account for 24 hours. Nothing in this directory is
+# ever committed.
+*
+!.gitignore

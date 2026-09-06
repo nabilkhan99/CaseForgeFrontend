@@ -1,4 +1,3 @@
-import 'server-only'
 import { BrevoClient } from '@getbrevo/brevo'
 import { BRAND, button, emailShell, fallbackLink, paragraph, row, signoff } from '@/lib/email/chrome'
 
@@ -13,6 +12,13 @@ import { BRAND, button, emailShell, fallbackLink, paragraph, row, signoff } from
  * Built on the house shell (lib/email/chrome) and the same Brevo transactional
  * call every other sender in this codebase makes, so it skips cleanly with no
  * `BREVO_API_KEY` rather than throwing on a local machine.
+ *
+ * No `server-only` marker, matching lib/email/accountEmail beside it. Two
+ * reasons: nothing in the browser imports it (the API key is a non-public env
+ * var, so a client bundle would inline `undefined` and skip), and
+ * scripts/trial-links/mint.ts has to be able to load it in plain Node — a
+ * second copy of this email living in a script is exactly how the copy in a
+ * customer's inbox stops matching the copy under review.
  *
  * The 24 hours in the copy is real and not a round number chosen for comfort:
  * a signed trial link's TTL is TRIAL_LINK_TTL_MS, matched to GoTrue's
