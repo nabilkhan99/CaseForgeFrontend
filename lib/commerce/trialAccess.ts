@@ -249,18 +249,49 @@ export async function countTrialConsumption(
 ): Promise<number> {
   const { data, error } = await supabase
     .from('clinical_sessions')
-    // `!inner` turns the embed into a join, so a session with no result row
-    // (never marked, or refused by the unmarkable guard) drops out entirely
-    // rather than arriving with a null to filter in JS.
-    .select('id, session_results!inner(weighted_score)')
+    .select('id, session_results(weighted_score)')
     .eq('user_id', userId)
     .gte('started_at', since.toISOString())
-    .gt('session_results.weighted_score', 0)
   if (error) throw error
 
-  // Distinct sessions, not rows: one session could in principle carry more than
-  // one result row, and two of them must never spend two stations.
-  return new Set((data ?? []).map((row) => (row as { id: string }).id)).size
+  // The score is filtered HERE rather than as a `.gt()` on the embed, matching
+  // lib/supabase/queries/development.ts and passTracking.ts. Not a stylistic
+  // choice: `weighted_score` is typed `number | string | null` throughout this
+  // codebase because PostgREST can hand a numeric back as a string, and a
+  // server-side `gt.0` on a string column is a lexicographic comparison that
+  // would quietly miscount somebody's stations. `Number(...)` is the one
+  // definition of "genuinely scored" the rest of the product already uses.
+  //
+  // The row set this scans is bounded by "sessions since the grant" — single
+  // digits for a five-station trial — so nothing is being paid for the safety.
+  const spent = new Set<string>()
+  for (const row of (data ?? []) as TrialConsumptionRow[]) {
+    // A to-one embed in practice, but tolerated as an array too: which shape
+    // PostgREST returns depends on the FK's uniqueness, and a schema change
+    // there must not silently stop counting.
+    const results = Array.isArray(row.session_results)
+      ? row.session_results
+      : row.session_results
+        ? [row.session_results]
+        : []
+    const scored = results.some((result) => {
+      const score = Number(result?.weighted_score)
+      return Number.isFinite(score) && score > 0
+    })
+    // Distinct sessions, not rows: two result rows for one consultation must
+    // never spend two stations.
+    if (scored) spent.add(row.id)
+  }
+  return spent.size
+}
+
+/** One `clinical_sessions` row with its mark, as PostgREST returns the embed. */
+interface TrialConsumptionRow {
+  id: string
+  session_results:
+    | { weighted_score: number | string | null }
+    | { weighted_score: number | string | null }[]
+    | null
 }
 
 /**

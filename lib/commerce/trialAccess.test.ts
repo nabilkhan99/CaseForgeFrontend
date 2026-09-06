@@ -4,7 +4,9 @@ import {
   TRIAL_ALLOWANCE,
   TRIAL_WINDOW_DAYS,
   computeTrialAccess,
+  countTrialConsumption,
   grantTrial,
+  loadTrialAccess,
   startTrialWindow,
   trialRefusal,
   type TrialGrant,
@@ -372,5 +374,122 @@ describe('startTrialWindow', () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
     expect(await startTrialWindow({ from: () => ({ update }) } as never, grant(), NOW)).toBe(false)
     spy.mockRestore()
+  })
+})
+
+describe('countTrialConsumption', () => {
+  /**
+   * The rule the whole cap rests on: a station is spent when a consultation was
+   * GENUINELY marked, which means a `session_results` row with a positive
+   * weighted score — the same test lib/supabase/queries/passTracking.ts applies.
+   * Everything the trial needs falls out of it: a session too short to mark
+   * writes no result row and costs nothing, and an old anonymous mock predates
+   * the grant and is filtered out by the query.
+   */
+  function stubSessions(rows: unknown[]) {
+    const gte = vi.fn().mockResolvedValue({ data: rows, error: null })
+    const eq = vi.fn(() => ({ gte }))
+    const select = vi.fn(() => ({ eq }))
+    return { client: { from: vi.fn(() => ({ select })) } as never, eq, gte }
+  }
+
+  const SINCE = new Date('2026-09-08T09:00:00Z')
+
+  it('counts only consultations that were genuinely marked', async () => {
+    const { client } = stubSessions([
+      { id: 's1', session_results: { weighted_score: 6.5 } },
+      // Never marked at all — a closed tab, or the unmarkable guard refusing a
+      // 20-second session. Costs nothing, which is the product decision.
+      { id: 's2', session_results: null },
+      // Marked, but a zero-score artefact: the marking engine scoring an empty
+      // transcript. Carries a verdict, and is not a consultation.
+      { id: 's3', session_results: { weighted_score: 0 } },
+      { id: 's4', session_results: { weighted_score: 3 } },
+    ])
+    expect(await countTrialConsumption(client, 'user-1', SINCE)).toBe(2)
+  })
+
+  it('reads a score PostgREST handed back as a string', async () => {
+    // `weighted_score` is typed `number | string | null` across this codebase
+    // for exactly this reason. A lexicographic comparison would be wrong here.
+    const { client } = stubSessions([{ id: 's1', session_results: { weighted_score: '6.5' } }])
+    expect(await countTrialConsumption(client, 'user-1', SINCE)).toBe(1)
+  })
+
+  it('spends one station for a session carrying two result rows', async () => {
+    const { client } = stubSessions([
+      { id: 's1', session_results: [{ weighted_score: 6.5 }, { weighted_score: 7 }] },
+    ])
+    expect(await countTrialConsumption(client, 'user-1', SINCE)).toBe(1)
+  })
+
+  it('asks only for sessions on or after the grant', async () => {
+    // How a lead's old anonymous free mock stays history: it is never fetched.
+    const { client, gte } = stubSessions([])
+    await countTrialConsumption(client, 'user-1', SINCE)
+    expect(gte).toHaveBeenCalledWith('started_at', SINCE.toISOString())
+  })
+
+  it('throws rather than guessing when the read fails', async () => {
+    // "How many have they used" has no safe default — a zero would be an
+    // unlimited trial. loadTrialAccess is what decides, and it fails closed.
+    const gte = vi.fn().mockResolvedValue({ data: null, error: { message: 'nope' } })
+    const eq = vi.fn(() => ({ gte }))
+    const select = vi.fn(() => ({ eq }))
+    await expect(
+      countTrialConsumption({ from: () => ({ select }) } as never, 'user-1', SINCE),
+    ).rejects.toBeTruthy()
+  })
+})
+
+describe('loadTrialAccess', () => {
+  it('walls the trialist when the count cannot be read', async () => {
+    // Fails CLOSED. The trialist meets the wall until the read recovers, which
+    // is recoverable; unlimited free Azure realtime minutes are not.
+    const grantRow = {
+      id: 'grant-1',
+      user_id: 'user-1',
+      email: 'gp@example.com',
+      allowance: 5,
+      window_days: 5,
+      source: 'signup',
+      started_at: null,
+      expires_at: null,
+      created_at: '2026-09-08T09:00:00Z',
+    }
+    const client = {
+      from: (table: string) =>
+        table === 'trial_grants'
+          ? {
+              select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: grantRow, error: null }) }) }),
+            }
+          : {
+              select: () => ({
+                eq: () => ({ gte: async () => ({ data: null, error: { message: 'down' } }) }),
+              }),
+            },
+    } as never
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const access = await loadTrialAccess(client, 'user-1', NOW)
+
+    expect(access.state).toBe('trial_ended')
+    expect(access.remaining).toBe(0)
+    spy.mockRestore()
+  })
+
+  it('reports no trial, and never runs the count, for somebody without a grant', async () => {
+    const count = vi.fn()
+    const client = {
+      from: (table: string) =>
+        table === 'trial_grants'
+          ? { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }
+          : { select: count },
+    } as never
+
+    expect(await loadTrialAccess(client, 'user-1', NOW)).toEqual(NO_TRIAL)
+    // The cost argument for putting this on the entitlement hot path: everybody
+    // who has bought pays one indexed lookup and nothing more.
+    expect(count).not.toHaveBeenCalled()
   })
 })
