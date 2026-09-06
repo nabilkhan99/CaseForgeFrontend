@@ -8,6 +8,7 @@ import PricingTable from '@/components/landing/v5/PricingTable';
 import { GuaranteeCard } from '@/components/landing/v5';
 import EmailVerificationGate from '@/components/try/EmailVerificationGate';
 import TrialProof from '@/components/try/TrialProof';
+import VerdictReveal from '@/components/try/VerdictReveal';
 import StationsPassedBar from '@/components/progress/StationsPassedBar';
 import { trialStationsPassed, type StationsPassed } from '@/lib/stations/passedProgress';
 import {
@@ -94,7 +95,22 @@ export default function TryFeedbackPage() {
   }
 
   if (!unlocked) {
-    return <EmailVerificationGate sessionId={sessionId} onUnlock={handleUnlock} />;
+    return (
+      <div className="bg-surface">
+        {/*
+          Their own verdict, score and one-line summary, above the gate.
+          Roughly a quarter of finishers abandon here, and until now they left
+          without seeing a single mark from the consultation they had just sat.
+
+          Only the summary crosses: the domain breakdown, the evidence and the
+          "one change" stay below, which is what the email is being asked for.
+          The gate is rendered unconditionally and never waits on this — see
+          VerdictReveal, which renders nothing at all if the mark never lands.
+        */}
+        <VerdictReveal sessionId={sessionId} />
+        <EmailVerificationGate sessionId={sessionId} onUnlock={handleUnlock} />
+      </div>
+    );
   }
 
   return (
