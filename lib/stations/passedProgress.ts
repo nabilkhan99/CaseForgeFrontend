@@ -1,13 +1,20 @@
 /**
- * One free station's worth of progress, for the guest reveal page.
+ * One sitting's worth of progress, for the guest reveal page.
+ *
+ * The offer this feeds is now five stations over five days in a real account,
+ * and this module is emphatically NOT how that allowance is counted — spend
+ * against the grant is derived from `session_results` rows server-side
+ * (lib/commerce/trialAccess.ts). What survives here is the narrower thing the
+ * reveal needs: a guest, at the end of one consultation, with no account yet
+ * and therefore no dashboard to read progress from. One sitting, one square
+ * against the guarantee's two hundred, which is the argument the page makes.
  *
  * Signed-in progress is NOT computed here — the dashboard already tracks it
  * through `lib/supabase/queries/passTracking`, which reduces attempts to one
  * pass state per station and absorbs two landmines this could not: legacy
  * `weighted_score <= 0` artefacts carrying a 'Fail' verdict for consultations
  * that never happened, and staged stations landing in a numerator whose
- * denominator excludes them. This module exists only for the case that map
- * cannot describe — a guest with no account and exactly one sitting.
+ * denominator excludes them.
  */
 import { isPassingVerdict } from '@/lib/clinical-master/scoring';
 
@@ -41,7 +48,8 @@ function progress(passed: number, attempted: number): StationsPassed {
 }
 
 /**
- * The progress a guest has after their one free station: one pass, or none.
+ * The progress a guest has after the consultation they have just sat: one
+ * pass, or none.
  *
  * Takes the score as well as the verdict for the same reason `passTracking`
  * does — a marked-but-empty transcript can carry a verdict without being a real

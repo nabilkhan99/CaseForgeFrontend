@@ -5,6 +5,13 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import { trackEvent } from '@/lib/analytics';
 import { suggestEmailFix } from '@/lib/trial/emailTypo';
+import { trackTrialAccountCreated } from '@/lib/trial/trialEvents';
+import {
+  accountCreatedDoor,
+  dashboardOffer,
+  type VerifiedAccount,
+  type VerifyCodeResponse,
+} from '@/lib/trial/verifiedAccount';
 import {
   EXAM_STATUSES,
   EXPECTED_START_YEARS,
@@ -56,6 +63,7 @@ function CompletePill() {
  */
 export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVerificationGateProps) {
   const [step, setStep] = useState<GateStep>('details');
+  const [account, setAccount] = useState<VerifiedAccount | null>(null);
 
   const [answers, setAnswers] = useState<QuestionnaireAnswers>(EMPTY_ANSWERS);
   const [stepIndex, setStepIndex] = useState(0);
@@ -285,7 +293,7 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId, code: candidate }),
       });
-      const data = (await res.json()) as { ok?: boolean; error?: string };
+      const data = (await res.json()) as VerifyCodeResponse;
       if (!res.ok || !data.ok) {
         setError(data.error ?? 'Something went wrong — please try again.');
         setCode('');
@@ -294,6 +302,13 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
         return;
       }
       trackEvent('trial_gate_code_verified', { session: sessionId });
+      // Held rather than acted on: the phone step may still come between here
+      // and the verified screen, and the dashboard offer belongs on that screen.
+      if (data.account) setAccount(data.account);
+      // Fired here rather than on render so it counts once, whichever route the
+      // gate takes to 'verified' — the phone step may still come in between.
+      const door = accountCreatedDoor(data.account);
+      if (door) void trackTrialAccountCreated(door);
       // Email proven — straight into the phone step. The server texts the
       // code (or fails open and requestPhoneCode moves to 'verified').
       setSubmitting(false);
@@ -315,6 +330,8 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
       else void verifyCode(digits);
     }
   }
+
+  const offer = dashboardOffer(account);
 
   const card =
     'rounded-[22px] border border-black/[0.06] bg-surface-raised p-7 shadow-[0_16px_42px_rgba(180,83,9,0.06)] sm:p-9';
@@ -930,6 +947,17 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
               Show my feedback
               <ArrowRight className="h-4 w-4" />
             </button>
+            {/* The account exists whether or not they take this now, so the
+                link is an offer rather than a step: the report is still the
+                thing they came for and stays the filled button above. */}
+            {offer && (
+              <a
+                href={offer.href}
+                className="mt-3 flex min-h-[44px] w-full items-center justify-center rounded-xl border border-stone-200 bg-white px-5 py-3 text-[13.5px] font-semibold text-heading transition-colors hover:border-primary/40"
+              >
+                {offer.label}
+              </a>
+            )}
           </div>
         )}
       </motion.div>
