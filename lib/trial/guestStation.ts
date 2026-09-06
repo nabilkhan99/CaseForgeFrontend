@@ -115,3 +115,88 @@ export async function pickGuestStationId(
   }
   return (await firstRecommended(admin)) ?? (await anyActive(admin))
 }
+
+/** Everything the call screen and the reading page need, in one shape. */
+export interface GuestConsultationStation {
+  id: string
+  title: string | null
+  patient_name: string | null
+  patient_age: number | null
+  candidate_instructions: string | null
+  reading_duration_seconds: number | null
+  consultation_duration_seconds: number | null
+  domain_name: string | null
+}
+
+const STATION_COLUMNS =
+  'id, title, patient_name, patient_age, candidate_instructions, reading_duration_seconds, consultation_duration_seconds, domains(name)'
+
+function toStation(row: unknown): GuestConsultationStation | null {
+  if (!row) return null
+  const record = row as Record<string, unknown>
+  const domains = record.domains as { name?: string } | { name?: string }[] | null
+  const domain = Array.isArray(domains) ? domains[0] : domains
+  return {
+    id: String(record.id),
+    title: (record.title as string) ?? null,
+    patient_name: (record.patient_name as string) ?? null,
+    patient_age: (record.patient_age as number) ?? null,
+    candidate_instructions: (record.candidate_instructions as string) ?? null,
+    reading_duration_seconds: (record.reading_duration_seconds as number) ?? null,
+    consultation_duration_seconds: (record.consultation_duration_seconds as number) ?? null,
+    domain_name: domain?.name ?? null,
+  }
+}
+
+/**
+ * The consultation behind a guest session id.
+ *
+ * The call screen resolves this on the SERVER, before it paints. It used to
+ * fetch `/api/try/free-cases` in the browser and pick its station out of the
+ * list — which meant two round trips before `connect()` could ask for the
+ * microphone, and which could only ever find the four flagged cases. Reading
+ * the row also means the station comes from the database rather than from a
+ * query string the visitor can edit.
+ *
+ * Null when there is no such session, when it belongs to an account (a signed-in
+ * consultation is not opened through the guest funnel), or when its station has
+ * been retired.
+ */
+export async function loadGuestConsultation(
+  admin: Admin,
+  sessionId: string,
+): Promise<GuestConsultationStation | null> {
+  const { data: session } = await admin
+    .from('clinical_sessions')
+    .select('station_id, user_id')
+    .eq('id', sessionId)
+    .maybeSingle()
+
+  const row = session as { station_id: string | null; user_id: string | null } | null
+  if (!row || row.user_id || !row.station_id) return null
+
+  const { data: station } = await admin
+    .from('stations')
+    .select(STATION_COLUMNS)
+    .eq('id', row.station_id)
+    .eq('is_active', true)
+    .maybeSingle()
+
+  return toStation(station)
+}
+
+/** The same station shape, straight from a station id. Used by the reading page. */
+export async function loadActiveStation(
+  admin: Admin,
+  stationId: string,
+): Promise<GuestConsultationStation | null> {
+  const asked = asStationId(stationId)
+  if (!asked) return null
+  const { data } = await admin
+    .from('stations')
+    .select(STATION_COLUMNS)
+    .eq('id', asked)
+    .eq('is_active', true)
+    .maybeSingle()
+  return toStation(data)
+}
