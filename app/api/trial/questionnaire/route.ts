@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
@@ -95,7 +96,7 @@ export async function POST(request: Request) {
       await admin.from('trial_leads').insert({
         ...values,
         email,
-        session_id: crypto.randomUUID(),
+        session_id: randomUUID(),
         email_verified_at: new Date().toISOString(),
       });
 
