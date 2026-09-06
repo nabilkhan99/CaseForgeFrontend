@@ -1,8 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { sendVerificationEmail } from '@/lib/email/verificationEmail';
-import { validateAnswers } from '@/lib/trial/questionnaire';
+import { validateAnswers, validateSignupAnswers } from '@/lib/trial/questionnaire';
 import { toE164 } from '@/lib/trial/phone';
+import { clientIp, createHitLog, withinLimit } from '@/lib/http/rateLimit';
 import {
   CODE_TTL_MS,
   RESEND_COOLDOWN_SECONDS,
@@ -15,11 +17,47 @@ import {
  * their guest session and emails them a 6-digit verification code.
  * Re-submitting (resend, or an edited email) replaces the previous code,
  * invalidating it; resends are throttled per session.
+ *
+ * Two doors arrive here now.
+ *
+ * The GUEST door (`sessionId`, the original) is unchanged: a real guest
+ * `clinical_sessions` row must exist, the whole questionnaire is validated, and
+ * the lead is written against that session.
+ *
+ * The SIGN-UP door (`mode: 'signup'`, from /free) has no consultation yet, so
+ * there is no session to look up and nothing but an email and a first name to
+ * validate. It is a genuinely weaker request, so it gets its own guards rather
+ * than a hole in the existing ones — see {@link sendSignupCode}.
  */
+
+/**
+ * Per-IP budget for the sign-up door.
+ *
+ * The guest door is gated by something expensive to obtain: a real guest
+ * session, which costs a consultation to create. The sign-up door has no such
+ * floor — an anonymous POST with any address mails that address — so the brake
+ * is the only thing standing between us and being a free mailer. Per-address
+ * throttling is already handled by `verification_last_sent_at`, and would not
+ * help here anyway: the abuse case is many different addresses from one client.
+ */
+const SIGNUP_IP_LIMIT = 8;
+const SIGNUP_IP_WINDOW_MS = 60 * 60 * 1000;
+const signupIpHits = createHitLog();
+
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as Record<string, unknown> & { sessionId?: string };
     const sessionId = typeof body.sessionId === 'string' ? body.sessionId : '';
+
+    // The sign-up door is opted into explicitly, and only when there is no
+    // session id. Written this way round on purpose: `mode` alone must never be
+    // able to turn OFF the session check on a request that carries a session,
+    // or the guest path's guard becomes one client-supplied string away from
+    // being skipped.
+    if (!sessionId && body.mode === 'signup') {
+      return await sendSignupCode(req, body);
+    }
+
     if (!sessionId) {
       return NextResponse.json({ error: 'A valid session is required' }, { status: 400 });
     }
@@ -165,4 +203,123 @@ export async function POST(req: NextRequest) {
     console.error('[send-code] unexpected error', error);
     return NextResponse.json({ error: 'Something went wrong — please try again' }, { status: 500 });
   }
+}
+
+/**
+ * Door (a): "Start your five" on /free. Email + first name, a code, nothing else.
+ *
+ * ## Why it can reuse this route at all
+ *
+ * The verification machinery — the hashed code, the TTL, the attempt counter,
+ * the resend cooldown, the Brevo send — is all keyed off the `trial_leads` row,
+ * not off the session. Only the LOOKUP was session-shaped. So the sign-up door
+ * needs a different way to find its row and a different validator, and gets to
+ * keep everything else, including the one place a verification code is
+ * generated and hashed.
+ *
+ * ## The placeholder session id
+ *
+ * `trial_leads.session_id` is `not null unique` (20260714_trial_leads.sql) and
+ * this door has no consultation, so a new row takes a random uuid that matches
+ * no `clinical_sessions` row. That is inert by construction: the column carries
+ * no foreign key, and the only reader that follows it —
+ * `claimTrialSessionsForUser` — updates `clinical_sessions` by id and simply
+ * matches nothing. Making the column nullable would be the tidier answer, and
+ * is a migration this build deliberately does not add on top of the one Nabil
+ * already has to apply by hand.
+ *
+ * ## Why an existing lead is UPDATED IN PLACE, never moved
+ *
+ * The guest door moves a known address's lead row onto the new session, because
+ * there the new session IS the thing they just did. Here there is no session,
+ * so moving the row would point a verified lead at a placeholder and quietly
+ * disconnect them from the consultation they actually sat — which is exactly
+ * the row `claimTrialSessionsForUser` needs to hand them their own work. So the
+ * sign-up door writes the verification fields and the name, and leaves
+ * `session_id` and `station_id` exactly as it found them.
+ */
+async function sendSignupCode(
+  req: NextRequest,
+  body: Record<string, unknown>,
+): Promise<NextResponse> {
+  if (!withinLimit(signupIpHits, clientIp(req), SIGNUP_IP_LIMIT, SIGNUP_IP_WINDOW_MS)) {
+    return NextResponse.json(
+      { error: 'Too many requests — please try again later' },
+      { status: 429 },
+    );
+  }
+
+  const parsed = validateSignupAnswers(body);
+  if (!parsed.ok) {
+    return NextResponse.json({ error: parsed.error }, { status: 400 });
+  }
+  const { email, firstName } = parsed.value;
+
+  const supabase = getSupabaseAdmin();
+
+  const { data: existing, error: lookupError } = await supabase
+    .from('trial_leads')
+    .select('id, verification_last_sent_at')
+    .eq('email', email)
+    .maybeSingle();
+
+  if (lookupError) {
+    console.error('[send-code] signup lead lookup failed', lookupError);
+    return NextResponse.json({ error: 'Something went wrong — please try again' }, { status: 500 });
+  }
+
+  if (existing?.verification_last_sent_at) {
+    const elapsedMs = Date.now() - new Date(existing.verification_last_sent_at).getTime();
+    const remaining = Math.ceil((RESEND_COOLDOWN_SECONDS * 1000 - elapsedMs) / 1000);
+    if (remaining > 0) {
+      return NextResponse.json(
+        { error: 'Please wait before requesting another code', retryAfter: remaining },
+        { status: 429 },
+      );
+    }
+  }
+
+  const code = generateVerificationCode();
+  const now = new Date();
+  const verification = {
+    first_name: firstName,
+    verification_code_hash: hashVerificationCode(code, email),
+    verification_expires_at: new Date(now.getTime() + CODE_TTL_MS).toISOString(),
+    verification_attempts: 0,
+    verification_last_sent_at: now.toISOString(),
+  };
+
+  const { error: writeError } = existing
+    ? // Deliberately does NOT clear `email_verified_at`. Someone who verified
+      // months ago and is now signing up is the same person at the same
+      // address; un-verifying them would strip the claim on their old
+      // consultation for the length of one round trip, for no gain.
+      await supabase.from('trial_leads').update(verification).eq('id', existing.id)
+    : await supabase.from('trial_leads').insert({
+        ...verification,
+        session_id: randomUUID(),
+        email,
+        email_verified_at: null,
+      });
+
+  if (writeError) {
+    console.error('[send-code] signup lead write failed', writeError);
+    return NextResponse.json({ error: 'Something went wrong — please try again' }, { status: 500 });
+  }
+
+  const emailResult = await sendVerificationEmail({ toEmail: email, firstName, code });
+  if (!emailResult.sent) {
+    // Undo the throttle stamp so a failed send can be retried immediately, and
+    // drop the hash so the dead code cannot be guessed at leisure.
+    await supabase
+      .from('trial_leads')
+      .update({ verification_last_sent_at: null, verification_code_hash: null })
+      .eq('email', email);
+    return NextResponse.json(
+      { error: "We couldn't send the code — check the address and try again" },
+      { status: 502 },
+    );
+  }
+
+  return NextResponse.json({ ok: true, resendCooldown: RESEND_COOLDOWN_SECONDS });
 }

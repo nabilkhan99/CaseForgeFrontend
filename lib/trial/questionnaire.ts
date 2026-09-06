@@ -272,3 +272,39 @@ export function validatePartialAnswers(
 
   return { ok: true, value: out }
 }
+
+/** What the /free sign-up box collects. Two fields, and that is the point. */
+export interface SignupAnswers {
+  email: string
+  firstName: string
+}
+
+/**
+ * The sign-up door's validator: email and first name, nothing else.
+ *
+ * A SEPARATE function rather than a `partial` flag on {@link validateAnswers},
+ * because the two are answering different questions and collapsing them would
+ * weaken the one that matters. `validateAnswers` guards a lead row written
+ * AFTER a 12-minute consultation, where every answer has been asked and a gap
+ * is a bug; this guards a two-field box on a page where nothing has been asked
+ * yet. Giving the strict validator a mode that skips the phone and the training
+ * stage would put the loose rule one boolean away from the strict path.
+ *
+ * The exam sitting and training stage are asked later, on the dashboard, during
+ * the wait for the first station's mark — see
+ * `components/dashboard/TrialQuestionnaireCard`. That ordering is the offer:
+ * five stations for an address, not for a form.
+ */
+export function validateSignupAnswers(
+  input: Record<string, unknown>,
+): { ok: true; value: SignupAnswers } | { ok: false; error: string } {
+  const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
+
+  const email = str(input.email).toLowerCase()
+  if (!EMAIL_RE.test(email)) return { ok: false, error: 'A valid email is required' }
+
+  const firstName = str(input.firstName).slice(0, 60)
+  if (!firstName) return { ok: false, error: 'First name is required' }
+
+  return { ok: true, value: { email, firstName } }
+}
