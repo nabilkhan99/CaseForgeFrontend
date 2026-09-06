@@ -27,6 +27,7 @@ import {
   Verdict,
 } from '@/lib/clinical-master/types';
 import PassCelebration from '@/components/clinical-master/PassCelebration';
+import { reportTrialStationCompleted } from '@/lib/trial/trialEvents';
 import { LearningPointsDisplay } from '@/components/cases/LearningPoints';
 import { MarkSchemeDomains } from '@/components/cases/MarkScheme';
 import {
@@ -1164,8 +1165,18 @@ function DomainCard({ domain, index }: { domain: DomainFeedback; index: number }
  * way out; they all used to render "Please try again later" with no button,
  * which was wrong for every one of them (none of the first three ever resolve
  * on their own, and the last two need a retry, not patience).
+ *
+ * 'unmarkable' is the Azure guard's verdict on a consultation too short to
+ * grade — the one case here that is not a fault at all, and the only one whose
+ * way out is simply to do it properly.
  */
-type ReportProblem = 'forbidden' | 'no_transcript' | 'stalled' | 'server' | 'timeout';
+type ReportProblem =
+  | 'forbidden'
+  | 'no_transcript'
+  | 'unmarkable'
+  | 'stalled'
+  | 'server'
+  | 'timeout';
 
 function ProblemScreen({
   title,
@@ -1353,6 +1364,12 @@ export default function FeedbackReport({
   /** Station behind a session we never got a report for, so retries have a target. */
   const [failedStationId, setFailedStationId] = useState<string | null>(null);
   /**
+   * How long the candidate actually spoke for, on a run the guard refused. Told
+   * back to them because "too short" on its own invites an argument, and the
+   * number ends it.
+   */
+  const [candidateSeconds, setCandidateSeconds] = useState<number | null>(null);
+  /**
    * Null until the reader picks one. The tab that is actually open falls back
    * to the weakest domain (see `activeDomain` below), which cannot be decided
    * here because the marks have not arrived yet.
@@ -1426,6 +1443,13 @@ export default function FeedbackReport({
           setTranscript(normaliseTranscript(data.transcript));
           setLoading(false);
           if (data.feedback.overall) onResultRef.current?.(data.feedback.overall);
+          // One of the five free stations has just been marked, if this is a
+          // trial account — the helper decides that itself, and does nothing
+          // for everybody else. Fired HERE rather than on mount because "a
+          // station was completed" is the moment the mark lands, which is what
+          // makes the index in the event the number of stations they have
+          // actually spent. Not awaited: the report is already on screen.
+          void reportTrialStationCompleted(sessionId, data.feedback.overall?.verdict ?? '');
           return;
         }
 
@@ -1433,6 +1457,18 @@ export default function FeedbackReport({
         // route computes this precisely so the page can stop polling and say so.
         if (data.status === 'no_transcript') {
           setProblem('no_transcript');
+          setLoading(false);
+          return;
+        }
+
+        // The Azure guard refused this run as too short to grade fairly. No
+        // result row is ever coming, so stop polling — and say how short, since
+        // the number is the argument.
+        if (data.status === 'unmarkable') {
+          if (typeof data.candidateSeconds === 'number') {
+            setCandidateSeconds(data.candidateSeconds);
+          }
+          setProblem('unmarkable');
           setLoading(false);
           return;
         }
@@ -1590,6 +1626,33 @@ export default function FeedbackReport({
               className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
             >
               Practise this case again
+            </Link>
+          )}
+          {historyLink}
+        </ProblemScreen>
+      );
+    }
+
+    if (problem === 'unmarkable') {
+      return (
+        <ProblemScreen
+          isTrial={isTrial}
+          title={
+            candidateSeconds === null || candidateSeconds === 0
+              ? 'That was too short to mark fairly'
+              : `That was ${candidateSeconds} second${candidateSeconds === 1 ? '' : 's'}, not enough to mark fairly.`
+          }
+          body="A real station runs to about twelve minutes, and a mark off a few opening
+                lines would say more about the transcript than about you. Nothing has been
+                marked and this hasn't used one of your stations — run it properly and
+                you'll get the full report."
+        >
+          {retryHref && (
+            <Link
+              href={retryHref}
+              className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+            >
+              Run it properly
             </Link>
           )}
           {historyLink}

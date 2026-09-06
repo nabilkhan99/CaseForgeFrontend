@@ -7,7 +7,7 @@ import { ArrowLeft, ArrowRight, CalendarClock } from 'lucide-react';
 import LandingNavbar from '@/components/landing/LandingNavbar';
 import LandingFooter from '@/components/landing/LandingFooter';
 import CoachingDayPicker, { useCoachingDays } from '@/components/commerce/CoachingDayPicker';
-import { trackEvent } from '@/lib/analytics';
+import { trackEvent, trialFunnelProperties } from '@/lib/analytics';
 
 /**
  * The coaching day picker: the single place where scarcity and timing render.
@@ -35,8 +35,14 @@ export default function CoachingDayPage() {
         setSubmitting(false);
         return;
       }
-      // Awaited so the capture flushes before we leave for Stripe.
-      await trackEvent('checkout_started', { plan: 'complete', coaching_day: selected });
+      // Awaited so the capture flushes before we leave for Stripe. The trial
+      // context rides along when the buyer has a grant ({} otherwise, and
+      // abandoned after its own short timeout), so it cannot hold this up.
+      await trackEvent('checkout_started', {
+        plan: 'complete',
+        coaching_day: selected,
+        ...(await trialFunnelProperties()),
+      });
       window.location.assign(data.url);
     } catch {
       setError('Something went wrong, please try again.');

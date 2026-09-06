@@ -3,6 +3,15 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { mintEphemeralKey, unreliableEchoCancellation } from '@/lib/clinical-master/realtimeToken';
 import { voiceForStation } from '@/lib/clinical-master/realtimeSession';
 import { rejectIfSignedIn } from '@/lib/trial/guestOnly';
+import {
+  GUEST_COOKIE,
+  guestCookieOptions,
+  guestMintRefusal,
+  logGuestRefusal,
+  readGuestCookie,
+  signGuestCookie,
+  withMint,
+} from '@/lib/trial/guestSession';
 
 
 /**
@@ -19,10 +28,27 @@ import { rejectIfSignedIn } from '@/lib/trial/guestOnly';
 export const maxDuration = 20;
 
 /**
- * Mint an Azure gpt-realtime ephemeral key for a guest (free-trial) consultation.
- * Replaces the former /api/try/livekit-token route. No JWT — validates that the
- * station is an active free-trial case, marks the guest session live, and returns
- * the ephemeral key + WebRTC calls URL.
+ * Mint an Azure gpt-realtime ephemeral key for a guest consultation.
+ *
+ * This is the only endpoint in the product that spends money with no
+ * authentication — a guest has none by definition — and until the five-station
+ * trial it defended itself with a single filter: the station had to be one of
+ * the four flagged `is_free_trial`. That filter is gone (any of the 200 active
+ * cases can now be run), so the defence is now the signed guest cookie and the
+ * nine rules in lib/trial/guestSession.ts, which is where they are documented
+ * in full. In short:
+ *
+ *   * the session id must have come out of `/try/talk` or `create-session`,
+ *     proven by an httpOnly HMAC-signed cookie this browser cannot forge;
+ *   * the row must exist, be unowned, be on the station asked for, be in
+ *     `reading` or `live`, and be under 30 minutes old;
+ *   * one mint per session per 2 minutes, three guest sessions per browser
+ *     per day.
+ *
+ * Two consequences worth stating plainly. This route NO LONGER INSERTS a
+ * `clinical_sessions` row — an id it does not recognise is a refusal, not a new
+ * consultation. And every refusal is logged with its rule's code, so "the gate
+ * said no, and which one" is visible in request logs rather than nowhere.
  */
 export async function POST(req: NextRequest) {
   // Guests only — this is the route that actually spends money. Signed-in
@@ -36,48 +62,59 @@ export async function POST(req: NextRequest) {
   }
 
   const admin = getSupabaseAdmin();
+  const cookie = readGuestCookie(req.cookies.get(GUEST_COOKIE)?.value);
 
-  // Validate that this station is an active free-trial station, and load it fully
+  const { data: session } = await admin
+    .from('clinical_sessions')
+    .select('user_id, status, started_at, station_id')
+    .eq('id', sessionId)
+    .maybeSingle();
+
+  const refusal = guestMintRefusal({
+    cookie,
+    sessionId,
+    session,
+    requestedStationId: stationId,
+    nowMs: Date.now(),
+  });
+  if (refusal) {
+    logGuestRefusal('try/realtime-token', sessionId, refusal);
+    return NextResponse.json(
+      { error: refusal.error, code: refusal.code, retryAfterSeconds: refusal.retryAfterSeconds },
+      { status: refusal.status },
+    );
+  }
+
+  // The row's station, not the body's — they were just checked to agree, and
+  // the row is the one the server wrote.
   const { data: station, error: stationErr } = await admin
     .from('stations')
     .select('*')
-    .eq('id', stationId)
-    .eq('is_free_trial', true)
+    .eq('id', session?.station_id ?? stationId)
     .eq('is_active', true)
     .maybeSingle();
   if (stationErr || !station) {
-    return NextResponse.json({ error: 'This station is not available for free trial' }, { status: 403 });
+    return NextResponse.json({ error: 'This case is not available' }, { status: 403 });
   }
-
-  // Ensure the guest session exists (user_id null), then mark it live
-  const { data: existing } = await admin
-    .from('clinical_sessions')
-    .select('id')
-    .eq('id', sessionId)
-    .maybeSingle();
 
   try {
     const result = await mintEphemeralKey(station, voiceForStation(station), {
       unreliableAec: unreliableEchoCancellation(req.headers.get('user-agent')),
     });
 
-    if (existing) {
-      await admin.from('clinical_sessions').update({ status: 'live' }).eq('id', sessionId);
-    } else {
-      await admin.from('clinical_sessions').insert({
-        id: sessionId,
-        user_id: null,
-        station_id: stationId,
-        status: 'live',
-        started_at: new Date().toISOString(),
-      });
-    }
+    await admin.from('clinical_sessions').update({ status: 'live' }).eq('id', sessionId);
 
     const durationSeconds = Number(station.consultation_duration_seconds) || 480;
     // `result` carries `origin` ('primary' | 'fallback') — which slot minted
     // the key — and `lane`, the Azure resource that slot pointed at. The client
     // logs both to the flight recorder; keep them in the response.
-    return NextResponse.json({ ...result, durationSeconds });
+    const response = NextResponse.json({ ...result, durationSeconds });
+
+    // The cooldown clock starts on a mint that actually happened. A mint Azure
+    // refused costs nothing and must not lock the trainee out of retrying.
+    const stamped = signGuestCookie(withMint(cookie!, sessionId, Math.floor(Date.now() / 1000)));
+    if (stamped) response.cookies.set(GUEST_COOKIE, stamped, guestCookieOptions());
+    return response;
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed to start realtime session';
     return NextResponse.json({ error: msg }, { status: 500 });

@@ -4,6 +4,7 @@ import PortfolioBelowFold from '@/components/portfolio/PortfolioBelowFold';
 import BelowFoldGate from '@/components/portfolio/BelowFoldGate';
 import PortfolioReviewStateProvider from '@/components/portfolio/PortfolioReviewState';
 import ReferralModalProvider from '@/components/portfolio/ReferralModalProvider';
+import FreeStationsBanner from '@/components/portfolio/FreeStationsBanner';
 import { PORTFOLIO_TOOL_JSON_LD, pageMetadata } from '@/lib/seo/site';
 
 export const metadata: Metadata = pageMetadata({
@@ -47,6 +48,10 @@ export default function GpPortfolioToolPage() {
             />
             <PortfolioReviewStateProvider>
                 <ReferralModalProvider>
+                    {/* The other thing we make, one line above the tool. It
+                        gates nothing: the tool below is identical whether or
+                        not this is read or filled in. */}
+                    <FreeStationsBanner />
                     <PortfolioToolClient />
                     <BelowFoldGate>
                         <PortfolioBelowFold />

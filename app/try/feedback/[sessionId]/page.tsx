@@ -8,6 +8,8 @@ import PricingTable from '@/components/landing/v5/PricingTable';
 import { GuaranteeCard } from '@/components/landing/v5';
 import EmailVerificationGate from '@/components/try/EmailVerificationGate';
 import TrialProof from '@/components/try/TrialProof';
+import VerdictReveal from '@/components/try/VerdictReveal';
+import OpenDashboardButton from '@/components/try/OpenDashboardButton';
 import StationsPassedBar from '@/components/progress/StationsPassedBar';
 import { trialStationsPassed, type StationsPassed } from '@/lib/stations/passedProgress';
 import {
@@ -94,7 +96,22 @@ export default function TryFeedbackPage() {
   }
 
   if (!unlocked) {
-    return <EmailVerificationGate sessionId={sessionId} onUnlock={handleUnlock} />;
+    return (
+      <div className="bg-surface">
+        {/*
+          Their own verdict, score and one-line summary, above the gate.
+          Roughly a quarter of finishers abandon here, and until now they left
+          without seeing a single mark from the consultation they had just sat.
+
+          Only the summary crosses: the domain breakdown, the evidence and the
+          "one change" stay below, which is what the email is being asked for.
+          The gate is rendered unconditionally and never waits on this — see
+          VerdictReveal, which renders nothing at all if the mark never lands.
+        */}
+        <VerdictReveal sessionId={sessionId} />
+        <EmailVerificationGate sessionId={sessionId} onUnlock={handleUnlock} />
+      </div>
+    );
   }
 
   return (
@@ -109,11 +126,19 @@ export default function TryFeedbackPage() {
       <div className="mx-auto max-w-[1180px] px-5 pb-6 sm:px-7 lg:px-10">
         <div className="border-t border-[#E4DDC9] pt-10 text-center">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#854F0B] sm:text-xs">
-            That was 1 of 200 stations
+            That was one of your five free stations
           </p>
           <h2 className="mx-auto mt-2 max-w-xl text-2xl font-semibold tracking-tight text-heading sm:text-3xl">
             Keep practising until you pass — or we pay you £500.
           </h2>
+          {/* Verifying the address created the account and granted the five, so
+              the next four stations already exist — they just need a way in
+              that does not depend on this browser. Above the pricing table
+              deliberately: the free thing they already own comes before the
+              paid thing they might buy. */}
+          <div className="mt-7">
+            <OpenDashboardButton sessionId={sessionId} />
+          </div>
         </div>
       </div>
 

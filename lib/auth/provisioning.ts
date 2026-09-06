@@ -167,26 +167,47 @@ export function setPasswordUrl(origin: string, tokenHash: string, email: string)
 export async function mintSetPasswordLink(args: {
   email: string;
 }): Promise<{ url: string | null; error?: string }> {
+  const email = args.email.toLowerCase().trim();
+  const { tokenHash, error } = await mintRecoveryTokenHash({ email });
+  if (!tokenHash) return { url: null, error };
+  return { url: setPasswordUrl(authLinkOrigin(), tokenHash, email) };
+}
+
+/**
+ * The raw recovery `token_hash` behind {@link mintSetPasswordLink}.
+ *
+ * Split out because the five-station trial needs the SAME credential pointed at
+ * a different page: /auth/start signs the browser in and lands on /dashboard,
+ * where /auth/set-password stops to ask for a password. Both verify the hash
+ * the same way, so there is exactly one place that talks to GoTrue.
+ *
+ * Every caveat on {@link mintSetPasswordLink} applies unchanged: minting
+ * INVALIDATES the previous link for that user, and the lifetime is GoTrue's
+ * `MAILER_OTP_EXP` (24 hours, uncapped by anything here).
+ *
+ * Wrapped, not just error-checked. GoTrue reports most failures in `error`, but
+ * a transport-level fault rejects — and callers run this while holding a send
+ * claim, so an escaping throw would leave a stamp written for a mail that never
+ * went. Always resolve; never throw.
+ */
+export async function mintRecoveryTokenHash(args: {
+  email: string;
+}): Promise<{ tokenHash: string | null; error?: string }> {
   const supabase = getAdminAuthClient();
   const email = args.email.toLowerCase().trim();
 
-  // Wrapped, not just error-checked. GoTrue reports most failures in `error`,
-  // but a transport-level fault rejects — and this runs while the caller holds
-  // the send claim, so an escaping throw would leave `set_password_sent_at`
-  // written for a mail that never went and no retry would ever revisit the
-  // buyer. Always resolve; never throw.
   try {
     const { data: link, error: linkError } = await supabase.auth.admin.generateLink({
       type: 'recovery',
       email,
     });
     if (linkError || !link?.properties?.hashed_token) {
-      return { url: null, error: linkError?.message ?? 'no token in link' };
+      return { tokenHash: null, error: linkError?.message ?? 'no token in link' };
     }
-    return { url: setPasswordUrl(authLinkOrigin(), link.properties.hashed_token, email) };
+    return { tokenHash: link.properties.hashed_token };
   } catch (error: unknown) {
     console.error('[provisioning] generateLink threw', { error });
-    return { url: null, error: error instanceof Error ? error.message : String(error) };
+    return { tokenHash: null, error: error instanceof Error ? error.message : String(error) };
   }
 }
 

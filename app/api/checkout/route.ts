@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getStripe } from '@/lib/commerce/stripe';
+import { countTrialConsumption, loadTrialGrant } from '@/lib/commerce/trialAccess';
 import {
   checkoutModeFor,
   getPlan,
@@ -246,5 +247,63 @@ export async function POST(request: Request) {
   } catch (error: unknown) {
     console.error('[checkout] unexpected error', error);
     return NextResponse.json({ error: 'Failed to start checkout' }, { status: 500 });
+  }
+}
+
+/**
+ * The trial context a buy-path event is tagged with, or null.
+ *
+ * WHY IT EXISTS. The baseline this whole five-station offer is measured
+ * against is "78 verified leads → 4 paid, median ~5 days, 1 station before
+ * purchase". Answering the same question about the new offer means every
+ * `checkout_started` and `purchase` has to carry how much of the trial the
+ * buyer had actually used when they decided. Neither number is knowable in the
+ * browser: `trial_grants` is readable only by its owner and `session_results`
+ * consumption is a join, so this is resolved server-side and handed to the
+ * client that fires the event.
+ *
+ * Null for everybody with no grant, which is every cold buyer — so their
+ * events keep exactly the shape and the properties they have today.
+ */
+export interface TrialFunnelProperties {
+  /** Genuinely-marked consultations spent against the grant when the event fired. */
+  trial_stations_used: number;
+  /** Whole days since the first consultation; null while the window never opened. */
+  days_since_first_station: number | null;
+}
+
+/**
+ * GET /api/checkout — the buy path's event properties, for the signed-in user.
+ *
+ * Sits beside POST rather than in a route of its own because it answers a
+ * question about this route's own event stream, and both halves need the same
+ * service-role read. Deliberately reports the grant EVEN AFTER A PURCHASE,
+ * which is where it differs from `/api/subscription`: that route hides the
+ * trial the moment a plan outranks it (correctly — the dashboard must not
+ * count down a trial over a plan somebody paid for), and the one event that
+ * most needs the trial's numbers is the purchase itself.
+ *
+ * Never fails: an analytics property is not worth a 500 on the checkout route.
+ */
+export async function GET() {
+  try {
+    const { user } = await getServerEntitlement();
+    if (!user) return NextResponse.json({ trial: null });
+
+    const admin = getSupabaseAdmin();
+    const grant = await loadTrialGrant(admin, user.id);
+    if (!grant) return NextResponse.json({ trial: null });
+
+    const used = await countTrialConsumption(admin, user.id, grant.createdAt);
+    const trial: TrialFunnelProperties = {
+      trial_stations_used: used,
+      days_since_first_station: grant.startedAt
+        ? Math.max(0, Math.floor((Date.now() - grant.startedAt.getTime()) / 86_400_000))
+        : null,
+    };
+    return NextResponse.json({ trial });
+  } catch (error: unknown) {
+    console.error('[checkout] trial funnel properties lookup failed', error);
+    return NextResponse.json({ trial: null });
   }
 }

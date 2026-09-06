@@ -284,3 +284,30 @@ export interface CoachingDayAvailability {
  * shorten a term already sold. See `lib/commerce/entitlements.ts`.
  */
 export const ACCESS_OPENS = '2026-09-01'
+
+/**
+ * The free column on the pricing table: five stations, five days, no card.
+ *
+ * DELIBERATELY NOT A MEMBER OF {@link PLANS}. `PLANS` is the catalogue of
+ * things that can be BOUGHT, and two rules key off exactly that:
+ * `lib/commerce/entitlements.ts` builds `KNOWN_PLANS` from it and honours any
+ * `preorders` row whose plan is in the set, and `stripePriceIdFor` expects
+ * every member to have a Price. A `free` member would mean a £0 `preorders`
+ * row could grant access through the purchase fold — which is the precise
+ * failure the trial's peer-table shape exists to make impossible (see
+ * supabase/migrations/20260906_trial_grants.sql). The free offer is a GRANT.
+ * It is display copy here and a `trial_grants` row in the database, and the two
+ * never meet.
+ *
+ * `ctaHref` rather than `cta: 'checkout'` for the same reason: there is nothing
+ * to check out. And the label is "Start free", not "Start trial" — the word
+ * never appears on a button.
+ */
+export const FREE_TIER = {
+  name: 'Free',
+  displayPrice: '£0',
+  priceSuffix: '',
+  tagline: 'Five stations · five days · no card',
+  ctaLabel: 'Start free',
+  ctaHref: '/free',
+} as const

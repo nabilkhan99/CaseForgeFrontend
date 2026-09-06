@@ -15,12 +15,17 @@ interface LandingNavbarProps {
 
 export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  // The offer is five stations, not one mock, so the CTA names the offer and
+  // points at /free. "Trial" never appears on a button — see the copy rules in
+  // the five-station handoff.
   const [trialCta, setTrialCta] = useState<{ label: string; href: string }>({
-    label: 'Try Free Mock Station',
-    href: '/try',
+    label: '5 free stations',
+    href: '/free',
   });
 
-  // Once the free station is used, the CTA deep-links back to their report.
+  // A returning browser that has already finished a consultation gets the
+  // deep-link back to its own report instead. Unchanged, and it still outranks
+  // the offer: somebody with a report waiting is not looking for the pitch.
   useEffect(() => {
     const trial = getTrialState();
     if (trial.used && trial.feedbackUrl) {

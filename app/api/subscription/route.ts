@@ -2,6 +2,38 @@ import { NextResponse } from 'next/server';
 import { isMonthlyPlan, type EntitlementState } from '@/lib/commerce/entitlements';
 import { getPlan } from '@/lib/commerce/plans';
 import { getServerEntitlement } from '@/lib/commerce/serverEntitlement';
+import { examDateFromSitting } from '@/lib/commerce/trialWallPlans';
+import type { TrialEndReason, TrialState } from '@/lib/commerce/trialAccess';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
+
+/** What a trial account needs to render its strip and, when it is spent, its wall. */
+export interface TrialSubscription {
+  /** Never 'none' — the field is null instead, so a truthy `trial` means "this is a trial account". */
+  state: Exclude<TrialState, 'none'>;
+  /** Genuinely-marked consultations counted against the grant. */
+  used: number;
+  remaining: number;
+  /** What the grant was worth, so the strip can say "3 of 5 left" without hardcoding the 5. */
+  allowance: number;
+  /** How long the window runs once it opens — the "5 days" in the strip's first line. */
+  windowDays: number;
+  /** ISO instant of the first consultation; null before it — the clock is not running yet. */
+  startedAt: string | null;
+  expiresAt: string | null;
+  /** Why it ended, for the wall's copy and its `trial_wall_hit` event. Null while live. */
+  reason: TrialEndReason | null;
+  /**
+   * The exam date behind their questionnaire answer (`trial_leads.sca_sitting`),
+   * as `YYYY-MM-DD`, or null.
+   *
+   * A FALLBACK, not the authority: `profiles.exam_date` is, and the dashboard
+   * already loads that with its stats. This exists because most trialists have
+   * answered the questionnaire and never filled the dashboard's date field, and
+   * the wall picks its two plans on that date. Resolved here rather than in the
+   * browser because `trial_leads` is RLS deny-all.
+   */
+  examHint: string | null;
+}
 
 export interface SubscriptionResponse {
   /** Plan key of the purchase the access derives from, null when there is none. */
@@ -58,6 +90,58 @@ export interface SubscriptionResponse {
    * the authority.
    */
   isTrainer: boolean;
+  /**
+   * The five-station free trial, when this account is running on one.
+   *
+   * Null for everybody else — including a trialist who has since bought, and an
+   * admin: for them the trial decides nothing, so drawing a countdown over a
+   * plan they paid for would be a lie about what they own. A truthy value
+   * therefore reads as "this is a trial account", which is exactly the question
+   * the dashboard strip and the wall ask.
+   *
+   * Present for BOTH states: 'trial' draws the strip, 'trial_ended' draws the
+   * wall. Squashing the second to null would leave the wall with nothing to
+   * distinguish a spent trial from someone who never had one.
+   */
+  trial: TrialSubscription | null;
+  /**
+   * Access rests on a live grant alone. Equivalent to `trial?.state === 'trial'`
+   * given the rule above, and carried separately because it is what the
+   * entitlement layer actually decided — see AccessDecision.trialOnly.
+   */
+  trialOnly: boolean;
+}
+
+/**
+ * The exam date behind a trialist's questionnaire answer, or null.
+ *
+ * Service role because `trial_leads` is RLS deny-all; scoped to the signed-in
+ * user's own address, and it reads one column. Only ever called for accounts
+ * that are actually on a trial, so nobody else pays a round trip for it — this
+ * route is polled by the navbar on every page.
+ *
+ * Never throws: a missing hint costs the wall its plan choice (it falls back to
+ * the £299 pair), which is not worth failing a subscription lookup over.
+ */
+async function examHintFor(email: string | null | undefined): Promise<string | null> {
+  try {
+    const address = email?.trim();
+    if (!address) return null;
+    const { data, error } = await getSupabaseAdmin()
+      .from('trial_leads')
+      .select('sca_sitting')
+      .ilike('email', address)
+      // Newest answer wins: somebody who came back through a second door
+      // answered again, and the later answer is the current one.
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return examDateFromSitting((data as { sca_sitting: string | null } | null)?.sca_sitting);
+  } catch (error: unknown) {
+    console.error('[subscription] exam hint lookup failed', error);
+    return null;
+  }
 }
 
 /**
@@ -69,12 +153,44 @@ export interface SubscriptionResponse {
  * built on it had gone quiet.
  */
 export async function GET() {
-  const { user, entitlement, allowed, bypass, failedOpen, cohort, cohortOnly } =
+  const { user, entitlement, allowed, bypass, failedOpen, cohort, cohortOnly, trial, trialOnly } =
     await getServerEntitlement();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  // The same test the entitlement layer applies: a trial decides nothing for
+  // someone who has bought or who is on the admin allowlist, so it is not
+  // reported to them at all. `bypass` covers the fail-open too, where nobody
+  // waived anything and the trial must not be counted down against a lookup
+  // that broke.
+  // A LIVE trial is always reported: it is what is letting them practise, and
+  // on a lapsed customer's dashboard it is the only line that explains why the
+  // stations still open. A SPENT one is reported only when there is no purchase
+  // to talk about instead — somebody who once bought has a plan name and a
+  // renew path, and their own story outranks the grant's, here as everywhere.
+  const trialGoverns =
+    trial !== null &&
+    trial.state !== 'none' &&
+    entitlement.state !== 'active' &&
+    !bypass &&
+    !failedOpen &&
+    (trial.state === 'trial' || !entitlement.plan);
+  const trialBody: TrialSubscription | null = trialGoverns
+    ? {
+        state: trial.state as Exclude<TrialState, 'none'>,
+        used: trial.used,
+        remaining: trial.remaining,
+        allowance: trial.allowance,
+        windowDays: trial.windowDays,
+        startedAt: trial.startedAt?.toISOString() ?? null,
+        expiresAt: trial.expiresAt?.toISOString() ?? null,
+        reason: trial.reason ?? null,
+        // Only the wall needs it, so only the wall's state pays for it.
+        examHint: trial.state === 'trial_ended' ? await examHintFor(user.email) : null,
+      }
+    : null;
 
   // Derived, not looked up. This route is polled by the navbar on every page,
   // so an extra service-role query here is a query on the hottest path in the
@@ -115,6 +231,8 @@ export async function GET() {
     // same five cases as his students, which is the intended pilot design.
     cohort: cohortOnly && cohort ? { id: cohort.id, stationIds: cohort.stationIds } : null,
     isTrainer,
+    trial: trialBody,
+    trialOnly,
   };
 
   return NextResponse.json(body);

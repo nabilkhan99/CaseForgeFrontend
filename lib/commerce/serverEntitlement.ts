@@ -4,6 +4,7 @@ import { parseAdminEmails } from '@/lib/admin/guard'
 import { effectiveLaunchDate } from '@/lib/commerce/launchDate'
 import { decideAccess, NO_ENTITLEMENT, type AccessDecision } from './entitlements'
 import { loadCohortAccess } from './cohortAccess'
+import { loadTrialAccess } from './trialAccess'
 import { exactEmailPattern } from './emailFilter'
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>
@@ -48,15 +49,23 @@ export async function getServerEntitlement(): Promise<ServerEntitlement> {
       bypass: false,
       cohort: null,
       cohortOnly: false,
+      trial: null,
+      trialOnly: false,
       failedOpen: false,
       allowed: false,
     }
   }
 
-  // Outside the try below on purpose: `loadCohortAccess` fails closed on its
-  // own, and a cohort read that broke must not be able to take the purchase
-  // read down with it into the fail-open branch.
-  const cohort = await loadCohortAccess(supabase, user.id)
+  // Outside the try below on purpose: both of these fail closed on their own,
+  // and a cohort or trial read that broke must not be able to take the purchase
+  // read down with it into the fail-open branch. Run together because they are
+  // independent and this sits on the hottest path in the product; the trial
+  // costs one indexed lookup for everybody and a second only for the people who
+  // actually hold a grant (loadTrialAccess skips the count when there is none).
+  const [cohort, trial] = await Promise.all([
+    loadCohortAccess(supabase, user.id),
+    loadTrialAccess(supabase, user.id),
+  ])
 
   try {
     // Belt and braces, exactly as the middleware does it: RLS already scopes
@@ -78,6 +87,7 @@ export async function getServerEntitlement(): Promise<ServerEntitlement> {
         launchDate: effectiveLaunchDate(),
         admins: parseAdminEmails(process.env.ADMIN_EMAILS),
         cohort,
+        trial,
       }),
     }
   } catch (error: unknown) {
@@ -96,7 +106,14 @@ export async function getServerEntitlement(): Promise<ServerEntitlement> {
       // reported either way so a pilot student whose purchase lookup broke is
       // still recognised as cohort-limited rather than silently given the bank.
       cohort,
-      cohortOnly: cohort !== null,
+      // The trial read succeeded or failed closed on its own terms, so it is
+      // reported either way. `trialOnly` stays FALSE regardless: this branch has
+      // already granted access unconditionally, and claiming the trial is what
+      // granted it would spend the trainee's stations against a broken lookup —
+      // and, on the dashboard, count down a trial that is not being used.
+      trial,
+      trialOnly: false,
+      cohortOnly: trial?.state === 'trial' ? false : cohort !== null,
       failedOpen: true,
       allowed: true,
     }

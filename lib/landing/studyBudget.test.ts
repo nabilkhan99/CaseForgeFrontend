@@ -14,7 +14,7 @@ describe('the deanery pre-approval email', () => {
     for (const deanery of DEANERIES) {
       for (const hasResat of [false, true]) {
         const body = buildEmailBody(deanery, hasResat)
-        const where = `${deanery.slug} resat=${hasResat}`
+        const where = `${deanery.id} resat=${hasResat}`
         expect(body, where).not.toContain('added SCA preparation to my PDP')
         expect(body, where).not.toContain('I have discussed this with my Educational Supervisor')
       }
@@ -24,7 +24,7 @@ describe('the deanery pre-approval email', () => {
   it('still asks the question the email exists to ask', () => {
     for (const deanery of DEANERIES) {
       for (const hasResat of [false, true]) {
-        expect(buildEmailBody(deanery, hasResat), `${deanery.slug} resat=${hasResat}`).toContain(
+        expect(buildEmailBody(deanery, hasResat), `${deanery.id} resat=${hasResat}`).toContain(
           'Could you confirm whether this would be approved',
         )
       }
@@ -34,7 +34,7 @@ describe('the deanery pre-approval email', () => {
   it('joins its paragraphs without leaving a gap where one was removed', () => {
     for (const deanery of DEANERIES) {
       for (const hasResat of [false, true]) {
-        expect(buildEmailBody(deanery, hasResat), `${deanery.slug} resat=${hasResat}`).not.toContain(
+        expect(buildEmailBody(deanery, hasResat), `${deanery.id} resat=${hasResat}`).not.toContain(
           '\n\n\n',
         )
       }
