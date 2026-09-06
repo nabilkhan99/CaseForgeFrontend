@@ -83,7 +83,10 @@ export function daysToExam(examDate: string | null | undefined, now: Date): numb
  * either stale or they have sat and are waiting on a result, and in neither case
  * is "your exam is in -3 days" a reason to sell a one-month plan.
  */
-export function chooseWallPlans(examDate: string | null | undefined, now: Date = new Date()): WallPlans {
+export function chooseWallPlans(
+  examDate: string | null | undefined,
+  now: Date = new Date(),
+): WallPlans {
   const days = daysToExam(examDate, now)
   const proximity: ExamProximity =
     days === null ? 'unknown' : days > 0 && days <= IMMINENT_EXAM_DAYS ? 'imminent' : 'later'
@@ -94,4 +97,29 @@ export function chooseWallPlans(examDate: string | null | undefined, now: Date =
     proximity,
     daysToExam: days,
   }
+}
+
+/**
+ * The two plans for a trialist, from the two places an exam date can come from.
+ *
+ * `profiles.exam_date` is the authority — the trainee typed it into the
+ * dashboard themselves — and `examHint` is the fallback derived from their
+ * questionnaire answer (`trial_leads.sca_sitting`), which most of them gave and
+ * then never revisited. Precedence rather than a merge: an answer somebody
+ * typed into this product beats one they picked from a dropdown before they had
+ * an account, even when the dropdown answer is more recent.
+ *
+ * Extracted from the wall component so the choice is testable without a DOM.
+ * The wall renders it; it does not decide it.
+ */
+export function wallPlansFor(
+  sources: { examDate?: string | null; examHint?: string | null },
+  now: Date = new Date(),
+): WallPlans {
+  // `||`, not `??`. An empty string is how a cleared exam date reaches this
+  // (Settings allows clearing it, and a form field round-trips as ''), and `??`
+  // would treat that as an answer — shadowing the questionnaire fallback with
+  // nothing and quietly putting every one of those trainees on the £299 pair.
+  const examDate = sources.examDate?.trim() || sources.examHint?.trim() || null
+  return chooseWallPlans(examDate, now)
 }

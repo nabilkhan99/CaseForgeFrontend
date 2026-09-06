@@ -4,6 +4,7 @@ import {
   chooseWallPlans,
   daysToExam,
   examDateFromSitting,
+  wallPlansFor,
 } from './trialWallPlans'
 import { SCA_TARGETS } from '@/lib/trial/leadFields'
 import { getPlan } from './plans'
@@ -93,5 +94,32 @@ describe('examDateFromSitting', () => {
     expect(chooseWallPlans(examDateFromSitting('sep_2026'), NOW).primary).toBe('self_study_monthly')
     expect(chooseWallPlans(examDateFromSitting('mid_2027'), NOW).primary).toBe('self_study')
     expect(chooseWallPlans(examDateFromSitting('not_sure'), NOW).primary).toBe('self_study')
+  })
+})
+
+describe('wallPlansFor', () => {
+  it('prefers the date the trainee typed into the dashboard', () => {
+    // Even when the questionnaire answer is nearer. A dropdown they picked
+    // before they had an account does not overrule a date they entered in it.
+    const wall = wallPlansFor(
+      { examDate: examIn(120), examHint: examDateFromSitting('sep_2026') },
+      NOW,
+    )
+    expect(wall.primary).toBe('self_study')
+  })
+
+  it('falls back to the questionnaire answer when there is no profile date', () => {
+    for (const missing of [null, undefined, '']) {
+      const wall = wallPlansFor(
+        { examDate: missing, examHint: examDateFromSitting('sep_2026') },
+        NOW,
+      )
+      expect(wall.primary).toBe('self_study_monthly')
+    }
+  })
+
+  it('shows the three-month term when neither source knows', () => {
+    expect(wallPlansFor({}, NOW).primary).toBe('self_study')
+    expect(wallPlansFor({ examDate: null, examHint: null }, NOW).proximity).toBe('unknown')
   })
 })

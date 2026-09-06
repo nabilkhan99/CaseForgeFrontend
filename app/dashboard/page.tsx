@@ -10,6 +10,9 @@ import { BlurFade } from '@/components/magicui/blur-fade';
 import { NumberTicker } from '@/components/magicui/number-ticker';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import TrainingHeatmap from '@/components/dashboard/TrainingHeatmap';
+import TrialStrip from '@/components/dashboard/TrialStrip';
+import TrialWall from '@/components/dashboard/TrialWall';
+import StudyBudgetChecker from '@/components/landing/v5/StudyBudgetChecker';
 import { getUserStats, getDailyActivityTimestamps } from '@/lib/supabase/queries/dashboard';
 import { getRandomStation, getStationIndex } from '@/lib/supabase/queries/station-library';
 import type { Station } from '@/lib/supabase/queries/station-library';
@@ -209,6 +212,18 @@ function DashboardContent() {
    */
   const canStart = access?.allowed ?? true;
 
+  /**
+   * This account is running on the five free stations.
+   *
+   * `/api/subscription` sends `trial` only when the grant is what decides
+   * access — never for somebody who has bought, and never for an admin — so a
+   * truthy value IS the question "is this a trial account", already answered by
+   * the entitlement layer rather than re-derived here.
+   */
+  const trial = access?.trial ?? null;
+  const trialLive = trial?.state === 'trial';
+  const trialEnded = trial?.state === 'trial_ended';
+
   const shouldReduceMotion = useReducedMotion();
 
   /**
@@ -372,6 +387,14 @@ function DashboardContent() {
           agreed in writing, so the date is the entitlement's own, not a fixed
           launch day. They paid; the one message that must never appear is
           "upgrade". */}
+      {/* The five free stations. The strip is standing status while the trial
+          runs; the wall replaces it once the stations or the days run out. Both
+          sit above every other banner because for a trial account they are the
+          only plan message that is true — `state` is 'none' for someone who has
+          bought nothing, and the prompts below are written for that. */}
+      {trialLive && trial && <TrialStrip trial={trial} />}
+      {trialEnded && trial && <TrialWall trial={trial} examDate={stats.examDate} />}
+
       {access?.state === 'none' && access.plan && !access.bypass && (
         /* Two different situations share this banner, and only one of them is
            an alert. Unbounced it is a standing status a preorder buyer reads
@@ -533,7 +556,19 @@ function DashboardContent() {
           browse the library but not start — say so here rather than letting
           the button bounce them back to this page with no explanation. */}
       <Reveal delay={REVEAL.quickStart} className="mb-10 tall:mb-14">
-        {access && !access.allowed && !access.plan && !access.bypass ? (
+        {trialEnded ? (
+          /* The wall above has already made the offer, with two plans and a
+             reason for each. "See plans" underneath it would be a third button
+             pointing at a fourth place, and the library link is the one thing
+             here they can still act on. */
+          <p className="border-y border-hairline py-5 text-center text-[13px] text-muted">
+            Stations are locked, but everything you did stays open &mdash;{' '}
+            <Link href="/dashboard/library" className="text-primary font-medium hover:underline">
+              your board
+            </Link>{' '}
+            and every report.
+          </p>
+        ) : access && !access.allowed && !access.plan && !access.bypass ? (
           /* S1: no plan at all is a different situation from a plan that hasn't
              opened yet, and it used to render as the latter — telling someone
              who has bought nothing that practice had not opened, while the
@@ -685,6 +720,34 @@ function DashboardContent() {
               How it works
             </Link>
           </p>
+        </Reveal>
+      )}
+
+      {/* The deanery checker, for trial accounts only.
+          It is the single most useful thing to put in front of somebody
+          deciding whether to pay for this: most of them can claim it against a
+          study budget and do not know it, and the answer is regional. Nobody
+          who has already bought needs it here — it would be advice about a
+          decision they have made — so it is gated on the grant, exactly as the
+          strip and the wall are.
+          Rendered with `surface="trial-dashboard"`, which is not 'landing', so
+          the checker lays itself out in one column instead of the homepage
+          band's two: 900px is not the width its split was drawn for. The
+          surface also tags its own `study_budget_deanery_selected` events, so
+          dashboard use is separable from landing use in PostHog. */}
+      {trial && (
+        <Reveal delay={REVEAL.guarantee} className="mb-4">
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.13em] text-primary">
+            Before you pay for it yourself
+          </p>
+          <p className="text-[13px] leading-relaxed text-muted">
+            Most deaneries reimburse SCA preparation out of the study budget. Check yours &mdash;
+            the email asking for pre-approval is drafted for you.
+          </p>
+          {/* Its own section padding supplies the gap below this line. */}
+          <div className="-mx-5 sm:-mx-8">
+            <StudyBudgetChecker surface="trial-dashboard" />
+          </div>
         </Reveal>
       )}
 

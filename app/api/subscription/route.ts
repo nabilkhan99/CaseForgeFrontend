@@ -15,6 +15,8 @@ export interface TrialSubscription {
   remaining: number;
   /** What the grant was worth, so the strip can say "3 of 5 left" without hardcoding the 5. */
   allowance: number;
+  /** How long the window runs once it opens — the "5 days" in the strip's first line. */
+  windowDays: number;
   /** ISO instant of the first consultation; null before it — the clock is not running yet. */
   startedAt: string | null;
   expiresAt: string | null;
@@ -170,6 +172,7 @@ export async function GET() {
         used: trial.used,
         remaining: trial.remaining,
         allowance: trial.allowance,
+        windowDays: trial.windowDays,
         startedAt: trial.startedAt?.toISOString() ?? null,
         expiresAt: trial.expiresAt?.toISOString() ?? null,
         reason: trial.reason ?? null,

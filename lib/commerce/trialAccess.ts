@@ -58,6 +58,13 @@ export interface TrialAccess {
   remaining: number
   /** How many the grant was worth, so a caller can render "3 of 5 left". */
   allowance: number
+  /**
+   * How long the window runs once it opens. Carried so the dashboard strip can
+   * say "5 stations · 5 days" before there is an `expiresAt` to read it off —
+   * the alternative was hardcoding a 5 in the copy that a per-row override
+   * would then contradict.
+   */
+  windowDays: number
   startedAt: Date | null
   expiresAt: Date | null
   reason?: TrialEndReason
@@ -72,6 +79,7 @@ export const NO_TRIAL: TrialAccess = Object.freeze({
   used: 0,
   remaining: 0,
   allowance: 0,
+  windowDays: 0,
   startedAt: null,
   expiresAt: null,
 })
@@ -109,6 +117,7 @@ export function computeTrialAccess(
     used,
     remaining,
     allowance: grant.allowance,
+    windowDays: grant.windowDays,
     startedAt: grant.startedAt,
     expiresAt,
   }
