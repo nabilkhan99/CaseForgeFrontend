@@ -113,3 +113,69 @@ export const analytics = {
   },
 };
 
+
+/**
+ * How much of their five free stations a buyer had used when they decided.
+ *
+ * Attached to the buy-path events (`checkout_started`, `purchase`) as
+ * `trial_stations_used` and `days_since_first_station`, so the new offer can be
+ * measured against the baseline it replaced: 78 verified leads → 4 paid within
+ * 30 days, median ~5 days to purchase, 1 station before purchase. Without these
+ * two numbers on the sale itself, "how many stations does it take to convince
+ * somebody" is unanswerable.
+ *
+ * Resolved server-side (`GET /api/checkout`) because neither number is visible
+ * to the browser: `trial_grants` is readable only by its owner and the
+ * consumption count is a join. Returns an EMPTY OBJECT for everybody without a
+ * grant — every existing event therefore keeps exactly the properties it has
+ * today, and a trial property is present only when it means something.
+ *
+ * Two safeguards, both because this sits on the path to Stripe:
+ *   * the answer is cached for the page load, so a second event does not make a
+ *     second round trip;
+ *   * the request is abandoned after {@link TRIAL_FUNNEL_TIMEOUT_MS}. A slow
+ *     analytics lookup must never be the reason a checkout button feels stuck —
+ *     losing the property is a worse report, losing the sale is worse than that.
+ */
+const TRIAL_FUNNEL_TIMEOUT_MS = 1200;
+
+let trialFunnelCache: Promise<Record<string, number>> | null = null;
+
+export const trialFunnelProperties = (): Promise<Record<string, number>> => {
+  if (typeof window === 'undefined') return Promise.resolve({});
+  if (trialFunnelCache) return trialFunnelCache;
+
+  trialFunnelCache = (async () => {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), TRIAL_FUNNEL_TIMEOUT_MS);
+      const res = await fetch('/api/checkout', { signal: controller.signal }).finally(() =>
+        clearTimeout(timer),
+      );
+      if (!res.ok) return {};
+      const data = (await res.json()) as {
+        trial?: { trial_stations_used?: number; days_since_first_station?: number | null } | null;
+      };
+      const trial = data?.trial;
+      if (!trial) return {};
+
+      const properties: Record<string, number> = {};
+      if (typeof trial.trial_stations_used === 'number') {
+        properties.trial_stations_used = trial.trial_stations_used;
+      }
+      // Null is a real answer — "their window never opened" — and is carried by
+      // the property being ABSENT rather than by a zero that would read as
+      // "bought on day one".
+      if (typeof trial.days_since_first_station === 'number') {
+        properties.days_since_first_station = trial.days_since_first_station;
+      }
+      return properties;
+    } catch {
+      // A missing property is a gap in a report. An exception here would be a
+      // buyer staring at a button that did nothing.
+      return {};
+    }
+  })();
+
+  return trialFunnelCache;
+};
