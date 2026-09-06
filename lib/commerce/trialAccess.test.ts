@@ -320,11 +320,16 @@ describe('startTrialWindow', () => {
    * the second re-checks the predicate against the committed version, matches
    * nothing, and returns no rows. There is no read-then-write to lose.
    */
+  interface Stamp {
+    started_at: string
+    expires_at: string
+  }
+
   function stubUpdate(rows: Record<string, unknown>[]) {
     const select = vi.fn().mockResolvedValue({ data: rows, error: null })
     const is = vi.fn(() => ({ select }))
     const eq = vi.fn(() => ({ is }))
-    const update = vi.fn(() => ({ eq }))
+    const update = vi.fn((_written: Stamp) => ({ eq }))
     const from = vi.fn(() => ({ update }))
     return { client: { from } as never, update, eq, is, select }
   }
@@ -333,7 +338,7 @@ describe('startTrialWindow', () => {
     const { client, update, is } = stubUpdate([{ started_at: NOW.toISOString() }])
     const stamped = await startTrialWindow(client, grant(), NOW)
     expect(stamped).toBe(true)
-    const written = update.mock.calls[0][0] as { started_at: string; expires_at: string }
+    const written = update.mock.calls[0][0]
     expect(written.started_at).toBe(NOW.toISOString())
     expect(written.expires_at).toBe(new Date(NOW.getTime() + 5 * DAY).toISOString())
     // The compare-and-set predicate. Without it the second concurrent call

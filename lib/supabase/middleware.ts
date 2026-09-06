@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { decideAccess } from '@/lib/commerce/entitlements';
 import { loadCohortAccess } from '@/lib/commerce/cohortAccess';
+import { loadTrialAccess } from '@/lib/commerce/trialAccess';
 import { exactEmailPattern } from '@/lib/commerce/emailFilter';
 import { effectiveLaunchDate } from '@/lib/commerce/launchDate';
 import { parseAdminEmails } from '@/lib/admin/guard';
@@ -113,13 +114,17 @@ export async function updateSession(request: NextRequest) {
             // second round trip in front of every page in the product's hot path.
             // The cohort read fails closed inside loadCohortAccess — a trainer
             // pilot student seeing the paywall is a far cheaper failure than a
-            // broken lookup handing five cases to everyone.
-            const [{ data: purchases, error: purchasesError }, cohort] = await Promise.all([
+            // broken lookup handing five cases to everyone. The trial read
+            // fails closed for the same reason and a sharper one: failing open
+            // there would hand a free five-station grant to every signed-in
+            // account, which is real money in Azure realtime minutes.
+            const [{ data: purchases, error: purchasesError }, cohort, trial] = await Promise.all([
                 supabase
                     .from('preorders')
                     .select('plan, status, created_at, coaching_day, access_starts_at, access_ends_at')
                     .ilike('email', exactEmailPattern(user.email)),
                 loadCohortAccess(supabase, user.id),
+                loadTrialAccess(supabase, user.id),
             ]);
             if (purchasesError) {
                 // supabase-js reports query failures as { error }, not a throw —
@@ -136,14 +141,35 @@ export async function updateSession(request: NextRequest) {
                 // (create-session, realtime-token), not by path. That is
                 // deliberate: the case brief for a locked station is meant to be
                 // reachable — it is where the upsell lives.
-                const { entitlement, allowed } = decideAccess(purchases ?? [], {
+                // A live trial reaches every page here too, with the WHOLE bank:
+                // the five-station cap is a count, not an allowlist, so there is
+                // no per-station question for a path rule to answer. What stops
+                // the sixth consultation is the server chokepoint
+                // (create-session / realtime-token), and what stops a trialist
+                // navigating at all is `allowed` going false below once the
+                // grant is spent or the five days are up.
+                const { entitlement, allowed, trial: trialAccess } = decideAccess(purchases ?? [], {
                     email: user.email,
                     launchDate: effectiveLaunchDate(),
                     admins: parseAdminEmails(process.env.ADMIN_EMAILS),
                     cohort,
+                    trial,
                 });
                 if (!allowed) {
                     const url = request.nextUrl.clone();
+                    // A spent trial is read-only in exactly the way a lapsed
+                    // plan is — reports, board and Development page all stay
+                    // open, only stations lock — but it does NOT go to
+                    // /pricing?renew=true. There is nothing to renew, and the
+                    // offer for someone who has just used their five stations is
+                    // two plans chosen by their exam date, which lives on the
+                    // dashboard. `?trial=ended` is what draws that wall.
+                    if (trialAccess?.state === 'trial_ended') {
+                        url.pathname = '/dashboard';
+                        url.search = '';
+                        url.searchParams.set('trial', 'ended');
+                        return NextResponse.redirect(url);
+                    }
                     // state 'none' WITH a plan is a preorder whose window hasn't
                     // opened — a paying customer. Sending them to /pricing reads
                     // as "your purchase doesn't exist"; the dashboard explains
