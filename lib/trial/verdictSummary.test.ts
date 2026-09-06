@@ -63,11 +63,32 @@ describe('toVerdictSummary', () => {
   })
 
   it('shows nothing for a row with no verdict', () => {
-    // Also what an empty-transcript artefact looks like — precisely the thing
-    // that must never be revealed as though it were a real mark.
     expect(toVerdictSummary({ ...FULL_ROW, verdict: '' })).toBeNull()
     expect(toVerdictSummary({ ...FULL_ROW, verdict: null })).toBeNull()
     expect(toVerdictSummary({ weighted_score: 5.5 })).toBeNull()
+  })
+
+  it('refuses an empty-transcript artefact', () => {
+    // A real row from production: marking ran without a transcript guard and
+    // graded one or two turns. Presenting that above the gate as somebody's
+    // result — to the person deciding whether the marking is worth an email
+    // address — is the worst possible place for a fabricated mark.
+    expect(
+      toVerdictSummary({
+        verdict: 'Fail',
+        weighted_score: 0,
+        max_score: 10.5,
+        one_line_summary:
+          'The consultation did not progress beyond a brief opening, so there was no meaningful history.',
+      }),
+    ).toBeNull()
+
+    // The fallback path lands on 0 too, and must not slip through it.
+    expect(toVerdictSummary({ verdict: 'Fail', weighted_score: null })).toBeNull()
+    // A genuine mark of any size still shows.
+    expect(toVerdictSummary({ ...FULL_ROW, weighted_score: 0.5 })).toMatchObject({
+      weightedScore: 0.5,
+    })
   })
 
   it('shows nothing when the mark has not landed', () => {
@@ -85,7 +106,7 @@ describe('toVerdictSummary', () => {
 
   it('falls back rather than rendering NaN', () => {
     expect(
-      toVerdictSummary({ verdict: 'Pass', weighted_score: null, max_score: undefined }),
-    ).toEqual({ verdict: 'Pass', weightedScore: 0, maxScore: 10.5, oneLineSummary: '' })
+      toVerdictSummary({ verdict: 'Pass', weighted_score: 7, max_score: undefined }),
+    ).toEqual({ verdict: 'Pass', weightedScore: 7, maxScore: 10.5, oneLineSummary: '' })
   })
 })

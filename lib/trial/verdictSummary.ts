@@ -40,14 +40,29 @@ export function toVerdictSummary(row: unknown): TrialVerdictSummary | null {
   if (!row || typeof row !== 'object') return null;
 
   const source = row as VerdictSummarySource;
-  // A row without a verdict is not a result anyone can be shown. It is also
-  // what an empty-transcript artefact looks like, which is precisely the thing
-  // that should never be revealed as though it were a mark.
+  // A row without a verdict is not a result anyone can be shown.
   if (typeof source.verdict !== 'string' || source.verdict.trim() === '') return null;
+
+  const weightedScore = toNumber(source.weighted_score, 0);
+
+  /**
+   * Zero is the signature of an empty-transcript artefact, not of a
+   * consultation. Marking used to run without a transcript guard, so
+   * production holds rows like "Fail 0.0 — the consultation did not progress
+   * beyond a brief opening", written against one or two turns. The rest of the
+   * project already treats `weighted_score > 0` as the test for a real mark.
+   *
+   * Refused here specifically because of where this is shown: above the gate,
+   * to someone deciding whether the marking is worth an email address. A
+   * fabricated mark is bad everywhere and worst there. The full report behind
+   * the gate is untouched — it still renders whatever the row says, and
+   * explains itself in the process.
+   */
+  if (weightedScore <= 0) return null;
 
   return {
     verdict: source.verdict,
-    weightedScore: toNumber(source.weighted_score, 0),
+    weightedScore,
     maxScore: toNumber(source.max_score, 10.5),
     oneLineSummary:
       typeof source.one_line_summary === 'string' ? source.one_line_summary : '',
