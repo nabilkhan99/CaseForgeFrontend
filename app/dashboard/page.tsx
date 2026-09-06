@@ -12,6 +12,7 @@ import PrimaryButton from '@/components/ui/PrimaryButton';
 import TrainingHeatmap from '@/components/dashboard/TrainingHeatmap';
 import TrialStrip from '@/components/dashboard/TrialStrip';
 import TrialWall from '@/components/dashboard/TrialWall';
+import TrialQuestionnaireCard from '@/components/dashboard/TrialQuestionnaireCard';
 import StudyBudgetChecker from '@/components/landing/v5/StudyBudgetChecker';
 import { getUserStats, getDailyActivityTimestamps } from '@/lib/supabase/queries/dashboard';
 import { getRandomStation, getStationIndex } from '@/lib/supabase/queries/station-library';
@@ -394,6 +395,27 @@ function DashboardContent() {
           bought nothing, and the prompts below are written for that. */}
       {trialLive && trial && <TrialStrip trial={trial} />}
       {trialEnded && trial && <TrialWall trial={trial} examDate={stats.examDate} />}
+
+      {/* The two questions the sign-up door skipped, asked once there is a mark
+          to weigh them against. `trial.used` is the count of GENUINELY MARKED
+          consultations, so a session too short to grade does not trigger this;
+          and it disappears the moment there is an exam date, from here or from
+          the countdown field below. */}
+      {trial && trial.used >= 1 && !stats.examDate && user?.id && (
+        <TrialQuestionnaireCard
+          userId={user.id}
+          onSaved={(examDate) => {
+            const days = examDate ? daysUntilExamDate(examDate) : null;
+            // A sitting we could not map to a real date (a 2027 period, "not
+            // sure") saves the answer but sets no countdown — the card is still
+            // dismissed, so nobody is asked twice.
+            if (!examDate || days === null) return;
+            // Same in-place update the countdown's own save does, rather than
+            // reloading a whole dashboard around two answers.
+            setStats((previous) => ({ ...previous, examDate, examCountdownDays: days }));
+          }}
+        />
+      )}
 
       {/* Both plan banners below stand down while a live trial is granting
           access. They are written for somebody who cannot practise, and saying
