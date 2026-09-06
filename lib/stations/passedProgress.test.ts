@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { GUARANTEE_STATION_COUNT, trialStationsPassed } from './passedProgress';
 
 describe('trialStationsPassed', () => {
-  it('is 1 of 200 when the free station passed', () => {
+  it('is 1 of 200 when the sitting passed', () => {
     expect(trialStationsPassed('Pass', 8)).toMatchObject({ passed: 1, attempted: 1 });
   });
 
