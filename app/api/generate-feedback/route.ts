@@ -1,7 +1,9 @@
-import { after, NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { getTrainerCohort } from '@/lib/trainer/guard';
+import { candidateRun } from '@/lib/clinical-master/candidateRun';
+import { triggerMarking } from '@/lib/clinical-master/triggerMarking';
 import type { ConsultationFeedback } from '@/lib/clinical-master/types';
 
 /**
@@ -20,13 +22,6 @@ import type { ConsultationFeedback } from '@/lib/clinical-master/types';
 // stale-claim TTL below covers. Raise this if the project moves to Fluid
 // Compute / Pro (300s), which also restores active failure handling.
 export const maxDuration = 60;
-
-/**
- * A marking claim (clinical_sessions.marking_started_at) older than this is
- * presumed dead and can be retaken, so a crashed run self-heals on the page's
- * next trigger poll instead of sticking in 'processing' forever.
- */
-const MARKING_CLAIM_STALE_MINUTES = 10;
 
 /**
  * Past this age a session that still has no result is stuck, not slow. Marking
@@ -248,7 +243,30 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        // 3. Trigger the Azure marking endpoint once; later polls pass trigger=false.
+        // 3. The Azure guard refused this one: too few candidate turns, or under
+        //    90 seconds between the first and last. It writes no session_results
+        //    row and releases its claim, recording only the status — so the
+        //    duration the page quotes back is re-derived from the transcript
+        //    here. Checked after the empty-transcript branch above: a mic that
+        //    captured nothing is "wasn't recorded", not "too short".
+        //
+        //    Returned before the trigger below on purpose. Re-firing marking for
+        //    a session the guard has already judged would spend money to be told
+        //    the same thing, and would leave the page polling in the meantime.
+        if (session.status === 'unmarkable') {
+            const run = candidateRun(session.transcript);
+            return NextResponse.json({
+                status: 'unmarkable',
+                triggerQueued: false,
+                candidateSeconds: run.seconds,
+                candidateTurns: run.turns,
+                ageMinutes,
+                stationId,
+                stationTitle,
+            });
+        }
+
+        // 4. Trigger the Azure marking endpoint once; later polls pass trigger=false.
         //    A trainer's read never triggers, whatever the client asked for —
         //    see `viaTrainer`. Enforced here rather than by having the Students
         //    tab send `trigger: false`, because a client-supplied flag is a
@@ -265,63 +283,17 @@ export async function POST(request: NextRequest) {
 
         let triggerQueued = false;
         if (trigger && !viaTrainer) {
-            // Cross-instance claim: only the request that flips marking_started_at
-            // from null (or stale) wins; concurrent polls from other Vercel
-            // instances see no row back and skip. An in-memory Set can't give
-            // this guarantee — parallel instances each start with an empty one.
-            // Cast: marking_started_at postdates the generated types (0005).
-            const staleCutoff = new Date(
-                Date.now() - MARKING_CLAIM_STALE_MINUTES * 60000
-            ).toISOString();
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { data: claim } = await (supabase as any)
-                .from('clinical_sessions')
-                .update({ marking_started_at: new Date().toISOString() })
-                .eq('id', sessionId)
-                .or(`marking_started_at.is.null,marking_started_at.lt.${staleCutoff}`)
-                .select('id')
-                .maybeSingle();
-
-            if (claim) {
-                triggerQueued = true;
-                const endpoint = `${markingUrl.replace(/\/+$/, '')}/api/mark-consultation`;
-                const releaseClaim = async () => {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    await (supabase as any)
-                        .from('clinical_sessions')
-                        .update({ marking_started_at: null })
-                        .eq('id', sessionId)
-                        .then(null, (err: unknown) =>
-                            console.error('Failed to release marking claim', { sessionId, err })
-                        );
-                };
-                after(async () => {
-                    try {
-                        const res = await fetch(endpoint, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'x-marking-secret': markingSecret,
-                            },
-                            body: JSON.stringify({ sessionId }),
-                        });
-
-                        if (!res.ok) {
-                            const body = await res.text().catch(() => '');
-                            console.error('Marking endpoint returned an error', {
-                                sessionId,
-                                status: res.status,
-                                body: body.slice(0, 500),
-                            });
-                            // Give the claim back so the page's next trigger poll retries.
-                            await releaseClaim();
-                        }
-                    } catch (err) {
-                        console.error('Failed to trigger marking endpoint:', err);
-                        await releaseClaim();
-                    }
-                });
-            }
+            // The claim, the ten-minute stale TTL and the un-awaited after()
+            // call all live in the shared trigger now, because save-transcript
+            // fires the same run the moment the consultation ends. Whichever of
+            // the two gets there first wins the claim; the other skips.
+            const outcome = await triggerMarking({
+                admin: supabase,
+                sessionId,
+                markingUrl,
+                markingSecret,
+            });
+            triggerQueued = outcome.triggered;
         }
 
         return NextResponse.json({
