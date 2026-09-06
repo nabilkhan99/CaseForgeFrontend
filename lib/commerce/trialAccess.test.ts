@@ -150,6 +150,9 @@ describe('trialRefusal', () => {
 })
 
 describe('decideAccess with a trial', () => {
+  /** The decision minus its `trial` field, for comparing two ways of saying "no grant". */
+  const sansTrial = (d: ReturnType<typeof decideAccess>) => ({ ...d, trial: null })
+
   const ctx = (over: Partial<AccessContext> = {}): AccessContext => ({
     email: 'gp@example.com',
     admins: new Set<string>(),
@@ -194,9 +197,11 @@ describe('decideAccess with a trial', () => {
   })
 
   it('behaves exactly as before for a user with no grant', () => {
-    const { trial: _a, ...withNoTrial } = decideAccess([], ctx({ trial: NO_TRIAL }))
-    const { trial: _b, ...withoutTheField } = decideAccess([], ctx())
-    expect(withNoTrial).toEqual(withoutTheField)
+    // NO_TRIAL and an absent field are the same answer, so the `trial` field
+    // itself is the one thing that legitimately differs between the two.
+    expect(sansTrial(decideAccess([], ctx({ trial: NO_TRIAL })))).toEqual(
+      sansTrial(decideAccess([], ctx())),
+    )
   })
 
   it('never fires trialOnly and cohortOnly together — the trial wins while it is live', () => {
@@ -217,9 +222,8 @@ describe('decideAccess with a trial', () => {
 
   it('leaves the existing cohort pilot untouched when no grant exists', () => {
     const cohort = { id: 'c1', stationIds: ['s1'], trainerEmail: 'tpd@nhs.net' }
-    const { trial: _a, ...withNoTrial } = decideAccess([], ctx({ cohort, trial: NO_TRIAL }))
-    const { trial: _b, ...withoutTheField } = decideAccess([], ctx({ cohort }))
-    expect(withNoTrial).toEqual(withoutTheField)
+    const withNoTrial = sansTrial(decideAccess([], ctx({ cohort, trial: NO_TRIAL })))
+    expect(withNoTrial).toEqual(sansTrial(decideAccess([], ctx({ cohort }))))
     expect(withNoTrial).toMatchObject({ allowed: true, cohortOnly: true, trialOnly: false })
   })
 
@@ -329,18 +333,21 @@ describe('startTrialWindow', () => {
     const select = vi.fn().mockResolvedValue({ data: rows, error: null })
     const is = vi.fn(() => ({ select }))
     const eq = vi.fn(() => ({ is }))
-    const update = vi.fn((_written: Stamp) => ({ eq }))
+    const writes: Stamp[] = []
+    const update = vi.fn((written: Stamp) => {
+      writes.push(written)
+      return { eq }
+    })
     const from = vi.fn(() => ({ update }))
-    return { client: { from } as never, update, eq, is, select }
+    return { client: { from } as never, update, writes, eq, is, select }
   }
 
   it('stamps started_at and expires_at together, five days apart', async () => {
-    const { client, update, is } = stubUpdate([{ started_at: NOW.toISOString() }])
+    const { client, writes, is } = stubUpdate([{ started_at: NOW.toISOString() }])
     const stamped = await startTrialWindow(client, grant(), NOW)
     expect(stamped).toBe(true)
-    const written = update.mock.calls[0][0]
-    expect(written.started_at).toBe(NOW.toISOString())
-    expect(written.expires_at).toBe(new Date(NOW.getTime() + 5 * DAY).toISOString())
+    expect(writes[0].started_at).toBe(NOW.toISOString())
+    expect(writes[0].expires_at).toBe(new Date(NOW.getTime() + 5 * DAY).toISOString())
     // The compare-and-set predicate. Without it the second concurrent call
     // would overwrite the first's stamp and hand out five fresh days.
     expect(is).toHaveBeenCalledWith('started_at', null)
