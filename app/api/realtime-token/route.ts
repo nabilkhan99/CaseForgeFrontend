@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerEntitlement } from '@/lib/commerce/serverEntitlement';
 import { cohortAllowsStation } from '@/lib/commerce/cohortAccess';
+import { trialRefusal } from '@/lib/commerce/trialAccess';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { mintEphemeralKey, unreliableEchoCancellation } from '@/lib/clinical-master/realtimeToken';
 import { voiceForStation } from '@/lib/clinical-master/realtimeSession';
@@ -30,9 +31,17 @@ export async function POST(req: NextRequest) {
   // Server-side auth + entitlement: this is the endpoint that spends Azure
   // realtime minutes, so a signed-in account without a live plan must not
   // reach it even though the middleware never sees an API call.
-  const { user, allowed, entitlement, cohort, cohortOnly } = await getServerEntitlement();
+  const { user, allowed, entitlement, cohort, cohortOnly, trial } = await getServerEntitlement();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  // Checked here as well as in create-session, not instead of it: this is the
+  // endpoint that spends Azure realtime minutes, and a session row could exist
+  // already — created before the fifth mark landed, or by a client that skipped
+  // straight here. The five-station cap is only as good as this refusal.
+  const refusal = trialRefusal(trial);
+  if (!allowed && refusal) {
+    return NextResponse.json({ ...refusal, state: entitlement.state }, { status: 403 });
   }
   // `state` rides along so the caller can pick renew-vs-buy without guessing.
   if (!allowed) {
