@@ -14,6 +14,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  * guard has broken the funnel it was meant to protect.
  */
 
+process.env.TRIAL_GUEST_COOKIE_SECRET = 'test-secret'
+
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
   admin: vi.fn(),
@@ -41,40 +43,50 @@ vi.mock('@/lib/clinical-master/realtimeSession', () => ({
 
 const { POST: createSession } = await import('./create-session/route')
 const { POST: realtimeToken } = await import('./realtime-token/route')
+const { signGuestCookie, withGuestSession } = await import('@/lib/trial/guestSession')
 
 type Handler = (req: Request) => Promise<Response>
 
-function request(path: string) {
-  return new Request(`https://www.fourteenfisherman.com${path}`, {
+/** The cookie /try/talk would have issued for this session. */
+function guestCookie(): string {
+  return signGuestCookie(withGuestSession(null, 's1', Math.floor(Date.now() / 1000)))!
+}
+
+function request(path: string, cookie: string | null = guestCookie()) {
+  const req = new Request(`https://www.fourteenfisherman.com${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ sessionId: 's1', stationId: 'st1' }),
   })
+  // NextRequest's cookie jar. The handlers read it to check the guest binding.
+  Object.defineProperty(req, 'cookies', {
+    value: { get: (name: string) => (cookie && name === 'ff_guest' ? { value: cookie } : undefined) },
+  })
+  return req
 }
 
 /**
- * Minimal service-role stand-in: a station that is free-trial and active, and
- * no existing session. Just enough for a guest call to get past the guard and
- * do real work.
+ * Minimal service-role stand-in: an active station and the guest session the
+ * funnel opened against it. Just enough for a guest call to get past the guard
+ * and do real work.
  */
 function guestStore() {
-  const station = { id: 'st1', is_free_trial: true, is_active: true, consultation_duration_seconds: 480 }
+  const station = { id: 'st1', is_active: true, consultation_duration_seconds: 480 }
+  const session = {
+    id: 's1',
+    user_id: null,
+    status: 'reading',
+    started_at: new Date().toISOString(),
+    station_id: 'st1',
+  }
   return {
     from: (table: string) => {
-      if (table === 'stations') {
-        const builder = {
-          select: () => builder,
-          eq: () => builder,
-          single: async () => ({ data: station, error: null }),
-          maybeSingle: async () => ({ data: station, error: null }),
-        }
-        return builder
-      }
+      const data = table === 'stations' ? station : session
       const builder = {
         select: () => builder,
         eq: () => builder,
-        single: async () => ({ data: null, error: null }),
-        maybeSingle: async () => ({ data: null, error: null }),
+        single: async () => ({ data, error: null }),
+        maybeSingle: async () => ({ data, error: null }),
         insert: async () => ({ error: null }),
         update: () => builder,
       }
@@ -121,12 +133,27 @@ describe.each(routes)('POST /api/try/%s', (_name, handler, path) => {
   })
 
   it('treats the caller as a guest when the auth lookup itself breaks', async () => {
-    // Fail open. Almost every caller here has no cookies at all; a transient
-    // auth failure must not take the free funnel down.
+    // Fail open. Almost every caller here has no session cookie at all; a
+    // transient auth failure must not take the free funnel down.
     mocks.getUser.mockRejectedValue(new Error('gotrue down'))
 
     const response = await handler(request(path))
 
     expect(response.status).toBe(200)
   })
+})
+
+/**
+ * The guest-only guard is not the only thing between an anonymous caller and
+ * an Azure key any more. Being a guest is necessary; having been handed the
+ * session by the funnel is the rest of it. See lib/trial/guestSession.ts.
+ */
+it('refuses an anonymous mint that the funnel never issued', async () => {
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+  const response = await realtimeToken(request('/api/try/realtime-token', null) as never)
+
+  expect(response.status).toBe(403)
+  expect((await response.json()).code).toBe('guest_cookie_missing')
+  expect(mocks.mintEphemeralKey).not.toHaveBeenCalled()
 })
