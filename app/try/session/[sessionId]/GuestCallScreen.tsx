@@ -10,6 +10,7 @@ import ConsultationStage from '@/components/clinical-master/ConsultationStage';
 import SessionControls from '@/components/clinical-master/SessionControls';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import type { CallBrief } from '@/lib/trial/callBrief';
+import { markTrialSessionStarted } from '@/lib/trial/storage';
 
 export interface GuestCallScreenProps {
   sessionId: string;
@@ -84,6 +85,13 @@ export default function GuestCallScreen({
     // Never auto-reconnect after a connection failure — the error screen owns retry.
     if (!isProcessing && !isEndingRef.current && status === 'disconnected' && !error) connect();
   }, [isProcessing, status, error, connect]);
+
+  // Where this consultation's report will live, so the landing navbar can
+  // deep-link a returning visitor at it. The one-click door has no "Begin"
+  // button to hang this off, so it happens on arrival.
+  useEffect(() => {
+    markTrialSessionStarted(sessionId);
+  }, [sessionId]);
 
   // The first word spoken by anyone starts the clock, and nothing stops it.
   useEffect(() => {
