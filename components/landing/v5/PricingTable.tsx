@@ -4,47 +4,12 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowRight, Info } from 'lucide-react';
-import { BOOK_A_CALL_URL, type PlanKey } from '@/lib/commerce/plans';
+import { BOOK_A_CALL_URL, FREE_TIER, type PlanKey } from '@/lib/commerce/plans';
+import { FEATURE_ROWS } from '@/lib/commerce/pricingFeatures';
 import ManageBillingButton from '@/components/commerce/ManageBillingButton';
 import { trackEvent } from '@/lib/analytics';
 import { Pill } from './editorial';
 import PaymentMethodsRow from './PaymentMethodsRow';
-
-interface FeatureCell {
-  text: string;
-  sub?: string;
-  cross?: boolean;
-}
-
-interface FeatureRow {
-  label: string;
-  labelSub?: string;
-  cells: [FeatureCell, FeatureCell, FeatureCell]; // self_study, complete, intensive
-}
-
-const FEATURE_ROWS: readonly FeatureRow[] = [
-  {
-    label: 'AI consultations',
-    labelSub: '200 stations',
-    cells: [{ text: 'Unlimited' }, { text: 'Unlimited', sub: '£299 value' }, { text: 'Unlimited' }],
-  },
-  {
-    label: 'On-demand Lectures',
-    cells: [{ text: '', cross: true }, { text: '8 hours', sub: '£599 value' }, { text: '8 hours' }],
-  },
-  {
-    label: 'Small-Group Coaching',
-    cells: [
-      { text: '', cross: true },
-      { text: 'One full day, 9am to 5pm', sub: 'Max class of 6 · £599 value' },
-      { text: 'One full day, 9am to 5pm' },
-    ],
-  },
-  {
-    label: '1:1 weekly coaching',
-    cells: [{ text: '', cross: true }, { text: '', cross: true }, { text: '12 x 1hr sessions' }],
-  },
-];
 
 /**
  * Which Self-Study offer the toggle is showing. A presentation concern, not a
@@ -323,7 +288,7 @@ function GuaranteeInfo({
 
 interface CtaButtonsProps {
   selfStudy: ReturnType<typeof useSelfStudyCheckout>;
-  variant: 'self_study' | 'complete' | 'intensive';
+  variant: 'free' | 'self_study' | 'complete' | 'intensive';
   /** Which Self-Study plan the billing toggle currently has selected. */
   selfStudyPlan: PlanKey;
   owned?: OwnedColumn;
@@ -344,6 +309,20 @@ function OwnedCta() {
 }
 
 function PlanCta({ selfStudy, variant, selfStudyPlan, owned, canUpgrade }: CtaButtonsProps) {
+  if (variant === 'free') {
+    // No Stripe call: there is nothing to buy. A plain link to the offer page,
+    // in the quiet treatment, because the column exists to remove a reason not
+    // to start rather than to compete with Complete.
+    return (
+      <Link
+        href={FREE_TIER.ctaHref}
+        onClick={() => trackEvent('checkout_clicked', { plan: 'free' })}
+        className="block w-full rounded-full border border-heading/15 bg-white px-2 py-3 text-center text-[13px] font-semibold text-heading transition-colors hover:bg-surface-warm sm:py-2.5 sm:text-sm"
+      >
+        {FREE_TIER.ctaLabel}
+      </Link>
+    );
+  }
   if (owned === variant) return <OwnedCta />;
   if (variant === 'complete' && canUpgrade) {
     // Dead while UPGRADEABLE_FROM is empty (canSwitchPlan always refuses, so
@@ -426,6 +405,17 @@ function MobileCards({ selfStudy, billing, owned, canUpgrade }: MobileCardsProps
   const selfStudyPrice = SELF_STUDY_PRICING[billing];
   const cards = [
     {
+      key: 'free' as const,
+      name: FREE_TIER.name,
+      price: FREE_TIER.displayPrice,
+      suffix: FREE_TIER.priceSuffix,
+      tagline: FREE_TIER.tagline,
+      highlighted: false,
+      badge: null,
+      valueLine: null,
+      cellIndex: 0,
+    },
+    {
       key: 'self_study' as const,
       name: 'Self-Study',
       price: (
@@ -441,7 +431,7 @@ function MobileCards({ selfStudy, billing, owned, canUpgrade }: MobileCardsProps
       highlighted: false,
       badge: null,
       valueLine: null,
-      cellIndex: 0,
+      cellIndex: 1,
     },
     {
       key: 'complete' as const,
@@ -452,7 +442,7 @@ function MobileCards({ selfStudy, billing, owned, canUpgrade }: MobileCardsProps
       highlighted: true,
       badge: 'Most popular',
       valueLine: '£1,497 total value',
-      cellIndex: 1,
+      cellIndex: 2,
     },
     {
       key: 'intensive' as const,
@@ -463,7 +453,7 @@ function MobileCards({ selfStudy, billing, owned, canUpgrade }: MobileCardsProps
       highlighted: false,
       badge: null,
       valueLine: null,
-      cellIndex: 2,
+      cellIndex: 3,
     },
   ];
 
@@ -534,14 +524,22 @@ function MobileCards({ selfStudy, billing, owned, canUpgrade }: MobileCardsProps
               );
             })}
 
-            {/* Guarantee row */}
-            <div className="bg-[#EAF3DE] px-5 py-3.5">
-              <GuaranteeInfo>
-                <p className="text-right text-[11px] leading-snug text-[#27500A]">
-                  Don’t pass? We pay you £500
-                </p>
-              </GuaranteeInfo>
-            </div>
+            {/* Guarantee row.
+                NOT on the free card. The desktop table states it once, as
+                "Every plan: don't pass, and we pay you £500" — and free is not
+                a plan. Repeating it inside a £0 card would make a £500 promise
+                to somebody who has paid nothing, which is a different offer
+                from the one the guarantee terms describe. Wording unchanged
+                everywhere it does appear. */}
+            {card.key !== 'free' && (
+              <div className="bg-[#EAF3DE] px-5 py-3.5">
+                <GuaranteeInfo>
+                  <p className="text-right text-[11px] leading-snug text-[#27500A]">
+                    Don’t pass? We pay you £500
+                  </p>
+                </GuaranteeInfo>
+              </div>
+            )}
           </div>
 
           <div className="p-3">
@@ -588,9 +586,19 @@ export default function PricingTable({ ownedPlan, accountEmail, canUpgrade = fal
           <MobileCards selfStudy={selfStudy} billing={billing} owned={owned} canUpgrade={canUpgrade} />
 
           <div className="hidden overflow-hidden rounded-3xl border border-heading/[0.06] bg-white/80 shadow-elevation-2 backdrop-blur sm:block">
-            <div className="grid grid-cols-[minmax(84px,170px)_repeat(3,minmax(0,1fr))]">
+            <div className="grid grid-cols-[minmax(78px,150px)_repeat(4,minmax(0,1fr))]">
               {/* Plan headers */}
               <div />
+              {/* Free first: it is the cheapest way to find out whether
+                  any of the other three are worth it, and burying it
+                  behind them would be pretending otherwise. */}
+              <div className="relative px-3 pb-5 pt-9 text-center">
+                <PlanName>{FREE_TIER.name}</PlanName>
+                <p className="mt-2.5 text-lg font-medium tracking-tight text-heading sm:text-3xl">
+                  {FREE_TIER.displayPrice}
+                </p>
+                <p className="mt-1 text-[10px] text-muted sm:text-xs">{FREE_TIER.tagline}</p>
+              </div>
               <div className="relative px-3 pb-5 pt-9 text-center">
                 {owned === 'self_study' && (
                   <OwnedBadge className="absolute left-1/2 top-3 -translate-x-1/2" />
@@ -663,7 +671,7 @@ export default function PricingTable({ ownedPlan, accountEmail, canUpgrade = fal
                     <div
                       key={i}
                       className={`flex flex-col items-center justify-center border-t border-heading/[0.06] px-2 py-4 text-center ${
-                        i === 1 ? HIGHLIGHT_BG : ''
+                        i === 2 ? HIGHLIGHT_BG : ''
                       }`}
                     >
                       {cell.cross ? (
@@ -688,6 +696,9 @@ export default function PricingTable({ ownedPlan, accountEmail, canUpgrade = fal
               {/* CTA row */}
               <div className="border-t border-heading/[0.06]" />
               <div className="border-t border-heading/[0.06] px-4 py-4">
+                <PlanCta selfStudy={selfStudy} variant="free" selfStudyPlan={selfStudyPlan} owned={owned} canUpgrade={canUpgrade} />
+              </div>
+              <div className="border-t border-heading/[0.06] px-4 py-4">
                 <PlanCta selfStudy={selfStudy} variant="self_study" selfStudyPlan={selfStudyPlan} owned={owned} canUpgrade={canUpgrade} />
               </div>
               <div className={`border-t border-heading/[0.06] ${HIGHLIGHT_BG} px-4 py-4`}>
@@ -698,7 +709,7 @@ export default function PricingTable({ ownedPlan, accountEmail, canUpgrade = fal
               </div>
 
               {/* One guarantee strip for the whole table */}
-              <div className="col-span-4 bg-[#EAF3DE] px-6 py-3.5">
+              <div className="col-span-5 bg-[#EAF3DE] px-6 py-3.5">
                 <GuaranteeInfo align="center">
                   <p className="text-[11px] text-[#27500A] sm:text-xs">
                     Every plan: don&rsquo;t pass, and we pay you £500.

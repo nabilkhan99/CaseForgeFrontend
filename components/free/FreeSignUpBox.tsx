@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { trackEvent } from '@/lib/analytics';
 import { trackTrialAccountCreated } from '@/lib/trial/trialEvents';
-import { CODE_LENGTH } from '@/lib/trial/verification';
 
 /**
  * "Start your five" — door (a).
@@ -29,6 +28,16 @@ import { CODE_LENGTH } from '@/lib/trial/verification';
  */
 
 type Step = 'details' | 'code' | 'stranded';
+
+/**
+ * Six, matching `CODE_LENGTH` in lib/trial/verification.
+ *
+ * Duplicated rather than imported for the same reason
+ * components/try/EmailVerificationGate duplicates it: that module is
+ * `server-only` (it hashes and generates the codes), so importing the constant
+ * would drag the hashing into the client bundle and fail the build.
+ */
+const CODE_LENGTH = 6;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
