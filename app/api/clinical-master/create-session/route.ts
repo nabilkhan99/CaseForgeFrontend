@@ -18,7 +18,12 @@ export async function POST(req: NextRequest) {
   // their five stations is the two-plan wall. The two reasons are separated
   // (`trial_allowance_used` / `trial_expired`) because the wall says different
   // things about stations that ran out and days that did.
-  const refusal = trialRefusal(trial);
+  //
+  // `!entitlement.plan` matches the rule the middleware applies to the same
+  // pair of facts: somebody who once bought and lapsed has a purchase to renew,
+  // and the API must not name a different wall from the one a page navigation
+  // would have sent them to.
+  const refusal = entitlement.plan ? null : trialRefusal(trial);
   if (!allowed && refusal) {
     return NextResponse.json({ ...refusal, state: entitlement.state }, { status: 403 });
   }

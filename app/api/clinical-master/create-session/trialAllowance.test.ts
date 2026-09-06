@@ -252,3 +252,27 @@ describe('starting the five-day window', () => {
     spy.mockRestore()
   })
 })
+
+describe('a lapsed customer who also holds a spent grant', () => {
+  it('is told to renew, not shown the trial wall', async () => {
+    // The API must not name a different wall from the one a page navigation
+    // would reach: the middleware sends this person to /pricing?renew=true.
+    const spent = computeTrialAccess(
+      grant({
+        startedAt: new Date(NOW.getTime() - 9 * DAY),
+        expiresAt: new Date(NOW.getTime() - 4 * DAY),
+      }),
+      5,
+      NOW,
+    )
+    signedIn({
+      trial: spent,
+      allowed: false,
+      entitlement: { state: 'read_only', plan: 'self_study', hasLectures: false },
+    })
+    expect(await (await POST(request())).json()).toMatchObject({
+      error: 'no_active_plan',
+      state: 'read_only',
+    })
+  })
+})

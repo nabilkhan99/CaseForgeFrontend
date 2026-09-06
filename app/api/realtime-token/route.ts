@@ -39,7 +39,10 @@ export async function POST(req: NextRequest) {
   // endpoint that spends Azure realtime minutes, and a session row could exist
   // already — created before the fifth mark landed, or by a client that skipped
   // straight here. The five-station cap is only as good as this refusal.
-  const refusal = trialRefusal(trial);
+  //
+  // `!entitlement.plan` for the same reason create-session has it: a lapsed
+  // customer is told to renew, not shown the trial wall.
+  const refusal = entitlement.plan ? null : trialRefusal(trial);
   if (!allowed && refusal) {
     return NextResponse.json({ ...refusal, state: entitlement.state }, { status: 403 });
   }
