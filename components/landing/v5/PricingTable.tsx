@@ -7,7 +7,7 @@ import { ArrowRight, Info } from 'lucide-react';
 import { BOOK_A_CALL_URL, FREE_TIER, type PlanKey } from '@/lib/commerce/plans';
 import { FEATURE_ROWS } from '@/lib/commerce/pricingFeatures';
 import ManageBillingButton from '@/components/commerce/ManageBillingButton';
-import { trackEvent } from '@/lib/analytics';
+import { trackEvent, trialFunnelProperties } from '@/lib/analytics';
 import { Pill } from './editorial';
 import PaymentMethodsRow from './PaymentMethodsRow';
 
@@ -91,7 +91,7 @@ function useSelfStudyCheckout() {
         return;
       }
       // Awaited so the capture flushes before we leave for Stripe.
-      await trackEvent('checkout_started', { plan });
+      await trackEvent('checkout_started', { plan, ...(await trialFunnelProperties()) });
       window.location.assign(data.url);
     } catch {
       setError('Something went wrong, please try again.');

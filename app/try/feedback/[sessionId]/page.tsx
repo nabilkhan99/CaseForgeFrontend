@@ -126,7 +126,7 @@ export default function TryFeedbackPage() {
       <div className="mx-auto max-w-[1180px] px-5 pb-6 sm:px-7 lg:px-10">
         <div className="border-t border-[#E4DDC9] pt-10 text-center">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#854F0B] sm:text-xs">
-            That was 1 of 200 stations
+            That was one of your five free stations
           </p>
           <h2 className="mx-auto mt-2 max-w-xl text-2xl font-semibold tracking-tight text-heading sm:text-3xl">
             Keep practising until you pass — or we pay you £500.

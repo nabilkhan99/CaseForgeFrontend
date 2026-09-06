@@ -63,7 +63,7 @@ interface VerdictRevealProps {
   retryHref?: string | null;
 }
 
-export default function VerdictReveal({ sessionId, retryHref = '/try' }: VerdictRevealProps) {
+export default function VerdictReveal({ sessionId, retryHref = '/try/talk' }: VerdictRevealProps) {
   const [state, setState] = useState<RevealState>({ kind: 'waiting' });
   const retries = useRef(0);
   const shouldReduceMotion = useReducedMotion();

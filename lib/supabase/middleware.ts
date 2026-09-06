@@ -206,6 +206,7 @@ export async function updateSession(request: NextRequest) {
     // and bouncing them to /dashboard would mean the password never gets set.
     const isPasswordRoute =
         request.nextUrl.pathname.startsWith('/auth/set-password') ||
+        request.nextUrl.pathname.startsWith('/auth/start') ||
         request.nextUrl.pathname.startsWith('/auth/reset-password');
     const isAuthRoute = request.nextUrl.pathname.startsWith('/auth') && !isPasswordRoute;
     if (isAuthRoute && user) {
