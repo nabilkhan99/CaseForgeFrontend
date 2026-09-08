@@ -258,7 +258,25 @@ export async function provisionAccountForPurchase(args: {
   const { data: created, error: createError } = await supabase.auth.admin.createUser({
     email,
     email_confirm: true,
-    user_metadata: args.fullName ? { full_name: args.fullName } : undefined,
+    user_metadata: {
+      ...(args.fullName ? { full_name: args.fullName } : {}),
+      // The account is born without a password, and the emailed link signs the
+      // person in (verifyOtp) BEFORE they choose one — so closing that tab left
+      // people browsing the product, sitting consultations, and then locked out
+      // for good once the session died, because the link is single-use.
+      //
+      // This flag is the "they never finished" marker the middleware gates on
+      // (lib/supabase/middleware.ts), and /auth/set-password clears it as part
+      // of the same updateUser that saves the password. Written at create time
+      // rather than derived, because nothing readable from an auth user says
+      // "has a password": a provisioned account and a normal one are identical
+      // from the outside.
+      //
+      // Only accounts created from here carry it, and its ABSENCE means "not
+      // gated" — so every account that existed before this shipped is untouched
+      // and no backfill runs in code.
+      password_pending: true,
+    },
   });
 
   if (createError) {

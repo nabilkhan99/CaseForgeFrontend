@@ -14,6 +14,20 @@ import SetPasswordForm from '@/components/auth/SetPasswordForm';
  * establishing the session without a navigation, so the middleware's
  * authed-users-leave-/auth redirect never fires — then renders the shared
  * set-password form. An expired token asks the server for a fresh link.
+ *
+ * TWO WAYS IN, and the second has no token at all:
+ *
+ *   1. The emailed link, carrying `token_hash` (+ `email`). verifyOtp signs
+ *      them in, then the form.
+ *   2. A bare `/auth/set-password`, sent here by the middleware because the
+ *      signed-in account still has `password_pending: true` — someone who
+ *      verified a link, got a session, and closed the tab before choosing a
+ *      password. There is nothing to verify: they already hold the session the
+ *      form needs, so the session check below runs FIRST and lands them on the
+ *      same form, driven by updateUser on the live session.
+ *
+ * Only a tokenless arrival with NO session is treated as an expired link — the
+ * one case where there is genuinely nothing to work with.
  */
 
 type VerifyState = 'verifying' | 'ok' | 'expired' | 'resent';
@@ -31,12 +45,17 @@ function SetPasswordInner() {
     useEffect(() => {
         let cancelled = false;
         const verify = async () => {
-            // Already signed in (e.g. the link was clicked twice) — straight to the form.
+            // Already signed in — straight to the form, token or no token. This
+            // covers the link clicked twice AND the middleware's redirect of a
+            // `password_pending` account, which arrives with no query at all.
+            // Checked before the token, so a stale `token_hash` on a session
+            // that already exists cannot spend a fresh link or fail the arrival.
             const { data: { session } } = await supabase.auth.getSession();
             if (session) {
                 if (!cancelled) setState('ok');
                 return;
             }
+            // No session and no token: nothing to verify and nothing to update.
             if (!tokenHash) {
                 if (!cancelled) setState('expired');
                 return;

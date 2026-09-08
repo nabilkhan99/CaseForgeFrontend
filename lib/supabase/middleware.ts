@@ -90,6 +90,40 @@ export async function updateSession(request: NextRequest) {
         return NextResponse.redirect(url);
     }
 
+    // A provisioned account must not be able to rest in "signed in, but never
+    // set a password". The set-up link verifies (verifyOtp) BEFORE the form is
+    // submitted, and verifying creates a real session — so closing the tab at
+    // that point left people browsing the product with no password at all, and
+    // locked out the moment the session expired, because the link is single-use
+    // and (until now) cohort accounts had no self-serve resend.
+    //
+    // Provisioning stamps `password_pending: true` at createUser; the
+    // set-password form clears it in the same updateUser that saves the
+    // password. Read strictly (`=== true`), so an account whose metadata has no
+    // such key — everyone who existed before this shipped — is never redirected.
+    //
+    // Scope, and why it cannot loop:
+    //   - `/auth/*` is exempt, so the destination itself is reachable, and the
+    //     rule below that bounces authed users off auth pages already exempts
+    //     the two password routes for exactly this reason.
+    //   - `/api/*` is exempt, so the feedback/marking polls and every fetch the
+    //     app makes keep getting JSON rather than a 307 to an HTML page.
+    //   - sign-out is a client-side `supabase.auth.signOut()` that clears the
+    //     cookies before navigating, so the next request through here has no
+    //     user and no gate.
+    const passwordPending = user?.user_metadata?.password_pending === true;
+    const isGateableNavigation =
+        !request.nextUrl.pathname.startsWith('/api') &&
+        !request.nextUrl.pathname.startsWith('/auth');
+    if (passwordPending && isGateableNavigation) {
+        const url = request.nextUrl.clone();
+        url.pathname = '/auth/set-password';
+        // No query carried over: `email` and `token_hash` are the set-password
+        // page's own inputs, and anything else would just be a stale filter.
+        url.search = '';
+        return NextResponse.redirect(url);
+    }
+
     // Subscription-gated routes: starting/practising cases requires an active
     // plan, but completed feedback must remain visible after a free trial or
     // after a plan expires.
