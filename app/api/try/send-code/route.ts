@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { findAccountByEmail } from '@/lib/auth/accountSignUp';
 import { sendVerificationEmail } from '@/lib/email/verificationEmail';
 import { validateAnswers, validateSignupAnswers } from '@/lib/trial/questionnaire';
 import { toE164 } from '@/lib/trial/phone';
@@ -206,7 +207,13 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * Door (a): "Start your five" on /free. Email + first name, a code, nothing else.
+ * The account-first door: an address, a code, nothing else on this call.
+ *
+ * Two surfaces post here. /free/start sends `intent: 'signup'` and is told
+ * plainly when the address already has a finished account — it is a sign-up
+ * form, and mailing a code to somebody who should be signing in wastes their
+ * time and ours. /free/open and the portfolio banner send no intent and keep
+ * the old behaviour: a code, whoever they are.
  *
  * ## Why it can reuse this route at all
  *
@@ -254,6 +261,22 @@ async function sendSignupCode(
     return NextResponse.json({ error: parsed.error }, { status: 400 });
   }
   const { email, firstName } = parsed.value;
+
+  // Only the account-first form asks. /free/open and the portfolio banner are
+  // for people coming BACK — telling them to sign in instead of mailing the
+  // code they asked for would close the door they were using.
+  if (body.intent === 'signup') {
+    const existing = await findAccountByEmail(email);
+    // `passwordPending` is a lead we provisioned who never chose a password:
+    // finishing that on the form is the point, so they carry on. A finished
+    // account cannot be finished twice, and its owner has a password already.
+    if (existing && !existing.passwordPending) {
+      return NextResponse.json(
+        { error: 'You already have an account. Sign in instead.', accountExists: true },
+        { status: 409 },
+      );
+    }
+  }
 
   const supabase = getSupabaseAdmin();
 

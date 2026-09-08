@@ -21,38 +21,29 @@ import { trackEvent } from '@/lib/analytics';
  *
  * ## Where the address goes
  *
- * Straight to /api/try/send-code's sign-up path, which writes the `trial_leads`
- * row and mails a 6-digit code — the same machinery /free uses. So the address
- * IS stored (in the leads table this product already has, rather than a new one
- * needing a migration), and the person arrives on /free already on the code
- * step with their address filled in, rather than being asked for it twice.
+ * Nowhere, by itself. It is handed to /free/start in the query and that page
+ * does the whole of the sign-up — the address, a mobile, a password and one
+ * code — in one place.
  *
- * A failure is swallowed on purpose. The worst case is that they land on /free
- * and type their address again, which is the page's normal first step.
+ * It used to POST the address to /api/try/send-code here and hand over with a
+ * code already in flight. That was right while the far side was an
+ * address-and-code form; it is wrong now, because a code mailed before anyone
+ * has chosen a password expires while they are still filling the form in, and
+ * an address typed into a banner is not yet a decision to sign up.
  */
 export default function FreeStationsBanner() {
     const [email, setEmail] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
-    async function handOver() {
+    function handOver() {
         const clean = email.trim().toLowerCase();
         if (submitting || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) return;
         setSubmitting(true);
         void trackEvent('portfolio_free_stations_email', {});
-        try {
-            await fetch('/api/try/send-code', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                // No first name: this is one field, not a form. The verification
-                // email greets an unnamed lead as "there".
-                body: JSON.stringify({ mode: 'signup', email: clean }),
-            });
-            window.location.assign(`/free/open?email=${encodeURIComponent(clean)}&code=sent`);
-        } catch {
-            // Land them on /free anyway — the address is typed again there,
-            // which is that page's normal first step.
-            window.location.assign(`/free/open?email=${encodeURIComponent(clean)}`);
-        }
+        // No request of our own: /free/start owns the sign-up, and arriving
+        // there with the address already in the field is the whole of the
+        // handover.
+        window.location.assign(`/free/start?email=${encodeURIComponent(clean)}`);
     }
 
     return (
@@ -75,18 +66,18 @@ export default function FreeStationsBanner() {
                     className="flex w-full items-center gap-2 sm:w-auto"
                     onSubmit={(event) => {
                         event.preventDefault();
-                        void handOver();
+                        handOver();
                     }}
                 >
                     <label htmlFor="portfolio-free-email" className="sr-only">
-                        Email (optional)
+                        Email
                     </label>
                     <input
                         id="portfolio-free-email"
                         type="email"
                         inputMode="email"
                         autoComplete="email"
-                        placeholder="Email (optional)"
+                        placeholder="Email"
                         value={email}
                         onChange={(event) => setEmail(event.target.value)}
                         className="min-w-0 flex-1 rounded-lg border border-defined bg-white px-3 py-2 text-[13.5px] text-heading outline-none transition placeholder:text-muted focus:border-primary sm:w-56 sm:flex-none"
@@ -96,7 +87,7 @@ export default function FreeStationsBanner() {
                         disabled={submitting}
                         className="shrink-0 rounded-lg border border-defined bg-white px-3.5 py-2 text-[13.5px] font-semibold text-heading transition-colors hover:bg-white/60 disabled:opacity-60"
                     >
-                        {submitting ? 'One moment…' : 'Open my dashboard'}
+                        {submitting ? 'One moment…' : 'Start free'}
                     </button>
                 </form>
             </div>

@@ -1,6 +1,7 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { claimTrialSessionsForUser } from '@/lib/auth/claimTrialSessions';
+import { provisionAccountWithPassword } from '@/lib/auth/accountSignUp';
 import { authLinkOrigin, mintRecoveryTokenHash, provisionAccountForPurchase } from '@/lib/auth/provisioning';
 import { trialSignInUrl } from '@/lib/auth/trialLink';
 import { grantTrial, loadTrialAccess, type TrialSource, type TrialState } from '@/lib/commerce/trialAccess';
@@ -9,9 +10,12 @@ import { grantTrial, loadTrialAccess, type TrialSource, type TrialState } from '
  * The four things that turn a verified address into a trialist, in the one
  * order that is safe, shared by every door.
  *
- *   1. ACCOUNT  — `provisionAccountForPurchase`, which is idempotent and
- *                 confirms the email, so nobody is asked to confirm an address
- *                 they have just typed a code from.
+ *   1. ACCOUNT  — idempotent, and confirms the email either way, so nobody is
+ *                 asked to confirm an address they have just typed a code from.
+ *                 With a `password` it is `provisionAccountWithPassword` (the
+ *                 account-first form, which has already asked for one); without,
+ *                 `provisionAccountForPurchase` (the guest reveal and the
+ *                 signed link, which have not).
  *   2. CLAIM    — any guest consultation that address already sat becomes
  *                 theirs. Before the grant, so the dashboard they land on has
  *                 their own work on it.
@@ -44,6 +48,20 @@ export interface EnsureTrialAccountInput {
    * otherwise rotate the token out from under their own verifyOtp.
    */
   mintSignIn?: boolean;
+  /**
+   * The password the trainee chose on the account-first form.
+   *
+   * Its presence switches step 1 from the purchase provisioner to
+   * {@link provisionAccountWithPassword}: the account is born WITH a password
+   * and without the `password_pending` stamp, so nobody is sent to
+   * /auth/set-password moments after choosing one. Absent for the guest reveal
+   * and the signed link, which have no form to have asked on.
+   *
+   * ⚠️ Never overwrites a password that already exists — see accountSignUp.
+   */
+  password?: string | null;
+  /** Mobile, E.164 where we could parse it. Stored on the auth user as metadata. */
+  phone?: string | null;
 }
 
 export interface EnsuredTrialAccount {
@@ -81,10 +99,16 @@ export async function ensureTrialAccount(
   // for the purchase path's stranded-buyer accounting — but here it is the
   // ordinary case: a lead who already has an account is exactly who door (c)
   // is for. Only a MISSING user id means we could not go on.
-  const provisioned = await provisionAccountForPurchase({
-    email,
-    fullName: input.firstName?.trim() || null,
-  });
+  const fullName = input.firstName?.trim() || null;
+  const password = input.password?.trim() || '';
+  const provisioned = password
+    ? await provisionAccountWithPassword({
+        email,
+        password,
+        fullName,
+        phone: input.phone ?? null,
+      })
+    : await provisionAccountForPurchase({ email, fullName });
   const userId = provisioned.userId;
   if (!userId) {
     console.error('[trial-account] no account for a verified address', {

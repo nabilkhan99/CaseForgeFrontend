@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { accountCreatedDoor, dashboardOffer } from './verifiedAccount'
 
 /**
- * The gate's half of Contract V, including the case that will be live until the
- * other half merges: no `account` block at all.
+ * The gate's half of the verify contract, including the case it must survive:
+ * no `account` block at all.
+ *
+ * The offer is the DASHBOARD now, not a one-time link — verifying the code sets
+ * the session cookies, so there is nothing between the person and their board.
  */
 describe('dashboardOffer', () => {
   it('offers nothing when the response carries no account', () => {
@@ -11,16 +14,19 @@ describe('dashboardOffer', () => {
     expect(dashboardOffer(null)).toBeNull()
   })
 
-  it('links at the signed link when there is one', () => {
-    expect(dashboardOffer({ userId: 'u1', created: true, signInUrl: 'https://ff.com/auth/start?t=x' })).toEqual({
-      href: 'https://ff.com/auth/start?t=x',
+  it('sends a verified account straight to the dashboard', () => {
+    expect(dashboardOffer({ userId: 'u1', created: true })).toEqual({
+      href: '/dashboard',
       label: 'Open your dashboard · 4 more stations, five days',
     })
   })
 
-  it('falls back to ordinary sign-in when no link could be minted', () => {
-    expect(dashboardOffer({ userId: 'u1', created: true, signInUrl: null })?.href).toBe('/auth/sign-in')
-    expect(dashboardOffer({ userId: 'u1' })?.href).toBe('/auth/sign-in')
+  it('never offers a bearer link, whatever the response carried', () => {
+    // A one-time sign-in URL in a JSON body is a credential for the account.
+    // The cookies on the same response do the job; nothing has to travel.
+    const offer = dashboardOffer({ userId: 'u1' })
+    expect(offer?.href).toBe('/dashboard')
+    expect(offer?.href).not.toContain('token')
   })
 
   it('offers the dashboard to an account that already existed', () => {

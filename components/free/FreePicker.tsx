@@ -15,16 +15,15 @@ import ExampleReport from './ExampleReport';
 /**
  * /free — the case picker.
  *
- * This page used to ask for an email address, a first name and a six-digit
- * code before anybody had seen the product. That is friction in front of
- * value, and value now comes first everywhere: the consultation is the call to
- * action, and identity is asked for at the reveal, after the first station,
- * where the trainee has their own verdict on the screen in front of them.
+ * The offer page, not a form. The left column says what a station gives back
+ * and then shows one; the right column is five cases, each one click from
+ * /free/start, where an account is made in one go and that case opens.
  *
- * So there is no form here. The left column says what a station gives back and
- * then shows one; the right column is five cases, each one click from a live
- * patient. The form still exists — at /free/open, for somebody coming back to
- * an account they already have.
+ * There is no guest lane behind these buttons any more (7 September 2026): the
+ * stations are sat inside the dashboard, so the work is on a board the next
+ * morning and the second station does not depend on the browser that sat the
+ * first. /free/open is still the way back for somebody who already has an
+ * account and would rather use a code than a password.
  *
  * Nothing on this page mentions days, locks, plans, cards or codes beyond the
  * pill, which is the single place "no card" is allowed to appear.
@@ -67,11 +66,10 @@ function Notice({ notice }: { notice: GuestNotice }) {
 /**
  * One case.
  *
- * A plain `<a>`, not a `<Link>`: /try/talk opens a consultation as a side
- * effect of a GET, and Next prefetches a `<Link>` the moment it enters the
- * viewport. The route already refuses prefetches (see its `isMachineFetch`),
- * but five links in one viewport would fire five refused requests on every
- * visit to no purpose.
+ * A `<Link>` again. It was a plain `<a>` while Start opened a consultation as a
+ * side effect of a GET — five of those in one viewport meant five prefetched
+ * consultations. Start now goes to /free/start, an ordinary page with no side
+ * effect at all, so prefetching it is exactly what we want.
  */
 function StationRow({
   station,
@@ -108,7 +106,7 @@ function StationRow({
           <p className="mt-1 text-[13px] text-muted">{station.meta}</p>
         </div>
 
-        <a
+        <Link
           href={station.href}
           className={`inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full px-5 py-2.5 text-sm font-semibold transition-colors ${
             first
@@ -118,7 +116,7 @@ function StationRow({
         >
           Start
           <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-        </a>
+        </Link>
       </div>
     </motion.li>
   );
@@ -127,23 +125,23 @@ function StationRow({
 /**
  * When the bank has nothing flagged.
  *
- * Never a dead page: the one-click door has its own fallback chain (see
- * lib/trial/guestStation) and will find a case even when no station carries
- * the flag, so an empty list still gets somebody into a consultation.
+ * Never a dead page: the account is worth making whether or not this list
+ * resolved, and the dashboard they land on carries the whole library — so an
+ * empty list still gets somebody to a patient, one screen later.
  */
 function NoStations() {
   return (
     <div className="mt-6 border-t border-hairline pt-6">
       <p className="text-[15px] leading-relaxed text-body">
-        The list is being refreshed. You can still start a consultation now.
+        The list is being refreshed. Your account still opens the whole library.
       </p>
-      <a
-        href="/try/talk"
+      <Link
+        href="/free/start"
         className="mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white transition-colors hover:opacity-90"
       >
-        Start a consultation
+        Start free
         <ArrowRight className="h-4 w-4" aria-hidden="true" />
-      </a>
+      </Link>
     </div>
   );
 }
@@ -191,8 +189,7 @@ export default function FreePicker({ stations, notice }: FreePickerProps) {
               className="mt-5 max-w-[34em] text-base leading-relaxed text-body sm:text-[19px] sm:leading-[1.55]"
             >
               A live 12-minute consultation with an AI patient, then a report against the three
-              SCA domains. Your first verdict is shown before we ask for anything. Save it to
-              keep all five on your board.
+              SCA domains. Your first verdict is minutes away, and all five stay on your board.
             </motion.p>
 
             <ExampleReport />
@@ -225,8 +222,8 @@ export default function FreePicker({ stations, notice }: FreePickerProps) {
                 </ul>
 
                 <p className="mt-4 text-[13px] leading-relaxed text-muted">
-                  Your microphone is asked for when you press Start. End whenever you like; a
-                  full run gets a marked report.
+                  Start makes your free account, then opens that case. End a consultation
+                  whenever you like; a full run gets a marked report.
                 </p>
               </>
             )}

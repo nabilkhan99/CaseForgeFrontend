@@ -1,19 +1,25 @@
 /**
  * What the guest reveal does with the account `/api/try/verify-code` makes.
  *
- * Contract V: proving the address at the gate is also what creates the Supabase
- * account and grants the five stations, so the verify response now carries an
- * `account` block alongside its `ok`. This gate is the last screen before the
- * report and therefore the only place that can tell someone the account exists
- * and hand them the way in.
+ * Proving the address at the gate is what creates the Supabase account, grants
+ * the five stations AND signs the browser in — the verify response carries
+ * session cookies, so by the time this screen renders the person is already
+ * inside the product. This gate is the last screen before the report and
+ * therefore the only place that can tell them so.
  *
- * EVERY FIELD IS OPTIONAL ON PURPOSE, and the whole block may be absent. The
- * account half of that route belongs to another workstream; until it lands the
- * response is the plain `{ ok }` it has always been, and the gate must then
- * behave exactly as it did before — offering the report and nothing else.
- * Absent means "no account was made", never "assume one was". That is the rule
- * these two functions exist to make testable, because the failure it prevents
- * (offering a dashboard to somebody who has no account) is silent.
+ * ## No link, no inbox
+ *
+ * There used to be a `signInUrl` in this response: a one-time credential the
+ * gate turned into a button, with an email fallback behind it. Both are gone.
+ * A bearer credential for an account has no business travelling in a JSON body
+ * when the same request can simply set the cookie, and "check your inbox" was
+ * the second inbox trip in ninety seconds for somebody who had just read a code
+ * out of the first one.
+ *
+ * EVERY FIELD IS STILL OPTIONAL, and the whole block may be absent. Absent means
+ * "no account was made", never "assume one was" — that is the rule these two
+ * functions exist to make testable, because the failure it prevents (offering a
+ * dashboard to somebody who has none) is silent.
  */
 import { doorForSource, type TrialDoor } from '@/lib/trial/trialEvents'
 
@@ -21,8 +27,6 @@ export interface VerifiedAccount {
   userId?: string
   /** True only when this verification is what created the account. */
   created?: boolean
-  /** A one-shot signed link into the dashboard. Null when none could be minted. */
-  signInUrl?: string | null
 }
 
 export interface VerifyCodeResponse {
@@ -30,6 +34,10 @@ export interface VerifyCodeResponse {
   error?: string
   account?: VerifiedAccount
   trial?: { state?: string; granted?: boolean }
+  /** The response set session cookies; the browser is signed in. */
+  signedIn?: boolean
+  /** Where the caller should go next. `/dashboard`, or a station they picked. */
+  redirectTo?: string
 }
 
 export interface DashboardOffer {
@@ -44,17 +52,13 @@ export interface DashboardOffer {
  */
 const LABEL = 'Open your dashboard · 4 more stations, five days'
 
-/**
- * Where the sign-in link goes when none was minted. The address is verified and
- * the account exists, so the ordinary code-based sign-in works — it is one more
- * step, not a dead end.
- */
-const FALLBACK_HREF = '/auth/sign-in'
+/** The dashboard. They are signed in; there is nothing between them and it. */
+const DASHBOARD = '/dashboard'
 
 /** The offer to render under the report button, or null to render nothing. */
 export function dashboardOffer(account: VerifiedAccount | null | undefined): DashboardOffer | null {
   if (!account) return null
-  return { href: account.signInUrl || FALLBACK_HREF, label: LABEL }
+  return { href: DASHBOARD, label: LABEL }
 }
 
 /**

@@ -50,7 +50,7 @@ interface Bank {
 }
 
 /**
- * A stand-in for the PostgREST builder, in the shape app/try/talk's test uses:
+ * A stand-in for the PostgREST builder:
  * every filter returns the builder and records itself, and awaiting it answers
  * from what the test set up. The builder is a thenable because that is what
  * supabase-js returns — the query runs when it is awaited, not on a terminal
@@ -96,12 +96,12 @@ function fakeAdmin(bank: Bank) {
 }
 
 describe('a picker row', () => {
-  it('sends Start to the one-click door with the station on it', () => {
-    expect(startHref('abc-123')).toBe('/try/talk?station=abc-123')
+  it('sends Start to the free account form with the station on it', () => {
+    expect(startHref('abc-123')).toBe('/free/start?station=abc-123')
   })
 
   it('escapes an id rather than pasting it into the query string', () => {
-    expect(startHref('a b&c')).toBe('/try/talk?station=a%20b%26c')
+    expect(startHref('a b&c')).toBe('/free/start?station=a%20b%26c')
   })
 
   it('reads "<domain> · 12 min"', () => {
@@ -152,7 +152,7 @@ describe('what /free lists', () => {
 
     expect(stations.map((station) => station.id)).toEqual([ROWS[0].id, ROWS[1].id])
     for (const station of stations) {
-      expect(station.href).toBe(`/try/talk?station=${station.id}`)
+      expect(station.href).toBe(`/free/start?station=${station.id}`)
     }
     expect(stations[0].title).toBe(ROWS[0].title)
     expect(stations[1].meta).toContain('telephone')

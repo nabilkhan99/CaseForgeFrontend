@@ -31,6 +31,12 @@ export default function TryFeedbackPage() {
   const [unlocked, setUnlocked] = useState(false);
   const [checkingGate, setCheckingGate] = useState(true);
   /**
+   * The address that unlocked this report, when this browser knows it — from
+   * the gate they have just come through, or from the last time they did. Only
+   * used to prefill /free/open, so a miss costs one typed address.
+   */
+  const [email, setEmail] = useState<string | null>(null);
+  /**
    * Filled in by the report once it has been marked, so the bar can say whether
    * this station was passed rather than only that it was sat. Null until then —
    * the bar is not rendered on a guess.
@@ -45,7 +51,9 @@ export default function TryFeedbackPage() {
     let cancelled = false;
 
     try {
-      if (window.localStorage.getItem(TRIAL_EMAIL_KEY)) {
+      const stored = window.localStorage.getItem(TRIAL_EMAIL_KEY);
+      if (stored) {
+        setEmail(stored);
         setUnlocked(true);
         setCheckingGate(false);
         return;
@@ -72,9 +80,10 @@ export default function TryFeedbackPage() {
     };
   }, [sessionId]);
 
-  function handleUnlock(email: string) {
+  function handleUnlock(verifiedEmail: string) {
+    setEmail(verifiedEmail);
     try {
-      window.localStorage.setItem(TRIAL_EMAIL_KEY, email);
+      window.localStorage.setItem(TRIAL_EMAIL_KEY, verifiedEmail);
       window.localStorage.setItem(TRIAL_USED_KEY, '1');
       window.localStorage.setItem(TRIAL_FEEDBACK_URL_KEY, `/try/feedback/${sessionId}`);
     } catch {
@@ -122,23 +131,14 @@ export default function TryFeedbackPage() {
         onResult={(overall) => setProgress(trialStationsPassed(overall.verdict, overall.weighted_score))}
       />
 
-      {/* The offer, at the moment the product has just proved itself. */}
+      {/* One way on, and it is the free thing they already own rather than the
+          paid thing they might buy — hence above the pricing table. Verifying
+          the address created the account and granted the five, so the other
+          four stations exist; this is the way into them from a browser that may
+          not be the one that sat this consultation. */}
       <div className="mx-auto max-w-[1180px] px-5 pb-6 sm:px-7 lg:px-10">
         <div className="border-t border-[#E4DDC9] pt-10 text-center">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#854F0B] sm:text-xs">
-            That was one of your five free stations
-          </p>
-          <h2 className="mx-auto mt-2 max-w-xl text-2xl font-semibold tracking-tight text-heading sm:text-3xl">
-            Keep practising until you pass — or we pay you £500.
-          </h2>
-          {/* Verifying the address created the account and granted the five, so
-              the next four stations already exist — they just need a way in
-              that does not depend on this browser. Above the pricing table
-              deliberately: the free thing they already own comes before the
-              paid thing they might buy. */}
-          <div className="mt-7">
-            <OpenDashboardButton sessionId={sessionId} />
-          </div>
+          <OpenDashboardButton email={email} />
         </div>
       </div>
 

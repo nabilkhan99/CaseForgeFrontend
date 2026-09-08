@@ -29,8 +29,13 @@ import { trackTrialAccountCreated } from '@/lib/trial/trialEvents';
  * pattern is ~30 lines of markup and one handler.
  *
  * On success the server has already created the account, claimed anything that
- * address sat as a guest, granted the five and minted a one-time sign-in URL.
- * All that is left here is to follow it.
+ * address sat as a guest, granted the five AND set the session cookies on the
+ * response. All that is left here is to navigate to where it says.
+ *
+ * Nothing on this screen emails a sign-in link any more. It used to, as the
+ * fallback when no one-time URL could be minted — a second inbox trip for
+ * somebody who had just read a code out of the first one. A password on the
+ * ordinary sign-in is the fallback now.
  */
 
 type Step = 'details' | 'code' | 'stranded';
@@ -50,7 +55,11 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 interface VerifyBody {
   ok?: true;
   error?: string;
-  account?: { userId: string; created: boolean; signInUrl: string | null } | null;
+  /** The response carried session cookies. */
+  signedIn?: boolean;
+  /** Where to go now that it did. */
+  redirectTo?: string;
+  account?: { userId: string; created: boolean } | null;
 }
 
 export interface FreeSignUpBoxProps {
@@ -74,7 +83,6 @@ export default function FreeSignUpBox({ initialEmail, codeAlreadySent }: FreeSig
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [cooldown, setCooldown] = useState(0);
-  const [resent, setResent] = useState(false);
   const codeInputRef = useRef<HTMLInputElement>(null);
 
   const cleanEmail = email.trim().toLowerCase();
@@ -145,13 +153,14 @@ export default function FreeSignUpBox({ initialEmail, codeAlreadySent }: FreeSig
       // Awaited so the capture flushes before the navigation tears the page down.
       await trackTrialAccountCreated('free');
 
-      const signInUrl = data.account?.signInUrl;
-      if (signInUrl) {
-        window.location.assign(signInUrl);
+      if (data.signedIn && data.redirectTo) {
+        // A full navigation: the cookies arrived on the response above and
+        // every server component past here needs to be rendered with them.
+        window.location.assign(data.redirectTo);
         return;
       }
-      // Verified, account made, grant made — but no link to walk through. Rare,
-      // and recoverable: the same link can be emailed. Never a dead end.
+      // Verified, account made, grant made — but no session. Rare, and
+      // recoverable on the ordinary sign-in. Never a dead end.
       setStep('stranded');
     } catch {
       setError('Something went wrong — please try again');
@@ -165,23 +174,6 @@ export default function FreeSignUpBox({ initialEmail, codeAlreadySent }: FreeSig
     setCode(digits);
     setError(null);
     if (digits.length === CODE_LENGTH) void submitCode(digits);
-  }
-
-  async function emailMeALink() {
-    setSubmitting(true);
-    try {
-      await fetch('/api/try/dashboard-link', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail }),
-      });
-    } catch {
-      // The route answers identically whatever happens, so there is nothing to
-      // branch on and the copy below already says "if that address…".
-    } finally {
-      setSubmitting(false);
-      setResent(true);
-    }
   }
 
   return (
@@ -342,27 +334,15 @@ export default function FreeSignUpBox({ initialEmail, codeAlreadySent }: FreeSig
             You&apos;re in
           </p>
           <p className="mx-auto mt-3 mb-5 max-w-sm text-[14px] leading-relaxed text-muted">
-            {resent
-              ? `A sign-in link is on its way to ${cleanEmail}.`
-              : 'Your five stations are ready. We could not open your dashboard automatically — we can email you a link instead.'}
+            Your five stations are ready. We could not open your dashboard automatically —
+            sign in with your password and it is there.
           </p>
-          {!resent && (
-            <button
-              type="button"
-              onClick={() => void emailMeALink()}
-              disabled={submitting}
-              className="cta-button w-full px-6 py-4 text-base"
-            >
-              {submitting ? 'Sending…' : 'Email me a sign-in link'}
-            </button>
-          )}
-          <p className="mt-4 text-[13px] text-muted">
-            Already set a password?{' '}
-            <Link href="/auth/sign-in" className="font-semibold text-primary">
-              Sign in
-            </Link>
-            .
-          </p>
+          <Link
+            href={`/auth/sign-in?email=${encodeURIComponent(cleanEmail)}`}
+            className="cta-button w-full px-6 py-4 text-base"
+          >
+            Sign in
+          </Link>
         </div>
       )}
     </motion.div>
