@@ -2,7 +2,7 @@ import { trackEvent } from '@/lib/analytics'
 import type { TrialSource } from '@/lib/commerce/trialAccess'
 
 /**
- * The five-station trial's analytics vocabulary, in one place.
+ * The free trial's analytics vocabulary, in one place.
  *
  * Event names are strings that have to match between the code that fires them
  * and the PostHog insight that reads them, and they are fired from surfaces
@@ -21,7 +21,7 @@ export const TRIAL_ACCOUNT_CREATED = 'trial_account_created'
 /** One of the five was genuinely marked. */
 export const TRIAL_STATION_COMPLETED = 'trial_station_completed'
 
-/** The trial ended and the two-plan wall was shown. */
+/** The five days ran out and the two-plan wall was shown. */
 export const TRIAL_WALL_HIT = 'trial_wall_hit'
 
 /**
@@ -51,22 +51,39 @@ export function doorForSource(source: TrialSource): TrialDoor {
   }
 }
 
-/** Why the trial ended. Mirrors TrialAccess.reason. */
-export type TrialWallReason = 'allowance' | 'expiry'
+/**
+ * Why the trial ended. Mirrors TrialAccess.reason.
+ *
+ * ONE VALUE since 7 September 2026. Attempts are unlimited, so there is no
+ * allowance to exhaust and expiry is the only way to reach the wall. Kept as a
+ * property rather than dropped from the event: the PostHog insight already
+ * filters on it, and a funnel that silently stops carrying a dimension is
+ * harder to read than one that carries a constant.
+ */
+export type TrialWallReason = 'expiry'
 
 export function trackTrialAccountCreated(door: TrialDoor): Promise<void> {
   return trackEvent(TRIAL_ACCOUNT_CREATED, { door })
 }
 
 /**
- * @param index Which of the five this was, 1-based.
+ * @param index How many of the five cases they have now tried, 1-based — so
+ *   "did people get past the second case" is one filter on this property.
  * @param verdict The band it reached, as `session_results.verdict` records it.
+ * @param attempt Which go at THIS case, 1-based. New with unlimited attempts,
+ *   and the property that answers the question the whole offer turns on: does
+ *   a second run at the same case score better than the first. Without it a
+ *   repeat is indistinguishable from a first sitting.
  */
-export function trackTrialStationCompleted(index: number, verdict: string): Promise<void> {
-  return trackEvent(TRIAL_STATION_COMPLETED, { index, verdict })
+export function trackTrialStationCompleted(
+  index: number,
+  verdict: string,
+  attempt: number,
+): Promise<void> {
+  return trackEvent(TRIAL_STATION_COMPLETED, { index, verdict, attempt })
 }
 
-export function trackTrialWallHit(reason: TrialWallReason): Promise<void> {
+export function trackTrialWallHit(reason: TrialWallReason = 'expiry'): Promise<void> {
   return trackEvent(TRIAL_WALL_HIT, { reason })
 }
 
@@ -100,17 +117,21 @@ function claimReport(sessionId: string): boolean {
  * Report that a trial account has just had one of its five marked.
  *
  * Call it when a result lands on the feedback report. It answers "is this a
- * trial account, and which of the five was that" ITSELF, from
+ * trial account, which of the five was that, and which go at it" ITSELF, from
  * `/api/subscription`, rather than making every caller thread trial state
  * through — the report is rendered in three places and only one of them knows
  * anything about the trial.
  *
- * `index` is the used count AFTER this mark, read back from the server rather
- * than incremented client-side: consumption is derived from `session_results`
- * (see lib/commerce/trialAccess.ts), and the row exists by the time the report
- * has a result to show, so the server's count already includes it. Floored at 1
- * because a session that started before the grant does not count against it —
- * an "index: 0 station completed" would be a nonsense row in a funnel.
+ * BOTH NUMBERS COME FROM THE SERVER, in the one request this already made.
+ * `index` is the distinct cases tried and `attempt` is the runs at this
+ * station, both derived from `clinical_sessions` (see
+ * lib/commerce/trialAccess.ts#countTrialUsage) — and both already include the
+ * consultation that has just been marked, because its row is `completed` by the
+ * time there is a result to show. Counting either in the browser would produce
+ * a number that disagrees with the dashboard the trainee is about to open.
+ *
+ * Floored at 1: a station whose usage row could not be read still happened, and
+ * an "attempt 0" is a nonsense row in a funnel.
  *
  * Silent for everybody who is not on a trial (`/api/subscription` sends `trial`
  * only when the grant is what decides access), and silent on any failure: this
@@ -119,6 +140,8 @@ function claimReport(sessionId: string): boolean {
 export async function reportTrialStationCompleted(
   sessionId: string,
   verdict: string,
+  /** The case that was just sat, so the attempt number can be looked up. */
+  stationId?: string | null,
 ): Promise<void> {
   if (typeof window === 'undefined') return
   if (!claimReport(sessionId)) return
@@ -126,10 +149,17 @@ export async function reportTrialStationCompleted(
   try {
     const res = await fetch('/api/subscription')
     if (!res.ok) return
-    const data = (await res.json()) as { trial?: { used?: number } | null }
-    const used = data?.trial?.used
-    if (typeof used !== 'number') return
-    await trackTrialStationCompleted(Math.max(1, used), verdict)
+    const data = (await res.json()) as {
+      trial?: { casesTried?: number; attemptsByStation?: Record<string, number> } | null
+    }
+    const trial = data?.trial
+    if (!trial || typeof trial.casesTried !== 'number') return
+    const attempts = stationId ? trial.attemptsByStation?.[stationId] : undefined
+    await trackTrialStationCompleted(
+      Math.max(1, trial.casesTried),
+      verdict,
+      Math.max(1, typeof attempts === 'number' ? attempts : 1),
+    )
   } catch {
     // No event rather than a broken report.
   }
