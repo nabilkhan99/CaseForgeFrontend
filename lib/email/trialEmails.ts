@@ -2,7 +2,7 @@ import { BrevoClient, BrevoError } from '@getbrevo/brevo'
 import { BRAND, button, emailShell, fallbackLink, paragraph, row, signoff } from './chrome'
 
 /**
- * The two emails the five-station free trial sends: one on day 3, one on day 5.
+ * The two emails the free trial sends: one on day 3, one on day 5.
  *
  * WHAT THESE ARE NOT. There is no AI in this file. Every sentence about a
  * trainee's results is composed here, from counts, by rules you can read — a
@@ -13,7 +13,9 @@ import { BRAND, button, emailShell, fallbackLink, paragraph, row, signoff } from
  *
  * COPY RULES, and they are rules rather than taste:
  *   * never the word "trial" at the reader (decision 2 in the handoff) — it is
- *     "five free stations", and what has run out is stations and days;
+ *     "five cases, unlimited attempts", and what runs out is DAYS. Since the
+ *     7 September rewrite nothing counts down but the calendar, so "N stations
+ *     left" is not merely off-brand, it describes an offer we no longer make;
  *   * no invented scarcity. The deadline is real (`expires_at`) and is stated
  *     as a date; nothing counts down, nothing is "about to close";
  *   * NO GUARANTEE WORDING. The £500 pass guarantee belongs to plan holders.
@@ -303,12 +305,28 @@ export function trialPatternLine(marks: readonly TrialMark[]): string | null {
   return `${capitalised} so far, and ${domain.label} came up ${timesPhrase(domain.count, domain.total)}.`
 }
 
-/** Their five days' work in one short paragraph. Deterministic; no judgement added. */
-export function trialResultsParagraph(marks: readonly TrialMark[], allowance: number): string {
+/**
+ * Their five days' work in one short paragraph. Deterministic; no judgement
+ * added.
+ *
+ * CONSULTATIONS AND CASES ARE COUNTED SEPARATELY, and that is the whole change
+ * from the version this replaced. Attempts are unlimited, so "you ran three of
+ * your five" is no longer a sentence that can be written — three marks might be
+ * three cases or three goes at one. Saying both numbers is the only honest
+ * summary, and it is also the more flattering one for the reader who did the
+ * thing the offer was designed to encourage.
+ */
+export function trialResultsParagraph(
+  marks: readonly TrialMark[],
+  casesTried: number,
+  casesTotal: number,
+): string {
   if (marks.length === 0) {
     return 'You did not get to a marked consultation this time, so there is nothing scored to look back on.'
   }
-  const ran = `You ran ${numberWord(marks.length)} of your ${numberWord(allowance)}: ${describeVerdicts(marks)}.`
+  const consultations = `${numberWord(marks.length)} ${plural(marks.length, 'consultation', 'consultations')}`
+  const across = `across ${numberWord(Math.max(1, casesTried))} of the ${numberWord(casesTotal)} cases`
+  const ran = `You ran ${consultations} ${across}: ${describeVerdicts(marks)}.`
   const domain = dominantDomain(marks)
   if (!domain) return ran
   return `${ran} ${domain.label.charAt(0).toUpperCase() + domain.label.slice(1)} came up as the thing to change ${timesPhrase(domain.count, domain.total)}.`
@@ -334,8 +352,12 @@ export function formatEndDate(date: Date): string {
 export interface TrialDay3Input {
   /** As given at sign-up; titles stripped, first word used. */
   firstName?: string | null
-  /** Stations still unspent. The subject line's N. */
-  remaining: number
+  /** Whole days to `endsAt`, from the runner's own clock. The subject line's N. */
+  daysLeft: number
+  /** How many of the cases they have sat. */
+  casesTried?: number
+  /** How many cases the trial opens. Defaults to five. */
+  casesTotal?: number
   /** `trial_grants.expires_at` — the real end of the window. */
   endsAt: Date
   /** Their marks so far, newest or oldest first — order is not used. */
@@ -352,25 +374,32 @@ export interface TrialDay3Input {
  * went" — so it says the number and the date and gets out of the way.
  */
 export function buildTrialDay3Email(input: TrialDay3Input): RenderedEmail {
-  const remaining = Math.max(0, Math.trunc(input.remaining))
+  const daysLeft = Math.max(0, Math.trunc(input.daysLeft))
+  const casesTotal = input.casesTotal ?? 5
+  const casesTried = Math.max(0, Math.min(input.casesTried ?? 0, casesTotal))
   const marks = input.marks ?? []
   const greeting = greetingFor(input.firstName)
   const endsOn = formatEndDate(input.endsAt)
-  const stations = `${numberWord(remaining)} ${plural(remaining, 'station', 'stations')}`
+  const days = `${numberWord(daysLeft)} ${plural(daysLeft, 'day', 'days')}`
 
-  const subject = `Two days and ${remaining} ${plural(remaining, 'station', 'stations')} left`
+  // Days, never stations. The only thing running out is the calendar.
+  const subject = `${days.charAt(0).toUpperCase()}${days.slice(1)} left of your ${numberWord(casesTotal)} cases`
   const cta = 'Open your dashboard'
 
   const lines = [
-    `You have ${stations} left, and your five days end on ${endsOn}.`,
+    `You have ${days} left — your ${numberWord(casesTotal)} cases stay open until ${endsOn}.`,
     trialPatternLine(marks),
-    'Any case in the bank counts, and you can run the same one twice.',
+    // The sentence the whole rewrite exists to make true. A trainee rationing
+    // five goes across five cases is doing the opposite of what helps them.
+    casesTried > 0
+      ? `You have tried ${numberWord(casesTried)} of the ${numberWord(casesTotal)}. Run any of them again — there is no limit on attempts.`
+      : `All ${numberWord(casesTotal)} are waiting on your dashboard, and you can run each of them as many times as you like.`,
   ].filter((line): line is string => Boolean(line))
 
   const html = emailShell({
     title: subject,
-    preheader: `${stations} still to run, until ${endsOn}.`,
-    heading: 'Two days left',
+    preheader: `Your ${numberWord(casesTotal)} cases stay open until ${endsOn}.`,
+    heading: `${days.charAt(0).toUpperCase()}${days.slice(1)} left`,
     rows: [
       row(
         [paragraph(escapeHtml(greeting)), ...lines.map((line) => paragraph(escapeHtml(line)))].join(
@@ -405,10 +434,12 @@ export function buildTrialDay3Email(input: TrialDay3Input): RenderedEmail {
 
 export interface TrialDay5Input {
   firstName?: string | null
-  /** Every genuinely-marked consultation of the five. */
+  /** Every genuinely-marked consultation. Can exceed `casesTotal` — attempts are unlimited. */
   marks?: readonly TrialMark[]
-  /** What the grant was worth, so the copy never hardcodes the five. */
-  allowance?: number
+  /** How many of the cases they sat. */
+  casesTried?: number
+  /** How many cases the trial opened, so the copy never hardcodes the five. */
+  casesTotal?: number
   /** Absolute URL of the dashboard, where the two-plan wall now renders. */
   dashboardUrl: string
 }
@@ -424,14 +455,16 @@ export interface TrialDay5Input {
  */
 export function buildTrialDay5Email(input: TrialDay5Input): RenderedEmail {
   const marks = input.marks ?? []
-  const allowance = input.allowance ?? 5
+  const casesTotal = input.casesTotal ?? 5
+  const casesTried = Math.max(0, Math.min(input.casesTried ?? 0, casesTotal))
   const greeting = greetingFor(input.firstName)
 
-  const subject = 'Your five stations have ended'
+  // Days, not stations: the calendar is the only thing that ends a trial now.
+  const subject = 'Your five days are up'
   const cta = 'Open your dashboard'
 
   const lines = [
-    trialResultsParagraph(marks, allowance),
+    trialResultsParagraph(marks, casesTried, casesTotal),
     'Everything you did is still there — your reports, your board and your development picture. It is the stations that stop, not the account.',
     'If you want to keep going, the two plans that fit your exam date are on your dashboard.',
   ]
@@ -439,7 +472,7 @@ export function buildTrialDay5Email(input: TrialDay5Input): RenderedEmail {
   const html = emailShell({
     title: subject,
     preheader: 'What you did, and what stays.',
-    heading: 'Your five stations have ended',
+    heading: subject,
     rows: [
       row(
         [paragraph(escapeHtml(greeting)), ...lines.map((line) => paragraph(escapeHtml(line)))].join(

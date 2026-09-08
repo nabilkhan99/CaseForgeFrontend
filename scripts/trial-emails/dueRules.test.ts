@@ -12,18 +12,18 @@ const DAY = 86_400_000
 const STARTED = new Date('2026-09-01T09:00:00Z')
 const EXPIRES = new Date(STARTED.getTime() + 5 * DAY)
 
-/** A trainee three days in, two stations marked, both near misses. */
+/** A trainee three days in, two of the five cases sat, both near misses. */
 function candidate(overrides: Partial<TrialEmailCandidate> = {}): TrialEmailCandidate {
   return {
     userId: 'user-1',
     email: 'trainee@nhs.net',
     firstName: 'Jane',
-    allowance: 5,
+    casesTotal: 5,
+    casesTried: 2,
     windowDays: 5,
     startedAt: STARTED,
     expiresAt: EXPIRES,
     marks: [{ verdict: 'Bare Fail' }, { verdict: 'Bare Fail' }],
-    lastMarkAt: new Date(STARTED.getTime() + 2 * DAY),
     hasPurchase: false,
     alreadySent: [],
     ...overrides,
@@ -73,13 +73,21 @@ describe('windowEndsAt', () => {
 })
 
 describe('decideTrialEmail — day 3', () => {
-  it('is due on day 3 with stations left', () => {
+  it('is due on day 3, carrying the days left and the cases tried', () => {
     expect(decideTrialEmail(candidate(), at(3))).toEqual({
       due: true,
       kind: 'day3',
-      remaining: 3,
+      daysLeft: 2,
+      casesTried: 2,
+      casesTotal: 5,
       endsAt: EXPIRES,
     })
+  })
+
+  it('rounds the days left up, so an afternoon still counts as a day', () => {
+    // The subject line says the number. A window with eight hours in it must
+    // not tell somebody they have zero days left of a trial they can still use.
+    expect(decideTrialEmail(candidate(), at(3.7))).toMatchObject({ daysLeft: 2 })
   })
 
   it('is not due before day 3', () => {
@@ -100,30 +108,46 @@ describe('decideTrialEmail — day 3', () => {
     })
   })
 
-  it('is not sent to an account that has spent the allowance', () => {
-    const spent = candidate({
-      marks: Array.from({ length: 5 }, () => ({ verdict: 'Bare Fail' })),
+  it('is still due for somebody who has sat all five cases', () => {
+    // THE RULE THAT CHANGED. Under the allowance, five marks ended the trial
+    // and this person got day 5 on day 3. Attempts are unlimited now, so
+    // trying every case is not using anything up — they have two days left and
+    // the email that says so is the useful one.
+    const everyCase = candidate({
+      casesTried: 5,
+      marks: Array.from({ length: 9 }, () => ({ verdict: 'Bare Fail' })),
     })
-    // Day 5's email, on day 3: the trial is over even though the clock is not.
-    expect(decideTrialEmail(spent, at(3))).toMatchObject({ due: true, kind: 'day5' })
+    expect(decideTrialEmail(everyCase, at(3))).toMatchObject({
+      due: true,
+      kind: 'day3',
+      casesTried: 5,
+    })
+  })
+
+  it('clamps cases tried to the number of cases there are', () => {
+    expect(decideTrialEmail(candidate({ casesTried: 9 }), at(3))).toMatchObject({ casesTried: 5 })
   })
 })
 
 describe('decideTrialEmail — day 5', () => {
-  it('is due once the window has run out', () => {
+  it('is due once the window has run out, and only then', () => {
+    // EXPIRY IS THE WHOLE RULE. There is no allowance left to exhaust, so the
+    // calendar is the only thing that can bring somebody here.
     expect(decideTrialEmail(candidate(), at(5))).toMatchObject({
       due: true,
       kind: 'day5',
-      remaining: 3,
+      daysLeft: 0,
+      casesTried: 2,
+      casesTotal: 5,
     })
   })
 
-  it('is due the moment the fifth station is marked, whatever the clock says', () => {
-    const spent = candidate({
-      marks: Array.from({ length: 5 }, () => ({ verdict: 'Pass' })),
-      lastMarkAt: at(1),
+  it('is never due early, however much practice has been done', () => {
+    const busy = candidate({
+      casesTried: 5,
+      marks: Array.from({ length: 20 }, () => ({ verdict: 'Pass' })),
     })
-    expect(decideTrialEmail(spent, at(1.1))).toMatchObject({ due: true, kind: 'day5', remaining: 0 })
+    expect(decideTrialEmail(busy, at(4.9))).not.toMatchObject({ kind: 'day5' })
   })
 
   it('is not sent twice', () => {
@@ -140,15 +164,14 @@ describe('decideTrialEmail — day 5', () => {
     })
   })
 
-  it('measures staleness from the last mark when the allowance ran out first', () => {
-    const spent = candidate({
-      marks: Array.from({ length: 5 }, () => ({ verdict: 'Pass' })),
-      lastMarkAt: at(1),
+  it('measures staleness from the end of the window, for everybody', () => {
+    // The old rule measured from the last mark when the allowance had run out
+    // first. With expiry as the only ending there is one clock, which is the
+    // one on the grant.
+    expect(decideTrialEmail(candidate(), at(5 + DAY5_STALE_AFTER_DAYS - 0.1))).toMatchObject({
+      due: true,
+      kind: 'day5',
     })
-    // Day 1 + 14 days is day 15, so day 15.1 is stale even though the window
-    // itself only ended on day 5.
-    expect(decideTrialEmail(spent, at(15.1))).toEqual({ due: false, reason: 'day5_stale' })
-    expect(decideTrialEmail(spent, at(14.9))).toMatchObject({ due: true, kind: 'day5' })
   })
 })
 
@@ -172,7 +195,7 @@ describe('decideTrialEmail — exclusions', () => {
   })
 
   it('leaves a grant whose window never opened alone, however old it is', () => {
-    const unstarted = candidate({ startedAt: null, expiresAt: null, marks: [], lastMarkAt: null })
+    const unstarted = candidate({ startedAt: null, expiresAt: null, marks: [], casesTried: 0 })
     expect(decideTrialEmail(unstarted, at(90))).toEqual({ due: false, reason: 'not_started' })
   })
 })
@@ -181,7 +204,12 @@ describe('selectDueTrialEmails', () => {
   it('splits a batch into who is due what, and who is not and why', () => {
     const batch: TrialEmailCandidate[] = [
       candidate({ userId: 'due-day3' }),
-      candidate({ userId: 'due-day5', marks: Array.from({ length: 5 }, () => ({ verdict: 'Fail' })) }),
+      // Expired four days ago, so day 5 is what they are due.
+      candidate({
+        userId: 'due-day5',
+        startedAt: at(-2),
+        expiresAt: at(3),
+      }),
       candidate({ userId: 'bought', hasPurchase: true }),
       candidate({ userId: 'internal', email: 'hello@fourteenfisherman.com' }),
       candidate({ userId: 'sent', alreadySent: ['day3'] }),

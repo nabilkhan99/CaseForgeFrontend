@@ -136,60 +136,108 @@ describe('trialPatternLine', () => {
 })
 
 describe('trialResultsParagraph', () => {
-  it('reads as one sentence of counts plus the domain to fix', () => {
+  it('counts consultations and cases separately', () => {
+    // The sentence the rewrite exists to make possible. Three marks across two
+    // cases is not "three of your five" — under unlimited attempts that phrase
+    // cannot be written at all without guessing which number it means.
     expect(
-      trialResultsParagraph([nearMissOnManagement, nearMissOnManagement, passOnGathering], 5),
+      trialResultsParagraph([nearMissOnManagement, nearMissOnManagement, passOnGathering], 2, 5),
     ).toBe(
-      'You ran three of your five: one pass and two near misses. Clinical management came up as the thing to change in two of them.',
+      'You ran three consultations across two of the five cases: one pass and two near misses. Clinical management came up as the thing to change in two of them.',
     )
   })
 
+  it('reads correctly when somebody ran one case several times', () => {
+    // The behaviour the offer is designed to encourage, and the one the old
+    // copy could not describe: four goes at a single case.
+    expect(
+      trialResultsParagraph(
+        [nearMissOnManagement, nearMissOnManagement, nearMissOnManagement, nearMissOnManagement],
+        1,
+        5,
+      ),
+    ).toContain('You ran four consultations across one of the five cases')
+  })
+
   it('handles a window that ended with nothing marked', () => {
-    expect(trialResultsParagraph([], 5)).toContain('did not get to a marked consultation')
+    expect(trialResultsParagraph([], 0, 5)).toContain('did not get to a marked consultation')
   })
 })
 
 describe('buildTrialDay3Email', () => {
-  it('puts the stations left in the subject, pluralised', () => {
-    const three = buildTrialDay3Email({
+  it('counts DAYS in the subject, never stations', () => {
+    const email = buildTrialDay3Email({
       firstName: 'Dr Jane Smith',
-      remaining: 3,
+      daysLeft: 2,
+      casesTried: 2,
       endsAt: ENDS_AT,
       marks: [nearMissOnManagement, nearMissOnManagement],
       dashboardUrl: DASHBOARD,
     })
-    expect(three.subject).toBe('Two days and 3 stations left')
-
-    const one = buildTrialDay3Email({
-      firstName: 'Jane',
-      remaining: 1,
-      endsAt: ENDS_AT,
-      marks: [nearMissOnManagement],
-      dashboardUrl: DASHBOARD,
-    })
-    expect(one.subject).toBe('Two days and 1 station left')
+    expect(email.subject).toBe('Two days left of your five cases')
+    expect(email.subject).not.toMatch(/station/i)
   })
 
-  it('with one mark: states what is left and the end date, and claims no pattern', () => {
+  it('says the number of days out loud, singular on the last one', () => {
+    const one = buildTrialDay3Email({
+      firstName: 'Jane',
+      daysLeft: 1,
+      endsAt: ENDS_AT,
+      dashboardUrl: DASHBOARD,
+    })
+    expect(one.subject).toBe('One day left of your five cases')
+  })
+
+  it('with one mark: states the days, the end date, and claims no pattern', () => {
     const email = buildTrialDay3Email({
       firstName: 'Jane',
-      remaining: 4,
+      daysLeft: 2,
+      casesTried: 1,
       endsAt: ENDS_AT,
       marks: [nearMissOnManagement],
       dashboardUrl: DASHBOARD,
     })
     expect(email.greeting).toBe('Hi Jane,')
     expect(email.text).toContain('Hi Jane,')
-    expect(email.text).toContain('You have four stations left, and your five days end on Friday 11 September.')
+    expect(email.text).toContain(
+      'You have two days left — your five cases stay open until Friday 11 September.',
+    )
     expect(email.text).not.toContain('so far')
     expect(email.html).toContain('Open your dashboard')
     expect(email.html).toContain(DASHBOARD)
   })
 
+  it('says attempts are unlimited, in as many words', () => {
+    // The single most important thing this email can say to somebody who is
+    // rationing five goes across five cases.
+    const email = buildTrialDay3Email({
+      firstName: 'Jane',
+      daysLeft: 2,
+      casesTried: 2,
+      endsAt: ENDS_AT,
+      dashboardUrl: DASHBOARD,
+    })
+    expect(email.text).toContain(
+      'You have tried two of the five. Run any of them again — there is no limit on attempts.',
+    )
+  })
+
+  it('invites them in when they have not started a case yet', () => {
+    const email = buildTrialDay3Email({
+      daysLeft: 2,
+      casesTried: 0,
+      endsAt: ENDS_AT,
+      dashboardUrl: DASHBOARD,
+    })
+    expect(email.text).toContain('as many times as you like')
+    expect(email.text).not.toContain('You have tried')
+  })
+
   it('with three marks: adds one line about the pattern', () => {
     const email = buildTrialDay3Email({
       firstName: null,
-      remaining: 2,
+      daysLeft: 2,
+      casesTried: 1,
       endsAt: ENDS_AT,
       marks: [nearMissOnManagement, nearMissOnManagement, nearMissOnManagement],
       dashboardUrl: DASHBOARD,
@@ -202,7 +250,7 @@ describe('buildTrialDay3Email', () => {
 
   it('renders a full HTML document long enough for the send guard', () => {
     const email = buildTrialDay3Email({
-      remaining: 5,
+      daysLeft: 2,
       endsAt: ENDS_AT,
       dashboardUrl: DASHBOARD,
     })
@@ -214,7 +262,7 @@ describe('buildTrialDay3Email', () => {
   it('escapes a name that came out of a form', () => {
     const email = buildTrialDay3Email({
       firstName: '<script>alert(1)</script>',
-      remaining: 2,
+      daysLeft: 2,
       endsAt: ENDS_AT,
       dashboardUrl: DASHBOARD,
     })
@@ -224,16 +272,19 @@ describe('buildTrialDay3Email', () => {
 })
 
 describe('buildTrialDay5Email', () => {
-  it('carries the fixed subject, the results and what stays', () => {
+  it('is about the days running out, not stations being spent', () => {
     const email = buildTrialDay5Email({
       firstName: 'Dr Amina Patel',
       marks: [nearMissOnManagement, nearMissOnManagement, passOnGathering],
-      allowance: 5,
+      casesTried: 2,
+      casesTotal: 5,
       dashboardUrl: DASHBOARD,
     })
-    expect(email.subject).toBe('Your five stations have ended')
+    expect(email.subject).toBe('Your five days are up')
     expect(email.greeting).toBe('Hi Amina,')
-    expect(email.text).toContain('You ran three of your five: one pass and two near misses.')
+    expect(email.text).toContain(
+      'You ran three consultations across two of the five cases: one pass and two near misses.',
+    )
     expect(email.text).toContain('Clinical management came up as the thing to change in two of them.')
     expect(email.text).toContain('your reports, your board and your development picture')
     expect(email.html).toContain('Open your dashboard')
@@ -259,7 +310,8 @@ describe('copy rules', () => {
   const emails = [
     buildTrialDay3Email({
       firstName: 'Jane',
-      remaining: 2,
+      daysLeft: 2,
+      casesTried: 2,
       endsAt: ENDS_AT,
       marks: [nearMissOnManagement, passOnGathering],
       dashboardUrl: DASHBOARD,
@@ -282,6 +334,14 @@ describe('copy rules', () => {
 
     it(`never says "trial" at the reader — ${email.subject}`, () => {
       expect(body).not.toMatch(/\btrials?\b/i)
+    })
+
+    it(`never counts stations left — ${email.subject}`, () => {
+      // The old offer was five consultations and the copy counted them down.
+      // Nothing but the calendar runs out now, so a "stations left" sentence
+      // would be describing a product we do not sell.
+      expect(body).not.toMatch(/stations? (?:left|remaining)/i)
+      expect(body).not.toMatch(/\d+ of (?:your )?\d+ stations/i)
     })
 
     it(`invents no scarcity and quotes nobody — ${email.subject}`, () => {

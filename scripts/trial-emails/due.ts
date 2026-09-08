@@ -28,15 +28,16 @@
  * Nabil's explicit go-ahead, every time. A daily dry run he reads before typing
  * --send is that go-ahead, made concrete.
  *
- * THE DAY-3 WINDOW IS 24 HOURS. Its subject says "two days left", which is true
+ * THE DAY-3 WINDOW IS 24 HOURS. Its subject counts the days left, which is true
  * on day 3 and false on day 4, so a day this is not run is a day whose cohort
  * gets no day-3 email at all (they still get day 5). Missing a nudge is cheap;
  * telling somebody they have two days when they have one is not. See
  * DAY3_WINDOW_DAYS.
  *
- * WHAT IT READS: trial_grants, clinical_sessions + session_results (to count
- * what was genuinely marked, by the same rule as
- * lib/commerce/trialAccess.ts#countTrialConsumption), trial_leads (first name),
+ * WHAT IT READS: trial_grants, stations (which five the trial opens),
+ * clinical_sessions + session_results (which of the five they sat, and what was
+ * genuinely marked, by the same rules as
+ * lib/commerce/trialAccess.ts#countTrialUsage), trial_leads (first name),
  * preorders (to exclude buyers), trial_email_sends (to exclude anyone already
  * emailed). WHAT IT WRITES: one trial_email_sends row per successful send, and
  * nothing else, ever.
@@ -139,6 +140,8 @@ async function loadGrants(): Promise<GrantRow[]> {
 
 interface MarkRow {
   user_id: string
+  station_id: string | null
+  status: string | null
   started_at: string | null
   session_results:
     | SessionResultRow
@@ -155,16 +158,41 @@ interface SessionResultRow {
 }
 
 /**
- * Every genuinely-marked consultation, per user.
+ * The five cases a trial opens, in `free_trial_order`.
  *
- * MIRRORS lib/commerce/trialAccess.ts#countTrialConsumption and must stay in
- * step with it: a distinct session carrying a `session_results` row with
- * `weighted_score > 0`, started on or after the grant. If this counted
- * differently from the product, an email would tell somebody they have three
- * stations left while their dashboard says two — and the dashboard is the one
- * they believe. The score is compared in JS, not as a `.gt()` on the embed,
- * because PostgREST can hand a numeric back as a string and a server-side
- * comparison would then be lexicographic.
+ * MIRRORS lib/commerce/trialAccess.ts#loadFreeTrialStationIds. The emails count
+ * cases tried against this list, so a script working from a different set would
+ * tell somebody they had sat two of five while their dashboard said three — and
+ * the dashboard is the one they believe.
+ */
+async function loadFreeStationIds(): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('stations')
+    .select('id, free_trial_order')
+    .eq('is_free_trial', true)
+    .order('free_trial_order', { ascending: true, nullsFirst: false })
+    .order('title', { ascending: true })
+  if (error) {
+    throw new Error(
+      `stations: ${error.message} — has supabase/migrations/20260906_trial_grants.sql been applied?`,
+    )
+  }
+  return (data ?? []).map((row) => (row as { id: string }).id)
+}
+
+/**
+ * Every session, per user, with its mark when it has one.
+ *
+ * Two numbers come out of this and they are counted by different rules, both
+ * mirroring lib/commerce/trialAccess.ts:
+ *   * CASES TRIED — distinct free-trial stations with a session in any status
+ *     but `reading` (countTrialUsage). Opening a brief is not sitting a case.
+ *   * MARKS — sessions carrying a `session_results` row with
+ *     `weighted_score > 0`, for the day-5 summary. There can be more of these
+ *     than there are cases: attempts are unlimited.
+ * The score is compared in JS, not as a `.gt()` on the embed, because PostgREST
+ * can hand a numeric back as a string and a server-side comparison would then
+ * be lexicographic.
  */
 async function loadMarks(userIds: string[]): Promise<Map<string, MarkRow[]>> {
   const byUser = new Map<string, MarkRow[]>()
@@ -173,7 +201,7 @@ async function loadMarks(userIds: string[]): Promise<Map<string, MarkRow[]>> {
   const { data, error } = await supabase
     .from('clinical_sessions')
     .select(
-      'user_id, started_at, session_results(weighted_score, verdict, focus_areas, domains, created_at)',
+      'user_id, station_id, status, started_at, session_results(weighted_score, verdict, focus_areas, domains, created_at)',
     )
     .in('user_id', userIds)
   if (error) throw new Error(`clinical_sessions: ${error.message}`)
@@ -265,23 +293,26 @@ async function loadAlreadySent(): Promise<Map<string, TrialEmailKind[]>> {
 
 const grants = await loadGrants()
 const userIds = grants.map((grant) => grant.user_id)
-const [marksByUser, firstNames, buyers, alreadySent] = await Promise.all([
+const [freeStationIds, marksByUser, firstNames, buyers, alreadySent] = await Promise.all([
+  loadFreeStationIds(),
   loadMarks(userIds),
   loadFirstNames(grants.map((grant) => lower(grant.email))),
   loadBuyerEmails(),
   loadAlreadySent(),
 ])
+const freeStations = new Set(freeStationIds)
 
 const candidates: TrialEmailCandidate[] = grants.map((grant) => {
-  const grantedAt = new Date(grant.created_at)
   const marks: TrialMark[] = []
-  let lastMarkAt: Date | null = null
+  const tried = new Set<string>()
 
   for (const row of marksByUser.get(grant.user_id) ?? []) {
-    const startedAt = row.started_at ? new Date(row.started_at) : null
-    // Sessions that predate the grant are history — a lead's old anonymous
-    // free mock does not count, which is the product decision.
-    if (!startedAt || startedAt < grantedAt) continue
+    // Cases tried: any of the five they actually sat down to. `reading` is
+    // written when the BRIEF loads, so it is not sitting a case.
+    if (row.station_id && freeStations.has(row.station_id) && row.status !== 'reading') {
+      tried.add(row.station_id)
+    }
+
     const result = resultOf(row)
     const score = Number(result?.weighted_score)
     if (!result || !Number.isFinite(score) || score <= 0) continue
@@ -291,8 +322,6 @@ const candidates: TrialEmailCandidate[] = grants.map((grant) => {
       focusDomains: focusDomains(result.focus_areas),
       domains: gradedDomains(result.domains),
     })
-    const markedAt = result.created_at ? new Date(result.created_at) : startedAt
-    if (!lastMarkAt || markedAt > lastMarkAt) lastMarkAt = markedAt
   }
 
   const email = lower(grant.email)
@@ -300,12 +329,14 @@ const candidates: TrialEmailCandidate[] = grants.map((grant) => {
     userId: grant.user_id,
     email,
     firstName: firstNames.get(email) ?? null,
-    allowance: Number(grant.allowance) || 5,
+    // The flag is the authority; the grant column is the fallback while
+    // nothing carries it — the same rule computeTrialAccess applies.
+    casesTotal: freeStationIds.length || Number(grant.allowance) || 5,
+    casesTried: tried.size,
     windowDays: Number(grant.window_days) || 5,
     startedAt: grant.started_at ? new Date(grant.started_at) : null,
     expiresAt: grant.expires_at ? new Date(grant.expires_at) : null,
     marks,
-    lastMarkAt,
     hasPurchase: buyers.has(email),
     alreadySent: alreadySent.get(grant.user_id) ?? [],
   }
@@ -317,7 +348,9 @@ function build(row: (typeof due)[number]): RenderedEmail {
   if (row.kind === 'day3') {
     return buildTrialDay3Email({
       firstName: row.candidate.firstName,
-      remaining: row.remaining,
+      daysLeft: row.daysLeft,
+      casesTried: row.casesTried,
+      casesTotal: row.casesTotal,
       endsAt: row.endsAt,
       marks: row.candidate.marks,
       dashboardUrl: DASHBOARD_URL,
@@ -326,13 +359,16 @@ function build(row: (typeof due)[number]): RenderedEmail {
   return buildTrialDay5Email({
     firstName: row.candidate.firstName,
     marks: row.candidate.marks,
-    allowance: row.candidate.allowance,
+    casesTried: row.casesTried,
+    casesTotal: row.casesTotal,
     dashboardUrl: DASHBOARD_URL,
   })
 }
 
 console.log(`trial emails · ${NOW.toISOString()} · ${ARMED ? 'SENDING' : 'DRY RUN'}`)
-console.log(`${grants.length} started grants · ${due.length} due · ${skipped.length} skipped`)
+console.log(
+  `${grants.length} started grants · ${freeStationIds.length} free cases · ${due.length} due · ${skipped.length} skipped`,
+)
 console.log('')
 
 const bySkipReason = new Map<TrialEmailSkipReason, number>()
@@ -361,7 +397,7 @@ for (const row of due) {
   console.log(`${row.kind}  ${row.candidate.email}`)
   console.log(`      subject: ${email.subject}`)
   console.log(
-    `      ${marked} marked · ${row.remaining} left · window ends ${row.endsAt.toISOString().slice(0, 10)}`,
+    `      ${marked} marked · ${row.casesTried}/${row.casesTotal} cases tried · ${row.daysLeft} days left · window ends ${row.endsAt.toISOString().slice(0, 10)}`,
   )
 
   if (!ARMED) continue

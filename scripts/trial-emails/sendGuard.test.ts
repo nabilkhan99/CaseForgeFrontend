@@ -7,7 +7,8 @@ const TO = 'trainee@nhs.net'
 
 const day3 = buildTrialDay3Email({
   firstName: 'Jane',
-  remaining: 3,
+  daysLeft: 2,
+  casesTried: 2,
   endsAt: new Date('2026-09-11T09:00:00Z'),
   dashboardUrl: DASHBOARD,
 })
@@ -48,7 +49,7 @@ describe('assertSendable', () => {
   it('handles a name that had to be escaped in the html', () => {
     const escaped = buildTrialDay3Email({
       firstName: 'Ben & Co',
-      remaining: 1,
+      daysLeft: 1,
       endsAt: new Date('2026-09-11T09:00:00Z'),
       dashboardUrl: DASHBOARD,
     })
