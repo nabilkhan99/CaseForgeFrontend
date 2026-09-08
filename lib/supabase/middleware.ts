@@ -121,7 +121,15 @@ export async function updateSession(request: NextRequest) {
         // No query carried over: `email` and `token_hash` are the set-password
         // page's own inputs, and anything else would just be a stale filter.
         url.search = '';
-        return NextResponse.redirect(url);
+        // Carry any cookies the auth client rotated during this request. The
+        // redirect replaces `supabaseResponse`, and for a gated user EVERY
+        // navigation takes this branch — dropping a refreshed token here would
+        // make the gate itself the thing that signs them out.
+        const redirect = NextResponse.redirect(url);
+        for (const cookie of supabaseResponse.cookies.getAll()) {
+            redirect.cookies.set(cookie);
+        }
+        return redirect;
     }
 
     // Subscription-gated routes: starting/practising cases requires an active
