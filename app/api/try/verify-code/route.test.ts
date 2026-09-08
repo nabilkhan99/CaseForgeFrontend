@@ -1,17 +1,25 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
- * The moment an address becomes an account.
+ * The moment an address becomes an account — and, since 7 September 2026, a
+ * signed-in session.
  *
  * Two doors verify through this one route and the difference between them is a
  * single string on a database row that decides which funnel every later chart
- * is drawn from: `sessionId` present = the GUEST reveal, absent = the /free
- * SIGN-UP box. Getting that backwards is invisible in the product and wrong
- * everywhere else, so it is pinned here.
+ * is drawn from: `sessionId` present = the GUEST reveal (legacy report links),
+ * absent = the ACCOUNT-FIRST form at /free/start. Getting that backwards is
+ * invisible in the product and wrong everywhere else, so it is pinned here.
  *
- * The other property under test is that provisioning failure is NOT fatal. The
- * code WAS right; refusing the guest their report over an account problem would
- * take away the thing they spent twelve minutes earning.
+ * The other properties under test:
+ *
+ *  - the sign-up branch sets the password, stores the mobile and sends NO SMS;
+ *  - the response carries session cookies, so nothing is emailed after the code;
+ *  - `redirectTo` is rebuilt from a matched uuid, never interpolated;
+ *  - provisioning failure is NOT fatal. The code WAS right; refusing the guest
+ *    their report over an account problem would take away the thing they spent
+ *    twelve minutes earning.
  */
 
 const mocks = vi.hoisted(() => ({
@@ -20,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   updates: [] as Record<string, unknown>[],
   filters: [] as { column: string; value: unknown }[],
   ensure: vi.fn(),
+  signIn: vi.fn(),
   brevo: vi.fn(),
 }))
 
@@ -31,6 +40,10 @@ vi.mock('@/lib/marketing/trialLead', () => ({
 
 vi.mock('@/lib/auth/trialAccount', () => ({
   ensureTrialAccount: (...args: unknown[]) => mocks.ensure(...args),
+}))
+
+vi.mock('@/lib/auth/accountSignUp', () => ({
+  signInWithMagicLink: (...args: unknown[]) => mocks.signIn(...args),
 }))
 
 vi.mock('@/lib/trial/verification', () => ({
@@ -107,10 +120,11 @@ beforeEach(() => {
   mocks.updates = []
   mocks.filters = []
   mocks.brevo.mockResolvedValue(undefined)
+  mocks.signIn.mockResolvedValue(true)
   mocks.ensure.mockResolvedValue({
     userId: 'user-1',
     created: true,
-    signInUrl: 'https://www.fourteenfisherman.com/auth/start?token_hash=h&email=sarah@nhs.net',
+    signInUrl: null,
     granted: true,
     state: 'trial',
     claimed: 0,
@@ -154,25 +168,30 @@ describe('which door the grant is recorded against', () => {
 })
 
 describe('the response the caller reads', () => {
-  it('carries the account and the grant beside the ok', async () => {
+  it('carries the account, the grant, the session and where to go', async () => {
     const { body } = await post({ sessionId: 'session-1', code: '123456' })
 
     expect(body).toEqual({
       ok: true,
-      account: {
-        userId: 'user-1',
-        created: true,
-        signInUrl: 'https://www.fourteenfisherman.com/auth/start?token_hash=h&email=sarah@nhs.net',
-      },
+      account: { userId: 'user-1', created: true },
       trial: { state: 'trial', granted: true },
+      signedIn: true,
+      redirectTo: '/dashboard',
     })
+  })
+
+  it('carries no sign-in credential — the cookies do that job', async () => {
+    // A one-time link in a JSON body is a bearer credential for the account.
+    const { body } = await post({ sessionId: 'session-1', code: '123456' })
+    expect(JSON.stringify(body)).not.toContain('token')
+    expect(body.account.signInUrl).toBeUndefined()
   })
 
   it('says created: false for an address that already had an account', async () => {
     mocks.ensure.mockResolvedValue({
       userId: 'user-9',
       created: false,
-      signInUrl: 'https://www.fourteenfisherman.com/auth/start?token_hash=h2',
+      signInUrl: null,
       granted: true,
       state: 'trial',
       claimed: 2,
@@ -193,6 +212,105 @@ describe('the response the caller reads', () => {
   })
 })
 
+describe('the account-first sign-up', () => {
+  it('passes the password through so the account is born with one', async () => {
+    await post({ email: 'sarah@nhs.net', code: '123456', password: 'longenough1' })
+
+    expect(mocks.ensure).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ source: 'signup', password: 'longenough1' }),
+    )
+  })
+
+  it('stores the mobile on the lead row, in E.164', async () => {
+    await post({
+      email: 'sarah@nhs.net',
+      code: '123456',
+      password: 'longenough1',
+      phone: '07700 900123',
+    })
+
+    expect(mocks.updates[0]).toMatchObject({ phone: '+447700900123' })
+  })
+
+  it('leaves a number we already hold alone when none was typed', async () => {
+    await post({ email: 'sarah@nhs.net', code: '123456', password: 'longenough1' })
+    expect(mocks.updates[0]).not.toHaveProperty('phone')
+  })
+
+  it('sends no text, ever', () => {
+    // The mobile is a line to a human, not a second factor. Asserted against
+    // the source because "did not send an SMS" has no call to spy on: the
+    // point is that this route knows nothing about SMS at all.
+    const route = readFileSync(fileURLToPath(new URL('./route.ts', import.meta.url)), 'utf8')
+      // The comments discuss the decision; only the code is bound by it.
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .replace(/^\s*\/\/.*$/gm, ' ')
+    expect(route.toLowerCase()).not.toMatch(/\bsms\b|send-phone-code|sendverificationsms/)
+  })
+
+  it('signs the browser in on this response', async () => {
+    const { body } = await post({ email: 'sarah@nhs.net', code: '123456', password: 'longenough1' })
+
+    expect(mocks.signIn).toHaveBeenCalledWith('sarah@nhs.net')
+    expect(body.signedIn).toBe(true)
+  })
+
+  it('still answers ok when the session could not be established', async () => {
+    mocks.signIn.mockResolvedValue(false)
+
+    const { status, body } = await post({ email: 'sarah@nhs.net', code: '123456' })
+
+    expect(status).toBe(200)
+    expect(body.signedIn).toBe(false)
+    // The account and the grant are real; the caller offers an ordinary sign-in.
+    expect(body.account).toMatchObject({ userId: 'user-1' })
+  })
+
+  it('refuses a password shorter than the form allows', async () => {
+    const { status } = await post({ email: 'sarah@nhs.net', code: '123456', password: 'short' })
+    expect(status).toBe(400)
+    expect(mocks.ensure).not.toHaveBeenCalled()
+  })
+
+  it('ignores a password sent with a session id, which no form does', async () => {
+    // A guest reveal is reachable by anyone holding the session id. A password
+    // arriving on that path is not a field anybody typed.
+    await post({ sessionId: 'session-1', code: '123456', password: 'longenough1' })
+
+    expect(mocks.ensure).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ source: 'guest_reveal', password: null }),
+    )
+  })
+})
+
+describe('where they land next', () => {
+  it('opens the station they picked', async () => {
+    const station = '2b0d9a5e-0000-4000-8000-000000000000'
+    const { body } = await post({ email: 'sarah@nhs.net', code: '123456', station })
+
+    expect(body.redirectTo).toBe(`/clinical-master/station/${station}`)
+  })
+
+  it('falls back to the dashboard when no station travelled', async () => {
+    const { body } = await post({ email: 'sarah@nhs.net', code: '123456' })
+    expect(body.redirectTo).toBe('/dashboard')
+  })
+
+  it.each([
+    'https://evil.example.com',
+    '//evil.example.com',
+    '../../dashboard',
+    'not-a-uuid',
+    '2b0d9a5e-0000-4000-8000-000000000000/../../evil',
+  ])('refuses to build a redirect out of %s', async (station) => {
+    // The value is client-supplied and ends up in a URL the browser follows.
+    const { body } = await post({ email: 'sarah@nhs.net', code: '123456', station })
+    expect(body.redirectTo).toBe('/dashboard')
+  })
+})
+
 describe('when the account cannot be made', () => {
   it('still opens the report — the code was right', async () => {
     mocks.ensure.mockResolvedValue({
@@ -210,6 +328,9 @@ describe('when the account cannot be made', () => {
     expect(body.ok).toBe(true)
     expect(body.account).toBeNull()
     expect(body.trial).toEqual({ state: 'none', granted: false })
+    // Nothing to sign in to, so nothing was asked of GoTrue.
+    expect(mocks.signIn).not.toHaveBeenCalled()
+    expect(body.signedIn).toBe(false)
   })
 
   it('survives ensureTrialAccount throwing outright', async () => {

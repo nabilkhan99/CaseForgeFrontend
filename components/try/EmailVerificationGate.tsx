@@ -930,8 +930,9 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
             <h1 className="mb-2 text-[26px] font-bold tracking-[-0.02em] text-heading">
               You&apos;re verified
             </h1>
-            {/* No copy of the report is emailed — the only message that goes
-                out is the verification code — so this must not promise one. */}
+            {/* Nothing is emailed on this screen — not the report, not a link.
+                The verify response signed them in, so the only thing left to
+                say is what is now open to them. */}
             <p className="mb-6 text-[14px] leading-relaxed text-muted">
               Your report is ready. Open it below for your scores against the three
               SCA marking domains, and the moments that cost you marks.
@@ -947,9 +948,9 @@ export default function EmailVerificationGate({ sessionId, onUnlock }: EmailVeri
               Show my feedback
               <ArrowRight className="h-4 w-4" />
             </button>
-            {/* The account exists whether or not they take this now, so the
-                link is an offer rather than a step: the report is still the
-                thing they came for and stays the filled button above. */}
+            {/* They are signed in by now, so this is one click to the board
+                rather than an errand. Still an offer rather than a step: the
+                report is what they came for and stays the filled button above. */}
             {offer && (
               <a
                 href={offer.href}

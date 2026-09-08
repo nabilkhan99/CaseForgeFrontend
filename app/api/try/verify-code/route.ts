@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { pushTrialLeadToBrevo } from '@/lib/marketing/trialLead';
+import { signInWithMagicLink } from '@/lib/auth/accountSignUp';
+import { MIN_PASSWORD_LENGTH } from '@/lib/auth/passwordPolicy';
 import { ensureTrialAccount } from '@/lib/auth/trialAccount';
+import { toE164 } from '@/lib/trial/phone';
 import type { TrialSource, TrialState } from '@/lib/commerce/trialAccess';
 import {
   AKT_TARGETS,
@@ -19,47 +22,66 @@ import {
 } from '@/lib/trial/verification';
 
 /**
- * State 2 of the trial gate: checks the 6-digit code against the lead recorded
- * by /api/try/send-code — and then turns that verified address into an account
- * with five stations on it.
+ * State 2 of the code step: checks the 6 digits against the lead recorded by
+ * /api/try/send-code — and then turns that verified address into an account
+ * with five stations on it, SIGNED IN, on this same response.
  *
  * ## Two doors, one verification
  *
- * `sessionId` = the GUEST reveal: they have just sat a consultation and are
- * unlocking their report. The grant is recorded as `guest_reveal`.
- * `email` alone = the SIGN-UP door on /free, where there is no consultation
- * yet. The grant is recorded as `signup`.
+ * `sessionId` = the GUEST reveal (legacy): a consultation was sat before there
+ * was an account, and this unlocks its report. Recorded as `guest_reveal`.
+ * `email` (+ a `password` from /free/start) = the ACCOUNT-FIRST door, where
+ * there is no consultation yet. Recorded as `signup`.
  *
  * ## Why the account is created HERE
  *
  * This is the only moment in the funnel where an address is PROVEN — they typed
- * a code we sent to it. Everything the account gives them (the claim on their
- * guest consultation, the grant, the dashboard) rests on that proof, so doing
- * it anywhere else would either happen before the proof or need a second round
- * trip after it. The three writes are each idempotent, so a retried verify
- * repeats them harmlessly — see lib/auth/trialAccount.
+ * a code we sent to it. Everything the account gives them (the claim on any
+ * guest consultation, the grant, the dashboard) rests on that proof, so doing it
+ * anywhere else would either happen before the proof or need a second round trip
+ * after it. The writes are each idempotent, so a retried verify repeats them
+ * harmlessly — see lib/auth/trialAccount.
+ *
+ * ## Why the SIGN-IN is here too, and no email is sent
+ *
+ * A route handler may write cookies, so the session is established inside this
+ * request (lib/auth/accountSignUp) and the browser navigates to `redirectTo`
+ * already signed in. The old shape mailed a one-time link and asked people to
+ * go and find it — a second inbox trip immediately after the first one, at the
+ * exact moment they were ready to talk to a patient. Nothing on this path sends
+ * mail of any kind, and nothing sends an SMS: the mobile is stored, never texted.
  *
  * Provisioning failure is NOT fatal to this request. The code was right, the
  * lead is verified, and the guest reveal must still open the report they earned;
- * `account: null` says "no account happened" and the caller falls back to the
- * report-only path.
+ * `account: null` says "no account happened" and the caller falls back.
  *
  * ⚠️ This route never routes through /auth/sign-up, which the middleware keeps
  * shut behind SIGNUP_INVITE_CODE. It provisions server-side with the service
  * role, so that gate stays exactly as closed as it was.
  */
 
-/** What the caller needs to sign the new trialist in. Null when provisioning failed. */
+/** Where a trainee lands when no station was carried through the flow. */
+const DASHBOARD = '/dashboard';
+
+/**
+ * A station id, or nothing.
+ *
+ * `redirectTo` is composed from a client-supplied value, so it is rebuilt from a
+ * matched uuid rather than interpolated — anything else and "carry the station
+ * through the sign-up" would be an open redirect with a friendly name.
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function redirectFor(station: unknown): string {
+  const value = typeof station === 'string' ? station.trim() : '';
+  return UUID_RE.test(value) ? `/clinical-master/station/${value.toLowerCase()}` : DASHBOARD;
+}
+
+/** What the caller needs to know about the account. Null when provisioning failed. */
 export interface TrialVerifyAccount {
   userId: string;
   /** We created the auth user on this call. False for a returning address. */
   created: boolean;
-  /**
-   * A one-time URL that leaves the browser signed in and lands on /dashboard,
-   * on any device. Null only when minting it failed — the account and the grant
-   * are still real, and every trial email carries the same kind of link.
-   */
-  signInUrl: string | null;
 }
 
 export interface TrialVerifyTrial {
@@ -72,6 +94,10 @@ interface VerifyResponse {
   ok: true;
   account: TrialVerifyAccount | null;
   trial: TrialVerifyTrial;
+  /** This response carries session cookies. False leaves the caller a sign-in path. */
+  signedIn: boolean;
+  /** Where to go next: the station they picked, or the dashboard. */
+  redirectTo: string;
 }
 
 const NO_TRIAL_RESPONSE: TrialVerifyTrial = { state: 'none', granted: false };
@@ -82,11 +108,15 @@ const LEAD_COLUMNS =
 
 export async function POST(req: NextRequest) {
   try {
-    const { sessionId, email, code } = (await req.json()) as {
+    const body = (await req.json()) as {
       sessionId?: string;
       email?: string;
       code?: string;
+      password?: string;
+      phone?: string;
+      station?: string;
     };
+    const { sessionId, email, code } = body;
 
     const trimmedCode = code?.trim() ?? '';
     const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
@@ -97,6 +127,19 @@ export async function POST(req: NextRequest) {
     }
 
     const source: TrialSource = sessionId ? 'guest_reveal' : 'signup';
+    const redirectTo = redirectFor(body.station);
+
+    // Only the account-first door sends these, and only it may: a password on a
+    // guest reveal would be a field nobody typed, arriving with a session id
+    // anyone holding the link could guess.
+    const password = source === 'signup' && typeof body.password === 'string' ? body.password : '';
+    const phone = source === 'signup' && typeof body.phone === 'string' ? body.phone.trim() : '';
+    if (password && password.length < MIN_PASSWORD_LENGTH) {
+      return NextResponse.json(
+        { error: `Use ${MIN_PASSWORD_LENGTH} characters or more` },
+        { status: 400 },
+      );
+    }
 
     const supabase = getSupabaseAdmin();
 
@@ -117,9 +160,16 @@ export async function POST(req: NextRequest) {
       // Already verified — the code step is done, but the account work may not
       // be (a reload, a second tab, or a lead verified before this shipped). It
       // is idempotent, so run it rather than returning a bare ok that would
-      // strand them without a grant.
+      // strand them without a grant or a session.
       return NextResponse.json(
-        await settleTrialAccount(lead.email, lead.first_name, source),
+        await settleTrialAccount({
+          email: lead.email,
+          firstName: lead.first_name,
+          source,
+          password,
+          phone,
+          redirectTo,
+        }),
       );
     }
     if (!lead.verification_code_hash || !lead.verification_expires_at) {
@@ -155,12 +205,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // The mobile rides along with the verification, on the row this product
+    // already keeps its leads in. Stored E.164 so the founder's call works
+    // straight off it. NOTHING TEXTS IT — there is no SMS step on this door.
+    const storedPhone = phone ? (toE164(phone) ?? phone) : null;
+
     const { error: updateError } = await supabase
       .from('trial_leads')
       .update({
         email_verified_at: new Date().toISOString(),
         verification_code_hash: null,
         verification_expires_at: null,
+        // Only when they gave one: blanking a number we already hold would cost
+        // the founder the call they were going to make.
+        ...(storedPhone ? { phone: storedPhone } : {}),
       })
       .eq('id', lead.id);
 
@@ -191,7 +249,7 @@ export async function POST(req: NextRequest) {
     await pushTrialLeadToBrevo({
       email: lead.email,
       firstName: lead.first_name,
-      phone: lead.phone,
+      phone: storedPhone ?? lead.phone,
       stationTitle,
       score: null,
       trainingStage: findOption(TRAINING_STAGES, lead.training_stage)?.label ?? lead.training_stage,
@@ -207,40 +265,74 @@ export async function POST(req: NextRequest) {
         findOption(NOT_IN_TRAINING_ROLES, lead.not_in_training_role)?.label ?? null,
     });
 
-    // The founder lead alert now fires from the phone-verification step
-    // (verify-phone-code, or send-phone-code's fail-open path) so it only
-    // ever carries a number that has actually received a text.
-
-    return NextResponse.json(await settleTrialAccount(lead.email, lead.first_name, source));
+    return NextResponse.json(
+      await settleTrialAccount({
+        email: lead.email,
+        firstName: lead.first_name,
+        source,
+        password,
+        phone: storedPhone ?? '',
+        redirectTo,
+      }),
+    );
   } catch (error: unknown) {
     console.error('[verify-code] unexpected error', error);
     return NextResponse.json({ error: 'Something went wrong — please try again' }, { status: 500 });
   }
 }
 
+interface SettleInput {
+  email: string;
+  firstName: string | null;
+  source: TrialSource;
+  /** Empty on every door but the account-first form. */
+  password: string;
+  /** E.164 where we could parse it, else what they typed. Empty when none. */
+  phone: string;
+  redirectTo: string;
+}
+
 /**
- * Account, claim, grant, sign-in link — and the body the caller reads them off.
+ * Account, claim, grant, session — and the body the caller reads them off.
  *
  * Its own function because both exits above need it: the freshly-verified path
  * and the already-verified reload. Never throws; a failure here still answers
  * `ok: true`, because the code WAS right and that is what the caller asked.
+ *
+ * `mintSignIn: false` on purpose. The session is established here, and minting a
+ * recovery token as well would rotate a credential nobody is going to use.
  */
-async function settleTrialAccount(
-  email: string,
-  firstName: string | null,
-  source: TrialSource,
-): Promise<VerifyResponse> {
+async function settleTrialAccount(input: SettleInput): Promise<VerifyResponse> {
   try {
-    const ensured = await ensureTrialAccount(getSupabaseAdmin(), { email, firstName, source });
+    const ensured = await ensureTrialAccount(getSupabaseAdmin(), {
+      email: input.email,
+      firstName: input.firstName,
+      source: input.source,
+      password: input.password || null,
+      phone: input.phone || null,
+      mintSignIn: false,
+    });
+
+    // Only for an account that exists: signing in an address with nothing behind
+    // it is not a thing GoTrue can do, and asking would only log a confusing
+    // error over a failure the caller already knows about from `account: null`.
+    const signedIn = ensured.userId ? await signInWithMagicLink(input.email) : false;
+
     return {
       ok: true,
-      account: ensured.userId
-        ? { userId: ensured.userId, created: ensured.created, signInUrl: ensured.signInUrl }
-        : null,
+      account: ensured.userId ? { userId: ensured.userId, created: ensured.created } : null,
       trial: { state: ensured.state, granted: ensured.granted },
+      signedIn,
+      redirectTo: input.redirectTo,
     };
   } catch (error: unknown) {
     console.error('[verify-code] account provisioning threw', error);
-    return { ok: true, account: null, trial: NO_TRIAL_RESPONSE };
+    return {
+      ok: true,
+      account: null,
+      trial: NO_TRIAL_RESPONSE,
+      signedIn: false,
+      redirectTo: input.redirectTo,
+    };
   }
 }
