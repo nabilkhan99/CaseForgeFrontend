@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { firstParam, guestNotice, openDashboardHref, openPrefill } from './freeParams'
+import {
+  firstParam,
+  guestNotice,
+  openDashboardHref,
+  openPrefill,
+  startPrefill,
+  stationParam,
+} from './freeParams'
 
 /**
  * The query states /free inherited when it stopped being a form.
@@ -85,5 +92,39 @@ describe('a repeated or empty param', () => {
     expect(openDashboardHref({ email: ['sam@example.com', 'other@example.com'] })).toBe(
       '/free/open?email=sam%40example.com',
     )
+  })
+})
+
+describe('what /free/start opens with', () => {
+  it('carries a station id through the sign-up', () => {
+    const station = '2b0d9a5e-0000-4000-8000-000000000000'
+    expect(startPrefill({ station })).toEqual({ email: undefined, station })
+  })
+
+  it('lower-cases it, so one link and its shouted copy land on one case', () => {
+    expect(stationParam({ station: '2B0D9A5E-0000-4000-8000-000000000000' })).toBe(
+      '2b0d9a5e-0000-4000-8000-000000000000',
+    )
+  })
+
+  it.each([
+    'https://evil.example.com',
+    '//evil.example.com/x',
+    '../../dashboard',
+    'not-a-uuid',
+    '2b0d9a5e-0000-4000-8000-000000000000/../evil',
+  ])('drops %s rather than carrying it into a redirect', (station) => {
+    // It ends up in a `redirectTo` the browser follows after sign-in. The route
+    // checks it again; this one keeps junk out of the form's hidden field.
+    expect(stationParam({ station })).toBeUndefined()
+  })
+
+  it('takes the first of a repeated param, like every other reader here', () => {
+    const first = '2b0d9a5e-0000-4000-8000-000000000000'
+    expect(stationParam({ station: [first, 'other'] })).toBe(first)
+  })
+
+  it('prefills an address handed over from another surface', () => {
+    expect(startPrefill({ email: 'sam@example.com' }).email).toBe('sam@example.com')
   })
 })
