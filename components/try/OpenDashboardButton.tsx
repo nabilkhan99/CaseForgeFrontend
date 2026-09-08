@@ -1,79 +1,45 @@
 'use client';
 
-import { useState } from 'react';
-import { motion } from 'framer-motion';
+import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { trackEvent } from '@/lib/analytics';
 
 /**
- * "Open your dashboard", on the report of a consultation someone sat as a guest.
+ * "Open your dashboard", under the report of a consultation sat as a guest.
  *
- * The consultation they just read is theirs, and by this point in the page they
- * have verified their address — so there is an account, it has their session
- * attached and it has five stations on it. The only thing missing is a way into
- * it from a browser that may not be the one that will read the email.
+ * These reports are legacy — the guest lane closed on 7 September 2026 — but
+ * their links are in about eighty people's inboxes and every one of those
+ * people has an account waiting, made when they verified their address at the
+ * gate. This is the way into it.
  *
- * Pressing it asks the server to mail a one-time sign-in link
- * (/api/try/dashboard-link). Deliberately an EMAIL rather than an inline
- * redirect: this page is reachable by anyone holding the session id — that is
- * what makes the guest funnel work at all — so handing the browser a session
- * off a click here would let whoever has the link become the account. Sending
- * it to the verified address instead means the person who proved the address is
- * the person who gets in.
+ * ## Why /free/open rather than /dashboard
  *
- * The route answers identically whatever happened (no lead, unverified,
- * throttled, sent), so there is nothing to branch on and one confirmation
- * covers every case.
+ * Because this page is reachable by anyone holding the session id — that is
+ * what made the guest funnel work — so it cannot assume the reader is signed
+ * in, and it must not hand a session to whoever has the link. /free/open asks
+ * for a 6-digit code at the address that verified this report, which is the
+ * same proof the gate took, and lands them signed in on the dashboard.
+ *
+ * A plain link, with the address prefilled when the page knows it. It used to
+ * be a button that asked the server to MAIL a one-time link — a second inbox
+ * trip, and a "check your inbox" that people read as the report being emailed.
  */
-export default function OpenDashboardButton({ sessionId }: { sessionId: string }) {
-  const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
-
-  async function requestLink() {
-    if (sending || sent) return;
-    setSending(true);
-    try {
-      void trackEvent('trial_dashboard_link_requested', { session: sessionId });
-      await fetch('/api/try/dashboard-link', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId }),
-      });
-    } catch {
-      // Same outcome either way; the copy below already says "if that address…".
-    } finally {
-      setSending(false);
-      setSent(true);
-    }
-  }
-
-  if (sent) {
-    return (
-      <motion.p
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="text-[14px] leading-relaxed text-muted"
-      >
-        Check your inbox — a one-time sign-in link is on its way. It opens your dashboard, with this
-        consultation already on it.
-      </motion.p>
-    );
-  }
+export default function OpenDashboardButton({ email }: { email?: string | null }) {
+  const clean = email?.trim().toLowerCase() ?? '';
+  const href = clean ? `/free/open?email=${encodeURIComponent(clean)}` : '/free/open';
 
   return (
     <div className="flex flex-col items-center gap-2">
-      <button
-        type="button"
-        onClick={() => void requestLink()}
-        disabled={sending}
+      <Link
+        href={href}
+        onClick={() => trackEvent('trial_dashboard_link_requested', { door: 'guest_report' })}
         className="cta-button px-7 py-3.5 text-[15px]"
       >
-        {sending ? 'Sending…' : 'Open your dashboard'}
-        {!sending && <ArrowRight className="h-4 w-4" aria-hidden="true" />}
-      </button>
+        Open your dashboard
+        <ArrowRight className="h-4 w-4" aria-hidden="true" />
+      </Link>
       <p className="text-[12.5px] text-muted">
-        We&apos;ll email you a one-time link. Four more stations are waiting on it.
+        Your board, this consultation and four more stations.
       </p>
     </div>
   );
