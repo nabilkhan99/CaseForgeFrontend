@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { sendSetPasswordLink } from '@/lib/auth/provisioning';
+import { exactEmailPattern } from '@/lib/commerce/emailFilter';
 
 /**
- * "Email me a fresh link" for a buyer whose set-password link has expired.
+ * "Email me a fresh link" for someone whose set-password link has expired.
  *
  * Server-side on purpose. The browser client's `resetPasswordForEmail` mints a
  * PKCE link whose `code_verifier` lives in the requesting browser, so a link
@@ -12,11 +13,18 @@ import { sendSetPasswordLink } from '@/lib/auth/provisioning';
  * what provisioning sends: an admin-generated recovery `token_hash` that works
  * in any browser.
  *
- * Only addresses with a paid purchase are served (checked with the service
- * role), but the response never says so. Past the two request-shape 400s, every
- * path returns the SAME generic body: no purchase, purchase, lookup failure,
- * cooled down, send failure. That is deliberate and it is why the send is
- * detached rather than awaited — see below.
+ * TWO WAYS TO BE OWED A LINK (both checked with the service role):
+ *   - a paid purchase in `preorders`;
+ *   - membership of any trainer cohort — a pilot seat is a real account with no
+ *     purchase behind it, so the preorders check alone told every cohort
+ *     student "an email is on its way" and then sent nothing. This is their
+ *     only self-serve recovery: their accounts are hand-provisioned, so a dead
+ *     link otherwise means emailing the founder.
+ *
+ * The response never says which (or neither). Past the two request-shape 400s,
+ * every path returns the SAME generic body: no account, purchase, cohort seat,
+ * lookup failure, cooled down, send failure. That is deliberate and it is why
+ * the send is detached rather than awaited — see below.
  */
 
 const GENERIC_OK = {
@@ -94,6 +102,53 @@ function getSupabaseAdmin() {
   );
 }
 
+/**
+ * Is this address a trainer-cohort seat?
+ *
+ * Two hops, because there is no email on `cohort_members`: `profiles` (written
+ * one row per auth user by the `on_auth_user_created` trigger, so it is a
+ * complete email → id map, and the same route provisioning takes) and then the
+ * membership row, which is keyed by `user_id` and indexed on it.
+ *
+ * FAILS CLOSED, exactly like the purchase lookup above it: a lookup error is
+ * "not eligible", never "send anyway". The cost of a false negative here is one
+ * person told to ask us; the cost of a false positive is an unauthenticated
+ * mailer that will mint a recovery token for any address at all.
+ *
+ * Matched case-insensitively with the wildcards escaped, as every other email
+ * match in this codebase is — a hand-seeded `Sarah@Nhs.net` must still resolve.
+ *
+ * Only reached when there is NO purchase, so a paying customer's path is
+ * unchanged: one indexed lookup, as before.
+ */
+async function isCohortMember(supabase: SupabaseClient, email: string): Promise<boolean> {
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('id')
+    .ilike('email', exactEmailPattern(email))
+    .maybeSingle();
+
+  if (profileError) {
+    console.error('[resend-set-password] profile lookup failed', { error: profileError });
+    return false;
+  }
+  const userId = (profile as { id?: string } | null)?.id;
+  if (!userId) return false;
+
+  const { data: membership, error: memberError } = await supabase
+    .from('cohort_members')
+    .select('user_id')
+    .eq('user_id', userId)
+    .limit(1)
+    .maybeSingle();
+
+  if (memberError) {
+    console.error('[resend-set-password] cohort lookup failed', { error: memberError });
+    return false;
+  }
+  return Boolean(membership);
+}
+
 export async function POST(request: Request) {
   let email: string;
   try {
@@ -133,8 +188,20 @@ export async function POST(request: Request) {
     return NextResponse.json(GENERIC_OK);
   }
 
-  // No purchase: answer exactly as if there were one. Nothing is sent.
-  if (!purchase) return NextResponse.json(GENERIC_OK);
+  // No purchase is no longer the end of it: a trainer-cohort seat is a real
+  // account with no `preorders` row, and this route is its only self-serve
+  // recovery. Checked second, and only on the miss, so nothing about the
+  // purchase path changes.
+  //
+  // It does add a round trip to the no-purchase path — but the comparison that
+  // matters is cohort member vs. stranger, and both of those pay for the
+  // `profiles` lookup, so the shape of the timing is unchanged where it could
+  // actually leak. Neither ever reaches the two upstream calls, which stay
+  // detached below precisely because those are the ones that separate people.
+  if (!purchase && !(await isCohortMember(supabase, email))) {
+    // Not owed a link: answer exactly as if they were. Nothing is sent.
+    return NextResponse.json(GENERIC_OK);
+  }
 
   // Detached on purpose, and the response never depends on how it goes.
   // Awaiting it leaked twice over: a hit did two upstream round-trips (GoTrue
@@ -147,12 +214,16 @@ export async function POST(request: Request) {
   // The cost of detaching is that a send can be lost if the instance is frozen
   // before it settles. That is acceptable here: nothing is owed to the caller,
   // the failure is logged, and the buyer can simply ask again.
-  void sendSetPasswordLink({ email, fullName: purchase.full_name })
+  void sendSetPasswordLink({ email, fullName: purchase?.full_name ?? null })
     .then(async (result) => {
       if (!result.sent) {
         console.error('[resend-set-password] send failed', { error: result.error });
         return;
       }
+      // Nothing to stamp for a cohort seat: the stamp lives on the purchase
+      // row, and there isn't one. No webhook is watching a cohort member
+      // either, so there is no obligation to close.
+      if (!purchase) return;
       // The Stripe webhook decides whether a buyer is still owed a link off
       // this stamp, so a link sent from here has to close that obligation. Left
       // unstamped, a webhook retry days later mails a SECOND link and rotates

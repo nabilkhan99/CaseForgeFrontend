@@ -76,6 +76,18 @@ export default function SetPasswordForm({
         try {
             const { error } = await supabase.auth.updateUser({
                 password: password,
+                // Clears the "provisioned but never finished" marker that
+                // lib/auth/provisioning.ts stamps and lib/supabase/middleware.ts
+                // gates on. It rides on the SAME call that saves the password —
+                // a second, separate updateUser could fail on its own and leave
+                // someone with a password but still redirected on every page.
+                //
+                // Set here rather than in the /auth/set-password page because
+                // this is where updateUser lives, and it is true of both routes
+                // that reach it: whichever way you got here, the account now has
+                // a password its owner chose. GoTrue merges `data` into the
+                // existing user_metadata, so `full_name` survives.
+                data: { password_pending: false },
             });
 
             if (error) {

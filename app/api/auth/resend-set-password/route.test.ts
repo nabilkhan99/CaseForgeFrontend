@@ -16,7 +16,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   sendSetPasswordLink: vi.fn(),
   update: vi.fn(),
+  /** `preorders` — the paid-purchase check. */
   lookup: vi.fn(),
+  /** `profiles` — email → auth user id, the first hop of the cohort check. */
+  profileLookup: vi.fn(),
+  /** `cohort_members` — the second hop. */
+  memberLookup: vi.fn(),
+  /** Every pattern handed to `.ilike('email', …)` on `profiles`. */
+  profilePatterns: [] as string[],
 }))
 
 vi.mock('server-only', () => ({}))
@@ -25,14 +32,26 @@ vi.mock('@/lib/auth/provisioning', () => ({
   sendSetPasswordLink: mocks.sendSetPasswordLink,
 }))
 
+/**
+ * Table-aware, because eligibility now reads three of them: a purchase, or
+ * failing that a `profiles` row and the `cohort_members` row behind it.
+ */
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({
-    from: () => ({
+    from: (table: string) => ({
       select: () => {
         const builder = {
           eq: () => builder,
+          ilike: (_column: string, pattern: string) => {
+            mocks.profilePatterns.push(pattern)
+            return builder
+          },
           limit: () => builder,
-          maybeSingle: async () => mocks.lookup(),
+          maybeSingle: async () => {
+            if (table === 'profiles') return mocks.profileLookup()
+            if (table === 'cohort_members') return mocks.memberLookup()
+            return mocks.lookup()
+          },
         }
         return builder
       },
@@ -71,7 +90,11 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.spyOn(console, 'error').mockImplementation(() => {})
   mocks.lookup.mockResolvedValue({ data: { id: 'p1', full_name: 'Jane Doe' }, error: null })
+  // Default: not a cohort member. The purchase path must never depend on these.
+  mocks.profileLookup.mockResolvedValue({ data: null, error: null })
+  mocks.memberLookup.mockResolvedValue({ data: null, error: null })
   mocks.sendSetPasswordLink.mockResolvedValue({ sent: true })
+  mocks.profilePatterns.length = 0
 })
 
 describe('the response never distinguishes a customer from a stranger', () => {
@@ -133,6 +156,111 @@ describe('the response never distinguishes a customer from a stranger', () => {
   it('still rejects a malformed request, which says nothing about any address', async () => {
     expect((await post('not-an-email', '1.1.1.6')).status).toBe(400)
     expect((await post(undefined, '1.1.1.7')).status).toBe(400)
+  })
+})
+
+describe('who is owed a link', () => {
+  /**
+   * A trainer-cohort seat is a real account with NO purchase behind it, and
+   * its password was set from a hand-provisioned link. Before this, every
+   * cohort student was told "an email is on its way" and none ever arrived —
+   * with no other self-serve path, a dead link meant emailing the founder.
+   */
+
+  /** No purchase; the address resolves to an auth user in a cohort. */
+  const asCohortMember = () => {
+    mocks.lookup.mockResolvedValue({ data: null, error: null })
+    mocks.profileLookup.mockResolvedValue({ data: { id: 'user-1' }, error: null })
+    mocks.memberLookup.mockResolvedValue({ data: { user_id: 'user-1' }, error: null })
+  }
+
+  it('sends to a cohort member who has no purchase', async () => {
+    asCohortMember()
+
+    const { status, body } = await post('student@nhs.net', '5.5.5.1')
+
+    expect(status).toBe(200)
+    expect(body).toEqual(GENERIC_OK)
+    await vi.waitFor(() => expect(mocks.sendSetPasswordLink).toHaveBeenCalledTimes(1))
+    expect(mocks.sendSetPasswordLink).toHaveBeenCalledWith({
+      email: 'student@nhs.net',
+      // No purchase row, so no name to carry: the mail addresses them plainly
+      // rather than inventing one.
+      fullName: null,
+    })
+  })
+
+  it('stamps nothing for a cohort member — the stamp lives on a purchase row', async () => {
+    asCohortMember()
+
+    await post('student2@nhs.net', '5.5.5.2')
+
+    await vi.waitFor(() => expect(mocks.sendSetPasswordLink).toHaveBeenCalled())
+    expect(mocks.update).not.toHaveBeenCalled()
+  })
+
+  it('matches the address case-insensitively, wildcards escaped', async () => {
+    // Cohort rows are seeded by hand, so `Sarah_J@Nhs.net` is a real shape —
+    // and `_` is an ilike wildcard, which would otherwise match strangers.
+    asCohortMember()
+
+    await post('  Sarah_J@Nhs.net ', '5.5.5.3')
+
+    expect(mocks.profilePatterns).toEqual(['sarah\\_j@nhs.net'])
+  })
+
+  it('never runs the cohort lookups when there is a purchase', async () => {
+    // The paying customer's path is one indexed read, exactly as it was.
+    await post('buyer-first@x.com', '5.5.5.4')
+
+    expect(mocks.profileLookup).not.toHaveBeenCalled()
+    expect(mocks.memberLookup).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(mocks.sendSetPasswordLink).toHaveBeenCalledTimes(1))
+  })
+
+  it('sends nothing to an account that is in no cohort', async () => {
+    mocks.lookup.mockResolvedValue({ data: null, error: null })
+    mocks.profileLookup.mockResolvedValue({ data: { id: 'user-2' }, error: null })
+
+    const { body } = await post('random@nhs.net', '5.5.5.5')
+
+    expect(body).toEqual(GENERIC_OK)
+    expect(mocks.sendSetPasswordLink).not.toHaveBeenCalled()
+  })
+
+  it('fails closed on a profile lookup error', async () => {
+    // Fail-open here is an unauthenticated mailer that mints a recovery token
+    // for any address at all, every time the database hiccups.
+    mocks.lookup.mockResolvedValue({ data: null, error: null })
+    mocks.profileLookup.mockResolvedValue({ data: null, error: { message: 'boom' } })
+
+    const { status, body } = await post('err1@nhs.net', '5.5.5.6')
+
+    expect(status).toBe(200)
+    expect(body).toEqual(GENERIC_OK)
+    expect(mocks.sendSetPasswordLink).not.toHaveBeenCalled()
+  })
+
+  it('fails closed on a cohort lookup error', async () => {
+    mocks.lookup.mockResolvedValue({ data: null, error: null })
+    mocks.profileLookup.mockResolvedValue({ data: { id: 'user-3' }, error: null })
+    mocks.memberLookup.mockResolvedValue({ data: null, error: { message: 'boom' } })
+
+    const { status, body } = await post('err2@nhs.net', '5.5.5.7')
+
+    expect(status).toBe(200)
+    expect(body).toEqual(GENERIC_OK)
+    expect(mocks.sendSetPasswordLink).not.toHaveBeenCalled()
+  })
+
+  it('charges a cohort member against the same budget as everyone else', async () => {
+    asCohortMember()
+
+    const first = await post('cohort-cooldown@nhs.net', '5.5.5.8')
+    const second = await post('cohort-cooldown@nhs.net', '5.5.5.9')
+
+    await vi.waitFor(() => expect(mocks.sendSetPasswordLink).toHaveBeenCalledTimes(1))
+    expect(second.body).toEqual(first.body)
   })
 })
 

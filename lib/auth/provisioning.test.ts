@@ -79,11 +79,36 @@ describe('provisionAccountForPurchase', () => {
     expect(mocks.createUser).toHaveBeenCalledWith({
       email: 'buyer@x.com',
       email_confirm: true,
-      user_metadata: { full_name: 'Jane Doe' },
+      user_metadata: { full_name: 'Jane Doe', password_pending: true },
     })
     expect(mocks.generateLink).not.toHaveBeenCalled()
     expect(mocks.sendSetPasswordEmail).not.toHaveBeenCalled()
     expect(result).toEqual({ created: true, alreadyExisted: false, userId: 'u1' })
+  })
+
+  /**
+   * The account is created without a password and the emailed link signs them
+   * in BEFORE they choose one, so "signed in" and "has a password" are not the
+   * same state. This flag is the only thing that tells them apart — nothing
+   * readable from an auth user does — and the middleware gate hangs off it.
+   */
+  it('marks the account as owing a password', async () => {
+    await provisionAccountForPurchase({ email: 'buyer@x.com', fullName: 'Jane Doe' })
+
+    expect(mocks.createUser.mock.calls[0][0].user_metadata.password_pending).toBe(true)
+  })
+
+  it('marks it even when we have no name to store', async () => {
+    // The old shape sent `user_metadata: undefined` whenever the name was
+    // missing, so a buyer whose Stripe session carried no name would have been
+    // created UNGATED — the one case where the gate matters just as much.
+    await provisionAccountForPurchase({ email: 'buyer@x.com', fullName: null })
+
+    expect(mocks.createUser).toHaveBeenCalledWith({
+      email: 'buyer@x.com',
+      email_confirm: true,
+      user_metadata: { password_pending: true },
+    })
   })
 
   it('lowercases and trims the buying email before creating the account', async () => {

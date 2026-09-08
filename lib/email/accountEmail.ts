@@ -89,19 +89,28 @@ export async function sendSetPasswordEmail({
     footerHtml: `<p style="margin:0;font-size:13px;color:#78716C;">${BRAND.senderName} · fourteenfisherman.com</p>`,
   })
 
-  try {
-    await new BrevoClient({ apiKey: brevoKey }).transactionalEmails.sendTransacEmail({
-      sender: { name: BRAND.senderName, email: BRAND.senderEmail },
-      // The buyer asked for this link; if something is wrong with it, their
-      // reply has to reach a person rather than Brevo's bounce address.
-      replyTo: { name: BRAND.senderName, email: BRAND.senderEmail },
-      to: [{ email: toEmail, ...(toName ? { name: toName } : {}) }],
-      subject: copy.subject,
-      htmlContent,
-    })
-    return { sent: true }
-  } catch (error) {
-    console.error('[account-email] send failed', { toEmail, error })
-    return { sent: false, skipped: 'brevo_error' }
+  // Two attempts, not one. Observed live (8 Sept 2026, prod lambda): the first
+  // call to Brevo can die at the socket — `SocketError: other side closed`
+  // against their Cloudflare edge — and this mailer runs detached behind a
+  // deliberately generic API response, so a single failed attempt IS a silently
+  // lost email. One retry after a beat covers the transient-connection case;
+  // anything that fails twice is a real outage and is logged as before.
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      await new BrevoClient({ apiKey: brevoKey }).transactionalEmails.sendTransacEmail({
+        sender: { name: BRAND.senderName, email: BRAND.senderEmail },
+        // The buyer asked for this link; if something is wrong with it, their
+        // reply has to reach a person rather than Brevo's bounce address.
+        replyTo: { name: BRAND.senderName, email: BRAND.senderEmail },
+        to: [{ email: toEmail, ...(toName ? { name: toName } : {}) }],
+        subject: copy.subject,
+        htmlContent,
+      })
+      return { sent: true }
+    } catch (error) {
+      console.error('[account-email] send failed', { toEmail, attempt, error })
+      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 1500))
+    }
   }
+  return { sent: false, skipped: 'brevo_error' }
 }
