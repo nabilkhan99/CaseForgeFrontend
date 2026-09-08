@@ -111,6 +111,23 @@ describe('FREE_TIER is display copy, not a plan', () => {
     expect(FREE_TIER.displayPrice).toBe('£0')
   })
 
+  it('names an outcome on the button, and no mechanism anywhere', () => {
+    // /free is a case picker now: nothing is signed up for and no code is
+    // typed until somebody has seen their own verdict, so the column that
+    // sells the free tier must not promise either.
+    const copy = [
+      FREE_TIER.ctaLabel,
+      FREE_TIER.tagline,
+      ...FEATURE_ROWS.map((row) => `${row.cells[FREE].text} ${row.cells[FREE].sub ?? ''}`),
+    ]
+      .join(' ')
+      .toLowerCase()
+
+    expect(FREE_TIER.ctaLabel).toBe('Start free')
+    expect(copy).not.toMatch(/sign[ -]up/)
+    expect(copy).not.toContain('code')
+  })
+
   it('never says "trial" on the button', () => {
     // A product rule, not a preference: "trial" reads as a countdown to being
     // sold something, and the offer is five stations with no card.

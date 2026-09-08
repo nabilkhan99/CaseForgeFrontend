@@ -106,19 +106,24 @@ export default function Hero() {
             transition={{ duration: 0.5, delay: 0.18 }}
           >
             {/*
+              THE CONSULTATION IS THE CALL TO ACTION.
+              This button used to point at /free, where an address, a first
+              name and a six-digit code stood between the page and the product.
+              It now opens a live patient in one click; /free is the picker,
+              offered underneath for somebody who would rather choose a case.
+
               Filled, not the old "2d" outline. The outline treatment was drawn
-              for a CTA competing with the receipt panel beside it; the offer is
-              now five marked stations rather than one mock, which is worth more
-              than the page's quietest button.
+              for a CTA competing with the receipt panel beside it, and starting
+              a consultation is worth more than the page's quietest button.
             */}
             <motion.a
-              href="/free"
+              href="/try/talk"
               whileHover={{ y: -2 }}
               whileTap={{ scale: 0.98 }}
               className="inline-flex items-center gap-3.5 rounded-full border-[3px] border-transparent py-2.5 pl-7 pr-2.5 text-lg font-bold tracking-[-0.01em] text-[#FFF8EF] shadow-[0_10px_28px_-14px_rgba(180,83,9,0.75)] sm:gap-4 sm:py-3 sm:pl-9 sm:pr-3 sm:text-xl"
               style={{ background: 'linear-gradient(135deg, #B45309 0%, #D97706 100%)' }}
             >
-              Start 5 free stations
+              Start your first station
               <span
                 className="flex h-11 w-11 items-center justify-center rounded-full bg-[#FFF8EF] text-[#B45309] sm:h-[52px] sm:w-[52px]"
                 aria-hidden="true"
@@ -126,19 +131,19 @@ export default function Hero() {
                 <ArrowRight className="h-5 w-5 sm:h-6 sm:w-6" />
               </span>
             </motion.a>
-            <p className="mt-4 text-xs text-[#78716C] sm:text-sm">
-              No card · five days · every station marked · your dashboard keeps the results
-            </p>
-            {/* Door (b), as a text link. Somebody who wants proof before an
-                address should be able to get it in one click; somebody who has
-                already decided should not have to read past it. */}
-            <p className="mt-2.5 text-xs sm:text-sm">
+            {/* The picker, as a text link: for somebody who wants to see what
+                the five are before they commit twelve minutes to one. */}
+            <p className="mt-4 text-xs sm:text-sm">
               <a
-                href="/try/talk"
+                href="/free"
                 className="text-[#78716C] underline decoration-[#78716C]/40 underline-offset-4 transition-colors hover:text-[#1C1917]"
               >
-                Or talk to a patient first · no sign-up, a live consultation now
+                See the five cases
               </a>
+            </p>
+            <p className="mt-2.5 text-xs text-[#78716C] sm:text-sm">
+              Five free stations · every one marked · your first verdict before we ask for
+              anything
             </p>
           </motion.div>
         </div>

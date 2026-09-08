@@ -47,11 +47,11 @@ export default function FreeStationsBanner() {
                 // email greets an unnamed lead as "there".
                 body: JSON.stringify({ mode: 'signup', email: clean }),
             });
-            window.location.assign(`/free?email=${encodeURIComponent(clean)}&code=sent`);
+            window.location.assign(`/free/open?email=${encodeURIComponent(clean)}&code=sent`);
         } catch {
             // Land them on /free anyway — the address is typed again there,
             // which is that page's normal first step.
-            window.location.assign(`/free?email=${encodeURIComponent(clean)}`);
+            window.location.assign(`/free/open?email=${encodeURIComponent(clean)}`);
         }
     }
 
@@ -96,7 +96,7 @@ export default function FreeStationsBanner() {
                         disabled={submitting}
                         className="shrink-0 rounded-lg border border-defined bg-white px-3.5 py-2 text-[13.5px] font-semibold text-heading transition-colors hover:bg-white/60 disabled:opacity-60"
                     >
-                        {submitting ? 'Sending…' : 'Send my code'}
+                        {submitting ? 'One moment…' : 'Open my dashboard'}
                     </button>
                 </form>
             </div>

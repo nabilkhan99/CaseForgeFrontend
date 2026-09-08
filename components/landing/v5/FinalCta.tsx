@@ -37,7 +37,7 @@ export default function FinalCta() {
               href="/free"
               className="inline-flex items-center gap-2 rounded-full bg-white px-8 py-4 text-base font-semibold text-[#854F0B] shadow-elevation-3 transition-transform hover:scale-[1.03]"
             >
-              Try Free Mock Station
+              See the five free cases
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </a>
           </div>

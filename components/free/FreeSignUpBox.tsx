@@ -7,7 +7,13 @@ import { trackEvent } from '@/lib/analytics';
 import { trackTrialAccountCreated } from '@/lib/trial/trialEvents';
 
 /**
- * "Start your five" — door (a).
+ * The email-and-code box — door (a), now living at /free/open.
+ *
+ * It moved when /free became a case picker: asking for an address before
+ * anybody has seen a consultation is friction in front of value, so this is no
+ * longer the first thing a visitor meets. It is what somebody uses to come
+ * back to an account, and the sign-up branch of `verify-code` still creates one
+ * when there is not one — so the behaviour is unchanged, only its audience.
  *
  * Two fields and a code. Everything else this product wants to know (exam
  * sitting, training stage) is asked on the dashboard AFTER the first station,
@@ -187,12 +193,8 @@ export default function FreeSignUpBox({ initialEmail, codeAlreadySent }: FreeSig
     >
       {step === 'details' && (
         <>
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-heading sm:text-[11px]">
-            Start your five
-          </p>
-
           <form
-            className="mt-5 flex flex-col gap-3"
+            className="flex flex-col gap-3"
             onSubmit={(event) => {
               event.preventDefault();
               if (detailsReady) void requestCode();
@@ -230,7 +232,10 @@ export default function FreeSignUpBox({ initialEmail, codeAlreadySent }: FreeSig
               disabled={!detailsReady || submitting}
               className="cta-button mt-1 w-full px-6 py-4 text-base"
             >
-              {submitting ? 'Sending…' : 'Send my code'}
+              {/* Names the outcome, not the mechanism. What the button does is
+                  email a code; what it is FOR is opening the dashboard, and
+                  the line underneath says so in full. */}
+              {submitting ? 'One moment…' : 'Open my dashboard'}
             </button>
           </form>
 
