@@ -86,11 +86,10 @@ describe('the other doors into the offer', () => {
   })
 
   it('sends the pricing table’s free column to the account form', () => {
-    // ⚠️ FREE_TIER.ctaHref in lib/commerce/plans.ts still reads /free and is
-    // owned by the money catalogue; PricingTable overrides it locally until
-    // that file is next touched. This pins the override, which is what ships.
-    expect(PRICING).toContain("const FREE_CTA_HREF = '/free/start'")
-    expect(PRICING).toContain('href={FREE_CTA_HREF}')
+    // The free column's destination lives on FREE_TIER in the plan catalogue
+    // and PricingTable reads it from there, so there is one source of truth.
+    expect(FREE_TIER.ctaHref).toBe('/free/start')
+    expect(PRICING).toContain('href={FREE_TIER.ctaHref}')
     expect(FREE_TIER.ctaLabel).toBe('Start free')
   })
 

@@ -106,8 +106,8 @@ describe('FREE_TIER is display copy, not a plan', () => {
     expect(PLANS.map((plan) => plan.key)).not.toContain('free')
   })
 
-  it('sends people to the offer page rather than to checkout', () => {
-    expect(FREE_TIER.ctaHref).toBe('/free')
+  it('sends people to the account form rather than to checkout', () => {
+    expect(FREE_TIER.ctaHref).toBe('/free/start')
     expect(FREE_TIER.displayPrice).toBe('£0')
   })
 

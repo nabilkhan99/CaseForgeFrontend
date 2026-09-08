@@ -307,7 +307,7 @@ export const FREE_TIER = {
   name: 'Free',
   displayPrice: '£0',
   priceSuffix: '',
-  tagline: 'Five stations · five days · no card',
+  tagline: 'Five stations · unlimited attempts · five days',
   ctaLabel: 'Start free',
-  ctaHref: '/free',
+  ctaHref: '/free/start',
 } as const

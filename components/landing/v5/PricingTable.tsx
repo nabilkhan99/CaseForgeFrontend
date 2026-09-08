@@ -317,7 +317,6 @@ function OwnedCta() {
  * points at the form; /free is the browse-first page, one link away from it.
  * ⚠️ Fold this back into FREE_TIER when plans.ts is next touched.
  */
-const FREE_CTA_HREF = '/free/start';
 
 function PlanCta({ selfStudy, variant, selfStudyPlan, owned, canUpgrade }: CtaButtonsProps) {
   if (variant === 'free') {
@@ -326,7 +325,7 @@ function PlanCta({ selfStudy, variant, selfStudyPlan, owned, canUpgrade }: CtaBu
     // start rather than to compete with Complete.
     return (
       <Link
-        href={FREE_CTA_HREF}
+        href={FREE_TIER.ctaHref}
         onClick={() => trackEvent('checkout_clicked', { plan: 'free' })}
         className="block w-full rounded-full border border-heading/15 bg-white px-2 py-3 text-center text-[13px] font-semibold text-heading transition-colors hover:bg-surface-warm sm:py-2.5 sm:text-sm"
       >
