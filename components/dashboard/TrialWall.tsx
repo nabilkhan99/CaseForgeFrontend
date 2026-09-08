@@ -1,15 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { getPlan, type PlanKey } from '@/lib/commerce/plans';
-import { wallPlansFor } from '@/lib/commerce/trialWallPlans';
+import TrialPlanOffer from '@/components/dashboard/TrialPlanOffer';
 import { trackTrialWallHit } from '@/lib/trial/trialEvents';
+import { numberWord } from '@/lib/trial/trialPanelCopy';
 import type { TrialSubscription } from '@/app/api/subscription/route';
 
 /**
- * The end of the five stations.
+ * The end of the five days.
  *
  * Two plans, not four, chosen by how close the exam is — see
  * lib/commerce/trialWallPlans.ts for why that is the axis. Everything the
@@ -21,114 +21,26 @@ import type { TrialSubscription } from '@/app/api/subscription/route';
  * A "wall" in name only, then — it is the one screen in the funnel where
  * somebody has actually used the product and can judge it, so it argues from
  * what they did rather than from a feature list.
+ *
+ * SINCE 7 SEPTEMBER 2026 IT HAS ONE TRIGGER. The trial used to end two ways —
+ * the stations ran out, or the days did — and the headline turned on which. It
+ * is now five cases with unlimited attempts, so there is nothing to exhaust and
+ * expiry is the only way here. The offer itself is unchanged, and it is no
+ * longer this screen's first appearance: TrialPanel has been making it on the
+ * dashboard since day one, which is why this can lead with what they did rather
+ * than with a price.
  */
 
-/** How the two plans are bought. Self-Study posts to checkout; Complete picks a day first. */
-function usePlanCheckout() {
-  const [submitting, setSubmitting] = useState<PlanKey | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  async function start(plan: PlanKey) {
-    if (submitting) return;
-    setSubmitting(plan);
-    setError(null);
-    try {
-      const res = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan }),
-      });
-      const data = (await res.json()) as { url?: string; error?: string };
-      if (!res.ok || !data.url) {
-        setError(data.error ?? 'Something went wrong, please try again.');
-        setSubmitting(null);
-        return;
-      }
-      window.location.assign(data.url);
-    } catch {
-      setError('Something went wrong, please try again.');
-      setSubmitting(null);
-    }
-  }
-
-  return { start, submitting, error };
-}
-
-/** The headline, which turns entirely on why the trial stopped. */
+/** The headline. One reason to be here now, so one thing to say. */
 function heading(trial: TrialSubscription): { title: string; body: string } {
-  if (trial.reason === 'expiry') {
-    return {
-      title: 'Your five days are up',
-      body:
-        trial.remaining > 0
-          ? `You had ${trial.remaining} station${trial.remaining === 1 ? '' : 's'} left. Everything you did is still here — pick up where you stopped.`
-          : 'Everything you did is still here — your reports, your board and your development picture.',
-    };
-  }
+  const untried = Math.max(0, trial.remaining);
   return {
-    title: `That's all ${trial.allowance} free stations`,
-    body: 'Everything you did is still here — your reports, your board and your development picture. There are 200 cases in the bank.',
+    title: `Your ${numberWord(trial.windowDays)} days are up`,
+    body:
+      untried > 0
+        ? `You tried ${trial.casesTried} of the ${numberWord(trial.allowance)}. Everything you did is still here — your reports, your board and your development picture.`
+        : 'You ran all of them. Everything you did is still here — your reports, your board and your development picture. There are 200 cases in the bank.',
   };
-}
-
-interface PlanCardProps {
-  planKey: PlanKey;
-  lead: boolean;
-  /** One sentence saying why this plan, for this person, now. */
-  why: string;
-  checkout: ReturnType<typeof usePlanCheckout>;
-}
-
-function PlanRow({ planKey, lead, why, checkout }: PlanCardProps) {
-  const plan = getPlan(planKey);
-  if (!plan) return null;
-
-  // Complete is never bought straight from a button: the coaching day is the
-  // unit of scarcity (a class of six) and has to be chosen before Stripe sees
-  // the order. Same split as the pricing table.
-  const picksADay = planKey === 'complete';
-  const busy = checkout.submitting === planKey;
-
-  return (
-    <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-3 py-5">
-      <div className="min-w-0">
-        <div className="flex items-baseline gap-2.5">
-          <span className="text-[17px] font-semibold tracking-[-0.01em] text-heading">
-            {plan.name}
-          </span>
-          <span className="font-mono text-[15px] font-bold text-heading">{plan.displayPrice}</span>
-          <span className="text-[12px] text-muted">{plan.priceSuffix}</span>
-        </div>
-        <p className="mt-1 text-[13px] leading-relaxed text-muted">{why}</p>
-      </div>
-
-      {picksADay ? (
-        <Link
-          href="/coaching-day"
-          className={
-            lead
-              ? 'flex-shrink-0 rounded-full bg-primary px-5 py-2.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90'
-              : 'flex-shrink-0 rounded-full border border-heading/15 bg-white px-5 py-2.5 text-[13px] font-semibold text-heading transition-colors hover:bg-surface-warm'
-          }
-        >
-          {plan.ctaLabel}
-        </Link>
-      ) : (
-        <button
-          type="button"
-          onClick={() => checkout.start(planKey)}
-          disabled={checkout.submitting !== null}
-          className={
-            lead
-              ? 'flex-shrink-0 rounded-full bg-primary px-5 py-2.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60'
-              : 'flex-shrink-0 rounded-full border border-heading/15 bg-white px-5 py-2.5 text-[13px] font-semibold text-heading transition-colors hover:bg-surface-warm disabled:opacity-60'
-          }
-        >
-          {busy ? 'Redirecting…' : plan.ctaLabel}
-        </button>
-      )}
-    </div>
-  );
 }
 
 export default function TrialWall({
@@ -143,8 +55,6 @@ export default function TrialWall({
   trial: TrialSubscription;
   examDate?: string | null;
 }) {
-  const checkout = usePlanCheckout();
-  const wall = wallPlansFor({ examDate, examHint: trial.examHint });
   const { title, body } = heading(trial);
 
   // Fired once per mount, not per render, and not on the server: this is the
@@ -152,22 +62,8 @@ export default function TrialWall({
   // it on a re-render would quietly inflate the denominator of every rate
   // computed from it.
   useEffect(() => {
-    trackTrialWallHit(trial.reason ?? 'allowance');
-  }, [trial.reason]);
-
-  // The argument for each plan, in the reader's own situation. The imminent
-  // case is the only one where the rolling plan is the honest recommendation,
-  // and saying why out loud is what stops it reading as an upsell.
-  const why: Record<'primary' | 'secondary', string> =
-    wall.proximity === 'imminent'
-      ? {
-          primary: 'Month by month, cancel any time — the right shape when the exam is weeks away.',
-          secondary: 'Adds the lectures and a coaching day in a class of six.',
-        }
-      : {
-          primary: 'One payment, three months, nothing renews. All 200 cases, every one marked.',
-          secondary: 'Everything in Self-Study, plus the lectures and a coaching day.',
-        };
+    trackTrialWallHit('expiry');
+  }, []);
 
   return (
     <motion.section
@@ -187,25 +83,16 @@ export default function TrialWall({
       </h2>
       <p className="mt-2 max-w-xl text-[13.5px] leading-relaxed text-body">{body}</p>
 
-      {/* Two rows between rules, not two cards. The house style, and the right
-          one here: a card grid at this moment reads as a pricing page, which is
-          the thing this screen is trying not to be. */}
-      <div className="mt-5 divide-y divide-hairline border-t border-hairline">
-        <PlanRow planKey={wall.primary} lead why={why.primary} checkout={checkout} />
-        <PlanRow planKey={wall.secondary} lead={false} why={why.secondary} checkout={checkout} />
+      <div className="mt-5">
+        <TrialPlanOffer examDate={examDate} examHint={trial.examHint} />
       </div>
 
-      {checkout.error && (
-        <p className="mt-3 text-[12px] font-medium text-danger">{checkout.error}</p>
-      )}
-
-      <p className="mt-4 text-[12px] text-muted">
-        {/* Quiet, and deliberately last. Two plans is a decision somebody can
-            make; four is a comparison they postpone. The other two are still
-            one click away for anyone who wants them. */}
-        <Link href="/#pricing" className="hover:text-primary hover:underline">
-          See all plans
-        </Link>
+      <p className="mt-3 text-[12px] text-muted">
+        Your reports and{' '}
+        <Link href="/dashboard/library" className="hover:text-primary hover:underline">
+          your board
+        </Link>{' '}
+        stay open either way.
       </p>
     </motion.section>
   );

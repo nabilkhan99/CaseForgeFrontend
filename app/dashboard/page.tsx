@@ -10,7 +10,7 @@ import { BlurFade } from '@/components/magicui/blur-fade';
 import { NumberTicker } from '@/components/magicui/number-ticker';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import TrainingHeatmap from '@/components/dashboard/TrainingHeatmap';
-import TrialStrip from '@/components/dashboard/TrialStrip';
+import TrialPanel from '@/components/dashboard/TrialPanel';
 import TrialWall from '@/components/dashboard/TrialWall';
 import TrialQuestionnaireCard from '@/components/dashboard/TrialQuestionnaireCard';
 import StudyBudgetChecker from '@/components/landing/v5/StudyBudgetChecker';
@@ -120,6 +120,11 @@ function DashboardContent() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [stats, setStats] = useState<UserStats>(defaultStats);
   const [upNext, setUpNext] = useState<Station | null>(null);
+  // The five cases a trial account may open, in `free_trial_order`, resolved
+  // out of the station index this page already fetches. Empty for everybody
+  // else — and empty for a trialist until both the index and /api/subscription
+  // have answered, which is one render.
+  const [trialStations, setTrialStations] = useState<Station[]>([]);
   const [calendar, setCalendar] = useState<IntensityCalendar | null>(null);
   // Pass progress for the guarantee line, counted off the station index the
   // picker already fetches — no extra query. null when the index came back
@@ -184,7 +189,22 @@ function DashboardContent() {
             ? { passed: stationIndex.filter((s) => s.passed).length, total: stationIndex.length }
             : null,
         );
-        setAccess(accessRes?.state ? (accessRes as SubscriptionResponse) : null);
+        const access = accessRes?.state ? (accessRes as SubscriptionResponse) : null;
+        setAccess(access);
+        // Resolved HERE, off the index that was fetched in the same breath,
+        // rather than in a second query for five rows: the panel shows each
+        // case's own attempt history, and a separate fetch could disagree with
+        // the board about it. Ordered by the ids, which arrive in
+        // `free_trial_order` — the pairing is the point of that column.
+        const freeIds = access?.trial?.freeStationIds ?? [];
+        if (freeIds.length > 0) {
+          const byId = new Map(stationIndex.map((station) => [station.id, station]));
+          setTrialStations(
+            freeIds
+              .map((id) => byId.get(id))
+              .filter((station): station is Station => station !== undefined),
+          );
+        }
 
         // The picker only ever offers a station the user has never attempted,
         // so it runs out once the bank is exhausted; a random case is still a
@@ -388,20 +408,24 @@ function DashboardContent() {
           agreed in writing, so the date is the entitlement's own, not a fixed
           launch day. They paid; the one message that must never appear is
           "upgrade". */}
-      {/* The five free stations. The strip is standing status while the trial
-          runs; the wall replaces it once the stations or the days run out. Both
-          sit above every other banner because for a trial account they are the
-          only plan message that is true — `state` is 'none' for someone who has
-          bought nothing, and the prompts below are written for that. */}
-      {trialLive && trial && <TrialStrip trial={trial} />}
+      {/* The free week. The panel is the whole of a trial account's dashboard
+          while it runs — the five cases, the deadline and the offer — and the
+          wall replaces it once the five days are up. Both sit above every other
+          banner because for a trial account they are the only plan message that
+          is true: `state` is 'none' for someone who has bought nothing, and the
+          prompts below are written for that. */}
+      {trialLive && trial && (
+        <TrialPanel trial={trial} stations={trialStations} examDate={stats.examDate} />
+      )}
       {trialEnded && trial && <TrialWall trial={trial} examDate={stats.examDate} />}
 
-      {/* The two questions the sign-up door skipped, asked once there is a mark
-          to weigh them against. `trial.used` is the count of GENUINELY MARKED
-          consultations, so a session too short to grade does not trigger this;
-          and it disappears the moment there is an exam date, from here or from
-          the countdown field below. */}
-      {trial && trial.used >= 1 && !stats.examDate && user?.id && (
+      {/* The two questions the sign-up door skipped, asked once they have
+          actually sat one of the five. `trial.casesTried` counts cases begun,
+          not marks, so this now appears when they come back to the dashboard
+          after their first consultation rather than ninety seconds later; and
+          it disappears the moment there is an exam date, from here or from the
+          countdown field below. */}
+      {trial && trial.casesTried >= 1 && !stats.examDate && user?.id && (
         <TrialQuestionnaireCard
           userId={user.id}
           onSaved={(examDate) => {
@@ -580,7 +604,14 @@ function DashboardContent() {
 
       {/* Quick start. A buyer whose window hasn't opened (or has closed) can
           browse the library but not start — say so here rather than letting
-          the button bounce them back to this page with no explanation. */}
+          the button bounce them back to this page with no explanation.
+
+          STOOD DOWN FOR A LIVE TRIAL. "Up next" recommends from the whole bank,
+          and for a trial account 195 of those cases are locked — so the page's
+          own primary action would have been an invitation to a brief with no
+          Begin on it. The panel above already names the five they can open, in
+          the order they should be taken. */}
+      {!trialLive && (
       <Reveal delay={REVEAL.quickStart} className="mb-10 tall:mb-14">
         {trialEnded ? (
           /* The wall above has already made the offer, with two plans and a
@@ -687,6 +718,7 @@ function DashboardContent() {
             second card competing with the page's primary action bought nothing.
             Its query (getLastStation) went with it. */}
       </Reveal>
+      )}
 
       {/* Training intensity — the page's centrepiece.
 
