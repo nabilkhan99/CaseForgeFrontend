@@ -5,7 +5,10 @@ import { startPrefill, type SearchParams } from '@/lib/trial/freeParams';
 import { pageMetadata } from '@/lib/seo/site';
 
 export const metadata: Metadata = pageMetadata({
-  title: 'Create your free account | Fourteen Fisherman',
+  // No " | Fourteen Fisherman" suffix: the root layout's title template
+  // (app/layout.tsx) already appends one, and pages that spell it out here end
+  // up saying it twice in the tab. Several older pages do; this one does not.
+  title: 'Create your free account',
   description:
     'Five SCA stations with an AI patient, unlimited attempts, five days, no card. Create your account and your first verdict is minutes away.',
   path: '/free/start',
