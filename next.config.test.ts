@@ -6,11 +6,10 @@ import nextConfig from './next.config.js'
  *
  * `/try` is in ads, in sent emails, in the hero of every cached copy of the old
  * landing page and in people's history, so it has to move rather than 404 — and
- * it has to move WITHOUT taking its children with it. `/try/talk`,
- * `/try/session/[id]` and `/try/feedback/[id]` are the live guest funnel: a
- * `/try/:path*` source, which is the obvious way to write this, would redirect
- * somebody out of a consultation they are in the middle of and would make every
- * report link in every sent email dead.
+ * it has to move WITHOUT taking its children with it. `/try/talk` has its own
+ * handler (it carries the station on to /free/start) and `/try/feedback/[id]`
+ * is roughly eighty live report links in people's inboxes. A `/try/:path*`
+ * source, which is the obvious way to write this, would swallow both.
  *
  * Nothing in the product fails visibly if that regresses — the funnel simply
  * stops, and the first evidence is a support message. So the shape of the rule
@@ -50,12 +49,13 @@ describe('/try', () => {
   })
 
   it.each([
+    // Retired 7 September 2026, but still answered: this one redirects to
+    // /free/start with the station on it (see app/try/talk/route.ts).
     '/try/talk',
     '/try/talk/',
+    // Legacy guest reports. These links are in people's inboxes.
     '/try/feedback/2b0d9a5e-0000-4000-8000-000000000000',
-    '/try/session/2b0d9a5e-0000-4000-8000-000000000000',
-    '/try/station/2b0d9a5e-0000-4000-8000-000000000000',
-  ])('leaves %s alone — it is the live guest funnel', async (path) => {
+  ])('leaves %s alone — it answers for itself', async (path) => {
     const redirects = await config.redirects()
     const hit = redirects.find((rule) => matches(rule.source, path))
     expect(hit, `${path} must not be redirected`).toBeUndefined()
