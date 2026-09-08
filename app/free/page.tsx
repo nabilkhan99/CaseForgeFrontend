@@ -9,18 +9,17 @@ import { pageMetadata } from '@/lib/seo/site';
 export const metadata: Metadata = pageMetadata({
   title: 'Five free SCA stations, marked | Fourteen Fisherman',
   description:
-    'Pick a case and talk to an AI patient for 12 minutes, then read your report against the three SCA domains. Five free stations, and your first verdict before we ask for anything.',
+    'Pick a case and talk to an AI patient for 12 minutes, then read your report against the three SCA domains. Five free stations in a free account, and your first verdict minutes away.',
   path: '/free',
 });
 
 /**
- * The deliberate door, rebuilt as a case picker.
+ * The offer page, as a case picker.
  *
- * Value before identity: the consultation is the call to action here and
- * everywhere, and the address is asked for at the reveal after the first
- * station — where the trainee is looking at their own verdict rather than at a
- * promise. The email-and-code form that used to occupy this page still exists,
- * one quiet link away at /free/open, for somebody coming back to an account.
+ * The five titles are the argument: pick one and Start takes you to
+ * /free/start, which makes the account and then opens that case. The
+ * email-and-code form that used to occupy this page still exists, one quiet
+ * link away at /free/open, for somebody coming back to an account they have.
  *
  * SERVER-RENDERED, and that is the point: the five titles are the page's whole
  * argument, so they are in the HTML rather than fetched after paint. It is

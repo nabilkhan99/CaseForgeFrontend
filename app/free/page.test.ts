@@ -39,13 +39,13 @@ describe('/free lists the five stations', () => {
     expect(FREE_PAGE).toContain('<FreePicker stations={stations}')
   })
 
-  it('links every Start to the one-click door with that station on it', () => {
+  it('links every Start to the free account form with that station on it', () => {
     const stations = toPickerStations([
       { id: 'aaaaaaaa-0000-0000-0000-000000000001', title: 'A case' },
       { id: 'bbbbbbbb-0000-0000-0000-000000000002', title: 'Another case' },
     ])
     for (const station of stations) {
-      expect(station.href).toBe(`/try/talk?station=${station.id}`)
+      expect(station.href).toBe(`/free/start?station=${station.id}`)
     }
     // And the row renders that href rather than composing its own.
     expect(PICKER).toContain('href={station.href}')
@@ -57,11 +57,21 @@ describe('/free lists the five stations', () => {
   })
 
   it('says what pressing Start actually does', () => {
-    expect(PICKER).toContain('Your microphone is asked for when you press Start')
+    expect(PICKER).toContain('Start makes your free account, then opens that case')
   })
 
-  it('answers both of the one-click door’s bounces', () => {
-    // /try/talk redirects to /free?guest=limit and /free?guest=unavailable.
+  it('no longer promises a verdict before anything is asked for', () => {
+    // The guest lane is gone: the account comes first and the verdict follows
+    // it by minutes. Leaving the old sentence up would be selling a door that
+    // is not there.
+    const copy = withoutComments(FREE_PAGE + PICKER)
+    expect(copy).not.toContain('before we ask for anything')
+    expect(copy).toContain('Your first verdict is minutes away')
+  })
+
+  it('still answers the two guest bounces older links can carry', () => {
+    // Retired links and cached pages can still arrive with ?guest=limit or
+    // ?guest=unavailable on them.
     expect(FREE_PAGE).toContain('guestNotice(params)')
     expect(PICKER).toContain('limit:')
     expect(PICKER).toContain('unavailable:')

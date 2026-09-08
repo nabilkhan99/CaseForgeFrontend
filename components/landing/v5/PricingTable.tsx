@@ -308,14 +308,25 @@ function OwnedCta() {
   );
 }
 
+/**
+ * Where the free column's button goes.
+ *
+ * Overridden here rather than read off `FREE_TIER.ctaHref`, which still says
+ * /free: `lib/commerce/plans.ts` is the money catalogue and belongs to another
+ * workstream on this build. "Start free" means make the account now, so it
+ * points at the form; /free is the browse-first page, one link away from it.
+ * ⚠️ Fold this back into FREE_TIER when plans.ts is next touched.
+ */
+const FREE_CTA_HREF = '/free/start';
+
 function PlanCta({ selfStudy, variant, selfStudyPlan, owned, canUpgrade }: CtaButtonsProps) {
   if (variant === 'free') {
-    // No Stripe call: there is nothing to buy. A plain link to the offer page,
-    // in the quiet treatment, because the column exists to remove a reason not
-    // to start rather than to compete with Complete.
+    // No Stripe call: there is nothing to buy. A plain link to the sign-up, in
+    // the quiet treatment, because the column exists to remove a reason not to
+    // start rather than to compete with Complete.
     return (
       <Link
-        href={FREE_TIER.ctaHref}
+        href={FREE_CTA_HREF}
         onClick={() => trackEvent('checkout_clicked', { plan: 'free' })}
         className="block w-full rounded-full border border-heading/15 bg-white px-2 py-3 text-center text-[13px] font-semibold text-heading transition-colors hover:bg-surface-warm sm:py-2.5 sm:text-sm"
       >

@@ -106,24 +106,26 @@ export default function Hero() {
             transition={{ duration: 0.5, delay: 0.18 }}
           >
             {/*
-              THE CONSULTATION IS THE CALL TO ACTION.
-              This button used to point at /free, where an address, a first
-              name and a six-digit code stood between the page and the product.
-              It now opens a live patient in one click; /free is the picker,
-              offered underneath for somebody who would rather choose a case.
+              THE ACCOUNT IS THE CALL TO ACTION (7 September 2026).
+              This button opened a guest consultation for a while, which got a
+              patient on screen faster and left the work in a browser rather
+              than on a board. It now makes a free account in one go — email,
+              mobile, password, one code — and the five stations are sat in the
+              dashboard like everything else. /free is the picker, offered
+              underneath for somebody who would rather choose a case first.
 
               Filled, not the old "2d" outline. The outline treatment was drawn
-              for a CTA competing with the receipt panel beside it, and starting
-              a consultation is worth more than the page's quietest button.
+              for a CTA competing with the receipt panel beside it, and this is
+              the page's most valuable button, not its quietest.
             */}
             <motion.a
-              href="/try/talk"
+              href="/free/start"
               whileHover={{ y: -2 }}
               whileTap={{ scale: 0.98 }}
               className="inline-flex items-center gap-3.5 rounded-full border-[3px] border-transparent py-2.5 pl-7 pr-2.5 text-lg font-bold tracking-[-0.01em] text-[#FFF8EF] shadow-[0_10px_28px_-14px_rgba(180,83,9,0.75)] sm:gap-4 sm:py-3 sm:pl-9 sm:pr-3 sm:text-xl"
               style={{ background: 'linear-gradient(135deg, #B45309 0%, #D97706 100%)' }}
             >
-              Start your first station
+              Start free
               <span
                 className="flex h-11 w-11 items-center justify-center rounded-full bg-[#FFF8EF] text-[#B45309] sm:h-[52px] sm:w-[52px]"
                 aria-hidden="true"
@@ -142,8 +144,7 @@ export default function Hero() {
               </a>
             </p>
             <p className="mt-2.5 text-xs text-[#78716C] sm:text-sm">
-              Five free stations · every one marked · your first verdict before we ask for
-              anything
+              Five stations · unlimited attempts · five days · no card
             </p>
           </motion.div>
         </div>

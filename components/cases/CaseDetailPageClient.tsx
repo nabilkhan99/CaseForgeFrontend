@@ -319,17 +319,18 @@ export default function CaseDetailPageClient({ caseData }: CaseDetailPageClientP
                             answers back, and it starts on this station rather
                             than on whichever one the funnel would have picked —
                             somebody reading a chlamydia results case wants to
-                            sit a chlamydia results case.
-                            Door (b): no sign-up, the verdict comes before we ask
-                            for anything. */}
+                            sit a chlamydia results case. The id rides through
+                            the free account form and is what opens on the far
+                            side of it. */}
                         <Link
-                            href={`/try/talk?station=${encodeURIComponent(caseData.id)}`}
+                            href={`/free/start?station=${encodeURIComponent(caseData.id)}`}
                             className="cta-button mt-4 w-full px-5 py-3.5 text-[15px]"
                         >
                             Practise this case free
                         </Link>
                         <p className="mt-2 text-xs leading-relaxed text-muted">
-                            A live 12-minute consultation with an AI patient, marked. No sign-up.
+                            A live 12-minute consultation with an AI patient, marked. Free account,
+                            no card.
                         </p>
                     </div>
 
