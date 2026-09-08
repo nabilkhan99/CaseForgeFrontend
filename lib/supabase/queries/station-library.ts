@@ -66,6 +66,49 @@ export interface Station {
     bestScore: number | null;
     /** Denominator that attempt was marked out of; null when unknown. */
     bestMaxScore: number | null;
+    /**
+     * Outside the five cases a free trial opens.
+     *
+     * Always false as fetched — these queries know nothing about who is asking
+     * beyond a user id, and the trial's five come from `/api/subscription`.
+     * {@link markTrialLocks} stamps it once the caller knows. False for
+     * everybody who is not on a trial, which is the safe default: a paying
+     * customer must never see 195 of their 200 cases flash as locked while a
+     * fetch resolves.
+     *
+     * MARKED, NOT FILTERED OUT. The locked cases stay in the array and on the
+     * board, because the brief page behind each of them is where the upsell
+     * lives — hiding the bank from the person we are trying to sell it to would
+     * be the opposite of the point. Same reasoning as the cohort lock beside
+     * it.
+     */
+    lockedForTrial: boolean;
+}
+
+/**
+ * Stamp `lockedForTrial` on a bank the caller has already fetched.
+ *
+ * `freeStationIds` is null for everybody without a live trial AND until the
+ * answer arrives — both collapse to "no limit", which is the same
+ * null-until-known rule `useCohortAllowlist` follows and for the same reason.
+ *
+ * An EMPTY list is not null and does not mean the same thing: it means the
+ * trial opens nothing (a bank with no flagged stations, or a lookup that failed
+ * — loadTrialAccess fails closed), so every case locks. That asymmetry is the
+ * whole reason this takes a nullable list rather than a Set built by the caller.
+ *
+ * Returns new objects rather than mutating the fetched ones, so a caller can
+ * hold the unmarked array and re-derive when the trial answer lands.
+ */
+export function markTrialLocks(
+    stations: Station[],
+    freeStationIds: readonly string[] | null,
+): Station[] {
+    if (freeStationIds === null) return stations;
+    const open = new Set(freeStationIds);
+    return stations.map(station =>
+        open.has(station.id) ? station : { ...station, lockedForTrial: true },
+    );
 }
 
 /**
@@ -228,6 +271,9 @@ function toStation(row: StationRow, domainName: string, progress: UserStationPro
         bestVerdict: passState?.bestVerdict ?? null,
         bestScore: passState?.bestScore ?? null,
         bestMaxScore: passState?.bestMaxScore ?? null,
+        // Stamped by markTrialLocks once the caller knows whose library this
+        // is; the query itself has no opinion.
+        lockedForTrial: false,
     };
 }
 
@@ -361,6 +407,7 @@ export async function getAllStations(): Promise<Station[]> {
         bestVerdict: null,
         bestScore: null,
         bestMaxScore: null,
+        lockedForTrial: false,
     }));
 }
 

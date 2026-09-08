@@ -15,6 +15,7 @@ import ConsultationTimer from '@/components/clinical-master/ConsultationTimer';
 import AudioSetupNotice from '@/components/clinical-master/AudioSetupNotice';
 import LockGlyph from '@/components/ui/LockGlyph';
 import { isStationLocked, useCohortAllowlist } from '@/hooks/useCohortAllowlist';
+import { isStationLockedForTrial, trialStationAllowlist, useTrialStatus } from '@/hooks/useTrialStatus';
 
 interface StationData {
   id: string;
@@ -38,13 +39,31 @@ function ReadingPhaseContent() {
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [readingComplete, setReadingComplete] = useState(false);
+  // Set when the API refuses this case for a trial account. The client-side
+  // check below should have caught it first, but the answer arrives
+  // asynchronously and the server is the authority — so a Begin that raced the
+  // lookup flips the page into the locked state rather than showing a raw
+  // error code.
+  const [serverTrialLocked, setServerTrialLocked] = useState(false);
 
-  // A cohort student can reach any brief in the bank; only their five assigned
-  // cases can be started. Everything above the CTA renders exactly as it does
-  // for a paying customer — the brief is the sample, and cutting it down would
-  // leave nothing to want.
+  // A cohort student, and now a trial account, can reach any brief in the bank;
+  // only their own cases can be started. Everything above the CTA renders
+  // exactly as it does for a paying customer — the brief is the sample, and
+  // cutting it down would leave nothing to want.
   const allowlist = useCohortAllowlist();
-  const locked = isStationLocked(allowlist, stationId);
+  const cohortLocked = isStationLocked(allowlist, stationId);
+  /**
+   * Outside the five cases the free trial opens.
+   *
+   * Kept separate from the cohort lock because the two are different offers.
+   * A cohort student's locked case needs their trainer to assign it; a trial
+   * account's needs a plan, which is a thing they can buy from this page — so
+   * this one gets the price link and the cohort one keeps its quieter line.
+   */
+  const trialLocked =
+    isStationLockedForTrial(trialStationAllowlist(useTrialStatus()), stationId) ||
+    serverTrialLocked;
+  const locked = cohortLocked || trialLocked;
 
   useEffect(() => {
     async function fetchStation() {
@@ -107,6 +126,22 @@ function ReadingPhaseContent() {
         // "your purchase doesn't exist".
         if (body?.pending) {
           router.push('/dashboard?access=pending');
+          return;
+        }
+        // A trial account reaching for a case outside its five. Nothing to
+        // navigate to: they are already on the one page that explains it, so
+        // the CTA becomes the upsell in place rather than bouncing them to a
+        // price list they did not ask for.
+        if (body?.error === 'trial_station_locked') {
+          setServerTrialLocked(true);
+          setStarting(false);
+          return;
+        }
+        // The five days are up. The two-plan wall lives on the dashboard, and
+        // the middleware sends a page navigation to exactly this URL — the API
+        // must not name a different destination.
+        if (body?.error === 'trial_expired') {
+          router.push('/dashboard?trial=ended');
           return;
         }
         const renewing = body?.state === 'read_only';
@@ -266,24 +301,37 @@ function ReadingPhaseContent() {
                 no microphone to set up for a consultation that cannot start. */}
             {!locked && <AudioSetupNotice />}
 
-            {/* CTA — or, for a case outside the cohort's five, the upsell that
-                takes its place. Deliberately quiet: a line and a link, no
+            {/* CTA — or, for a case outside the reader's own five, the upsell
+                that takes its place. Deliberately quiet: a line and a link, no
                 panel, no price, and nothing about scores or feedback. This is
                 the pre-consultation view a paying customer sees, minus the one
                 button, which is exactly as much as we owe someone who cannot
-                sit it. */}
+                sit it.
+
+                The trial wording differs from the cohort's on purpose. A
+                trialist has five cases of their own that DO open, so the useful
+                sentence is "this one is not one of them, and here is what
+                unlocks it" — and it points at /#pricing, where the plans are,
+                rather than the standalone /pricing page. */}
             <div>
               {locked ? (
                 <div className="border-t border-hairline pt-5">
                   <p className="flex items-center gap-1.5 text-[14px] font-medium text-heading">
                     <LockGlyph label="Locked" className="opacity-50" />
-                    Included with the full library
+                    {trialLocked
+                      ? 'Not one of your five free cases'
+                      : 'Included with the full library'}
                   </p>
+                  {trialLocked && (
+                    <p className="mt-1 text-[13px] leading-relaxed text-muted">
+                      Your five are on your dashboard, with as many attempts as you like.
+                    </p>
+                  )}
                   <Link
-                    href="/pricing"
+                    href={trialLocked ? '/#pricing' : '/pricing'}
                     className="mt-2 inline-flex min-h-[44px] items-center text-[13px] font-semibold text-primary hover:underline focus-visible-ring"
                   >
-                    Unlock all 200 cases &rarr;
+                    {trialLocked ? 'Unlock all 200 stations' : 'Unlock all 200 cases'} &rarr;
                   </Link>
                 </div>
               ) : (
