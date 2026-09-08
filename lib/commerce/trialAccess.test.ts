@@ -371,26 +371,23 @@ describe('decideAccess with a trial', () => {
 
 describe('loadFreeTrialStationIds', () => {
   function stubStations(rows: unknown[], error: unknown = null) {
-    const calls: { column: string; options: unknown }[] = []
-    const chain: Record<string, unknown> = {}
-    const order = vi.fn((column: string, options: unknown) => {
-      calls.push({ column, options })
-      return { ...chain, then: undefined }
-    })
     // A thenable chain: `.order()` twice, then awaited.
     const second = { then: (fn: (v: unknown) => unknown) => fn({ data: rows, error }) }
     const first = { order: vi.fn(() => second) }
-    const eq = vi.fn(() => ({ order: vi.fn(() => first) }))
+    const inFilter = vi.fn(() => ({ order: vi.fn(() => first) }))
+    const eq = vi.fn(() => ({ in: inFilter }))
     const select = vi.fn(() => ({ eq }))
-    void order
-    return { client: { from: vi.fn(() => ({ select })) } as never, eq, select }
+    return { client: { from: vi.fn(() => ({ select })) } as never, eq, inFilter, select }
   }
 
   it('returns the flagged stations, in order', async () => {
-    const { client, eq } = stubStations([{ id: 'st-2' }, { id: 'st-1' }])
+    const { client, eq, inFilter } = stubStations([{ id: 'st-2' }, { id: 'st-1' }])
     expect(await loadFreeTrialStationIds(client)).toEqual(['st-2', 'st-1'])
     // The flag is the set. Nothing else selects the trial's cases.
     expect(eq).toHaveBeenCalledWith('is_free_trial', true)
+    // And the same visibility rule the library reads by, so a flagged-but-
+    // staged case cannot be openable and invisible at the same time.
+    expect(inFilter).toHaveBeenCalledWith('is_active', [true])
   })
 
   it('throws rather than reporting an empty set when the read fails', async () => {
@@ -500,7 +497,11 @@ function stubTrialClient(opts: {
         return {
           select: () => ({
             eq: () => ({
-              order: () => ({ order: () => ({ then: (fn: (v: unknown) => unknown) => fn(answer) }) }),
+              in: () => ({
+                order: () => ({
+                  order: () => ({ then: (fn: (v: unknown) => unknown) => fn(answer) }),
+                }),
+              }),
             }),
           }),
         }

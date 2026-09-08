@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { visibleStationStates } from '@/lib/stations/visibility'
 
 /**
  * The free trial: FIVE FIXED CASES, UNLIMITED ATTEMPTS, FIVE DAYS.
@@ -406,12 +407,19 @@ export async function loadTrialGrant(
  *
  * Nulls sort last so a flagged station nobody has ordered yet still appears —
  * after the ordered ones — rather than jumping the queue or vanishing.
+ *
+ * `visibleStationStates()` rather than a bare `is_active = true`, so this
+ * agrees with `getStationIndex` — the query the library and the dashboard panel
+ * build their lists from. Without it a flagged-but-staged station would be
+ * openable at the chokepoints and invisible on every surface that offers cases,
+ * which is a case a trainee could only reach by guessing a URL.
  */
 export async function loadFreeTrialStationIds(supabase: SupabaseClient): Promise<string[]> {
   const { data, error } = await supabase
     .from('stations')
     .select('id, free_trial_order')
     .eq('is_free_trial', true)
+    .in('is_active', visibleStationStates())
     .order('free_trial_order', { ascending: true, nullsFirst: false })
     .order('title', { ascending: true })
   if (error) throw error

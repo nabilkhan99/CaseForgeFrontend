@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { fetchSubscriptionOnce } from '@/lib/commerce/subscriptionFetch';
 import type { TrialSubscription } from '@/app/api/subscription/route';
 
 /**
@@ -21,16 +22,14 @@ export function useTrialStatus(): TrialSubscription | null {
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/subscription')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (cancelled || !data?.trial) return;
-        setTrial(data.trial as TrialSubscription);
-      })
-      .catch(() => {
-        // No banner rather than a wrong one. Nothing here gates anything —
-        // the server chokepoints do.
-      });
+    // Shared with useCohortAllowlist when both mount together, which is what
+    // the station brief page does — see lib/commerce/subscriptionFetch.ts.
+    fetchSubscriptionOnce().then((data) => {
+      // No banner rather than a wrong one on failure. Nothing here gates
+      // anything — the server chokepoints do.
+      if (cancelled || !data?.trial) return;
+      setTrial(data.trial);
+    });
     return () => {
       cancelled = true;
     };
