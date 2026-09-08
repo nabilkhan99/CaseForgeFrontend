@@ -59,11 +59,15 @@ interface VerdictRevealProps {
   /**
    * Where "run it properly" sends someone whose consultation was too short.
    * Null when the station behind the session isn't known to this page.
+   *
+   * /free/start rather than the retired one-click door: a run that was too
+   * short to mark is a run they still have to sit, and there is only one place
+   * to sit one now.
    */
   retryHref?: string | null;
 }
 
-export default function VerdictReveal({ sessionId, retryHref = '/try/talk' }: VerdictRevealProps) {
+export default function VerdictReveal({ sessionId, retryHref = '/free/start' }: VerdictRevealProps) {
   const [state, setState] = useState<RevealState>({ kind: 'waiting' });
   const retries = useRef(0);
   const shouldReduceMotion = useReducedMotion();
