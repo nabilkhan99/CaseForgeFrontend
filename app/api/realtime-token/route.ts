@@ -6,6 +6,7 @@ import {
   countOpenTrialSessions,
   startTrialWindowFor,
   trialRefusal,
+  trialStationRefusal,
 } from '@/lib/commerce/trialAccess';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { mintEphemeralKey, unreliableEchoCancellation } from '@/lib/clinical-master/realtimeToken';
@@ -43,8 +44,8 @@ export async function POST(req: NextRequest) {
   }
   // Checked here as well as in create-session, not instead of it: this is the
   // endpoint that spends Azure realtime minutes, and a session row could exist
-  // already — created before the fifth mark landed, or by a client that skipped
-  // straight here. The five-station cap is only as good as this refusal.
+  // already — created before the window closed, or by a client that skipped
+  // straight here. The five days are only as real as this refusal.
   //
   // `!entitlement.plan` for the same reason create-session has it: a lapsed
   // customer is told to renew, not shown the trial wall.
@@ -76,17 +77,25 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // The five cases, checked here as well as in create-session and for the same
+  // reason the cohort allowlist is: a session row for a locked case could
+  // already exist — created before the flags were changed, or by a client that
+  // skipped the brief page entirely — and this is the endpoint that spends
+  // money. Unlimited attempts means unlimited attempts AT THESE FIVE.
+  const stationLock = trialOnly ? trialStationRefusal(trial, stationId) : null;
+  if (stationLock) {
+    return NextResponse.json({ ...stationLock, state: entitlement.state }, { status: 403 });
+  }
+
   const admin = getSupabaseAdmin();
 
   // ONE CONSULTATION AT A TIME, for a trial account only.
   //
-  // The five-station cap is enforced from a DERIVED count of marked sessions,
-  // and a mark lands ~90 seconds after a consultation that itself runs up to 12
-  // minutes. For that quarter of an hour a started consultation is invisible to
-  // the count, so without this a client could fire N mints in parallel, every
-  // one of them reading the same low `used`, and spend N lots of Azure realtime
-  // minutes against a five-station grant. Sequential enforcement is not
-  // enforcement.
+  // The one quantity limit left on a trial. Attempts at the five cases are
+  // unlimited BY DESIGN, which is exactly why this has to hold: without it a
+  // client could fire fifty mints at the same free station in parallel and
+  // spend fifty lots of Azure realtime minutes. One person sits one
+  // consultation at a time.
   //
   // Deliberately here and not in create-session: this is the endpoint that
   // spends, and create-session merely records that a brief was opened.

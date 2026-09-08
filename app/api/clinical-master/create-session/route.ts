@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerEntitlement } from '@/lib/commerce/serverEntitlement';
 import { cohortAllowsStation } from '@/lib/commerce/cohortAccess';
-import { startTrialWindowFor, trialRefusal } from '@/lib/commerce/trialAccess';
+import { startTrialWindowFor, trialRefusal, trialStationRefusal } from '@/lib/commerce/trialAccess';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 export async function POST(req: NextRequest) {
@@ -12,12 +12,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // A spent trial answers before the generic refusal below, with its own code.
+  // An ENDED trial answers before the generic refusal below, with its own code.
   // `no_active_plan` would be true but useless here: it sends the client to
-  // renew-vs-buy, and the right destination for somebody who has just used
-  // their five stations is the two-plan wall. The two reasons are separated
-  // (`trial_allowance_used` / `trial_expired`) because the wall says different
-  // things about stations that ran out and days that did.
+  // renew-vs-buy, and the right destination for somebody whose five days have
+  // just run out is the two-plan wall on their dashboard.
   //
   // `!entitlement.plan` matches the rule the middleware applies to the same
   // pair of facts: somebody who once bought and lapsed has a purchase to renew,
@@ -55,6 +53,18 @@ export async function POST(req: NextRequest) {
       { error: 'not_in_cohort', state: entitlement.state, cohort: true },
       { status: 403 },
     );
+  }
+
+  // A trial buys FIVE NAMED CASES, unlimited times — not the bank. The library
+  // dashes out the rest and the brief page swaps Begin for an upsell, but both
+  // are decoration: this is the check that actually holds, because the station
+  // id arrives in the request body and nothing before this point has looked at
+  // it. Same shape as the cohort check above, and gated on `trialOnly` for the
+  // same reason it is gated on `cohortOnly` — a trialist who has since bought
+  // must not be narrowed to five cases by a grant they are no longer using.
+  const stationLock = trialOnly ? trialStationRefusal(trial, stationId) : null;
+  if (stationLock) {
+    return NextResponse.json({ ...stationLock, state: entitlement.state }, { status: 403 });
   }
 
   // Check if session already exists (idempotent)
