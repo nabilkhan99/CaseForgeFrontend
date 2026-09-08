@@ -15,6 +15,7 @@ import StatusChips from '@/components/library/StatusChips';
 import StationRow from '@/components/library/StationRow';
 import { useLibraryFilters } from '@/components/library/useLibraryFilters';
 import { isStationLocked, useCohortAllowlist } from '@/hooks/useCohortAllowlist';
+import { isStationLockedForTrial, trialStationAllowlist, useTrialStatus } from '@/hooks/useTrialStatus';
 import { shouldShowDifficulty } from '@/lib/stations/difficulty';
 import { matchesStatus } from '@/lib/stations/librarySearch';
 import { MAX_WEIGHTED_SCORE } from '@/lib/clinical-master/types';
@@ -52,6 +53,12 @@ function DomainDetailContent({ domainId }: { domainId: string }) {
   // null for everyone without a trainer-pilot seat, and until the answer
   // arrives — so nobody watches their library flash as locked on load.
   const allowlist = useCohortAllowlist();
+  // The five cases a free trial opens, or null when there is no trial limit.
+  // Same null-until-known rule, and the same reason it has to be here at all:
+  // on a phone the board is hidden, so a topic page is where a trialist meets
+  // the bank, and a case that will be refused by the API must say so before
+  // they read three minutes of brief.
+  const freeStationIds = trialStationAllowlist(useTrialStatus());
 
   useEffect(() => {
     const supabase = createClient();
@@ -201,11 +208,28 @@ function DomainDetailContent({ domainId }: { domainId: string }) {
                   animate={{ opacity: matches ? 1 : 0.32, y: 0 }}
                   transition={{ delay: Math.min(i, 12) * 0.04, duration: 0.25 }}
                 >
-                  <StationRow
-                    station={station}
-                    showDifficulty={showDifficulty}
-                    locked={isStationLocked(allowlist, station.id)}
-                  />
+                  {/* Two limits, never both: a live trial outranks a cohort
+                      seat in decideAccess, so at most one of these is in force.
+                      They say different things because they mean different
+                      things — a cohort case needs a trainer, a trial case needs
+                      a plan and can be had this afternoon. */}
+                  {(() => {
+                    const trialLocked = isStationLockedForTrial(freeStationIds, station.id);
+                    const cohortLocked = isStationLocked(allowlist, station.id);
+                    return (
+                      <StationRow
+                        station={station}
+                        showDifficulty={showDifficulty}
+                        locked={trialLocked || cohortLocked}
+                        lockLabel={trialLocked ? 'Unlock' : 'Locked'}
+                        lockTitle={
+                          trialLocked
+                            ? 'Not one of your five free cases'
+                            : 'Not in your assigned cases'
+                        }
+                      />
+                    );
+                  })()}
                 </motion.div>
               );
             })}

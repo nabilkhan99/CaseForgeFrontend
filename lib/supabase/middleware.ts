@@ -183,13 +183,16 @@ export async function updateSession(request: NextRequest) {
                 // (create-session, realtime-token), not by path. That is
                 // deliberate: the case brief for a locked station is meant to be
                 // reachable — it is where the upsell lives.
-                // A live trial reaches every page here too, with the WHOLE bank:
-                // the five-station cap is a count, not an allowlist, so there is
-                // no per-station question for a path rule to answer. What stops
-                // the sixth consultation is the server chokepoint
-                // (create-session / realtime-token), and what stops a trialist
-                // navigating at all is `allowed` going false below once the
-                // grant is spent or the five days are up.
+                // A live trial is now exactly the same shape, and reaches every
+                // page here for exactly the same reason. Since 7 September the
+                // trial IS an allowlist (`trial.freeStationIds`) rather than a
+                // count, so there is a per-station question — and it is
+                // deliberately not answered here. A trialist who has clicked a
+                // case outside their five should read its brief and meet the
+                // "unlock all 200 stations" line, not bounce off a redirect
+                // wondering what happened. What refuses the consultation is the
+                // chokepoint; what stops a trialist navigating at all is
+                // `allowed` going false below once the five days are up.
                 const { entitlement, allowed, trial: trialAccess } = decideAccess(purchases ?? [], {
                     email: user.email,
                     launchDate: effectiveLaunchDate(),
@@ -199,13 +202,18 @@ export async function updateSession(request: NextRequest) {
                 });
                 if (!allowed) {
                     const url = request.nextUrl.clone();
-                    // A spent trial is read-only in exactly the way a lapsed
+                    // An ENDED trial is read-only in exactly the way a lapsed
                     // plan is — reports, board and Development page all stay
                     // open, only stations lock — but it does NOT go to
                     // /pricing?renew=true. There is nothing to renew, and the
-                    // offer for someone who has just used their five stations is
+                    // offer for someone whose five days have just run out is
                     // two plans chosen by their exam date, which lives on the
                     // dashboard. `?trial=ended` is what draws that wall.
+                    //
+                    // Unchanged by the September rewrite, and re-checked
+                    // against it: the only way to reach `trial_ended` now is
+                    // expiry, which is precisely the case this branch was
+                    // written for.
                     //
                     // `!entitlement.plan` keeps that to people whose access
                     // rested on the grant ALONE. Somebody who once bought and

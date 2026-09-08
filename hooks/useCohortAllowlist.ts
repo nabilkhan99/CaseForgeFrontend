@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { fetchSubscriptionOnce } from '@/lib/commerce/subscriptionFetch';
 
 /**
  * Which cases the signed-in user may actually open, for the surfaces that have
@@ -21,16 +22,14 @@ export function useCohortAllowlist(): Set<string> | null {
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/subscription')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (cancelled || !data?.cohort) return;
-        const ids = data.cohort.stationIds;
-        if (Array.isArray(ids)) setStationIds(new Set<string>(ids));
-      })
-      .catch(() => {
-        // No lock rather than a wrong one. The server still refuses.
-      });
+    // Shared with useTrialStatus when both mount together — see
+    // lib/commerce/subscriptionFetch.ts. No lock rather than a wrong one on
+    // failure; the server still refuses.
+    fetchSubscriptionOnce().then((data) => {
+      if (cancelled || !data?.cohort) return;
+      const ids = data.cohort.stationIds;
+      if (Array.isArray(ids)) setStationIds(new Set<string>(ids));
+    });
     return () => {
       cancelled = true;
     };

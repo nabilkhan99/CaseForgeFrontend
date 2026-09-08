@@ -1443,13 +1443,19 @@ export default function FeedbackReport({
           setTranscript(normaliseTranscript(data.transcript));
           setLoading(false);
           if (data.feedback.overall) onResultRef.current?.(data.feedback.overall);
-          // One of the five free stations has just been marked, if this is a
+          // One of the five free cases has just been marked, if this is a
           // trial account — the helper decides that itself, and does nothing
           // for everybody else. Fired HERE rather than on mount because "a
           // station was completed" is the moment the mark lands, which is what
-          // makes the index in the event the number of stations they have
-          // actually spent. Not awaited: the report is already on screen.
-          void reportTrialStationCompleted(sessionId, data.feedback.overall?.verdict ?? '');
+          // makes the counts in the event the server's own. The station id goes
+          // with it so the event can carry WHICH GO this was: attempts are
+          // unlimited, so a repeat and a first sitting are otherwise the same
+          // row. Not awaited: the report is already on screen.
+          void reportTrialStationCompleted(
+            sessionId,
+            data.feedback.overall?.verdict ?? '',
+            data.feedback.station_id ?? null,
+          );
           return;
         }
 

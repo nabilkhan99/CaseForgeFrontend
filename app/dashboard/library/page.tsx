@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import type { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
-import { getStationIndex, type Station } from '@/lib/supabase/queries/station-library';
+import { getStationIndex, markTrialLocks, type Station } from '@/lib/supabase/queries/station-library';
 import PageHeader from '@/components/ui/PageHeader';
 import { getDomainColor } from '@/lib/constants/domains';
 import StationBoard from '@/components/library/StationBoard';
@@ -13,8 +13,7 @@ import PinnedStations from '@/components/library/PinnedStations';
 import { useLibraryFilters } from '@/components/library/useLibraryFilters';
 import { summariseDomains } from '@/lib/stations/librarySearch';
 import { useCohortAllowlist } from '@/hooks/useCohortAllowlist';
-import { useTrialStatus } from '@/hooks/useTrialStatus';
-import { getRecommendedStationIds } from '@/lib/supabase/queries/trialStations';
+import { trialStationAllowlist, useTrialStatus } from '@/hooks/useTrialStatus';
 
 function LibrarySpinner() {
   return (
@@ -31,10 +30,6 @@ function LibrarySpinner() {
 function StationLibraryContent() {
   const [stations, setStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState(true);
-  // The recommended "Start here" cases, in order. Ids only — the board has
-  // already loaded every station, so these are looked up in that array rather
-  // than fetched a second time and risking two versions of the same case.
-  const [recommendedIds, setRecommendedIds] = useState<string[]>([]);
   // `undefined` = auth hasn't answered yet, `null` = genuinely signed out. The
   // data fetch waits for the difference: firing it on the initial null renders
   // a returning user's whole library as "Not started" before the progress
@@ -49,9 +44,21 @@ function StationLibraryContent() {
   // null for everyone without a trainer-pilot seat, and until the answer
   // arrives — so nobody watches their library flash as locked on load.
   const allowlist = useCohortAllowlist();
-  // Null for everybody who is not running on the five free stations, and until
-  // the answer arrives — same null-until-known rule as the allowlist above.
+  // Null for everybody who is not running on the free week, and until the
+  // answer arrives — same null-until-known rule as the allowlist above.
   const trial = useTrialStatus();
+  /**
+   * The five cases a trial opens, or null when there is no trial limit.
+   *
+   * THE GATE, not a recommendation — which is the whole difference between this
+   * library and the one that shipped a week ago. The old five-consultation
+   * trial let a trainee sit any of the two hundred and counted how many they
+   * finished, so "Start here" was advice; the offer is now five NAMED cases,
+   * enforced at create-session and realtime-token, so the rest of the board has
+   * to say so rather than letting somebody read a brief, click Begin and be
+   * refused by an API.
+   */
+  const freeStationIds = trialStationAllowlist(trial);
 
   useEffect(() => {
     const supabase = createClient();
@@ -78,19 +85,19 @@ function StationLibraryContent() {
     };
   }, [user]);
 
-  // Independent of the station fetch and of who is signed in: the recommended
-  // set is a property of the bank, not of the reader, and it fails soft to an
-  // empty list (the `free_trial_order` column does not exist until the
-  // migration is applied). Only rendered for trial accounts — see `recommended`.
-  useEffect(() => {
-    let cancelled = false;
-    getRecommendedStationIds().then((ids) => {
-      if (!cancelled) setRecommendedIds(ids);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  /**
+   * The bank, with a trial account's locks stamped on it.
+   *
+   * Derived rather than re-fetched when the trial answer lands: the two arrive
+   * independently (stations off Supabase, the trial off /api/subscription) and
+   * refetching on the second would show a returning trialist their whole
+   * library twice. `markTrialLocks` returns the same array untouched when there
+   * is no limit, so a paying customer pays nothing for this.
+   */
+  const marked = useMemo(
+    () => markTrialLocks(stations, freeStationIds),
+    [stations, freeStationIds],
+  );
 
   const domains = useMemo(() => summariseDomains(stations), [stations]);
   const passedTotal = useMemo(
@@ -115,13 +122,6 @@ function StationLibraryContent() {
     [stations, allowlist],
   );
 
-  const subtitle =
-    stations.length === 0
-      ? 'No cases available yet'
-      : allowlist
-        ? `${assignedPassed} of your ${allowlist.size} assigned cases passed`
-        : `${passedTotal} of ${stations.length} passed across ${domains.length} topic areas`;
-
   /**
    * The cohort student's own cases, pulled to the top of the page.
    *
@@ -142,34 +142,43 @@ function StationLibraryContent() {
    * same null-until-known rule the locks follow.
    */
   const assigned = useMemo(
-    () => (allowlist ? stations.filter((station) => allowlist.has(station.id)) : []),
-    [stations, allowlist],
+    () => (allowlist ? marked.filter((station) => allowlist.has(station.id)) : []),
+    [marked, allowlist],
   );
 
   /**
-   * The recommended "Start here" cases, for somebody on the five free stations.
+   * A trial account's five, pulled to the top and in `free_trial_order`.
    *
-   * Ordered by `free_trial_order` — the ids arrive in that order and are mapped
-   * back through the loaded station array, so the pairing Ishaq chose (a near
-   * miss, then a case where the same "one change" applies) survives. A flagged
+   * The ids arrive in that order from /api/subscription and are mapped back
+   * through the loaded station array, so the pairing Ishaq chose (a near miss,
+   * then a case where the same "one change" applies) survives, and each row
+   * carries its own attempt history rather than a second copy of it. A flagged
    * station missing from the index (staged, or deleted) drops out rather than
    * rendering a hole.
    *
-   * NOT A GATE. Nothing here locks the other cases: a trialist may sit any of
-   * the two hundred, and what limits them is the count, enforced at the server
-   * chokepoints. This is a recommendation, and the board below is unchanged —
-   * which is exactly why it does not pass an `allowlist`.
-   *
-   * Trial accounts only. For a customer three months into the bank, a "start
-   * here" list is a section about a decision they made weeks ago.
+   * Empty for everybody else, so this section never renders for a paying
+   * customer — and empty until the trial answer lands, which is the same
+   * null-until-known rule the locks follow.
    */
-  const recommended = useMemo(() => {
-    if (!trial) return [];
-    const byId = new Map(stations.map((station) => [station.id, station]));
-    return recommendedIds
+  const yourFive = useMemo(() => {
+    if (!freeStationIds) return [];
+    const byId = new Map(marked.map((station) => [station.id, station]));
+    return freeStationIds
       .map((id) => byId.get(id))
       .filter((station): station is Station => station !== undefined);
-  }, [stations, recommendedIds, trial]);
+  }, [marked, freeStationIds]);
+
+  const subtitle =
+    stations.length === 0
+      ? 'No cases available yet'
+      : freeStationIds
+        ? // A trialist's denominator is their five, not the bank: "2 of 200
+          // passed" would be true and demoralising about a library they were
+          // never given. The bank is named so the offer above it makes sense.
+          `${yourFive.length} cases open to you · ${stations.length} in the full bank`
+        : allowlist
+          ? `${assignedPassed} of your ${allowlist.size} assigned cases passed`
+          : `${passedTotal} of ${stations.length} passed across ${domains.length} topic areas`;
 
   return (
     <div>
@@ -185,19 +194,21 @@ function StationLibraryContent() {
           {/* Cohort students only — see `assigned`. */}
           <PinnedStations id="assigned-cases" heading="Your cases" stations={assigned} />
 
-          {/* Trial accounts only — see `recommended`. The same section, said
-              differently: a cohort student is being told which cases are
-              theirs, a trialist which of two hundred to spend a station on
-              first. Both render nothing for everybody else, so at most one of
-              them ever appears. */}
-          <PinnedStations id="start-here" heading="Start here" stations={recommended} />
+          {/* Trial accounts only — see `yourFive`. The same section as the
+              cohort's, said differently and now meaning the same thing: both
+              are the whole of what that reader may open. Both render nothing
+              for everybody else, so at most one of them ever appears. */}
+          <PinnedStations id="your-five" heading="Your five" stations={yourFive} />
 
-          {/* The page, above `sm`. Its own chips carry the progress filter. */}
+          {/* The page, above `sm`. Its own chips carry the progress filter.
+              One allowlist, whichever limit is in force — they are mutually
+              exclusive by construction (decideAccess: a live trial outranks a
+              cohort seat), so this is a choice between two, never a merge. */}
           <StationBoard
-            stations={stations}
+            stations={marked}
             status={filters.status}
             onStatusChange={setStatus}
-            allowlist={allowlist}
+            allowlist={freeStationIds ? new Set(freeStationIds) : allowlist}
           />
 
           {/* Mobile only. The board is hidden below `sm` because an 18px square

@@ -402,9 +402,9 @@ export interface AccessContext {
    */
   cohort?: CohortAccess | null
   /**
-   * Where the user's five-station free trial stands, when they have a grant.
-   * Loaded by the caller (see lib/commerce/trialAccess.ts) for the same reason
-   * the cohort is: this function must stay pure and edge-safe.
+   * Where the user's free trial stands, when they have a grant. Loaded by the
+   * caller (see lib/commerce/trialAccess.ts) for the same reason the cohort is:
+   * this function must stay pure and edge-safe.
    */
   trial?: TrialAccess | null
 }
@@ -434,19 +434,24 @@ export interface AccessDecision {
    */
   cohortOnly: boolean
   /**
-   * The five-station free trial behind this account, or null. Present whether
-   * or not it is what granted access, so a caller can tell a SPENT trial (the
-   * two-plan wall) apart from never having had one (the pricing page).
+   * The free trial behind this account, or null. Present whether or not it is
+   * what granted access, so a caller can tell an ENDED trial (the two-plan
+   * wall) apart from never having had one (the pricing page).
    */
   trial: TrialAccess | null
   /**
    * Access rests on a LIVE trial grant alone — so it reaches
-   * `/clinical-master/*`, with the whole bank, until the fifth marked
-   * consultation or the fifth day.
+   * `/clinical-master/*`, for the FIVE FLAGGED CASES ONLY, any number of times,
+   * until the fifth day.
+   *
+   * WHICH cases is not decided here: `trial.freeStationIds` carries them and
+   * the two server chokepoints enforce them, exactly as `cohortOnly` and
+   * `cohort.stationIds` divide the same job between them. This flag answers
+   * only "is the grant what is letting them in".
    *
    * False for anyone who has bought and for an admin, exactly as `cohortOnly`
-   * is, and false the moment the trial ends: at that point access rests on
-   * nothing, which is what puts the account behind the wall.
+   * is, and false the moment the five days are up: at that point access rests
+   * on nothing, which is what puts the account behind the wall.
    */
   trialOnly: boolean
 }
@@ -486,11 +491,11 @@ export function decideAccess(rows: EntitlementRow[], ctx: AccessContext): Access
   //
   // `!trialOnly` is what keeps `trialOnly` and `cohortOnly` mutually exclusive,
   // and the ordering (trial wins while it is live) is deliberate. A cohort
-  // handed the trial is meant to open the WHOLE bank for five stations — its
-  // `station_ids` is left empty precisely because the grant, not the allowlist,
-  // is what is giving access — and an empty allowlist means "access to
-  // nothing", so letting `cohortOnly` win would tell a trainee their cases do
-  // not exist. Once the trial ends the account falls back to whatever the
+  // handed the trial is meant to practise the FIVE FLAGGED cases — its
+  // `station_ids` is left empty precisely because the grant, not the cohort
+  // allowlist, is what is giving access — and an empty allowlist means "access
+  // to nothing", so letting `cohortOnly` win would tell a trainee their cases
+  // do not exist. Once the trial ends the account falls back to whatever the
   // cohort assigns, which is the right ladder. For the existing pilot (cohort
   // members with no grant) nothing changes at all: `trialOnly` is false for
   // them, so this reduces to exactly the expression it replaced.

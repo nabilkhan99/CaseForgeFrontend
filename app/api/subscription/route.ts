@@ -6,16 +6,50 @@ import { examDateFromSitting } from '@/lib/commerce/trialWallPlans';
 import type { TrialEndReason, TrialState } from '@/lib/commerce/trialAccess';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
-/** What a trial account needs to render its strip and, when it is spent, its wall. */
+/** What a trial account needs to render its panel and, once the days are up, its wall. */
 export interface TrialSubscription {
   /** Never 'none' — the field is null instead, so a truthy `trial` means "this is a trial account". */
   state: Exclude<TrialState, 'none'>;
-  /** Genuinely-marked consultations counted against the grant. */
+  /**
+   * THE FIVE CASES, in `free_trial_order` — the whole of what this account may
+   * open, and the list the dashboard panel renders with a Start beside each.
+   *
+   * Also what the library and the brief page draw their locks from, so the
+   * client and the two server chokepoints are working from one answer. Empty
+   * means the trial opens nothing (see loadTrialAccess: it fails closed), which
+   * the surfaces render as "everything is locked" rather than "everything is
+   * open".
+   */
+  freeStationIds: string[];
+  /** Distinct cases of the five with at least one consultation begun. 0–5. */
+  casesTried: number;
+  /** Consultations begun on each of the five, keyed by station id. Display only. */
+  attemptsByStation: Record<string, number>;
+  /**
+   * Always true, and said out loud rather than assumed.
+   *
+   * The offer changed on 7 September 2026 from "five marked consultations" to
+   * "five cases, as many goes as you like", and the difference is the single
+   * most important thing the panel has to communicate. A client that renders a
+   * count without checking this would be describing last month's product.
+   */
+  attemptsUnlimited: true;
+  /**
+   * Whole days until the window closes, rounded up, floored at zero — or null
+   * while the clock has not started.
+   *
+   * Computed on the SERVER so every surface counts the same way and a browser
+   * with a wrong clock cannot invent a day. `1` means it ends within the day,
+   * which the panel says as "Ends today".
+   */
+  daysLeft: number | null;
+  /** Cases tried, under its old name. Same number as {@link casesTried}. */
   used: number;
+  /** Cases of the five not yet tried. */
   remaining: number;
-  /** What the grant was worth, so the strip can say "3 of 5 left" without hardcoding the 5. */
+  /** How many cases the trial opens — the flagged count, so copy never hardcodes a 5. */
   allowance: number;
-  /** How long the window runs once it opens — the "5 days" in the strip's first line. */
+  /** How long the window runs once it opens — the "5 days" in the panel's first line. */
   windowDays: number;
   /** ISO instant of the first consultation; null before it — the clock is not running yet. */
   startedAt: string | null;
@@ -29,8 +63,13 @@ export interface TrialSubscription {
    * A FALLBACK, not the authority: `profiles.exam_date` is, and the dashboard
    * already loads that with its stats. This exists because most trialists have
    * answered the questionnaire and never filled the dashboard's date field, and
-   * the wall picks its two plans on that date. Resolved here rather than in the
-   * browser because `trial_leads` is RLS deny-all.
+   * both the panel and the wall pick their two plans on that date. Resolved
+   * here rather than in the browser because `trial_leads` is RLS deny-all.
+   *
+   * Loaded for a LIVE trial too, not only at the wall — the upgrade offer is
+   * now on the dashboard from day one, so the date has to be known from day
+   * one. It costs one indexed lookup, and only for accounts actually on a
+   * trial.
    */
   examHint: string | null;
 }
@@ -91,7 +130,7 @@ export interface SubscriptionResponse {
    */
   isTrainer: boolean;
   /**
-   * The five-station free trial, when this account is running on one.
+   * The free trial, when this account is running on one.
    *
    * Null for everybody else — including a trialist who has since bought, and an
    * admin: for them the trial decides nothing, so drawing a countdown over a
@@ -110,6 +149,25 @@ export interface SubscriptionResponse {
    * entitlement layer actually decided — see AccessDecision.trialOnly.
    */
   trialOnly: boolean;
+}
+
+const DAY_MS = 86_400_000;
+
+/**
+ * Whole days until the trial's window closes, rounded up and floored at zero.
+ *
+ * Null while `expires_at` is null, which is the whole of "the clock has not
+ * started": the five days run from the first consultation, so a grant handed
+ * out on Friday is not quietly spending the weekend. That null is what the
+ * panel renders as "your five days start with your first consultation".
+ *
+ * Rounded UP so a window with four hours left reads as 1 rather than 0 — the
+ * panel says "Ends today" at 1, and "0 days left" over a trial somebody can
+ * still use would be the page contradicting itself.
+ */
+function daysLeftUntil(expiresAt: Date | null, now: Date = new Date()): number | null {
+  if (!expiresAt) return null;
+  return Math.max(0, Math.ceil((expiresAt.getTime() - now.getTime()) / DAY_MS));
 }
 
 /**
@@ -180,6 +238,11 @@ export async function GET() {
   const trialBody: TrialSubscription | null = trialGoverns
     ? {
         state: trial.state as Exclude<TrialState, 'none'>,
+        freeStationIds: trial.freeStationIds,
+        casesTried: trial.used,
+        attemptsByStation: trial.attemptsByStation,
+        attemptsUnlimited: true,
+        daysLeft: daysLeftUntil(trial.expiresAt),
         used: trial.used,
         remaining: trial.remaining,
         allowance: trial.allowance,
@@ -187,8 +250,10 @@ export async function GET() {
         startedAt: trial.startedAt?.toISOString() ?? null,
         expiresAt: trial.expiresAt?.toISOString() ?? null,
         reason: trial.reason ?? null,
-        // Only the wall needs it, so only the wall's state pays for it.
-        examHint: trial.state === 'trial_ended' ? await examHintFor(user.email) : null,
+        // Both states now: the two-plan offer is on the dashboard for the whole
+        // trial, not only after it, so the date it turns on has to be there for
+        // the whole trial too.
+        examHint: await examHintFor(user.email),
       }
     : null;
 

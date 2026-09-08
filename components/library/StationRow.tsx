@@ -40,10 +40,23 @@ interface StationRowProps {
     /** True in flat search results, where the domain is no longer implied. */
     showDomain?: boolean;
     /**
-     * Outside a cohort student's five assigned cases. Marks the row rather than
-     * disabling it — the brief page behind it is where the upsell lives.
+     * Outside the cases this reader may open — a cohort student's assigned five,
+     * or a trial account's five free ones. Marks the row rather than disabling
+     * it: the brief page behind it is where the upsell lives.
      */
     locked?: boolean;
+    /**
+     * What the lock says, for the two situations that produce one.
+     *
+     * A cohort student's locked case is not theirs to sit and never will be
+     * without their trainer; a trial account's locked case is one they can buy
+     * their way into this afternoon. Same glyph, different sentence — "Locked"
+     * at somebody mid-purchase-decision is a dead end where "Unlock" is an
+     * offer. Defaults to the cohort wording, which is the older caller.
+     */
+    lockLabel?: string;
+    /** Screen-reader name for the glyph. Defaults to the cohort wording. */
+    lockTitle?: string;
 }
 
 /**
@@ -73,7 +86,14 @@ interface StationRowProps {
  * History tab's job by hand. The chevron still collapses a row, and cases with
  * no attempts have nothing to open and render no control at all.
  */
-export default function StationRow({ station, showDifficulty = false, showDomain = false, locked = false }: StationRowProps) {
+export default function StationRow({
+    station,
+    showDifficulty = false,
+    showDomain = false,
+    locked = false,
+    lockLabel = 'Locked',
+    lockTitle = 'Not in your assigned cases',
+}: StationRowProps) {
     const [expanded, setExpanded] = useState(true);
     const hasAttempts = station.attempts.length > 0;
     const latestAttempt = hasAttempts ? station.attempts[0] : null;
@@ -92,7 +112,7 @@ export default function StationRow({ station, showDifficulty = false, showDomain
                 >
                     <div className="line-clamp-2 text-[15px] font-semibold leading-snug text-heading transition-colors group-hover:text-primary">
                         {station.title}
-                        {locked && <LockGlyph label="Not in your assigned cases" />}
+                        {locked && <LockGlyph label={lockTitle} />}
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-muted">
                         <span>{station.patient_name}</span>
@@ -153,9 +173,10 @@ export default function StationRow({ station, showDifficulty = false, showDomain
                         <span className="hidden text-[12px] text-muted sm:inline">Not started</span>
                     )}
 
-                    {/* Muted and reading "Locked" rather than a primary-coloured
-                        "Start" that goes to a page with no Start on it. Still the
-                        same link: what is behind it is the upsell, not a refusal. */}
+                    {/* Muted rather than a primary-coloured "Start" that goes to a
+                        page with no Start on it. Still the same link: what is
+                        behind it is the upsell, not a refusal — which is why a
+                        trial account's version of this reads "Unlock". */}
                     <Link
                         href={stationHref}
                         tabIndex={-1}
@@ -164,7 +185,7 @@ export default function StationRow({ station, showDifficulty = false, showDomain
                             locked ? 'text-muted' : 'text-primary'
                         }`}
                     >
-                        {locked ? 'Locked' : hasAttempts ? 'Try again' : 'Start'}
+                        {locked ? lockLabel : hasAttempts ? 'Try again' : 'Start'}
                     </Link>
 
                     {/* Phones get a chevron instead of the "Start" label: the whole row
