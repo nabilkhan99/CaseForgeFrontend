@@ -6,10 +6,12 @@ import nextConfig from './next.config.js'
  *
  * `/try` is in ads, in sent emails, in the hero of every cached copy of the old
  * landing page and in people's history, so it has to move rather than 404 — and
- * it has to move WITHOUT taking its children with it. `/try/talk` has its own
- * handler (it carries the station on to /free/start) and `/try/feedback/[id]`
- * is roughly eighty live report links in people's inboxes. A `/try/:path*`
- * source, which is the obvious way to write this, would swallow both.
+ * it has to move WITHOUT taking its children with it. `/try` is the only path
+ * that moves; everything under it is the live guest lane — `/try/talk` opens a
+ * consultation, `/try/session/[id]` is the call, `/try/station/[id]` the brief,
+ * and `/try/feedback/[id]` both the post-call sign-up and roughly eighty live
+ * report links in people's inboxes. A `/try/:path*` source, which is the
+ * obvious way to write this, would swallow the whole funnel.
  *
  * Nothing in the product fails visibly if that regresses — the funnel simply
  * stops, and the first evidence is a support message. So the shape of the rule
@@ -49,15 +51,21 @@ describe('/try', () => {
   })
 
   it.each([
-    // Retired 7 September 2026, but still answered: this one redirects to
-    // /free/start with the station on it (see app/try/talk/route.ts).
+    // The one-click door. Opens a guest consultation and redirects into the
+    // call screen (see app/try/talk/route.ts).
     '/try/talk',
     '/try/talk/',
-    // Legacy guest reports. These links are in people's inboxes.
+    '/try/talk?station=2b0d9a5e-0000-4000-8000-000000000000',
+    // The live consultation, and the optional exam-style brief behind it.
+    '/try/session/2b0d9a5e-0000-4000-8000-000000000000',
+    '/try/station/2b0d9a5e-0000-4000-8000-000000000000',
+    // The post-call page: the sign-up while marking runs, and every legacy
+    // guest report link sitting in somebody's inbox.
     '/try/feedback/2b0d9a5e-0000-4000-8000-000000000000',
   ])('leaves %s alone — it answers for itself', async (path) => {
     const redirects = await config.redirects()
-    const hit = redirects.find((rule) => matches(rule.source, path))
+    // Next matches the path, not the query, so compare on the path alone.
+    const hit = redirects.find((rule) => matches(rule.source, path.split('?')[0]))
     expect(hit, `${path} must not be redirected`).toBeUndefined()
   })
 
