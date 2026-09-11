@@ -39,7 +39,7 @@ import type { Verdict } from '@/lib/clinical-master/types';
 const POLL_INTERVAL_MS = 3000;
 const MAX_RETRIES = 100;
 
-type RevealState =
+export type RevealState =
   | { kind: 'waiting' }
   | { kind: 'ready'; summary: TrialVerdictSummary }
   /** The Azure guard refused the run as too short to grade fairly. */
@@ -58,21 +58,40 @@ interface VerdictRevealProps {
   sessionId: string;
   /**
    * Where "run it properly" sends someone whose consultation was too short.
-   * Null when the station behind the session isn't known to this page.
-   *
-   * /free/start rather than the retired one-click door: a run that was too
-   * short to mark is a run they still have to sit, and there is only one place
-   * to sit one now.
+   * Null when the station behind the session isn't known to this page — and on
+   * the post-call sign-up, where the answer is "from your dashboard, after you
+   * make the account", which the form beneath already says.
    */
   retryHref?: string | null;
+  /**
+   * The poll's answer, when the PAGE is already running one.
+   *
+   * /try/feedback shows a status line of its own above the form and must not
+   * open a second three-second loop against the same endpoint to do it, so it
+   * polls once with {@link useVerdictPoll} and hands the result down. Omitted
+   * everywhere else, and then this component polls for itself as it always did.
+   */
+  state?: RevealState;
+  /**
+   * Render the "marking your consultation" line while waiting. False where the
+   * page says it better, in which case waiting renders nothing at all.
+   */
+  showWaiting?: boolean;
 }
 
-export default function VerdictReveal({ sessionId, retryHref = '/free/start' }: VerdictRevealProps) {
+/**
+ * The gate-status poll, on its own, so a page can drive both this component and
+ * its own copy from one loop.
+ *
+ * `sessionId: null` parks it — for the controlled case above, where polling
+ * twice would be two requests every three seconds for one fact.
+ */
+export function useVerdictPoll(sessionId: string | null): RevealState {
   const [state, setState] = useState<RevealState>({ kind: 'waiting' });
   const retries = useRef(0);
-  const shouldReduceMotion = useReducedMotion();
 
   useEffect(() => {
+    if (!sessionId) return;
     let cancelled = false;
     retries.current = 0;
 
@@ -124,7 +143,21 @@ export default function VerdictReveal({ sessionId, retryHref = '/free/start' }: 
     };
   }, [sessionId]);
 
+  return state;
+}
+
+export default function VerdictReveal({
+  sessionId,
+  retryHref = '/free/start',
+  state: controlled,
+  showWaiting = true,
+}: VerdictRevealProps) {
+  const polled = useVerdictPoll(controlled ? null : sessionId);
+  const state = controlled ?? polled;
+  const shouldReduceMotion = useReducedMotion();
+
   if (state.kind === 'silent') return null;
+  if (state.kind === 'waiting' && !showWaiting) return null;
 
   return (
     <div className="mx-auto w-full max-w-[560px] px-5 pt-10 sm:px-7">
