@@ -10,6 +10,8 @@ import { WASH } from '@/components/landing/v5/editorial';
 import {
   CODE_LENGTH,
   CodeStep,
+  EXISTING_ACCOUNT_NOTICE,
+  EXISTING_ACCOUNT_NOTICE_MS,
   EMAIL_RE,
   EmailField,
   MobileField,
@@ -50,7 +52,14 @@ interface VerifyBody {
   error?: string;
   signedIn?: boolean;
   redirectTo?: string;
-  account?: { userId: string; created: boolean } | null;
+  account?: {
+    userId: string;
+    created: boolean;
+    /** The address already had an account; this call signed them into it. */
+    alreadyExisted?: boolean;
+    /** They typed a password and the account's existing one was kept. */
+    passwordKept?: boolean;
+  } | null;
 }
 
 export interface FreeStartProps {
@@ -72,6 +81,8 @@ export default function FreeStart({ initialEmail, station, stationTitle }: FreeS
 
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
+  /** Said out loud before the redirect when the typed password was not applied. */
+  const [notice, setNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const codeInputRef = useRef<HTMLInputElement>(null);
@@ -163,6 +174,14 @@ export default function FreeStart({ initialEmail, station, stationTitle }: FreeS
       await trackTrialAccountCreated('free');
 
       if (data.signedIn && data.redirectTo) {
+        // The address already had an account with a password, so the one they
+        // typed here was deliberately not applied. Saying nothing is how
+        // somebody ends up locked out of an account they believe they just set
+        // a password on.
+        if (data.account?.alreadyExisted && data.account?.passwordKept) {
+          setNotice(EXISTING_ACCOUNT_NOTICE);
+          await new Promise((resolve) => setTimeout(resolve, EXISTING_ACCOUNT_NOTICE_MS));
+        }
         // A full navigation, not a router push: the session cookies arrived on
         // the response above and every server component past here has to be
         // rendered with them.
@@ -264,6 +283,15 @@ export default function FreeStart({ initialEmail, station, stationTitle }: FreeS
                   unlimited attempts, five days, no card.
                 </p>
               </>
+            )}
+
+            {notice && (
+              <div
+                role="status"
+                className="mb-4 rounded-lg border border-primary/20 bg-primary/[0.06] p-3"
+              >
+                <p className="text-center text-sm leading-relaxed text-heading">{notice}</p>
+              </div>
             )}
 
             {step === 'code' && (

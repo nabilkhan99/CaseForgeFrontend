@@ -26,6 +26,11 @@ import type { ProvisionResult } from '@/lib/auth/provisioning';
  * a paying customer who types their address into the free form must not have
  * their password silently rotated, so an account that has finished its setup is
  * signed in and left alone. See {@link setPasswordIfUnset}.
+ *
+ * SILENTLY was the bug. The rule is right; not saying so was not. The result
+ * now carries `passwordKept`, and the forms tell the person their existing
+ * password still applies rather than letting them find out on the next
+ * sign-in — see {@link PasswordProvisionResult}.
  */
 
 function adminAuth() {
@@ -84,6 +89,27 @@ export async function findAccountByEmail(emailRaw: string): Promise<ExistingAcco
   }
 }
 
+/**
+ * A provisioning result that also says what happened to the password.
+ *
+ * `provisionAccountWithPassword` is given a password the person has just typed
+ * and is sometimes obliged to ignore it (see {@link setPasswordIfUnset}). That
+ * used to be invisible: the form said "Create my free account", the account was
+ * somebody's existing one, the password went nowhere and nothing said so — and
+ * the next time they came back, the password they believed they had set did not
+ * work. `passwordKept` is what lets the caller tell them.
+ */
+export interface PasswordProvisionResult extends ProvisionResult {
+  /**
+   * The account already existed WITH a password, so the one typed on this form
+   * was deliberately not applied and the old one still signs them in.
+   *
+   * False on every other path, including a half-provisioned account that has
+   * just been given the password it never had.
+   */
+  passwordKept: boolean;
+}
+
 export interface SignUpAccountInput {
   email: string;
   /** Already length-checked by the caller. Never logged. */
@@ -104,7 +130,7 @@ export interface SignUpAccountInput {
  */
 export async function provisionAccountWithPassword(
   input: SignUpAccountInput,
-): Promise<ProvisionResult> {
+): Promise<PasswordProvisionResult> {
   const supabase = adminAuth();
   const email = input.email.trim().toLowerCase();
   const phone = input.phone?.trim() || null;
@@ -125,13 +151,24 @@ export async function provisionAccountWithPassword(
   });
 
   if (!createError) {
-    return { created: true, alreadyExisted: false, userId: created?.user?.id ?? null };
+    return {
+      created: true,
+      alreadyExisted: false,
+      userId: created?.user?.id ?? null,
+      passwordKept: false,
+    };
   }
 
   const alreadyExists =
     createError.code === 'email_exists' || /already/i.test(createError.message);
   if (!alreadyExists) {
-    return { created: false, alreadyExisted: false, userId: null, error: createError.message };
+    return {
+      created: false,
+      alreadyExisted: false,
+      userId: null,
+      error: createError.message,
+      passwordKept: false,
+    };
   }
 
   const existing = await findAccountByEmail(email);
@@ -141,8 +178,14 @@ export async function provisionAccountWithPassword(
       alreadyExisted: true,
       userId: null,
       error: 'account_already_exists',
+      passwordKept: false,
     };
   }
+
+  // Read BEFORE the write: an account that has finished its setup is the one
+  // whose password survives this form, and after `setPasswordIfUnset` has run
+  // the two cases are indistinguishable.
+  const passwordKept = !existing.passwordPending;
 
   await setPasswordIfUnset(existing, { password: input.password, fullName: input.fullName, phone });
 
@@ -151,6 +194,7 @@ export async function provisionAccountWithPassword(
     alreadyExisted: true,
     userId: existing.userId,
     error: 'account_already_exists',
+    passwordKept,
   };
 }
 

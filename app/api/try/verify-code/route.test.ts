@@ -174,6 +174,8 @@ beforeEach(() => {
   mocks.ensure.mockResolvedValue({
     userId: 'user-1',
     created: true,
+    alreadyExisted: false,
+    passwordKept: false,
     signInUrl: null,
     granted: true,
     state: 'trial',
@@ -223,11 +225,47 @@ describe('the response the caller reads', () => {
 
     expect(body).toEqual({
       ok: true,
-      account: { userId: 'user-1', created: true },
+      account: { userId: 'user-1', created: true, alreadyExisted: false, passwordKept: false },
       trial: { state: 'trial', granted: true },
       signedIn: true,
       redirectTo: '/dashboard',
     })
+  })
+
+  it('says when the password typed on the form was not the one that counts', async () => {
+    // The address already had an account with a password. Keeping it is the
+    // rule (lib/auth/accountSignUp); keeping it SILENTLY is how somebody ends
+    // up locked out of an account they believe they just set a password on.
+    mocks.ensure.mockResolvedValue({
+      userId: 'user-7',
+      created: false,
+      alreadyExisted: true,
+      passwordKept: true,
+      signInUrl: null,
+      granted: true,
+      state: 'trial',
+      claimed: 0,
+    })
+
+    const { body } = await post({
+      sessionId: GUEST_SESSION,
+      code: '123456',
+      password: 'longenough1',
+    })
+
+    expect(body.account).toEqual({
+      userId: 'user-7',
+      created: false,
+      alreadyExisted: true,
+      passwordKept: true,
+    })
+  })
+
+  it('claims nothing was kept when the account was made on this call', async () => {
+    const { body } = await post({ sessionId: 'session-1', code: '123456' })
+
+    expect(body.account.alreadyExisted).toBe(false)
+    expect(body.account.passwordKept).toBe(false)
   })
 
   it('carries no sign-in credential — the cookies do that job', async () => {

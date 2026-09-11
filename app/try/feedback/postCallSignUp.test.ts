@@ -188,6 +188,41 @@ describe('the poll ends when no mark is coming', () => {
   })
 })
 
+describe('an address that already has an account', () => {
+  const FREE_START = source('../../../components/free/FreeStart.tsx')
+  const FIELDS = source('../../../components/account/AccountFormFields.tsx')
+
+  it('says the typed password was not the one that counts', () => {
+    // verify-code keeps an existing password on purpose — rotating one because
+    // somebody typed the address into a free form would be a takeover with a
+    // friendly name. Keeping it silently is how people end up locked out of an
+    // account they believe they just set a password on.
+    expect(FIELDS).toContain(
+      "You already have an account. We've signed you in; your existing password still applies.",
+    )
+  })
+
+  it('shows it on BOTH doors, from one string', () => {
+    for (const form of [FORM, FREE_START]) {
+      expect(form).toContain('EXISTING_ACCOUNT_NOTICE')
+      expect(form).toContain('data.account?.alreadyExisted && data.account?.passwordKept')
+      expect(form).toContain('setNotice(EXISTING_ACCOUNT_NOTICE)')
+    }
+  })
+
+  it('waits for it to be read, then goes where the server said', () => {
+    // Still a redirect, and still the server's: they ARE signed in, and the
+    // report is what they are owed. The pause is long enough for one sentence.
+    for (const form of [FORM, FREE_START]) {
+      expect(form).toContain(
+        'await new Promise((resolve) => setTimeout(resolve, EXISTING_ACCOUNT_NOTICE_MS));',
+      )
+      expect(form).toContain('window.location.assign(data.redirectTo)')
+    }
+    expect(FIELDS).toContain('export const EXISTING_ACCOUNT_NOTICE_MS = 3000;')
+  })
+})
+
 describe('what no longer renders here', () => {
   it('shows no report, no pricing table and no guarantee', () => {
     // The report moved into the dashboard, on an account that owns it. This

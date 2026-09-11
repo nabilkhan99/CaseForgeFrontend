@@ -112,6 +112,18 @@ export interface TrialVerifyAccount {
   userId: string;
   /** We created the auth user on this call. False for a returning address. */
   created: boolean;
+  /** The address already had an account — they are being signed into it. */
+  alreadyExisted: boolean;
+  /**
+   * They typed a password and their existing one was kept instead.
+   *
+   * The form has to say this. Rotating a password because somebody typed their
+   * address into the free form would be a takeover with a friendly name (see
+   * lib/auth/accountSignUp), so the password is deliberately discarded — but
+   * discarding it without a word left people believing they had set one, and
+   * finding out on a failed sign-in days later.
+   */
+  passwordKept: boolean;
 }
 
 export interface TrialVerifyTrial {
@@ -459,7 +471,14 @@ async function settleTrialAccount(input: SettleInput): Promise<VerifyResponse> {
 
     return {
       ok: true,
-      account: ensured.userId ? { userId: ensured.userId, created: ensured.created } : null,
+      account: ensured.userId
+        ? {
+            userId: ensured.userId,
+            created: ensured.created,
+            alreadyExisted: ensured.alreadyExisted,
+            passwordKept: ensured.passwordKept,
+          }
+        : null,
       trial: { state: ensured.state, granted: ensured.granted },
       signedIn,
       redirectTo: input.redirectTo,

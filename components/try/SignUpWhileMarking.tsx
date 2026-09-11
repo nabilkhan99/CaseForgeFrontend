@@ -8,6 +8,8 @@ import {
   CODE_LENGTH,
   CodeStep,
   EMAIL_RE,
+  EXISTING_ACCOUNT_NOTICE,
+  EXISTING_ACCOUNT_NOTICE_MS,
   EmailField,
   MobileField,
   PasswordField,
@@ -71,7 +73,14 @@ interface VerifyBody {
   error?: string;
   signedIn?: boolean;
   redirectTo?: string;
-  account?: { userId: string; created: boolean } | null;
+  account?: {
+    userId: string;
+    created: boolean;
+    /** The address already had an account; this call signed them into it. */
+    alreadyExisted?: boolean;
+    /** They typed a password and the account's existing one was kept. */
+    passwordKept?: boolean;
+  } | null;
 }
 
 type Step = 'details' | 'code' | 'stranded';
@@ -94,6 +103,8 @@ export default function SignUpWhileMarking({ sessionId, stationId }: SignUpWhile
 
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
+  /** Said out loud before the redirect when the typed password was not applied. */
+  const [notice, setNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const codeInputRef = useRef<HTMLInputElement>(null);
@@ -223,6 +234,13 @@ export default function SignUpWhileMarking({ sessionId, stationId }: SignUpWhile
       await trackTrialAccountCreated('guest');
 
       if (data.signedIn && data.redirectTo) {
+        // They typed a password onto an address that already had one. It was
+        // kept, on purpose, and saying nothing about it is how somebody ends up
+        // locked out of an account they believe they just set a password on.
+        if (data.account?.alreadyExisted && data.account?.passwordKept) {
+          setNotice(EXISTING_ACCOUNT_NOTICE);
+          await new Promise((resolve) => setTimeout(resolve, EXISTING_ACCOUNT_NOTICE_MS));
+        }
         // A full navigation, not a router push: the session cookies arrived on
         // the response above and every server component past here — the report
         // included — has to be rendered with them.
@@ -335,6 +353,15 @@ export default function SignUpWhileMarking({ sessionId, stationId }: SignUpWhile
                 in your dashboard, with four more cases and five days on the clock — no card.
               </p>
             </>
+          )}
+
+          {notice && (
+            <div
+              role="status"
+              className="mb-4 rounded-lg border border-primary/20 bg-primary/[0.06] p-3"
+            >
+              <p className="text-center text-sm leading-relaxed text-heading">{notice}</p>
+            </div>
           )}
 
           {step === 'code' && (
