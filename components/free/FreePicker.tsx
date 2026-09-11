@@ -9,7 +9,7 @@ import LandingFooter from '@/components/landing/LandingFooter';
 import { Pill, WASH } from '@/components/landing/v5/editorial';
 import { createClient } from '@/lib/supabase/client';
 import type { GuestNotice } from '@/lib/trial/freeParams';
-import type { PickerStation } from '@/lib/trial/freeStationPicks';
+import { accountFirstHref, type PickerStation } from '@/lib/trial/freeStationPicks';
 import ExampleReport from './ExampleReport';
 
 /**
@@ -37,14 +37,35 @@ interface FreePickerProps {
   notice: GuestNotice | null;
 }
 
-const NOTICES: Record<GuestNotice, { heading: string; body: string }> = {
+/**
+ * The two bounces, and what each one leaves a visitor able to do.
+ *
+ * Both used to end in a dead end. `limit` offered "open your dashboard", which
+ * is the one thing a guest who has never made an account does not have; and
+ * `unavailable` said "pick another below" when the five buttons below it would
+ * bounce straight back here. So the limit notice offers the account — the way
+ * to carry on now, and the only one — and the unavailable notice says the
+ * honest thing, which is to wait.
+ */
+const NOTICES: Record<GuestNotice, { heading: string; body: React.ReactNode }> = {
   limit: {
     heading: "That's three consultations today.",
-    body: 'Three a day is the limit while you are a guest. Come back tomorrow, or open your dashboard to carry on now.',
+    body: (
+      <>
+        Come back tomorrow, or{' '}
+        <Link
+          href="/free/start"
+          className="font-medium text-heading underline decoration-muted/40 underline-offset-4 transition-colors hover:decoration-heading"
+        >
+          create your free account
+        </Link>{' '}
+        to carry on now.
+      </>
+    ),
   },
   unavailable: {
     heading: 'That case is briefly unavailable.',
-    body: 'Nothing is wrong at your end. Pick another below, or try again in a few minutes.',
+    body: 'Nothing is wrong at your end. Try again in a few minutes.',
   },
 };
 
@@ -152,6 +173,16 @@ export default function FreePicker({ stations, notice }: FreePickerProps) {
   const [user, setUser] = useState<{ id: string } | null>(null);
   const reduceMotion = Boolean(useReducedMotion());
 
+  // The guest door is shut for today, so the five buttons stop pointing at it.
+  // /try/talk would refuse and bounce the visitor back to this same page — five
+  // buttons whose only outcome is the page they are on. Through /free/start the
+  // case still gets run, on an account, which is exactly what the notice above
+  // the list now offers.
+  const rows =
+    notice === 'limit'
+      ? stations.map((station) => ({ ...station, href: accountFirstHref(station.id) }))
+      : stations;
+
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => setUser(data.user as { id: string } | null));
@@ -208,12 +239,12 @@ export default function FreePicker({ stations, notice }: FreePickerProps) {
               Pick where to start
             </motion.h2>
 
-            {stations.length === 0 ? (
+            {rows.length === 0 ? (
               <NoStations />
             ) : (
               <>
                 <ul className="mt-5 border-t border-hairline">
-                  {stations.map((station, index) => (
+                  {rows.map((station, index) => (
                     <StationRow
                       key={station.id}
                       station={station}
@@ -224,8 +255,9 @@ export default function FreePicker({ stations, notice }: FreePickerProps) {
                 </ul>
 
                 <p className="mt-4 text-[13px] leading-relaxed text-muted">
-                  Start opens a consultation now. You see your verdict before we ask for
-                  anything.
+                  {notice === 'limit'
+                    ? 'Start opens your free account, and the case is the first one waiting on it.'
+                    : 'Start opens a consultation now. You see your verdict before we ask for anything.'}
                 </p>
               </>
             )}

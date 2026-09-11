@@ -63,6 +63,20 @@ export function startHref(stationId: string): string {
   return `/try/talk?station=${encodeURIComponent(stationId)}`
 }
 
+/**
+ * The same case, through the account-first door.
+ *
+ * Where a Start button points once the guest lane has said no. Three
+ * consultations is a browser's lot for the day, and /try/talk will bounce
+ * straight back to /free — so a row that still pointed at it was a button whose
+ * only possible outcome was the page it was already on. The account has no such
+ * limit, and /free/start carries the case through to the first consultation
+ * after sign-up.
+ */
+export function accountFirstHref(stationId: string): string {
+  return `/free/start?station=${encodeURIComponent(stationId)}`
+}
+
 /** A button: what it says, and where it goes. */
 export interface CaseCta {
   label: string
