@@ -363,12 +363,12 @@ function MarkingStatus({ kind }: { kind: 'waiting' | 'ready' | 'unmarkable' | 's
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: 0.06 }}
-      className="mt-3 flex items-center gap-2.5 text-base leading-relaxed text-body"
+      className="mt-3 flex items-start gap-2.5 text-base leading-relaxed text-body"
     >
       {kind === 'waiting' && (
         <span
           aria-hidden="true"
-          className="inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-primary"
+          className="mt-[0.6em] inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-primary"
         />
       )}
       {line}
