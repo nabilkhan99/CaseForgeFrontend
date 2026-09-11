@@ -4,7 +4,13 @@ import { claimTrialSessionsForUser } from '@/lib/auth/claimTrialSessions';
 import { provisionAccountWithPassword } from '@/lib/auth/accountSignUp';
 import { authLinkOrigin, mintRecoveryTokenHash, provisionAccountForPurchase } from '@/lib/auth/provisioning';
 import { trialSignInUrl } from '@/lib/auth/trialLink';
-import { grantTrial, loadTrialAccess, type TrialSource, type TrialState } from '@/lib/commerce/trialAccess';
+import {
+  grantTrial,
+  loadTrialAccess,
+  startTrialWindow,
+  type TrialSource,
+  type TrialState,
+} from '@/lib/commerce/trialAccess';
 
 /**
  * The four things that turn a verified address into a trialist, in the one
@@ -62,6 +68,23 @@ export interface EnsureTrialAccountInput {
   password?: string | null;
   /** Mobile, E.164 where we could parse it. Stored on the auth user as metadata. */
   phone?: string | null;
+  /**
+   * Start the five days HERE, from this instant, instead of leaving the clock
+   * for the first consultation to start.
+   *
+   * Exactly one door needs it: the guest who has ALREADY sat their first
+   * consultation and is making the account afterwards. Their five days must run
+   * from the consultation they just did — `clinical_sessions.started_at` — or a
+   * window that is meant to cover the work would begin after most of a session
+   * of it was over, and (worse) the chokepoints that normally stamp it would
+   * start it again from whenever they next opened a station.
+   *
+   * Absent everywhere else, and deliberately so: the account-first form has no
+   * consultation behind it, and a clock started at sign-up would spend days a
+   * trainee has not used. {@link startTrialWindow} is a compare-and-set, so a
+   * grant that already has a `started_at` is left exactly as it is.
+   */
+  windowStartsAt?: Date | null;
 }
 
 export interface EnsuredTrialAccount {
@@ -120,6 +143,12 @@ export async function ensureTrialAccount(
 
   const claimed = await claimTrialSessionsForUser(admin, userId, email);
   const grant = await grantTrial(admin, { userId, email, source: input.source });
+
+  // Between the grant and the read-back, because the read-back is what the
+  // caller's copy is written from and a window stamped after it would be a
+  // countdown nobody was told about. Never throws, and a grant that already
+  // carries a `started_at` is untouched.
+  if (grant && input.windowStartsAt) await startTrialWindow(admin, grant, input.windowStartsAt);
 
   // Read back rather than infer: a returning trialist may already have spent
   // their five, and the caller's copy ("five stations, five days") would be a

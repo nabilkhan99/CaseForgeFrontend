@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   grant: vi.fn(),
   loadAccess: vi.fn(),
   mintTokenHash: vi.fn(),
+  startWindow: vi.fn(),
   order: [] as string[],
 }))
 
@@ -65,6 +66,10 @@ vi.mock('@/lib/commerce/trialAccess', () => ({
     return mocks.grant(...args)
   },
   loadTrialAccess: (...args: unknown[]) => mocks.loadAccess(...args),
+  startTrialWindow: (...args: unknown[]) => {
+    mocks.order.push('start-window')
+    return mocks.startWindow(...args)
+  },
 }))
 
 const { ensureTrialAccount } = await import('./trialAccount')
@@ -85,6 +90,42 @@ beforeEach(() => {
   mocks.grant.mockResolvedValue({ userId: 'user-1', source: 'signup' })
   mocks.loadAccess.mockResolvedValue({ state: 'trial' })
   mocks.mintTokenHash.mockResolvedValue({ tokenHash: 'hash-1' })
+  mocks.startWindow.mockResolvedValue(true)
+})
+
+describe('the five-day clock', () => {
+  it('is left alone unless a caller dates it', async () => {
+    // Every door but the post-consultation sign-up leaves the window for the
+    // first station they open to stamp.
+    await ensureTrialAccount(admin, { email: 'a@b.com', source: 'signup' })
+    expect(mocks.startWindow).not.toHaveBeenCalled()
+  })
+
+  it('starts from the consultation, on the grant, before the read-back', async () => {
+    const sat = new Date('2026-09-11T09:00:00.000Z')
+    const grant = { userId: 'user-1', source: 'guest_reveal' }
+    mocks.grant.mockResolvedValue(grant)
+
+    await ensureTrialAccount(admin, {
+      email: 'a@b.com',
+      source: 'guest_reveal',
+      windowStartsAt: sat,
+    })
+
+    expect(mocks.startWindow).toHaveBeenCalledWith(admin, grant, sat)
+    // After the grant exists, before the state the caller's copy is written from.
+    expect(mocks.order.indexOf('grant')).toBeLessThan(mocks.order.indexOf('start-window'))
+  })
+
+  it('stamps nothing when there is no grant to stamp', async () => {
+    mocks.grant.mockResolvedValue(null)
+    await ensureTrialAccount(admin, {
+      email: 'a@b.com',
+      source: 'guest_reveal',
+      windowStartsAt: new Date(),
+    })
+    expect(mocks.startWindow).not.toHaveBeenCalled()
+  })
 })
 
 describe('a new address', () => {

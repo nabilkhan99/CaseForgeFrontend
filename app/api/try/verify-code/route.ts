@@ -5,6 +5,7 @@ import { signInWithMagicLink } from '@/lib/auth/accountSignUp';
 import { MIN_PASSWORD_LENGTH } from '@/lib/auth/passwordPolicy';
 import { ensureTrialAccount } from '@/lib/auth/trialAccount';
 import { toE164 } from '@/lib/trial/phone';
+import { GUEST_COOKIE, cookieOwnsSession, readGuestCookie } from '@/lib/trial/guestSession';
 import type { TrialSource, TrialState } from '@/lib/commerce/trialAccess';
 import {
   AKT_TARGETS,
@@ -28,10 +29,25 @@ import {
  *
  * ## Two doors, one verification
  *
- * `sessionId` = the GUEST reveal (legacy): a consultation was sat before there
- * was an account, and this unlocks its report. Recorded as `guest_reveal`.
+ * `sessionId` = the GUEST reveal: a consultation was sat before there was an
+ * account, and this turns it into one. Recorded as `guest_reveal`.
  * `email` (+ a `password` from /free/start) = the ACCOUNT-FIRST door, where
  * there is no consultation yet. Recorded as `signup`.
+ *
+ * ## Why a guest may set a password, and only sometimes (contract C3)
+ *
+ * A bare session id proves nothing — it is a UUID in a URL, and the guest
+ * report has always been readable by whoever holds it. A `password` arriving
+ * with one could therefore be a field nobody typed, on somebody else's
+ * consultation. What DOES prove this browser ran the consultation is the signed
+ * httpOnly `ff_guest` cookie the server wrote when it opened the session
+ * (lib/trial/guestSession), so `password` and `phone` are honoured on the guest
+ * branch exactly when {@link cookieOwnsSession} says that cookie carries this
+ * session id, and ignored otherwise. With the proof, the account is born with
+ * the password (no `password_pending`, no trip to /auth/set-password), the
+ * mobile is stored, and the five-day window starts FROM THE CONSULTATION rather
+ * than from whenever they next open a station. Without it, the branch does
+ * exactly what it did before.
  *
  * ## Why the account is created HERE
  *
@@ -75,6 +91,20 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 function redirectFor(station: unknown): string {
   const value = typeof station === 'string' ? station.trim() : '';
   return UUID_RE.test(value) ? `/clinical-master/station/${value.toLowerCase()}` : DASHBOARD;
+}
+
+/**
+ * The report of the consultation they have just sat, inside the dashboard.
+ *
+ * Only for a proven guest: the claim has just made the session theirs and the
+ * cookies on this response sign them in, so the dashboard's own ownership check
+ * passes. Rebuilt from a matched uuid for the same reason {@link redirectFor}
+ * is — the id came off the request.
+ */
+function reportFor(sessionId: string): string {
+  return UUID_RE.test(sessionId)
+    ? `/clinical-master/feedback/${sessionId.toLowerCase()}`
+    : DASHBOARD;
 }
 
 /** What the caller needs to know about the account. Null when provisioning failed. */
@@ -127,13 +157,28 @@ export async function POST(req: NextRequest) {
     }
 
     const source: TrialSource = sessionId ? 'guest_reveal' : 'signup';
-    const redirectTo = redirectFor(body.station);
 
-    // Only the account-first door sends these, and only it may: a password on a
-    // guest reveal would be a field nobody typed, arriving with a session id
-    // anyone holding the link could guess.
-    const password = source === 'signup' && typeof body.password === 'string' ? body.password : '';
-    const phone = source === 'signup' && typeof body.phone === 'string' ? body.phone.trim() : '';
+    // Contract C3's proof: the signed cookie this server wrote when it opened
+    // the consultation carries this session id, so this browser is the one that
+    // sat it. Forged, absent, or holding a different session — all the same
+    // answer, and all of them fall back to the branch as it was.
+    const guestProven =
+      Boolean(sessionId) &&
+      cookieOwnsSession(readGuestCookie(req.cookies?.get(GUEST_COOKIE)?.value), sessionId ?? '');
+
+    // The account-first door always may; the guest door only with the proof
+    // above. Everything else gets neither field, whatever it sends.
+    const mayCollect = source === 'signup' || guestProven;
+    const password = mayCollect && typeof body.password === 'string' ? body.password : '';
+    const phone = mayCollect && typeof body.phone === 'string' ? body.phone.trim() : '';
+    // E.164 where we can parse one, so the founder's call works straight off
+    // the row and the auth user's metadata carries the same string the lead
+    // does. NOTHING TEXTS IT — there is no SMS step on either door.
+    const normalizedPhone = phone ? (toE164(phone) ?? phone) : '';
+
+    // A proven guest goes straight to the report of the consultation they just
+    // sat; everyone else to the station they carried, or the dashboard.
+    const redirectTo = guestProven ? reportFor(sessionId ?? '') : redirectFor(body.station);
     if (password && password.length < MIN_PASSWORD_LENGTH) {
       return NextResponse.json(
         { error: `Use ${MIN_PASSWORD_LENGTH} characters or more` },
@@ -167,8 +212,9 @@ export async function POST(req: NextRequest) {
           firstName: lead.first_name,
           source,
           password,
-          phone,
+          phone: normalizedPhone,
           redirectTo,
+          windowSessionId: guestProven ? (sessionId ?? null) : null,
         }),
       );
     }
@@ -206,9 +252,8 @@ export async function POST(req: NextRequest) {
     }
 
     // The mobile rides along with the verification, on the row this product
-    // already keeps its leads in. Stored E.164 so the founder's call works
-    // straight off it. NOTHING TEXTS IT — there is no SMS step on this door.
-    const storedPhone = phone ? (toE164(phone) ?? phone) : null;
+    // already keeps its leads in.
+    const storedPhone = normalizedPhone || null;
 
     const { error: updateError } = await supabase
       .from('trial_leads')
@@ -273,6 +318,7 @@ export async function POST(req: NextRequest) {
         password,
         phone: storedPhone ?? '',
         redirectTo,
+        windowSessionId: guestProven ? (sessionId ?? null) : null,
       }),
     );
   } catch (error: unknown) {
@@ -290,10 +336,47 @@ interface SettleInput {
   /** E.164 where we could parse it, else what they typed. Empty when none. */
   phone: string;
   redirectTo: string;
+  /**
+   * The consultation whose `started_at` the five days should run from, or null
+   * to leave the clock for the first station they open.
+   *
+   * Only ever set for a guest whose cookie proved the session is theirs — see
+   * the C3 note at the top. Null on the account-first door, which has no
+   * consultation to date the window from.
+   */
+  windowSessionId: string | null;
 }
 
 /**
- * Account, claim, grant, session — and the body the caller reads them off.
+ * When the consultation began, for the window stamp.
+ *
+ * Falls back to NOW rather than to "do not start the clock": a proven guest has
+ * just finished a consultation, so the five days have to begin, and a row we
+ * could not read is a reason to be a few minutes generous, not to hand out a
+ * trial that never ends.
+ *
+ * A `started_at` in the future is treated as now for the same reason — the only
+ * way to get one is a clock skew, and honouring it would push the expiry out.
+ */
+async function consultationStart(sessionId: string): Promise<Date> {
+  const now = new Date();
+  try {
+    const { data } = await getSupabaseAdmin()
+      .from('clinical_sessions')
+      .select('started_at')
+      .eq('id', sessionId)
+      .maybeSingle();
+    const parsed = data?.started_at ? Date.parse(data.started_at) : NaN;
+    if (!Number.isFinite(parsed) || parsed > now.getTime()) return now;
+    return new Date(parsed);
+  } catch (error: unknown) {
+    console.error('[verify-code] could not read the consultation start', error);
+    return now;
+  }
+}
+
+/**
+ * Account, claim, grant, clock, session — and the body the caller reads them off.
  *
  * Its own function because both exits above need it: the freshly-verified path
  * and the already-verified reload. Never throws; a failure here still answers
@@ -304,6 +387,10 @@ interface SettleInput {
  */
 async function settleTrialAccount(input: SettleInput): Promise<VerifyResponse> {
   try {
+    const windowStartsAt = input.windowSessionId
+      ? await consultationStart(input.windowSessionId)
+      : null;
+
     const ensured = await ensureTrialAccount(getSupabaseAdmin(), {
       email: input.email,
       firstName: input.firstName,
@@ -311,6 +398,7 @@ async function settleTrialAccount(input: SettleInput): Promise<VerifyResponse> {
       password: input.password || null,
       phone: input.phone || null,
       mintSignIn: false,
+      windowStartsAt,
     });
 
     // Only for an account that exists: signing in an address with nothing behind

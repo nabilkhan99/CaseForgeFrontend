@@ -20,11 +20,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  *  - provisioning failure is NOT fatal. The code WAS right; refusing the guest
  *    their report over an account problem would take away the thing they spent
  *    twelve minutes earning.
+ *
+ * And, since 11 September, contract C3: the guest branch honours a `password`
+ * and a `phone` — and dates the five-day window from the consultation — ONLY
+ * when the signed `ff_guest` cookie carries that session id. Every way of not
+ * having that proof (no cookie, a forged one, one for a different session) has
+ * to land on the old behaviour, so all three are pinned below.
  */
+
+process.env.TRIAL_GUEST_COOKIE_SECRET = 'test-secret'
 
 const mocks = vi.hoisted(() => ({
   lead: null as Record<string, unknown> | null,
   leadError: null as unknown,
+  /** `clinical_sessions.started_at` for the session under test. */
+  sessionStartedAt: null as string | null,
+  /** Its status. The route must not care what it is. */
+  sessionStatus: 'completed' as string,
   updates: [] as Record<string, unknown>[],
   filters: [] as { column: string; value: unknown }[],
   ensure: vi.fn(),
@@ -63,10 +75,15 @@ vi.mock('@/lib/supabase/admin', () => ({
             if (table === 'trial_leads') mocks.filters.push({ column, value })
             return builder
           },
-          maybeSingle: async () =>
-            table === 'trial_leads'
-              ? { data: mocks.lead, error: mocks.leadError }
-              : { data: { title: 'A station' }, error: null },
+          maybeSingle: async () => {
+            if (table === 'trial_leads') return { data: mocks.lead, error: mocks.leadError }
+            if (table === 'clinical_sessions')
+              return {
+                data: { started_at: mocks.sessionStartedAt, status: mocks.sessionStatus },
+                error: null,
+              }
+            return { data: { title: 'A station' }, error: null }
+          },
         }
         return builder
       },
@@ -79,6 +96,20 @@ vi.mock('@/lib/supabase/admin', () => ({
 }))
 
 const { POST } = await import('./route')
+// The real signer, not a stand-in: a test that forged its own cookies would
+// prove nothing about the only thing this proof rests on.
+const { newGuestCookie, signGuestCookie, withGuestSession } = await import(
+  '@/lib/trial/guestSession'
+)
+
+/** A guest session id shaped like the ones /try/talk actually mints. */
+const GUEST_SESSION = '11111111-1111-4111-8111-111111111111'
+
+/** The cookie the server would have written when it opened `sessionId`. */
+function guestCookie(sessionId: string): string {
+  const cookie = withGuestSession(newGuestCookie(), sessionId, Math.floor(Date.now() / 1000))
+  return signGuestCookie(cookie) ?? ''
+}
 
 const VERIFIABLE_LEAD = {
   id: 'lead-1',
@@ -101,15 +132,20 @@ const VERIFIABLE_LEAD = {
   email_verified_at: null,
 }
 
-async function post(body: Record<string, unknown>) {
-  const response = await POST(
-    new Request('https://www.fourteenfisherman.com/api/try/verify-code', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    }) as any,
-  )
+async function post(body: Record<string, unknown>, cookie?: string) {
+  const request = new Request('https://www.fourteenfisherman.com/api/try/verify-code', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  // NextRequest's cookie jar, which a plain Request has no equivalent of.
+  Object.assign(request, {
+    cookies: {
+      get: (name: string) => (cookie && name === 'ff_guest' ? { value: cookie } : undefined),
+    },
+  })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const response = await POST(request as any)
   return { status: response.status, body: await response.json() }
 }
 
@@ -117,6 +153,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.lead = { ...VERIFIABLE_LEAD }
   mocks.leadError = null
+  mocks.sessionStartedAt = null
+  mocks.sessionStatus = 'completed'
   mocks.updates = []
   mocks.filters = []
   mocks.brevo.mockResolvedValue(undefined)
@@ -273,15 +311,127 @@ describe('the account-first sign-up', () => {
     expect(mocks.ensure).not.toHaveBeenCalled()
   })
 
-  it('ignores a password sent with a session id, which no form does', async () => {
-    // A guest reveal is reachable by anyone holding the session id. A password
-    // arriving on that path is not a field anybody typed.
+  it('ignores a password sent with an unproven session id', async () => {
+    // A guest reveal is reachable by anyone holding the session id. Without the
+    // cookie, a password arriving on that path is not a field anybody typed.
     await post({ sessionId: 'session-1', code: '123456', password: 'longenough1' })
 
     expect(mocks.ensure).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ source: 'guest_reveal', password: null }),
     )
+  })
+})
+
+describe('C3: the guest who proves the consultation was theirs', () => {
+  const OWNED = { sessionId: GUEST_SESSION, code: '123456', password: 'longenough1' }
+
+  it('sets the password, stores the mobile and dates the clock from the consultation', async () => {
+    mocks.sessionStartedAt = '2026-09-11T09:00:00.000Z'
+
+    const { body } = await post(
+      { ...OWNED, phone: '07700 900123' },
+      guestCookie(GUEST_SESSION),
+    )
+
+    expect(mocks.ensure).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        source: 'guest_reveal',
+        password: 'longenough1',
+        phone: '+447700900123',
+        // The five days run from the consultation just sat, not from the
+        // sign-up, and not from whenever they next open a station.
+        windowStartsAt: new Date('2026-09-11T09:00:00.000Z'),
+      }),
+    )
+    // And on the lead row the founder actually calls off.
+    expect(mocks.updates[0]).toMatchObject({ phone: '+447700900123' })
+    expect(body.ok).toBe(true)
+  })
+
+  it('sends them to the report of that consultation, inside the dashboard', async () => {
+    const { body } = await post(OWNED, guestCookie(GUEST_SESSION))
+    expect(body.redirectTo).toBe(`/clinical-master/feedback/${GUEST_SESSION}`)
+  })
+
+  it('starts the clock now when the row has no start time to read', async () => {
+    mocks.sessionStartedAt = null
+    const before = Date.now()
+
+    await post(OWNED, guestCookie(GUEST_SESSION))
+
+    const { windowStartsAt } = mocks.ensure.mock.calls[0][1] as { windowStartsAt: Date }
+    expect(windowStartsAt.getTime()).toBeGreaterThanOrEqual(before)
+  })
+
+  it('still makes the account when the consultation was too short to mark', async () => {
+    // `unmarkable` is a property of the session, not of the verification. The
+    // account is worth having either way — it is the other four cases.
+    mocks.sessionStatus = 'unmarkable'
+    mocks.sessionStartedAt = '2026-09-11T09:00:00.000Z'
+
+    const { status, body } = await post(OWNED, guestCookie(GUEST_SESSION))
+
+    expect(status).toBe(200)
+    expect(body.account).toMatchObject({ userId: 'user-1' })
+    expect(body.trial.granted).toBe(true)
+    expect(body.signedIn).toBe(true)
+  })
+})
+
+describe('C3: every way of not having the proof', () => {
+  const claimed = () => mocks.ensure.mock.calls[0][1] as Record<string, unknown>
+
+  it('no cookie at all: no password, no clock, no report redirect', async () => {
+    const { body } = await post({
+      sessionId: GUEST_SESSION,
+      code: '123456',
+      password: 'longenough1',
+      phone: '07700 900123',
+    })
+
+    expect(claimed()).toMatchObject({ password: null, phone: null, windowStartsAt: null })
+    expect(mocks.updates[0]).not.toHaveProperty('phone')
+    expect(body.redirectTo).toBe('/dashboard')
+  })
+
+  it('a forged cookie is no cookie', async () => {
+    // Same payload, one byte of signature changed: `readGuestCookie` returns
+    // null and the branch falls back, which is the whole point of signing it.
+    const real = guestCookie(GUEST_SESSION)
+    const forged = `${real.slice(0, -1)}${real.endsWith('A') ? 'B' : 'A'}`
+
+    const { body } = await post(
+      { sessionId: GUEST_SESSION, code: '123456', password: 'longenough1' },
+      forged,
+    )
+
+    expect(claimed()).toMatchObject({ password: null, windowStartsAt: null })
+    expect(body.redirectTo).toBe('/dashboard')
+  })
+
+  it('a valid cookie for somebody else’s session is no cookie', async () => {
+    const other = '22222222-2222-4222-8222-222222222222'
+
+    const { body } = await post(
+      { sessionId: GUEST_SESSION, code: '123456', password: 'longenough1' },
+      guestCookie(other),
+    )
+
+    expect(claimed()).toMatchObject({ password: null, windowStartsAt: null })
+    expect(body.redirectTo).toBe('/dashboard')
+  })
+
+  it('the account-first door needs no cookie and is untouched by any of this', async () => {
+    await post({ email: 'sarah@nhs.net', code: '123456', password: 'longenough1' })
+
+    expect(claimed()).toMatchObject({
+      source: 'signup',
+      password: 'longenough1',
+      // No consultation behind it, so no clock to start.
+      windowStartsAt: null,
+    })
   })
 })
 
