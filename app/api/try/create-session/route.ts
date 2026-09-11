@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
   if (!canOpenGuestSession(cookie, nowSeconds)) {
     console.warn('[try/create-session] guest daily limit reached');
     return NextResponse.json(
-      { error: 'That is three consultations today. Make an account for five stations over five days.', code: 'guest_daily_limit' },
+      { error: 'That is three consultations today. Make an account for five cases over five days.', code: 'guest_daily_limit' },
       { status: 429 },
     );
   }

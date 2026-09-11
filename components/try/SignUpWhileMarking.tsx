@@ -306,8 +306,9 @@ export default function SignUpWhileMarking({
     if (digits.length === CODE_LENGTH) void submitCode(digits);
   }
 
+  // Short top padding: the layout above this one carries the brand mark.
   return (
-    <main className="px-5 pb-24 pt-16 sm:px-8 sm:pt-20">
+    <main className="px-5 pb-24 pt-8 sm:px-8 sm:pt-10">
       {/*
         Their own verdict, score and one-line summary, above the form — and the
         short-run notice when the run was too brief to grade. Renders nothing at

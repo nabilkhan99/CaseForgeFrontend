@@ -250,6 +250,24 @@ describe('an address that already has an account', () => {
   })
 })
 
+describe('the header it has now', () => {
+  const LAYOUT = source('./layout.tsx')
+
+  it('names the tab after the thing being asked for', () => {
+    // The tab used to read "Fourteen Fisherman — The Complete SCA Course" over
+    // a form asking for a password.
+    expect(LAYOUT).toContain("title: { absolute: 'Set up your free account' }")
+  })
+
+  it('carries a brand mark and nothing else', () => {
+    // Every other link is a way out of the single conversion point in the
+    // funnel; the mark goes back to the five cases this visitor came from.
+    expect(LAYOUT).toContain('href="/free"')
+    expect(LAYOUT).toContain('alt="Fourteen Fisherman"')
+    expect(LAYOUT).not.toContain('LandingNavbar')
+  })
+})
+
 describe('what no longer renders here', () => {
   it('shows no report, no pricing table and no guarantee', () => {
     // The report moved into the dashboard, on an account that owns it. This

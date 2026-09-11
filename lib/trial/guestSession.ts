@@ -395,7 +395,7 @@ export function guestMintRefusal(input: MintRefusalInput): MintRefusal | null {
   if (rank >= GUEST_SESSIONS_PER_DAY) {
     return {
       code: 'guest_daily_limit',
-      error: `That is ${GUEST_SESSIONS_PER_DAY} consultations today. Make an account for five stations over five days.`,
+      error: `That is ${GUEST_SESSIONS_PER_DAY} consultations today. Make an account for five cases over five days.`,
       status: 429,
     }
   }
