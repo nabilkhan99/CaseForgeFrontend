@@ -15,15 +15,16 @@ import ExampleReport from './ExampleReport';
 /**
  * /free — the case picker.
  *
- * The offer page, not a form. The left column says what a station gives back
- * and then shows one; the right column is five cases, each one click from
- * /free/start, where an account is made in one go and that case opens.
+ * The offer page, not a form. The left column says what a case gives back and
+ * then shows one; the right column is five cases, each one click from a live
+ * patient.
  *
- * There is no guest lane behind these buttons any more (7 September 2026): the
- * stations are sat inside the dashboard, so the work is on a board the next
- * morning and the second station does not depend on the browser that sat the
- * first. /free/open is still the way back for somebody who already has an
- * account and would rather use a code than a password.
+ * VALUE BEFORE IDENTITY. Start goes to /try/talk and opens the consultation
+ * there and then — no address, no password, no code in front of it. Identity
+ * is asked for afterwards, on the feedback page, while the consultation is
+ * being marked and the trainee has their own verdict coming. /free/open is
+ * still the way back for somebody who already has an account and would rather
+ * use a code than a password.
  *
  * Nothing on this page mentions days, locks, plans, cards or codes beyond the
  * pill, which is the single place "no card" is allowed to appear.
@@ -66,10 +67,11 @@ function Notice({ notice }: { notice: GuestNotice }) {
 /**
  * One case.
  *
- * A `<Link>` again. It was a plain `<a>` while Start opened a consultation as a
- * side effect of a GET — five of those in one viewport meant five prefetched
- * consultations. Start now goes to /free/start, an ordinary page with no side
- * effect at all, so prefetching it is exactly what we want.
+ * A plain `<a>`, not a `<Link>`: /try/talk opens a consultation as a side
+ * effect of a GET, and Next prefetches a `<Link>` the moment it enters the
+ * viewport. The route already refuses prefetches (see its `isMachineFetch`),
+ * but five links in one viewport would fire five refused requests on every
+ * visit to no purpose.
  */
 function StationRow({
   station,
@@ -106,7 +108,7 @@ function StationRow({
           <p className="mt-1 text-[13px] text-muted">{station.meta}</p>
         </div>
 
-        <Link
+        <a
           href={station.href}
           className={`inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full px-5 py-2.5 text-sm font-semibold transition-colors ${
             first
@@ -116,7 +118,7 @@ function StationRow({
         >
           Start
           <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-        </Link>
+        </a>
       </div>
     </motion.li>
   );
@@ -163,14 +165,14 @@ export default function FreePicker({ stations, notice }: FreePickerProps) {
         {notice && <Notice notice={notice} />}
 
         <div className="mx-auto grid max-w-5xl gap-10 lg:grid-cols-[1.1fr_1fr] lg:gap-14">
-          {/* Left: what a station gives back, and one to look at. */}
+          {/* Left: what a case gives back, and one to look at. */}
           <div>
             <motion.p
               initial={reduceMotion ? false : { opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.45 }}
             >
-              <Pill>Five free stations · no card</Pill>
+              <Pill>Five free cases · no card</Pill>
             </motion.p>
 
             <motion.h1
@@ -222,8 +224,8 @@ export default function FreePicker({ stations, notice }: FreePickerProps) {
                 </ul>
 
                 <p className="mt-4 text-[13px] leading-relaxed text-muted">
-                  Start makes your free account, then opens that case. End a consultation
-                  whenever you like; a full run gets a marked report.
+                  Start opens a consultation now. You see your verdict before we ask for
+                  anything.
                 </p>
               </>
             )}
