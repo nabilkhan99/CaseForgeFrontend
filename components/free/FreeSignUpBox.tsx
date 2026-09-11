@@ -22,7 +22,7 @@ import { trackTrialAccountCreated } from '@/lib/trial/trialEvents';
  * stations for an address, not for a form.
  *
  * The code step is the same one-real-input-six-boxes pattern
- * components/try/EmailVerificationGate uses, so paste and iOS autofill work
+ * components/account/AccountFormFields uses, so paste and iOS autofill work
  * exactly as they do at the guest reveal, and the two screens read as one
  * product. It is duplicated rather than extracted because that component is
  * owned by the guest-reveal workstream on this build and is mid-change; the
@@ -44,7 +44,7 @@ type Step = 'details' | 'code' | 'stranded';
  * Six, matching `CODE_LENGTH` in lib/trial/verification.
  *
  * Duplicated rather than imported for the same reason
- * components/try/EmailVerificationGate duplicates it: that module is
+ * components/account/AccountFormFields duplicates it: that module is
  * `server-only` (it hashes and generates the codes), so importing the constant
  * would drag the hashing into the client bundle and fail the build.
  */

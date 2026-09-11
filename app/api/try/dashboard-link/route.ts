@@ -10,7 +10,7 @@ import { clientIp, createHitLog, withinLimit } from '@/lib/http/rateLimit';
  * emails it to them.
  *
  * USER-INITIATED, always. It is reached from the button on someone's own
- * report (components/try/OpenDashboardButton) and from the "send me a fresh
+ * report and from the "send me a fresh
  * one" fallback on /auth/start. Nothing calls it in a loop, and the mint script
  * for the existing leads deliberately does not go through it — that one writes
  * a CSV and stops.
