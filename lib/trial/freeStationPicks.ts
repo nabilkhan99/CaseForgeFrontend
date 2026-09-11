@@ -50,12 +50,40 @@ export interface PickerStation {
 /**
  * Where a "Start" button goes. One place, so the list and its test agree.
  *
- * /free/start, not the retired one-click guest door: every free station is sat
- * inside an account now, and the station rides through the sign-up in the query
- * so the trainee lands on the case they clicked rather than on a dashboard.
+ * /try/talk, the guest door: one click opens a consultation on that case, and
+ * nothing is asked for until the trainee is looking at their own verdict. The
+ * account is made on the far side of it, while the consultation is being
+ * marked, and the five days run from the consultation just done.
+ *
+ * ⚠️ This route has a SIDE EFFECT and is reached by GET. It refuses prefetches
+ * itself, but nothing should link to it with a Next `<Link>` all the same —
+ * five rows in one viewport would fire five refused requests on every visit.
  */
 export function startHref(stationId: string): string {
-  return `/free/start?station=${encodeURIComponent(stationId)}`
+  return `/try/talk?station=${encodeURIComponent(stationId)}`
+}
+
+/** A button: what it says, and where it goes. */
+export interface CaseCta {
+  label: string
+  href: string
+}
+
+/**
+ * The call to action on a public case page.
+ *
+ * Two answers, because a case page can be either kind of case. Somebody
+ * reading a chlamydia results case wants to sit THAT case, so when it is one
+ * of the five they get it — one click, no account, the id carried through. The
+ * other ~195 are not free, and offering "practise this one free" on them would
+ * be a promise the door cannot keep: the guest lane opens free stations only
+ * (it falls back to the first of the five rather than opening what was asked
+ * for), so the honest button names the five and goes to the picker.
+ */
+export function caseCtaFor(station: { id: string; isFree: boolean }): CaseCta {
+  return station.isFree
+    ? { label: 'Practise this case free', href: startHref(station.id) }
+    : { label: 'Try 5 free cases', href: '/free' }
 }
 
 /** Whole minutes from a duration in seconds, falling back to the SCA's twelve. */

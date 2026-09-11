@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   DEFAULT_STATION_MINUTES,
+  caseCtaFor,
   listFreeStations,
   startHref,
   stationMeta,
@@ -96,12 +97,14 @@ function fakeAdmin(bank: Bank) {
 }
 
 describe('a picker row', () => {
-  it('sends Start to the free account form with the station on it', () => {
-    expect(startHref('abc-123')).toBe('/free/start?station=abc-123')
+  it('sends Start straight into a consultation on that case', () => {
+    // The guest door, not an account form: one click and the patient is
+    // there. Identity is asked for afterwards, while it is being marked.
+    expect(startHref('abc-123')).toBe('/try/talk?station=abc-123')
   })
 
   it('escapes an id rather than pasting it into the query string', () => {
-    expect(startHref('a b&c')).toBe('/free/start?station=a%20b%26c')
+    expect(startHref('a b&c')).toBe('/try/talk?station=a%20b%26c')
   })
 
   it('reads "<domain> · 12 min"', () => {
@@ -152,7 +155,7 @@ describe('what /free lists', () => {
 
     expect(stations.map((station) => station.id)).toEqual([ROWS[0].id, ROWS[1].id])
     for (const station of stations) {
-      expect(station.href).toBe(`/free/start?station=${station.id}`)
+      expect(station.href).toBe(`/try/talk?station=${station.id}`)
     }
     expect(stations[0].title).toBe(ROWS[0].title)
     expect(stations[1].meta).toContain('telephone')
@@ -180,5 +183,30 @@ describe('what /free lists', () => {
     expect(await listFreeStations(admin)).toEqual([])
     expect(quiet).toHaveBeenCalled()
     quiet.mockRestore()
+  })
+})
+
+describe('the call to action on a public case page', () => {
+  it('offers THIS case when it is one of the five', () => {
+    // Somebody reading a chlamydia results case wants to sit that case, and
+    // the guest door will open it because the flag says it may.
+    expect(caseCtaFor({ id: 'abc-123', isFree: true })).toEqual({
+      label: 'Practise this case free',
+      href: '/try/talk?station=abc-123',
+    })
+  })
+
+  it('offers the five, not this one, when this one is not free', () => {
+    // The guest door opens free cases ONLY — asked for another it falls back
+    // to the first of the five — so "practise this case free" on the other
+    // ~195 would be a promise it cannot keep.
+    expect(caseCtaFor({ id: 'abc-123', isFree: false })).toEqual({
+      label: 'Try 5 free cases',
+      href: '/free',
+    })
+  })
+
+  it('never sends a paid case id to the guest door', () => {
+    expect(caseCtaFor({ id: 'abc-123', isFree: false }).href).not.toContain('abc-123')
   })
 })

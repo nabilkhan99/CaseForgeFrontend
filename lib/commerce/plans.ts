@@ -300,14 +300,21 @@ export const ACCESS_OPENS = '2026-09-01'
  * never meet.
  *
  * `ctaHref` rather than `cta: 'checkout'` for the same reason: there is nothing
- * to check out. And the label is "Start free", not "Start trial" — the word
- * never appears on a button.
+ * to check out. And the label never says "trial" — the word reads as a
+ * countdown to being sold something, and it never appears on a button.
+ *
+ * THIS COLUMN IS THE DELIBERATE, ACCOUNT-FIRST DOOR, and the only one left.
+ * Every other free call to action on the site now opens a consultation first
+ * (/free, the picker) and asks for the account afterwards, while the
+ * consultation is being marked. A reader of a price table is comparing plans,
+ * not looking for a patient, so this one says what it will do — "Create free
+ * account" — and goes to the form at /free/start.
  */
 export const FREE_TIER = {
   name: 'Free',
   displayPrice: '£0',
   priceSuffix: '',
-  tagline: 'Five stations · unlimited attempts · five days',
-  ctaLabel: 'Start free',
+  tagline: 'Five cases · unlimited attempts · five days',
+  ctaLabel: 'Create free account',
   ctaHref: '/free/start',
 } as const

@@ -15,11 +15,13 @@ interface LandingNavbarProps {
 
 export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  // The offer is five stations, not one mock, so the CTA names the offer and
-  // points at /free. "Trial" never appears on a button — see the copy rules in
-  // the five-station handoff.
+  // The offer is five cases, not one mock, so the CTA names the offer and
+  // points at /free. "Cases" rather than "stations": a station is what the
+  // thing is called inside the product (brief, report, library), and a visitor
+  // who has never sat one only knows the word from an exam blueprint.
+  // "Trial" never appears on a button — see the copy rules in the handoff.
   const [trialCta, setTrialCta] = useState<{ label: string; href: string }>({
-    label: '5 free stations',
+    label: '5 free cases',
     href: '/free',
   });
 

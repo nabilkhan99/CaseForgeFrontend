@@ -13,8 +13,11 @@
  * handoff and hold across the panel, the wall and the two emails):
  *   * the reader is never told they are on a "trial". The offer is five cases,
  *     unlimited attempts, five days;
- *   * nothing is described as "stations left" any more — attempts are
- *     unlimited, so the only countable things are CASES TRIED and DAYS;
+ *   * the five are CASES, never stations. "Station" is the whole bank's word
+ *     (200 of them) and using it for the five makes two numbers about two
+ *     things share a noun;
+ *   * nothing is described as "cases left" any more — attempts are unlimited,
+ *     so the only countable things are CASES TRIED and DAYS;
  *   * no invented urgency. The deadline is real (`trial_grants.expires_at`) and
  *     is stated as a date.
  */
@@ -48,16 +51,21 @@ function plural(n: number, one: string, many: string): string {
 }
 
 /**
- * The panel's title line: "Unlimited attempts · five stations".
+ * The panel's title line: "Unlimited attempts · five cases".
  *
  * The count comes from the flagged stations rather than a literal five, so a
  * bank with four flagged (or a hand-made grant) describes itself honestly. The
  * "unlimited attempts" half is first on purpose — it is the part of the offer
  * that changed, and the part a trainee who saw the old five-consultation
  * version needs to have corrected.
+ *
+ * CASES, not stations, and it is the same word the progress line under it
+ * uses: the two lines count the same five things and must not name them
+ * differently. "Station" is the word the product uses for the whole bank — the
+ * 200 — which is a different number about a different thing.
  */
 export function trialTitleLine(caseCount: number): string {
-  return `Unlimited attempts · ${numberWord(caseCount)} ${plural(caseCount, 'station', 'stations')}`
+  return `Unlimited attempts · ${numberWord(caseCount)} ${plural(caseCount, 'case', 'cases')}`
 }
 
 /** "three of five cases tried" — the progress line, in the panel's own words. */

@@ -13,9 +13,11 @@ import { BRAND, button, emailShell, fallbackLink, paragraph, row, signoff } from
  *
  * COPY RULES, and they are rules rather than taste:
  *   * never the word "trial" at the reader (decision 2 in the handoff) — it is
- *     "five cases, unlimited attempts", and what runs out is DAYS. Since the
- *     7 September rewrite nothing counts down but the calendar, so "N stations
- *     left" is not merely off-brand, it describes an offer we no longer make;
+ *     "five cases, unlimited attempts", and what runs out is DAYS. Nothing
+ *     counts down but the calendar, so "N cases left" is not merely
+ *     off-brand, it describes an offer we no longer make;
+ *   * the five are CASES, never stations — the same noun /free, the pricing
+ *     table and the dashboard panel use. "Station" is the whole bank's word;
  *   * no invented scarcity. The deadline is real (`expires_at`) and is stated
  *     as a date; nothing counts down, nothing is "about to close";
  *   * NO GUARANTEE WORDING. The £500 pass guarantee belongs to plan holders.
@@ -93,7 +95,7 @@ const VERDICT_PHRASE: Record<string, { one: string; many: string }> = {
   Fail: { one: 'fail', many: 'fails' },
 }
 
-/** Counting words. Five stations is the whole offer, so this never needs to go far. */
+/** Counting words. Five cases is the whole offer, so this never needs to go far. */
 const NUMBER_WORD: readonly string[] = [
   'no',
   'one',
@@ -247,7 +249,7 @@ export interface DominantDomain {
 /**
  * The domain that came up most often across a set of marks, or null.
  *
- * Requires at least two marks pointing at the same domain: one station saying
+ * Requires at least two marks pointing at the same domain: one case saying
  * "clinical management" is a case, two is a pattern, and only the second is
  * worth an email. Ties are broken by {@link DOMAIN_PRIORITY} so the answer is
  * stable rather than dependent on row order.
@@ -292,8 +294,8 @@ function timesPhrase(count: number, total: number): string {
 /**
  * One line about the pattern so far, or null when there is not enough to say.
  *
- * Null under two marks on purpose: after a single station the only honest
- * sentence is "you did one station", which the rest of the email already says.
+ * Null under two marks on purpose: after a single case the only honest
+ * sentence is "you did one case", which the rest of the email already says.
  */
 export function trialPatternLine(marks: readonly TrialMark[]): string | null {
   if (marks.length < 2) return null
@@ -338,7 +340,7 @@ export function trialResultsParagraph(
  * The timezone is pinned rather than taken from the machine: this runs from
  * whatever laptop or region the send script is invoked on, and a date that
  * slips by one for readers in the UK is exactly the sort of error nobody
- * notices until a trainee says their stations ended a day early.
+ * notices until a trainee says their cases ended a day early.
  */
 export function formatEndDate(date: Date): string {
   return new Intl.DateTimeFormat('en-GB', {
@@ -382,7 +384,7 @@ export function buildTrialDay3Email(input: TrialDay3Input): RenderedEmail {
   const endsOn = formatEndDate(input.endsAt)
   const days = `${numberWord(daysLeft)} ${plural(daysLeft, 'day', 'days')}`
 
-  // Days, never stations. The only thing running out is the calendar.
+  // Days, never cases. The only thing running out is the calendar.
   const subject = `${days.charAt(0).toUpperCase()}${days.slice(1)} left of your ${numberWord(casesTotal)} cases`
   const cta = 'Open your dashboard'
 
@@ -449,9 +451,9 @@ export interface TrialDay5Input {
  *
  * The second paragraph is the one that matters and it is the one people do not
  * expect: the account does not disappear. Reports, board and development
- * picture stay readable for ever; it is only the stations that stop. Said in
- * the email because somebody who thinks their results are about to be deleted
- * does not come back to check.
+ * picture stay readable for ever; it is only the cases that stop. Said in the
+ * email because somebody who thinks their results are about to be deleted does
+ * not come back to check.
  */
 export function buildTrialDay5Email(input: TrialDay5Input): RenderedEmail {
   const marks = input.marks ?? []
@@ -459,13 +461,13 @@ export function buildTrialDay5Email(input: TrialDay5Input): RenderedEmail {
   const casesTried = Math.max(0, Math.min(input.casesTried ?? 0, casesTotal))
   const greeting = greetingFor(input.firstName)
 
-  // Days, not stations: the calendar is the only thing that ends a trial now.
+  // Days, not cases: the calendar is the only thing that ends a trial now.
   const subject = 'Your five days are up'
   const cta = 'Open your dashboard'
 
   const lines = [
     trialResultsParagraph(marks, casesTried, casesTotal),
-    'Everything you did is still there — your reports, your board and your development picture. It is the stations that stop, not the account.',
+    'Everything you did is still there — your reports, your board and your development picture. It is the cases that stop, not the account.',
     'If you want to keep going, the two plans that fit your exam date are on your dashboard.',
   ]
 
@@ -554,7 +556,7 @@ export async function sendTrialEmail({
     const response = await new BrevoClient({ apiKey: brevoKey }).transactionalEmails.sendTransacEmail(
       {
         sender: { name: BRAND.senderName, email: BRAND.senderEmail },
-        // A reply to "your stations have ended" is a person with a question
+        // A reply to "your cases have ended" is a person with a question
         // about their own results; it has to reach a human, not a bounce box.
         replyTo: { name: BRAND.senderName, email: BRAND.senderEmail },
         to: [{ email: toEmail, ...(toName ? { name: toName } : {}) }],

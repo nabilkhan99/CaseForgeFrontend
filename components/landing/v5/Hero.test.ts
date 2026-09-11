@@ -6,11 +6,17 @@ import { FREE_TIER } from '@/lib/commerce/plans'
 /**
  * Where the landing page's calls to action point.
  *
- * The rule they all now obey (7 September 2026): the free trial is an ACCOUNT,
- * made in one go at /free/start, and every free call to action goes there. The
- * guest lane behind /try/talk is retired — a button still pointing at it would
- * take somebody through a redirect they did not need, and would keep a dead
- * door alive in every cached copy of this page.
+ * The rule they all now obey (11 September 2026): the free offer is FIVE CASES
+ * and the consultation comes first. Every free call to action on the landing
+ * page therefore goes to /free, the picker, where Start opens a consultation
+ * on that case; the account is made afterwards, while it is being marked. The
+ * account-first form at /free/start still exists and is still deliberate — it
+ * is the pricing table's free column, where somebody is comparing plans rather
+ * than looking for a patient.
+ *
+ * The noun is "cases" on every one of these surfaces. "Station" is the word
+ * the product uses inside itself (the brief, the report, the library, "200 AI
+ * stations" on the receipt) and it stays there.
  *
  * Source assertions, because vitest runs in `node` here and there is no DOM to
  * render a client component into — the same readFileSync approach
@@ -33,26 +39,23 @@ const NAVBAR = source('../LandingNavbar.tsx')
 const PRICING = source('./PricingTable.tsx')
 
 describe('the hero’s call to action', () => {
-  it('makes the free account', () => {
-    expect(HERO).toContain('href="/free/start"')
-    expect(HERO).toContain('Start free')
-  })
-
-  it('no longer points at the retired guest door', () => {
-    expect(HERO).not.toContain('/try/talk')
-  })
-
-  it('offers the picker underneath, as a text link', () => {
+  it('names the offer and opens the picker', () => {
     expect(HERO).toContain('href="/free"')
-    expect(HERO).toContain('See the five cases')
+    expect(HERO_COPY).toContain('Try 5 free cases')
   })
 
-  it('says what the free account is worth', () => {
-    expect(HERO_COPY).toContain('Five stations · unlimited attempts · five days · no card')
+  it('carries one button and no secondary link', () => {
+    // Two doors into the same offer only made the reader choose between them.
+    expect(HERO_COPY).not.toContain('See the five cases')
+    expect(HERO).not.toContain('href="/free/start"')
   })
 
-  it('drops the promise the guest lane used to make', () => {
-    expect(HERO_COPY).not.toContain('before we ask for')
+  it('says what the free offer is, underneath', () => {
+    expect(HERO_COPY).toContain('Live consultations with an AI patient · marked · no card')
+  })
+
+  it('never counts stations at somebody who has not sat one', () => {
+    expect(HERO_COPY).not.toContain('Five stations')
   })
 
   it('names outcomes, never mechanisms', () => {
@@ -80,22 +83,25 @@ describe('the receipt block is untouched', () => {
 })
 
 describe('the other doors into the offer', () => {
-  it('keeps the navbar CTA on the picker — it is a browse link, not a start', () => {
-    expect(NAVBAR).toContain("label: '5 free stations'")
+  it('keeps the navbar CTA on the picker, in the same noun', () => {
+    expect(NAVBAR).toContain("label: '5 free cases'")
     expect(NAVBAR).toContain("href: '/free'")
   })
 
   it('sends the pricing table’s free column to the account form', () => {
-    // The free column's destination lives on FREE_TIER in the plan catalogue
-    // and PricingTable reads it from there, so there is one source of truth.
+    // The free column is the DELIBERATE door: a reader comparing plans is not
+    // looking for a patient. Its destination and its label both live on
+    // FREE_TIER and PricingTable reads them from there, so there is one source
+    // of truth and no local override.
     expect(FREE_TIER.ctaHref).toBe('/free/start')
+    expect(FREE_TIER.ctaLabel).toBe('Create free account')
     expect(PRICING).toContain('href={FREE_TIER.ctaHref}')
-    expect(FREE_TIER.ctaLabel).toBe('Start free')
+    expect(PRICING).toContain('{FREE_TIER.ctaLabel}')
   })
 
-  it('sends the closing banner to the account form, and off mechanism words', () => {
-    expect(FINAL_CTA).toContain('href="/free/start"')
-    expect(FINAL_CTA).toContain('Start free')
+  it('sends the closing banner to the picker, and off mechanism words', () => {
+    expect(FINAL_CTA).toContain('href="/free"')
+    expect(FINAL_CTA).toContain('Try 5 free cases')
     expect(withoutComments(FINAL_CTA).toLowerCase()).not.toMatch(/sign[ -]up|6-digit/)
   })
 })

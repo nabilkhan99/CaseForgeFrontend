@@ -18,8 +18,12 @@ import type { TrialSubscription } from '@/app/api/subscription/route';
  * where do I start*. A list of five cases with a Start beside each is the
  * shortest honest answer, and it is the page's primary action, so it leads.
  *
+ * THE NOUN IS "CASES" for the five, everywhere a reader can see it — the same
+ * word /free, the pricing table and the two emails use. "Station" is the whole
+ * bank's word, and the bank is a different number about a different thing.
+ *
  * FOUR THINGS, IN THIS ORDER, and the order is the argument:
- *   1. what the offer is  — "Unlimited attempts · five stations". First,
+ *   1. what the offer is  — "Unlimited attempts · five cases". First,
  *      because a trainee who saw the old five-consultation version is
  *      rationing, and rationing is the behaviour this is trying to stop.
  *   2. how long it runs   — a real date, never a manufactured countdown.

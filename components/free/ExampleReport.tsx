@@ -64,7 +64,7 @@ export default function ExampleReport() {
       className="mt-9 rounded-[18px] border border-hairline bg-white/85 px-5 py-6 shadow-elevation-2 backdrop-blur sm:px-7"
     >
       <figcaption className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted sm:text-[11px]">
-        What you get after a station, example
+        What you get after a case, example
       </figcaption>
 
       <div className="mt-5 flex flex-col items-center gap-5 sm:flex-row sm:items-center sm:gap-7">
