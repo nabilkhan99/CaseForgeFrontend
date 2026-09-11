@@ -23,8 +23,9 @@ import {
  *                 `provisionAccountForPurchase` (the guest reveal and the
  *                 signed link, which have not).
  *   2. CLAIM    — any guest consultation that address already sat becomes
- *                 theirs. Before the grant, so the dashboard they land on has
- *                 their own work on it.
+ *                 theirs, plus `claimSessionId` when the caller can name one the
+ *                 leads table cannot. Before the grant, so the dashboard they
+ *                 land on has their own work on it.
  *   3. GRANT    — the five stations, idempotent on `user_id`.
  *   4. SIGN-IN  — a one-time URL, minted last because it is the only step that
  *                 is allowed to fail without failing the request.
@@ -85,6 +86,21 @@ export interface EnsureTrialAccountInput {
    * grant that already has a `started_at` is left exactly as it is.
    */
   windowStartsAt?: Date | null;
+  /**
+   * One more consultation to attach, named directly rather than found through a
+   * lead row.
+   *
+   * The claim normally follows `trial_leads.session_id`, which is the only
+   * evidence that links an anonymous consultation to an address. A returning
+   * trainee has no such link for their SECOND guest consultation: `send-code`
+   * deliberately leaves a verified lead pointing at the session it was verified
+   * for, because re-pointing it would disown the first one. So the new session
+   * is passed here instead, and only when the signed `ff_guest` cookie proved it
+   * belongs to this browser (contract C3).
+   *
+   * Still subject to `user_id is null` — see lib/auth/claimTrialSessions.
+   */
+  claimSessionId?: string | null;
 }
 
 export interface EnsuredTrialAccount {
@@ -141,7 +157,7 @@ export async function ensureTrialAccount(
     return NOT_PROVISIONED;
   }
 
-  const claimed = await claimTrialSessionsForUser(admin, userId, email);
+  const claimed = await claimTrialSessionsForUser(admin, userId, email, input.claimSessionId ?? null);
   const grant = await grantTrial(admin, { userId, email, source: input.source });
 
   // Between the grant and the read-back, because the read-back is what the

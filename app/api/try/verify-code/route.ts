@@ -188,11 +188,32 @@ export async function POST(req: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
-    const query = supabase.from('trial_leads').select(LEAD_COLUMNS);
-    const { data: lead, error: leadError } = await (sessionId
-      ? query.eq('session_id', sessionId)
-      : query.eq('email', normalizedEmail)
+    const found = await (sessionId
+      ? supabase.from('trial_leads').select(LEAD_COLUMNS).eq('session_id', sessionId)
+      : supabase.from('trial_leads').select(LEAD_COLUMNS).eq('email', normalizedEmail)
     ).maybeSingle();
+    let lead = found.data;
+    let leadError = found.error;
+
+    // A returning trainee's SECOND guest consultation has no lead pointing at
+    // it. `send-code` leaves a verified lead on the session it was verified
+    // against — re-pointing it would disown that first consultation — so the row
+    // has to be found by address instead.
+    //
+    // Only behind the cookie proof, and only when the session lookup found
+    // nothing. With the proof this request comes from the browser that ran the
+    // consultation, which is the same standing the account-first door has when
+    // it verifies an address and a code together; without it, a bare session id
+    // still cannot reach any lead but its own.
+    if (!leadError && !lead && sessionId && guestProven && normalizedEmail) {
+      const byEmail = await supabase
+        .from('trial_leads')
+        .select(LEAD_COLUMNS)
+        .eq('email', normalizedEmail)
+        .maybeSingle();
+      lead = byEmail.data;
+      leadError = byEmail.error;
+    }
 
     if (leadError) {
       console.error('[verify-code] lead lookup failed', leadError);
@@ -201,24 +222,19 @@ export async function POST(req: NextRequest) {
     if (!lead) {
       return NextResponse.json({ error: 'Request a code first' }, { status: 404 });
     }
-    if (lead.email_verified_at) {
-      // Already verified — the code step is done, but the account work may not
-      // be (a reload, a second tab, or a lead verified before this shipped). It
-      // is idempotent, so run it rather than returning a bare ok that would
-      // strand them without a grant or a session.
-      return NextResponse.json(
-        await settleTrialAccount({
-          email: lead.email,
-          firstName: lead.first_name,
-          source,
-          password,
-          phone: normalizedPhone,
-          redirectTo,
-          windowSessionId: guestProven ? (sessionId ?? null) : null,
-        }),
-      );
-    }
+    // ⚠️ THE CODE IS CHECKED FIRST, ALWAYS — including for a lead that is
+    // already verified.
+    //
+    // The already-verified shortcut used to sit above this block and return
+    // `settleTrialAccount` without ever comparing the digits. That was survivable
+    // while the branch only re-granted a trial; since contract C3 it provisions a
+    // PASSWORD and signs the caller in, so an unchecked path meant anyone holding
+    // a verified lead's session id (or, on the other door, their address) could
+    // set a password on their account and walk into it. Whatever the row says,
+    // this request has to prove it knows the code.
     if (!lead.verification_code_hash || !lead.verification_expires_at) {
+      // A verified lead with nothing pending lands here too: there is no code to
+      // check, so there is nothing to accept. `send-code` issues a fresh one.
       return NextResponse.json({ error: 'Request a new code' }, { status: 410 });
     }
     if (new Date(lead.verification_expires_at).getTime() < Date.now()) {
@@ -248,6 +264,28 @@ export async function POST(req: NextRequest) {
               : 'Too many attempts — resend a new code',
         },
         { status: 401 },
+      );
+    }
+
+    // The code was right. NOW an already-verified lead can be settled — the
+    // account work may still be outstanding (a reload, a second tab, a lead
+    // verified before any of this shipped), and every step of it is idempotent,
+    // so running it again is safer than a bare ok that strands a trialist
+    // without a grant or a session. The pending code is deliberately left in
+    // place: it is what makes a double-submit of the SAME still-valid code work,
+    // and clearing it would answer the second one with a 410.
+    if (lead.email_verified_at) {
+      return NextResponse.json(
+        await settleTrialAccount({
+          email: lead.email,
+          firstName: lead.first_name,
+          source,
+          password,
+          phone: normalizedPhone,
+          redirectTo,
+          windowSessionId: guestProven ? (sessionId ?? null) : null,
+          claimSessionId: guestProven ? (sessionId ?? null) : null,
+        }),
       );
     }
 
@@ -319,6 +357,7 @@ export async function POST(req: NextRequest) {
         phone: storedPhone ?? '',
         redirectTo,
         windowSessionId: guestProven ? (sessionId ?? null) : null,
+        claimSessionId: guestProven ? (sessionId ?? null) : null,
       }),
     );
   } catch (error: unknown) {
@@ -345,6 +384,17 @@ interface SettleInput {
    * consultation to date the window from.
    */
   windowSessionId: string | null;
+  /**
+   * The consultation to attach to the account by id, on top of whatever the
+   * leads table links to this address.
+   *
+   * A returning trainee's second guest consultation is not named by any lead —
+   * `send-code` keeps a verified lead on the session it verified against — so
+   * without this it would stay ownerless and invisible from the dashboard.
+   * Set only for a proven guest, and the claim still refuses a session that
+   * already has an owner.
+   */
+  claimSessionId: string | null;
 }
 
 /**
@@ -399,6 +449,7 @@ async function settleTrialAccount(input: SettleInput): Promise<VerifyResponse> {
       phone: input.phone || null,
       mintSignIn: false,
       windowStartsAt,
+      claimSessionId: input.claimSessionId,
     });
 
     // Only for an account that exists: signing in an address with nothing behind

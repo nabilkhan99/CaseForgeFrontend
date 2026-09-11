@@ -303,3 +303,22 @@ describe('the account-first door', () => {
     expect(mocks.provisionWithPassword).not.toHaveBeenCalled()
   })
 })
+
+describe('a consultation named by the caller', () => {
+  it('is handed to the claim alongside the address', async () => {
+    // The returning trainee's second guest consultation: their verified lead
+    // still points at the first one, so nothing in trial_leads names this.
+    await ensureTrialAccount(admin, {
+      email: 'sarah@nhs.net',
+      source: 'guest_reveal',
+      claimSessionId: 'new-session',
+    })
+
+    expect(mocks.claim).toHaveBeenCalledWith(admin, 'user-1', 'sarah@nhs.net', 'new-session')
+  })
+
+  it('is null for every door that has no consultation behind it', async () => {
+    await ensureTrialAccount(admin, { email: 'sarah@nhs.net', source: 'signup' })
+    expect(mocks.claim).toHaveBeenCalledWith(admin, 'user-1', 'sarah@nhs.net', null)
+  })
+})

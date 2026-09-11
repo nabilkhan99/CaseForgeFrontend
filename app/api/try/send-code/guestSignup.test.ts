@@ -17,14 +17,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  *     gap there is still a bug, not an answer withheld;
  *  3. the relaxed path OMITS what it was not told rather than nulling it, so a
  *     second visit cannot erase what a first one collected.
+ *
+ * And, since 11 September, a fourth: a VERIFIED lead is never un-verified and
+ * never re-pointed by a caller who cannot prove the new session is theirs. That
+ * row is the only link between an address and the consultations it has sat.
  */
+
+process.env.TRIAL_GUEST_COOKIE_SECRET = 'test-secret'
 
 const mocks = vi.hoisted(() => ({
   sendEmail: vi.fn(),
   /** The `clinical_sessions` row, or null for "no such session". */
   session: null as Record<string, unknown> | null,
-  lead: null as Record<string, unknown> | null,
+  /** The lead keyed by this session, and the one keyed by the address. */
+  leadBySession: null as Record<string, unknown> | null,
+  leadByEmail: null as Record<string, unknown> | null,
   writes: [] as Record<string, unknown>[],
+  deletes: [] as unknown[],
 }))
 
 vi.mock('server-only', () => ({}))
@@ -39,42 +48,83 @@ vi.mock('@/lib/email/verificationEmail', () => ({
 
 vi.mock('@/lib/supabase/admin', () => ({
   getSupabaseAdmin: () => ({
-    from: (table: string) => ({
-      select: () => ({
-        eq: () => ({
-          maybeSingle: async () => ({
-            data: table === 'clinical_sessions' ? mocks.session : mocks.lead,
+    from: (table: string) => {
+      // Which lead comes back depends on WHICH key was asked for: the route
+      // reads the row for this session and the row for this address, and the
+      // whole verified-lead question is what happens when they differ.
+      const filters: Record<string, unknown> = {}
+      const builder = {
+        select: () => builder,
+        eq: (column: string, value: unknown) => {
+          filters[column] = value
+          return builder
+        },
+        maybeSingle: async () => {
+          if (table === 'clinical_sessions') return { data: mocks.session, error: null }
+          return {
+            data: 'session_id' in filters ? mocks.leadBySession : mocks.leadByEmail,
             error: null,
-          }),
+          }
+        },
+        upsert: async (values: Record<string, unknown>) => {
+          mocks.writes.push(values)
+          return { error: null }
+        },
+        update: (values: Record<string, unknown>) => {
+          mocks.writes.push(values)
+          return { eq: async () => ({ error: null }) }
+        },
+        delete: () => ({
+          eq: async (_column: string, value: unknown) => {
+            mocks.deletes.push(value)
+            return { error: null }
+          },
         }),
-      }),
-      upsert: async (values: Record<string, unknown>) => {
-        mocks.writes.push(values)
-        return { error: null }
-      },
-      update: (values: Record<string, unknown>) => {
-        mocks.writes.push(values)
-        return { eq: async () => ({ error: null }) }
-      },
-      delete: () => ({ eq: async () => ({ error: null }) }),
-    }),
+      }
+      return builder
+    },
   }),
 }))
 
 const { POST } = await import('./route')
+// The real signer: a test that forged its own cookies would prove nothing
+// about the only thing the verified-lead guard rests on.
+const { signGuestCookie, withGuestSession } = await import('@/lib/trial/guestSession')
 
 const SESSION_ID = '33333333-3333-4333-8333-333333333333'
 const STATION_ID = '44444444-4444-4444-8444-444444444444'
+/** The session the returning trainee's lead was verified against, months ago. */
+const OLD_SESSION_ID = '55555555-5555-4555-8555-555555555555'
 
-async function post(body: Record<string, unknown>) {
-  const response = await POST(
-    new Request('https://www.fourteenfisherman.com/api/try/send-code', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    }) as any,
-  )
+/** The cookie this server would have written when it opened `sessionId`. */
+function heldCookie(sessionId = SESSION_ID): string {
+  return signGuestCookie(withGuestSession(null, sessionId, Math.floor(Date.now() / 1000)))!
+}
+
+/** Every call gets its own client address, so the per-IP brake never crosses tests. */
+let addresses = 0
+
+async function post(
+  body: Record<string, unknown>,
+  options: { cookie?: string; ip?: string } = {},
+) {
+  addresses += 1
+  const request = new Request('https://www.fourteenfisherman.com/api/try/send-code', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-forwarded-for': options.ip ?? `203.0.113.${addresses}`,
+    },
+    body: JSON.stringify(body),
+  })
+  Object.assign(request, {
+    cookies: {
+      get: (name: string) =>
+        options.cookie && name === 'ff_guest' ? { value: options.cookie } : undefined,
+    },
+  })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const response = await POST(request as any)
   return { status: response.status, body: await response.json() }
 }
 
@@ -94,9 +144,12 @@ const FULL_ANSWERS = {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.spyOn(console, 'error').mockImplementation(() => {})
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
   mocks.session = { id: SESSION_ID, user_id: null, station_id: STATION_ID }
-  mocks.lead = null
+  mocks.leadBySession = null
+  mocks.leadByEmail = null
   mocks.writes = []
+  mocks.deletes = []
   mocks.sendEmail.mockResolvedValue({ sent: true })
 })
 
@@ -201,5 +254,128 @@ describe('the legacy gate', () => {
     // that lookup exactly where it was.
     const { status } = await post({ sessionId: SESSION_ID, mode: 'signup', email: 'a@b.com' })
     expect(status).toBe(400)
+  })
+})
+
+describe('a lead that is already verified', () => {
+  /** Sarah verified months ago, against a different consultation. */
+  const VERIFIED_ELSEWHERE = {
+    id: 'lead-1',
+    session_id: OLD_SESSION_ID,
+    station_id: 'a-station-from-back-then',
+    verification_last_sent_at: null,
+    email_verified_at: '2026-07-01T10:00:00.000Z',
+  }
+
+  it('is not touched by a caller who cannot prove the new session is theirs', async () => {
+    // Typing a known address next to any unowned session id used to null that
+    // row's `email_verified_at` and move it here — losing the real owner their
+    // claim on the consultation they actually sat, and attaching their address
+    // to somebody else's work.
+    mocks.leadByEmail = { ...VERIFIED_ELSEWHERE }
+
+    const { status, body } = await post({
+      sessionId: SESSION_ID,
+      mode: 'guest_signup',
+      email: 'sarah@nhs.net',
+    })
+
+    expect(status).toBe(403)
+    expect(body.code).toBe('guest_session_unrecognised')
+    expect(mocks.writes).toHaveLength(0)
+    expect(mocks.deletes).toHaveLength(0)
+    expect(mocks.sendEmail).not.toHaveBeenCalled()
+  })
+
+  it('gets a new code in its own browser, and keeps both its verification and its session', async () => {
+    // The legitimate case: the same trainee, in the browser that ran this
+    // consultation, coming back for another free case.
+    mocks.leadByEmail = { ...VERIFIED_ELSEWHERE }
+
+    const { status } = await post(
+      { sessionId: SESSION_ID, mode: 'guest_signup', email: 'sarah@nhs.net' },
+      { cookie: heldCookie() },
+    )
+
+    expect(status).toBe(200)
+    expect(mocks.sendEmail).toHaveBeenCalledOnce()
+
+    const written = mocks.writes[0]
+    // Never un-verified: the claim on their first consultation depends on it.
+    expect(written).not.toHaveProperty('email_verified_at')
+    // And never re-pointed: the new session is attached by verify-code instead.
+    expect(written.session_id).toBe(OLD_SESSION_ID)
+    expect(written.station_id).toBe('a-station-from-back-then')
+    expect(written.verification_code_hash).toEqual(expect.any(String))
+  })
+
+  it('clears an unverified first attempt off this session, so the code it mailed is the one that answers', async () => {
+    // They typed one address, changed their mind, and typed the verified one.
+    // `verify-code` looks a guest up by session; the abandoned row would be
+    // what it found, and its code is not the one that just went out.
+    mocks.leadByEmail = { ...VERIFIED_ELSEWHERE }
+    mocks.leadBySession = { id: 'lead-2', verification_last_sent_at: null, email_verified_at: null }
+
+    await post(
+      { sessionId: SESSION_ID, mode: 'guest_signup', email: 'sarah@nhs.net' },
+      { cookie: heldCookie() },
+    )
+
+    expect(mocks.deletes).toEqual(['lead-2'])
+  })
+
+  it('never deletes a verified row to tidy up, whoever it belongs to', async () => {
+    // A verified lead is a proven address and a claim on a consultation.
+    mocks.leadByEmail = { ...VERIFIED_ELSEWHERE }
+    mocks.leadBySession = {
+      id: 'lead-3',
+      verification_last_sent_at: null,
+      email_verified_at: '2026-08-01T00:00:00.000Z',
+    }
+
+    await post(
+      { sessionId: SESSION_ID, mode: 'guest_signup', email: 'sarah@nhs.net' },
+      { cookie: heldCookie() },
+    )
+
+    expect(mocks.deletes).toHaveLength(0)
+  })
+
+  it('still un-verifies nothing when the lead is already on this session', async () => {
+    mocks.leadByEmail = { ...VERIFIED_ELSEWHERE, session_id: SESSION_ID }
+    mocks.leadBySession = { ...VERIFIED_ELSEWHERE, session_id: SESSION_ID }
+
+    const { status } = await post({
+      sessionId: SESSION_ID,
+      mode: 'guest_signup',
+      email: 'sarah@nhs.net',
+    })
+
+    expect(status).toBe(200)
+    expect(mocks.writes[0]).not.toHaveProperty('email_verified_at')
+  })
+})
+
+describe('the per-IP brake', () => {
+  it('stops one client mailing code after code from a single finished session', async () => {
+    // A real session id bounds how many SESSIONS a client can have, not how
+    // many addresses it can mail from one of them — resends are throttled per
+    // lead row, and each new address is a new row.
+    const ip = '198.51.100.7'
+    const statuses: number[] = []
+    for (let attempt = 0; attempt < 14; attempt += 1) {
+      const { status, body } = await post(
+        { sessionId: SESSION_ID, mode: 'guest_signup', email: `t${attempt}@nhs.net` },
+        { ip },
+      )
+      statuses.push(status)
+      if (status === 429) {
+        expect(body.code).toBe('guest_ip_limit')
+        break
+      }
+    }
+
+    expect(statuses).toContain(429)
+    expect(statuses.filter((status) => status === 200).length).toBeLessThanOrEqual(12)
   })
 })

@@ -86,13 +86,17 @@ vi.mock('@/lib/supabase/admin', () => ({
 
 const { GET } = await import('./route')
 
+/** Every call gets its own client address, so the per-IP brake never crosses tests. */
+let addresses = 0
+
 function request(search = '', cookie?: string, headers: Record<string, string> = {}, method = 'GET') {
+  addresses += 1
   const url = `https://fourteenfisherman.com/try/talk${search}`
   return {
     url,
     method,
     nextUrl: new URL(url),
-    headers: new Headers(headers),
+    headers: new Headers({ 'x-forwarded-for': `203.0.113.${addresses}`, ...headers }),
     cookies: { get: (name: string) => (cookie && name === 'ff_guest' ? { value: cookie } : undefined) },
   } as never
 }
@@ -110,9 +114,11 @@ const FIRST_FREE = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const OTHER_FREE = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const PAID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.spyOn(console, 'error').mockImplementation(() => {})
+  const { resetGuestRateLimits } = await import('@/lib/trial/guestRateLimit')
+  resetGuestRateLimits()
   mocks.signedIn = false
   mocks.free = [{ id: FIRST_FREE }, { id: OTHER_FREE }]
   mocks.freeOrderError = null
@@ -223,5 +229,33 @@ describe('what it leaves behind', () => {
     const { location } = await talk()
     expect(location).toContain('/dashboard')
     expect(mocks.inserted).toHaveLength(0)
+  })
+})
+
+describe('the per-IP brake', () => {
+  it('sends a client that has opened too many to the deliberate door', async () => {
+    // The three-a-day cap lives in the ff_guest cookie, so a client that keeps
+    // no cookie gets three more on every request. This is the floor under that.
+    const { GUEST_OPENS_PER_IP_PER_HOUR } = await import('@/lib/trial/guestRateLimit')
+    const headers = { 'x-forwarded-for': '198.51.100.31' }
+
+    for (let attempt = 0; attempt < GUEST_OPENS_PER_IP_PER_HOUR; attempt += 1) {
+      const { location } = await talk('', undefined, headers)
+      expect(location).toMatch(/\/try\/session\//)
+    }
+
+    const { location } = await talk('', undefined, headers)
+    expect(location).toContain('/free?guest=limit')
+    expect(mocks.inserted).toHaveLength(GUEST_OPENS_PER_IP_PER_HOUR)
+  })
+
+  it('leaves a different client alone', async () => {
+    const { GUEST_OPENS_PER_IP_PER_HOUR } = await import('@/lib/trial/guestRateLimit')
+    for (let attempt = 0; attempt <= GUEST_OPENS_PER_IP_PER_HOUR; attempt += 1) {
+      await talk('', undefined, { 'x-forwarded-for': '198.51.100.32' })
+    }
+
+    const { location } = await talk('', undefined, { 'x-forwarded-for': '198.51.100.33' })
+    expect(location).toMatch(/\/try\/session\//)
   })
 })

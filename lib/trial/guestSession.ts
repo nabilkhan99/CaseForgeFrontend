@@ -14,12 +14,23 @@ import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
  *
  * ## The cookie
  *
- * The SERVER generates every guest session id (in `/try/talk` or
- * `/api/try/create-session`) and records it in an httpOnly, HMAC-signed cookie
- * before the browser is ever told the id. The cookie is the browser's
+ * The server records every guest session in an httpOnly, HMAC-signed cookie at
+ * the moment it writes the `clinical_sessions` row. The cookie is the browser's
  * identity: it carries a random guest id, and one entry per session the server
  * opened for it — when it was opened (`c`) and when a key was last minted for
  * it (`m`).
+ *
+ * ⚠️ ONE of the two doors generates the id, not both. `/try/talk` mints it
+ * server-side and the browser learns it from the redirect. `/api/try/create-
+ * session` ACCEPTS a client-generated id, because the page that calls it —
+ * `/try/station/[stationId]`, the read-the-brief path — was handed that id by
+ * `/try/talk` and is re-submitting it; generating a fresh one there would open a
+ * second consultation for a brief already on screen. That is harmless for a row
+ * that does not exist yet (the id is a uuid nobody else holds, and the cookie is
+ * written for it in the same response). What it must never become is a way to
+ * MINT A COOKIE FOR SOMEBODY ELSE'S SESSION, so when the row already exists
+ * `create-session` re-signs only what {@link cookieOwnsSession} says this
+ * browser already holds — see the refusals in {@link guestResumeRefusal}.
  *
  * Cookie-backed rather than a table, deliberately. Vercel Hobby has no Redis
  * and an in-memory map is per-instance (so no limit at all across a fleet), and
@@ -277,6 +288,91 @@ export interface MintRefusalInput {
 }
 
 /**
+ * Rules 1, 2, 7 and 8 as constructors, because the mint is no longer the only
+ * caller that has to say them. Written once so the two gates cannot drift into
+ * telling the same person two different things about the same session.
+ */
+const refusals = {
+  cookieMissing: (): MintRefusal => ({
+    code: 'guest_cookie_missing',
+    error: 'Start your consultation from the link — this one has lost its place.',
+    status: 403,
+  }),
+  unrecognised: (): MintRefusal => ({
+    code: 'guest_session_unrecognised',
+    error: 'Start your consultation from the link — this one has lost its place.',
+    status: 403,
+  }),
+  notStartable: (): MintRefusal => ({
+    code: 'guest_session_not_startable',
+    error: 'That consultation has already finished.',
+    status: 403,
+  }),
+  expired: (): MintRefusal => ({
+    code: 'guest_session_expired',
+    error: 'That consultation has been waiting too long. Start a new one.',
+    status: 403,
+  }),
+}
+
+/**
+ * Rule 8 on its own: is the row too old to be started?
+ *
+ * The row's own timestamp is authoritative; `fallbackOpenedSeconds` — in
+ * practice the cookie entry's `c` — covers a row written without one.
+ */
+export function guestSessionAgeExceeded(
+  startedAt: string | null | undefined,
+  nowSeconds: number,
+  fallbackOpenedSeconds: number,
+): boolean {
+  const openedMs = startedAt ? Date.parse(startedAt) : NaN
+  const openedSeconds = Number.isFinite(openedMs)
+    ? Math.floor(openedMs / 1000)
+    : fallbackOpenedSeconds
+  return nowSeconds - openedSeconds > GUEST_SESSION_MAX_AGE_SECONDS
+}
+
+/**
+ * Rules 2, 7 and 8, for a caller that already holds the row and is being asked
+ * to hand this browser its cookie BACK for a session it says it is resuming.
+ *
+ * `/api/try/create-session` is that caller. It is idempotent by design — the
+ * read-the-brief page re-submits an id `/try/talk` already opened — and the
+ * re-sign is what lets a browser that lost its cookie carry on. Unguarded, that
+ * same re-sign is a cookie-minting oracle: POST any unowned session id and the
+ * response hands back a signed cookie carrying it, which is the exact proof the
+ * mint (rule 2) and the post-call password (contract C3) rest on.
+ *
+ * So a resume re-signs only a session the cookie ALREADY holds, and only while
+ * that session is still one a consultation could be run from. Deliberately does
+ * NOT include the cooldown (rule 9 — nothing is being minted here), the daily
+ * cap (rule 3 — the session is already open and counted), or the station check
+ * (rule 6 — the caller has just made it against the row).
+ */
+export function guestResumeRefusal(input: {
+  cookie: GuestCookie | null
+  sessionId: string
+  session: Pick<GuestSessionRow, 'status' | 'started_at'>
+  nowMs: number
+}): MintRefusal | null {
+  const { cookie, sessionId, session, nowMs } = input
+  const nowSeconds = Math.floor(nowMs / 1000)
+
+  // One code for all three ways of not having the proof — no cookie, a forged
+  // one, a valid one for a different session. The mint tells them apart because
+  // it is diagnosing a call that failed to start; here they are the same answer
+  // to the same question, which is the question `cookieOwnsSession` asks.
+  if (!cookieOwnsSession(cookie, sessionId)) return refusals.unrecognised()
+  if (!STARTABLE_STATUSES.has(session.status ?? '')) return refusals.notStartable()
+
+  const opened = cookie?.s.find((entry) => entry.i === sessionId)?.c ?? nowSeconds
+  if (guestSessionAgeExceeded(session.started_at, nowSeconds, opened)) return refusals.expired()
+
+  return null
+}
+
+/**
  * The whole gate, as a pure function: the reason to refuse, or null to mint.
  *
  * Pure so every rule can be pinned by a unit test without a database or an
@@ -287,22 +383,10 @@ export function guestMintRefusal(input: MintRefusalInput): MintRefusal | null {
   const { cookie, sessionId, session, requestedStationId, nowMs } = input
   const nowSeconds = Math.floor(nowMs / 1000)
 
-  if (!cookie) {
-    return {
-      code: 'guest_cookie_missing',
-      error: 'Start your consultation from the link — this one has lost its place.',
-      status: 403,
-    }
-  }
+  if (!cookie) return refusals.cookieMissing()
 
   const entry = cookie.s.find((candidate) => candidate.i === sessionId)
-  if (!entry) {
-    return {
-      code: 'guest_session_unrecognised',
-      error: 'Start your consultation from the link — this one has lost its place.',
-      status: 403,
-    }
-  }
+  if (!entry) return refusals.unrecognised()
 
   // Rule 3 again. Creation refuses the fourth, so a cookie we signed can only
   // hold three; this catches a cookie signed before the cap existed.
@@ -344,25 +428,9 @@ export function guestMintRefusal(input: MintRefusalInput): MintRefusal | null {
     }
   }
 
-  if (!STARTABLE_STATUSES.has(session.status ?? '')) {
-    return {
-      code: 'guest_session_not_startable',
-      error: 'That consultation has already finished.',
-      status: 403,
-    }
-  }
+  if (!STARTABLE_STATUSES.has(session.status ?? '')) return refusals.notStartable()
 
-  // The row's own timestamp is authoritative; the cookie's `c` covers a row
-  // written without one.
-  const openedMs = session.started_at ? Date.parse(session.started_at) : NaN
-  const openedSeconds = Number.isFinite(openedMs) ? Math.floor(openedMs / 1000) : entry.c
-  if (nowSeconds - openedSeconds > GUEST_SESSION_MAX_AGE_SECONDS) {
-    return {
-      code: 'guest_session_expired',
-      error: 'That consultation has been waiting too long. Start a new one.',
-      status: 403,
-    }
-  }
+  if (guestSessionAgeExceeded(session.started_at, nowSeconds, entry.c)) return refusals.expired()
 
   if (typeof entry.m === 'number') {
     const since = nowSeconds - entry.m
