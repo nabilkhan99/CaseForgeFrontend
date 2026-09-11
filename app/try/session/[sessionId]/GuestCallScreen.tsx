@@ -9,6 +9,7 @@ import ConnectingScreen from '@/components/clinical-master/ConnectingScreen';
 import ConsultationStage from '@/components/clinical-master/ConsultationStage';
 import SessionControls from '@/components/clinical-master/SessionControls';
 import ConfirmModal from '@/components/ui/ConfirmModal';
+import { micRecoveryHint } from '@/lib/clinical-master/micErrors';
 import type { CallBrief } from '@/lib/trial/callBrief';
 import { markTrialSessionStarted } from '@/lib/trial/storage';
 
@@ -72,7 +73,7 @@ export default function GuestCallScreen({
     router.push(`/try/feedback/${sessionId}`);
   }, [router, sessionId]);
 
-  const { isConnected, isSpeaking, transcript, connect, endConsultation, disconnect, setMicMuted, getPatientLevel, error, status } =
+  const { isConnected, isSpeaking, transcript, connect, endConsultation, disconnect, setMicMuted, getPatientLevel, error, errorKind, status } =
     useRealtimeSession({
       sessionId,
       stationId,
@@ -141,7 +142,26 @@ export default function GuestCallScreen({
     );
   }
 
+  // A refused microphone is not a connection problem, and "Try again" is the
+  // one thing that cannot fix it: the browser remembers the refusal (iOS Safari
+  // until the site's settings are reset), so connect() would re-throw the same
+  // error forever — and on this lane each attempt that got as far as the mint
+  // also spent the guest cooldown, leaving a visitor stuck behind their own
+  // 2-minute refusal. The mint now happens after the microphone, and this
+  // screen says which permission to change and where, exactly as the signed-in
+  // session screen has done since the mic errors were classified.
   if (error && !isConnected) {
+    const micProblem = errorKind !== null && errorKind !== 'connection';
+    const hint = micRecoveryHint(
+      errorKind ?? 'connection',
+      typeof navigator !== 'undefined' ? navigator.userAgent : '',
+    );
+    const title =
+      errorKind === 'mic_denied' ? 'Microphone blocked'
+      : errorKind === 'mic_missing' ? 'No microphone found'
+      : errorKind === 'mic_busy' ? 'Microphone in use'
+      : errorKind === 'mic_unsupported' ? "This browser can't capture audio"
+      : 'Connection problem';
     return (
       <div className="min-h-[100dvh] bg-surface flex items-center justify-center px-6">
         <motion.div
@@ -155,15 +175,18 @@ export default function GuestCallScreen({
               <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.5" />
             </svg>
           </div>
-          <h3 className="text-[18px] font-semibold text-heading mb-2">Connection problem</h3>
-          <p className="text-[14px] leading-[1.65] text-muted mb-6">{error}</p>
-          <div className="flex flex-col items-center gap-3">
+          <h3 className="text-[18px] font-semibold text-heading mb-2">{title}</h3>
+          <p className="text-[14px] leading-[1.65] text-muted mb-2">
+            {micProblem ? 'The consultation needs your microphone to hear you.' : error}
+          </p>
+          {micProblem && <p className="text-[13px] leading-[1.65] text-muted mb-6">{hint}</p>}
+          <div className={`flex flex-col items-center gap-3 ${micProblem ? '' : 'mt-4'}`}>
             <button
-              onClick={() => connect()}
+              onClick={() => (micProblem ? window.location.reload() : connect())}
               className="min-h-[44px] rounded-xl px-6 py-3 text-[14px] font-semibold text-white cursor-pointer"
               style={{ background: 'linear-gradient(135deg, #B45309, #D97706)', boxShadow: '0 4px 12px rgba(180,83,9,0.2)' }}
             >
-              Try again
+              {micProblem ? 'Reload this page' : 'Try again'}
             </button>
             <Link href="/" className="text-[13px] font-semibold text-primary hover:underline">
               Back to Fourteen Fisherman

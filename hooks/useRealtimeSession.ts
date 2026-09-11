@@ -2020,7 +2020,32 @@ export function useRealtimeSession({
                 unreliableAec: unreliableEchoCancellation(navigator.userAgent),
             });
 
-            // 1. Mint ephemeral key + session config
+            // 1. Microphone — FIRST, and before anything is spent.
+            //
+            // Classified separately so a denied mic gets recovery instructions
+            // rather than "Connection problem". It runs ahead of the mint
+            // because the mint is not free and is not repeatable: minting an
+            // ephemeral key moves a guest session to `live` and stamps the
+            // 2-minute cooldown on the `ff_guest` cookie, so a trainee who
+            // fumbles the permission prompt used to spend their mint on a
+            // consultation that could never start and then be refused for two
+            // minutes by the door they were standing in. Asking for the
+            // microphone first costs nothing when it is refused.
+            let micStream: MediaStream;
+            try {
+                if (!navigator.mediaDevices?.getUserMedia) {
+                    throw new MicError('mic_unsupported', 'This browser cannot capture audio here.');
+                }
+                micStream = await navigator.mediaDevices.getUserMedia({
+                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+                });
+            } catch (micErr) {
+                throw micErr instanceof MicError ? micErr : classifyMicError(micErr);
+            }
+            micStreamRef.current = micStream;
+            micTrackRef.current = micStream.getAudioTracks()[0] ?? null;
+
+            // 2. Mint ephemeral key + session config
             const res = await fetch(tokenEndpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -2039,21 +2064,6 @@ export function useRealtimeSession({
             // changes when lanes are swapped, so `lane` names the resource.
             logDebug('connect:token', { origin: origin ?? 'unknown', lane: lane ?? 'unknown' });
 
-            // 2. Microphone — classified separately so a denied mic gets
-            // recovery instructions rather than "Connection problem".
-            let micStream: MediaStream;
-            try {
-                if (!navigator.mediaDevices?.getUserMedia) {
-                    throw new MicError('mic_unsupported', 'This browser cannot capture audio here.');
-                }
-                micStream = await navigator.mediaDevices.getUserMedia({
-                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-                });
-            } catch (micErr) {
-                throw micErr instanceof MicError ? micErr : classifyMicError(micErr);
-            }
-            micStreamRef.current = micStream;
-            micTrackRef.current = micStream.getAudioTracks()[0] ?? null;
             startDoubleTalkDetector();
 
             // Consultation audio. The patient side joins at ontrack/unmute.
