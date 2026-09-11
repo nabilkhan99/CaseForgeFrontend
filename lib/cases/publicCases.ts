@@ -16,6 +16,15 @@ export interface PublicCase {
     clinical_management?: string | null;
     relating_to_others?: string | null;
     clinical_learning_points?: string | null;
+    /**
+     * One of the five free cases. Read-only here: the flag is set in the
+     * database and the public case page uses it to decide whether its button
+     * can offer THIS case free or has to offer the five.
+     *
+     * Optional because the light list select does not carry it — only the
+     * detail select does, and the detail page merges detail over list.
+     */
+    is_free_trial?: boolean | null;
     domain_id: string;
     domain_name: string;
 }
@@ -29,7 +38,7 @@ export interface PublicCaseDomain {
 
 // Full case body, incl. large text fields (patient script, marking scheme, learning points) — detail page + sitemap.
 const CASE_SELECT_DETAIL =
-    'id, title, patient_name, patient_age, difficulty, consultation_type, reading_duration_seconds, consultation_duration_seconds, candidate_instructions, station_script, data_gathering, clinical_management, relating_to_others, clinical_learning_points, domain_id';
+    'id, title, patient_name, patient_age, difficulty, consultation_type, reading_duration_seconds, consultation_duration_seconds, candidate_instructions, station_script, data_gathering, clinical_management, relating_to_others, clinical_learning_points, is_free_trial, domain_id';
 
 // Card-display fields only — list page, avoids pulling the large text blobs for every card.
 const CASE_SELECT_LIST =

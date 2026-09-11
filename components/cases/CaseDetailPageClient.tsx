@@ -12,6 +12,7 @@ import { MarkSchemeDomains } from '@/components/cases/MarkScheme';
 import LandingNavbar from '@/components/landing/LandingNavbar';
 import Container from '@/components/ui/Container';
 import { createClient } from '@/lib/supabase/client';
+import { caseCtaFor } from '@/lib/trial/freeStationPicks';
 
 interface CaseDetailPageClientProps {
     caseData: SeoCase;
@@ -117,6 +118,12 @@ export default function CaseDetailPageClient({ caseData }: CaseDetailPageClientP
     }, []);
 
     const sections = parseInstructions(caseData.candidate_instructions ?? '');
+
+    // Which door this case opens. One of the five free ones can be sat here
+    // and now; the other ~195 cannot, and the button says so rather than
+    // promising a case the guest lane would quietly swap for another.
+    const isFreeCase = caseData.is_free_trial === true;
+    const cta = caseCtaFor({ id: caseData.id, isFree: isFreeCase });
 
     const detailSections = sections.filter(
         s =>
@@ -315,22 +322,29 @@ export default function CaseDetailPageClient({ caseData }: CaseDetailPageClientP
                         </Container>
 
                         {/* The page above is the case on paper: brief, script,
-                            mark scheme. This is the same case with a patient who
-                            answers back, and it starts on this station rather
-                            than on whichever one the funnel would have picked —
-                            somebody reading a chlamydia results case wants to
-                            sit a chlamydia results case. The id rides through
-                            the free account form and is what opens on the far
-                            side of it. */}
-                        <Link
-                            href={`/free/start?station=${encodeURIComponent(caseData.id)}`}
-                            className="cta-button mt-4 w-full px-5 py-3.5 text-[15px]"
-                        >
-                            Practise this case free
-                        </Link>
+                            mark scheme. The button is the same case with a
+                            patient who answers back — but only when this case
+                            is one of the five that are free. Somebody reading a
+                            chlamydia results case wants to sit a chlamydia
+                            results case, and when we can give them that we do,
+                            in one click with nothing asked for first.
+
+                            A plain <a>, not a <Link>, for the free case: the
+                            guest door opens a consultation as a side effect of
+                            a GET and a prefetch must not reach it. */}
+                        {isFreeCase ? (
+                            <a href={cta.href} className="cta-button mt-4 w-full px-5 py-3.5 text-[15px]">
+                                {cta.label}
+                            </a>
+                        ) : (
+                            <Link href={cta.href} className="cta-button mt-4 w-full px-5 py-3.5 text-[15px]">
+                                {cta.label}
+                            </Link>
+                        )}
                         <p className="mt-2 text-xs leading-relaxed text-muted">
-                            A live 12-minute consultation with an AI patient, marked. Free account,
-                            no card.
+                            {isFreeCase
+                                ? 'A live 12-minute consultation with an AI patient, marked. You see your verdict before we ask for anything.'
+                                : 'Five cases are free: a live 12-minute consultation with an AI patient each, marked, and no card.'}
                         </p>
                     </div>
 
