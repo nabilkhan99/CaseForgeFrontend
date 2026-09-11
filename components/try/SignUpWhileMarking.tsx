@@ -165,6 +165,12 @@ export default function SignUpWhileMarking({ sessionId }: SignUpWhileMarkingProp
         body: JSON.stringify({
           sessionId,
           code: candidate,
+          // The address as well as the session: a returning trainee's verified
+          // lead stays on the consultation it was verified against, so there is
+          // no lead pointing at THIS one to find. `sessionId` still wins — the
+          // address is only consulted when the session finds nothing and the
+          // guest cookie proves this browser ran it.
+          email: cleanEmail,
           password,
           // Sent as typed; the server stores E.164 where it can parse one. Both
           // are honoured only behind the cookie proof — see the header.

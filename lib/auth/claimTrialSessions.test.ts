@@ -227,3 +227,60 @@ describe('claimTrialSessionsForUser', () => {
     expect(await claimTrialSessionsForUser(store, 'user-1', 'jane@nhs.net')).toBe(0)
   })
 })
+
+describe('a session named directly by the caller', () => {
+  /**
+   * A returning trainee's SECOND guest consultation. `send-code` leaves their
+   * verified lead on the session it was verified against — re-pointing it would
+   * disown that first one — so nothing in `trial_leads` names the new session
+   * and it would otherwise stay ownerless.
+   */
+  it('is claimed alongside the ones the leads table names', async () => {
+    const { store, updates } = makeStore({
+      leads: [{ session_id: 'old-session', email_verified_at: '2026-07-01T00:00:00Z' }],
+      sessions: { 'old-session': { user_id: null }, 'new-session': { user_id: null } },
+    })
+
+    expect(
+      await claimTrialSessionsForUser(store, 'user-1', 'jane@nhs.net', 'new-session'),
+    ).toBe(2)
+    expect(updates[0].ids).toEqual(['old-session', 'new-session'])
+  })
+
+  it('is claimed even when no lead names anything at all', async () => {
+    const { store } = makeStore({
+      leads: [],
+      sessions: { 'new-session': { user_id: null } },
+    })
+
+    expect(
+      await claimTrialSessionsForUser(store, 'user-1', 'jane@nhs.net', 'new-session'),
+    ).toBe(1)
+  })
+
+  it('never takes a session that already belongs to somebody', async () => {
+    // The `user_id is null` guard applies to it like everything else: naming a
+    // session is not the same as owning it.
+    const { store, updates } = makeStore({
+      leads: [],
+      sessions: { 'new-session': { user_id: 'someone-else' } },
+    })
+
+    expect(
+      await claimTrialSessionsForUser(store, 'user-1', 'jane@nhs.net', 'new-session'),
+    ).toBe(0)
+    expect(updates[0].guarded).toBe(true)
+  })
+
+  it('is not deduplicated into a second write when a lead names it too', async () => {
+    const { store, updates } = makeStore({
+      leads: [{ session_id: 'new-session', email_verified_at: '2026-07-01T00:00:00Z' }],
+      sessions: { 'new-session': { user_id: null } },
+    })
+
+    expect(
+      await claimTrialSessionsForUser(store, 'user-1', 'jane@nhs.net', 'new-session'),
+    ).toBe(1)
+    expect(updates[0].ids).toEqual(['new-session'])
+  })
+})

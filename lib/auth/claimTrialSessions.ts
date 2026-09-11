@@ -31,6 +31,19 @@ import { normalizeEmail } from '@/lib/commerce/referrals';
  *
  * Idempotent by construction: the second run matches the same leads, finds
  * their sessions already owned, and claims nothing.
+ *
+ * ## `extraSessionId`
+ *
+ * One consultation can be theirs without any lead pointing at it. A trainee who
+ * verified months ago and comes back for another free case keeps their ORIGINAL
+ * lead row — `send-code` refuses to re-point a verified lead, because doing so
+ * would silently disown the consultation that lead was written for — so the new
+ * session is named directly by the caller instead. `/api/try/verify-code` passes
+ * it only when the signed `ff_guest` cookie proves this browser ran it
+ * (contract C3); an id off a request is not evidence of anything on its own.
+ *
+ * It goes through the same `user_id is null` gate as the rest, so it can add a
+ * session to an account and never move one between accounts.
  */
 
 /** Anything that can reach the tables — in practice the service-role client. */
@@ -40,6 +53,7 @@ export async function claimTrialSessionsForUser(
   supabase: ClaimClient,
   userId: string,
   email: string | null | undefined,
+  extraSessionId?: string | null,
 ): Promise<number> {
   const normalized = normalizeEmail(email ?? '');
   if (!userId || !normalized) return 0;
@@ -60,9 +74,10 @@ export async function claimTrialSessionsForUser(
 
   const sessionIds = [
     ...new Set(
-      (leads ?? [])
-        .map((lead) => (lead as { session_id?: string | null }).session_id)
-        .filter((id): id is string => Boolean(id)),
+      [
+        ...(leads ?? []).map((lead) => (lead as { session_id?: string | null }).session_id),
+        extraSessionId ?? null,
+      ].filter((id): id is string => Boolean(id)),
     ),
   ];
   if (sessionIds.length === 0) return 0;

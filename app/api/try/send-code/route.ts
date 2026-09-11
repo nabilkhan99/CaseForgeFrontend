@@ -11,6 +11,7 @@ import {
 import { leadFieldsFrom } from '@/lib/trial/leadRow';
 import { toE164 } from '@/lib/trial/phone';
 import { clientIp, createHitLog, withinLimit } from '@/lib/http/rateLimit';
+import { GUEST_COOKIE, cookieOwnsSession, readGuestCookie } from '@/lib/trial/guestSession';
 import {
   CODE_TTL_MS,
   RESEND_COOLDOWN_SECONDS,
@@ -63,6 +64,21 @@ const SIGNUP_IP_LIMIT = 8;
 const SIGNUP_IP_WINDOW_MS = 60 * 60 * 1000;
 const signupIpHits = createHitLog();
 
+/**
+ * Per-IP budget for the guest door.
+ *
+ * Looser than the sign-up door's, because a real session id is still required
+ * and a real session id costs a consultation. It is here because "costs a
+ * consultation" bounds how many DIFFERENT sessions a client can have, not how
+ * many addresses it can mail from one of them: resends are throttled per lead
+ * row, so a script cycling addresses against one finished session paid for the
+ * session once and then mails for free. Twelve an hour is more than any human
+ * mistypes.
+ */
+const GUEST_IP_LIMIT = 12;
+const GUEST_IP_WINDOW_MS = 60 * 60 * 1000;
+const guestIpHits = createHitLog();
+
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as Record<string, unknown> & { sessionId?: string };
@@ -79,6 +95,13 @@ export async function POST(req: NextRequest) {
 
     if (!sessionId) {
       return NextResponse.json({ error: 'A valid session is required' }, { status: 400 });
+    }
+
+    if (!withinLimit(guestIpHits, clientIp(req), GUEST_IP_LIMIT, GUEST_IP_WINDOW_MS)) {
+      return NextResponse.json(
+        { error: 'Too many requests — please try again later', code: 'guest_ip_limit' },
+        { status: 429 },
+      );
     }
 
     // Same validators the two forms use, so the allowlists cannot drift and a
@@ -124,10 +147,44 @@ export async function POST(req: NextRequest) {
         .maybeSingle(),
       supabase
         .from('trial_leads')
-        .select('id, session_id, verification_last_sent_at')
+        .select('id, session_id, station_id, verification_last_sent_at, email_verified_at')
         .eq('email', normalizedEmail)
         .maybeSingle(),
     ]);
+
+    // A VERIFIED lead is somebody's finished gate, and it is the only link
+    // between their address and the consultations they have sat: the claim
+    // reads `trial_leads.session_id`, and `claimTrialSessionsForUser` only
+    // trusts rows with an `email_verified_at`. This branch used to overwrite
+    // both — `email_verified_at: null` and a new `session_id` — for anyone who
+    // typed a known address next to any unowned session id. That un-verified a
+    // stranger's lead and pointed it at the caller's consultation, which is
+    // both a denial of service on their claim and a way to attach their address
+    // to work they never did. (The comment below claiming verified rows were
+    // "turned away above" was describing a check that did not exist.)
+    //
+    // The legitimate case is narrow and worth keeping: a trainee who verified
+    // last month, in this browser, running another free case. The signed
+    // `ff_guest` cookie is what tells the two apart — it is the same proof the
+    // Azure mint and contract C3's password rest on, and a bare session id is
+    // not evidence of anything.
+    const verifiedLead = Boolean(leadByEmail?.email_verified_at);
+    if (verifiedLead && leadByEmail!.session_id !== sessionId) {
+      const owns = cookieOwnsSession(
+        readGuestCookie(req.cookies.get(GUEST_COOKIE)?.value),
+        sessionId,
+      );
+      if (!owns) {
+        console.warn('[send-code] refused to move a verified lead onto an unproven session');
+        return NextResponse.json(
+          {
+            error: 'Start your consultation from the link — this one has lost its place.',
+            code: 'guest_session_unrecognised',
+          },
+          { status: 403 },
+        );
+      }
+    }
 
     // A repeat email is NOT refused here. By this point the consultation has
     // already happened, so refusing only withholds a report the person has
@@ -179,23 +236,33 @@ export async function POST(req: NextRequest) {
         };
 
     const leadRow = {
-      session_id: sessionId,
+      // A verified lead KEEPS the session it was verified against. Re-pointing
+      // it would hand this browser their claim on that consultation and lose
+      // them their own; the new one is attached instead by `verify-code`, which
+      // passes it to the claim as `claimSessionId`.
+      session_id: verifiedLead ? (leadByEmail!.session_id as string) : sessionId,
       email: normalizedEmail,
       ...answerColumns,
+      // `station_id` describes the consultation `session_id` points at, so the
+      // pair moves together or not at all.
+      ...(verifiedLead ? { station_id: leadByEmail!.station_id ?? null } : {}),
       verification_code_hash: hashVerificationCode(code, normalizedEmail),
       verification_expires_at: new Date(now.getTime() + CODE_TTL_MS).toISOString(),
       verification_attempts: 0,
       verification_last_sent_at: now.toISOString(),
-      email_verified_at: null,
+      // Never un-verifies. A proven address does not become unproven because a
+      // new code was issued to it, and the claim depends on it staying set.
+      ...(verifiedLead ? {} : { email_verified_at: null }),
     };
 
     let upsertError = null;
     if (leadByEmail && leadByEmail.session_id !== sessionId) {
-      // Only unverified rows reach here — a verified one was turned away above.
-      // This is an abandoned attempt (details entered, code never confirmed),
-      // so it is moved to the current session rather than left to block the
-      // person behind the unique email index.
-      if (leadBySession && leadBySession.id !== leadByEmail.id) {
+      // An abandoned attempt under this address (details entered, code never
+      // confirmed) is moved to the current session rather than left to block
+      // the person behind the unique email index. A verified one is written in
+      // place — `leadRow.session_id` above is its own — and this is the branch
+      // that reaches it because it is still the row keyed by the address.
+      if (!verifiedLead && leadBySession && leadBySession.id !== leadByEmail.id) {
         await supabase.from('trial_leads').delete().eq('id', leadBySession.id);
       }
       ({ error: upsertError } = await supabase
@@ -222,10 +289,13 @@ export async function POST(req: NextRequest) {
     });
     if (!emailResult.sent) {
       // Undo the throttle stamp so a failed send can be retried immediately.
+      // By ADDRESS, not by session: `trial_leads` is unique on lower(email), so
+      // this is the row just written in every branch — including the verified
+      // lead that kept its original `session_id`.
       await supabase
         .from('trial_leads')
         .update({ verification_last_sent_at: null, verification_code_hash: null })
-        .eq('session_id', sessionId);
+        .eq('email', normalizedEmail);
       return NextResponse.json(
         { error: "We couldn't send the code — check the address and try again" },
         { status: 502 },

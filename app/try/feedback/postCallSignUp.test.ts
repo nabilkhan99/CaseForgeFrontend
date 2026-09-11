@@ -109,10 +109,13 @@ describe('the three requests it makes', () => {
     expect(send).toContain("mode: 'guest_signup'")
   })
 
-  it('verifies with the session, the password and the mobile', () => {
+  it('verifies with the session, the address, the password and the mobile', () => {
     const verify = FORM.slice(FORM.indexOf("'/api/try/verify-code'"))
     expect(verify).toContain('sessionId,')
     expect(verify).toContain('code: candidate')
+    // A returning trainee's verified lead stays on the consultation it was
+    // verified against, so the address is what finds it for this one.
+    expect(verify).toContain('email: cleanEmail')
     expect(verify).toContain('password,')
     expect(verify).toContain('...(phone.trim() ? { phone: phone.trim() } : {})')
   })

@@ -33,6 +33,8 @@ process.env.TRIAL_GUEST_COOKIE_SECRET = 'test-secret'
 const mocks = vi.hoisted(() => ({
   lead: null as Record<string, unknown> | null,
   leadError: null as unknown,
+  /** True when no lead row points at the session under test. */
+  noLeadForSession: false,
   /** `clinical_sessions.started_at` for the session under test. */
   sessionStartedAt: null as string | null,
   /** Its status. The route must not care what it is. */
@@ -70,13 +72,22 @@ vi.mock('@/lib/supabase/admin', () => ({
   getSupabaseAdmin: () => ({
     from: (table: string) => ({
       select: () => {
+        // Per-query, so "which key was this asked by" is answerable: the guest
+        // branch looks up by session and may then fall back to the address.
+        const used: Record<string, unknown> = {}
         const builder = {
           eq: (column: string, value: unknown) => {
-            if (table === 'trial_leads') mocks.filters.push({ column, value })
+            if (table === 'trial_leads') {
+              mocks.filters.push({ column, value })
+              used[column] = value
+            }
             return builder
           },
           maybeSingle: async () => {
-            if (table === 'trial_leads') return { data: mocks.lead, error: mocks.leadError }
+            if (table === 'trial_leads') {
+              const missing = mocks.noLeadForSession && 'session_id' in used
+              return { data: missing ? null : mocks.lead, error: mocks.leadError }
+            }
             if (table === 'clinical_sessions')
               return {
                 data: { started_at: mocks.sessionStartedAt, status: mocks.sessionStatus },
@@ -153,6 +164,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.lead = { ...VERIFIABLE_LEAD }
   mocks.leadError = null
+  mocks.noLeadForSession = false
   mocks.sessionStartedAt = null
   mocks.sessionStatus = 'completed'
   mocks.updates = []
@@ -626,5 +638,93 @@ describe('refusals', () => {
     const { status } = await post({ email: 'nobody@example.com', code: '123456' })
     expect(status).toBe(404)
     expect(mocks.ensure).not.toHaveBeenCalled()
+  })
+})
+
+describe('C3: attaching the consultation that was just sat', () => {
+  it('names it to the claim when the cookie proves it', async () => {
+    // The claim normally follows trial_leads.session_id. A returning trainee's
+    // verified lead still points at their FIRST consultation, so this one has
+    // to be named directly or it stays ownerless.
+    await post({ sessionId: GUEST_SESSION, code: '123456' }, guestCookie(GUEST_SESSION))
+
+    expect(mocks.ensure).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ claimSessionId: GUEST_SESSION }),
+    )
+  })
+
+  it('names nothing without the proof', async () => {
+    await post({ sessionId: GUEST_SESSION, code: '123456' })
+
+    expect(mocks.ensure).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ claimSessionId: null }),
+    )
+  })
+
+  it('and never on the account-first door, which has no consultation', async () => {
+    await post({ email: 'sarah@nhs.net', code: '123456' })
+
+    expect(mocks.ensure).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ claimSessionId: null }),
+    )
+  })
+})
+
+describe('a returning trainee whose lead is on an older consultation', () => {
+  it('is found by address once the session finds nothing — but only with the cookie', async () => {
+    mocks.noLeadForSession = true
+    mocks.lead = { ...VERIFIABLE_LEAD, email_verified_at: new Date().toISOString() }
+
+    const { status } = await post(
+      { sessionId: GUEST_SESSION, email: 'Sarah@NHS.net', code: '123456' },
+      guestCookie(GUEST_SESSION),
+    )
+
+    expect(status).toBe(200)
+    // The session was asked first and the address only after it came back empty.
+    expect(mocks.filters).toEqual([
+      { column: 'session_id', value: GUEST_SESSION },
+      { column: 'email', value: 'sarah@nhs.net' },
+    ])
+    expect(mocks.ensure).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        source: 'guest_reveal',
+        email: 'sarah@nhs.net',
+        claimSessionId: GUEST_SESSION,
+      }),
+    )
+  })
+
+  it('is not reachable by a bare session id and a guessed address', async () => {
+    mocks.noLeadForSession = true
+    mocks.lead = { ...VERIFIABLE_LEAD, email_verified_at: new Date().toISOString() }
+
+    const { status } = await post({
+      sessionId: GUEST_SESSION,
+      email: 'sarah@nhs.net',
+      code: '123456',
+      password: 'longenough1',
+    })
+
+    expect(status).toBe(404)
+    expect(mocks.filters).toEqual([{ column: 'session_id', value: GUEST_SESSION }])
+    expect(mocks.ensure).not.toHaveBeenCalled()
+  })
+
+  it('does not consult the address when the session found its own lead', async () => {
+    await post(
+      { sessionId: GUEST_SESSION, email: 'attacker@example.com', code: '123456' },
+      guestCookie(GUEST_SESSION),
+    )
+
+    expect(mocks.filters).toEqual([{ column: 'session_id', value: GUEST_SESSION }])
+    expect(mocks.ensure).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ email: 'sarah@nhs.net' }),
+    )
   })
 })
