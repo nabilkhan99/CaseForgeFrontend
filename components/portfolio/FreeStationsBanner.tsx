@@ -50,7 +50,7 @@ export default function FreeStationsBanner() {
         <div className="border-b border-hairline bg-surface-warm/70">
             <div className="mx-auto flex max-w-5xl flex-col gap-3 px-5 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-8">
                 <p className="text-[13.5px] leading-snug text-body">
-                    <span className="font-semibold text-heading">New:</span> five free SCA stations
+                    <span className="font-semibold text-heading">New:</span> five free SCA cases
                     with an AI patient.{' '}
                     <Link
                         href="/free"
