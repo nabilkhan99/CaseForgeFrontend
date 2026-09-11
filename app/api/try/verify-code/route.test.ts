@@ -495,10 +495,12 @@ describe('when the account cannot be made', () => {
 })
 
 describe('an already-verified lead', () => {
+  const VERIFIED = { ...VERIFIABLE_LEAD, email_verified_at: new Date().toISOString() }
+
   it('is granted anyway, so a reload does not strand a trialist without a grant', async () => {
     // Legacy leads verified before this shipped land here too, which is the
     // reason it is not a bare `return { ok: true }`.
-    mocks.lead = { ...VERIFIABLE_LEAD, email_verified_at: new Date().toISOString() }
+    mocks.lead = { ...VERIFIED }
 
     const { body } = await post({ sessionId: 'session-1', code: '123456' })
 
@@ -507,6 +509,79 @@ describe('an already-verified lead', () => {
     // Nothing re-verified, nothing re-pushed to the marketing list.
     expect(mocks.updates).toHaveLength(0)
     expect(mocks.brevo).not.toHaveBeenCalled()
+  })
+
+  it('still has to know the code: a wrong one provisions nothing and signs nobody in', async () => {
+    // The shortcut used to return settleTrialAccount without comparing the
+    // digits at all. Since C3 that path sets a PASSWORD and establishes a
+    // session, so anyone holding a verified lead's session id could have walked
+    // into the account.
+    mocks.lead = { ...VERIFIED }
+
+    const { status, body } = await post(
+      { sessionId: GUEST_SESSION, code: '999999', password: 'longenough1' },
+      guestCookie(GUEST_SESSION),
+    )
+
+    expect(status).toBe(401)
+    expect(body.ok).toBeUndefined()
+    expect(mocks.ensure).not.toHaveBeenCalled()
+    expect(mocks.signIn).not.toHaveBeenCalled()
+    // The attempt is counted, so brute force runs out the same way.
+    expect(mocks.updates[0]).toEqual({ verification_attempts: 1 })
+  })
+
+  it('and on the account-first door too', async () => {
+    mocks.lead = { ...VERIFIED }
+
+    const { status } = await post({
+      email: 'sarah@nhs.net',
+      code: '999999',
+      password: 'longenough1',
+    })
+
+    expect(status).toBe(401)
+    expect(mocks.ensure).not.toHaveBeenCalled()
+    expect(mocks.signIn).not.toHaveBeenCalled()
+  })
+
+  it('accepts the same still-valid code twice, which is what a double-submit is', async () => {
+    mocks.lead = { ...VERIFIED }
+
+    const first = await post({ sessionId: GUEST_SESSION, code: '123456' }, guestCookie(GUEST_SESSION))
+    const second = await post({ sessionId: GUEST_SESSION, code: '123456' }, guestCookie(GUEST_SESSION))
+
+    expect(first.status).toBe(200)
+    expect(second.status).toBe(200)
+    expect(mocks.ensure).toHaveBeenCalledTimes(2)
+  })
+
+  it('has nothing to accept once the code is spent: 410, not a free pass', async () => {
+    mocks.lead = {
+      ...VERIFIED,
+      verification_code_hash: null,
+      verification_expires_at: null,
+    }
+
+    const { status, body } = await post(
+      { sessionId: GUEST_SESSION, code: '123456', password: 'longenough1' },
+      guestCookie(GUEST_SESSION),
+    )
+
+    expect(status).toBe(410)
+    expect(body.error).toBe('Request a new code')
+    expect(mocks.ensure).not.toHaveBeenCalled()
+  })
+
+  it('refuses an expired code even though the address is verified', async () => {
+    mocks.lead = {
+      ...VERIFIED,
+      verification_expires_at: new Date(Date.now() - 1000).toISOString(),
+    }
+
+    const { status } = await post({ sessionId: GUEST_SESSION, code: '123456' })
+    expect(status).toBe(410)
+    expect(mocks.ensure).not.toHaveBeenCalled()
   })
 })
 

@@ -201,24 +201,19 @@ export async function POST(req: NextRequest) {
     if (!lead) {
       return NextResponse.json({ error: 'Request a code first' }, { status: 404 });
     }
-    if (lead.email_verified_at) {
-      // Already verified — the code step is done, but the account work may not
-      // be (a reload, a second tab, or a lead verified before this shipped). It
-      // is idempotent, so run it rather than returning a bare ok that would
-      // strand them without a grant or a session.
-      return NextResponse.json(
-        await settleTrialAccount({
-          email: lead.email,
-          firstName: lead.first_name,
-          source,
-          password,
-          phone: normalizedPhone,
-          redirectTo,
-          windowSessionId: guestProven ? (sessionId ?? null) : null,
-        }),
-      );
-    }
+    // ⚠️ THE CODE IS CHECKED FIRST, ALWAYS — including for a lead that is
+    // already verified.
+    //
+    // The already-verified shortcut used to sit above this block and return
+    // `settleTrialAccount` without ever comparing the digits. That was survivable
+    // while the branch only re-granted a trial; since contract C3 it provisions a
+    // PASSWORD and signs the caller in, so an unchecked path meant anyone holding
+    // a verified lead's session id (or, on the other door, their address) could
+    // set a password on their account and walk into it. Whatever the row says,
+    // this request has to prove it knows the code.
     if (!lead.verification_code_hash || !lead.verification_expires_at) {
+      // A verified lead with nothing pending lands here too: there is no code to
+      // check, so there is nothing to accept. `send-code` issues a fresh one.
       return NextResponse.json({ error: 'Request a new code' }, { status: 410 });
     }
     if (new Date(lead.verification_expires_at).getTime() < Date.now()) {
@@ -248,6 +243,27 @@ export async function POST(req: NextRequest) {
               : 'Too many attempts — resend a new code',
         },
         { status: 401 },
+      );
+    }
+
+    // The code was right. NOW an already-verified lead can be settled — the
+    // account work may still be outstanding (a reload, a second tab, a lead
+    // verified before any of this shipped), and every step of it is idempotent,
+    // so running it again is safer than a bare ok that strands a trialist
+    // without a grant or a session. The pending code is deliberately left in
+    // place: it is what makes a double-submit of the SAME still-valid code work,
+    // and clearing it would answer the second one with a 410.
+    if (lead.email_verified_at) {
+      return NextResponse.json(
+        await settleTrialAccount({
+          email: lead.email,
+          firstName: lead.first_name,
+          source,
+          password,
+          phone: normalizedPhone,
+          redirectTo,
+          windowSessionId: guestProven ? (sessionId ?? null) : null,
+        }),
       );
     }
 
