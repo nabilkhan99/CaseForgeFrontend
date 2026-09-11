@@ -18,7 +18,12 @@ import VerdictReveal, { useVerdictPoll } from '@/components/try/VerdictReveal';
 import { passwordLongEnough } from '@/lib/auth/passwordPolicy';
 import { trackEvent } from '@/lib/analytics';
 import { trackTrialAccountCreated } from '@/lib/trial/trialEvents';
-import { TRIAL_EMAIL_KEY, TRIAL_USED_KEY, TRIAL_FEEDBACK_URL_KEY } from '@/lib/trial/storage';
+import {
+  TRIAL_EMAIL_KEY,
+  TRIAL_USED_KEY,
+  TRIAL_FEEDBACK_URL_KEY,
+  markTrialClaimed,
+} from '@/lib/trial/storage';
 
 /**
  * Set up your account while we mark your consultation. Contract C4.
@@ -289,6 +294,9 @@ export default function SignUpWhileMarking({
     } catch {
       // Storage unavailable — nothing here depends on it.
     }
+    // The account exists now, which is what turns the navbar's offer from
+    // "finish this" into "read your report". Only reached on a verified code.
+    markTrialClaimed();
   }
 
   function handleCodeChange(raw: string) {
