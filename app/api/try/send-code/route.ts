@@ -3,7 +3,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { findAccountByEmail } from '@/lib/auth/accountSignUp';
 import { sendVerificationEmail } from '@/lib/email/verificationEmail';
-import { validateAnswers, validateSignupAnswers } from '@/lib/trial/questionnaire';
+import {
+  validateAnswers,
+  validatePartialAnswers,
+  validateSignupAnswers,
+} from '@/lib/trial/questionnaire';
+import { leadFieldsFrom } from '@/lib/trial/leadRow';
 import { toE164 } from '@/lib/trial/phone';
 import { clientIp, createHitLog, withinLimit } from '@/lib/http/rateLimit';
 import {
@@ -21,9 +26,22 @@ import {
  *
  * Two doors arrive here now.
  *
- * The GUEST door (`sessionId`, the original) is unchanged: a real guest
- * `clinical_sessions` row must exist, the whole questionnaire is validated, and
- * the lead is written against that session.
+ * The GUEST door (`sessionId`, the original) requires a real guest
+ * `clinical_sessions` row, and the lead is written against that session. It
+ * comes in two shapes now:
+ *
+ *   * the LEGACY GATE (no `mode`) still validates the whole questionnaire,
+ *     because that form asks every question and a gap there is a bug;
+ *   * `mode: 'guest_signup'` — the post-consultation page at
+ *     /try/feedback/[sessionId], which asks for an address, a mobile and a
+ *     password and nothing else — validates what it was given and keeps it,
+ *     through the same `findOption` allowlists, so a hand-rolled POST still
+ *     cannot write a value outside the published options. The exam questions
+ *     are asked later, on the dashboard, while the first mark runs.
+ *
+ * The relaxation is ONLY of the questionnaire. The session check — a real,
+ * unowned `clinical_sessions` row — is what bounds this door's abuse surface,
+ * and it applies to both shapes identically.
  *
  * The SIGN-UP door (`mode: 'signup'`, from /free) has no consultation yet, so
  * there is no session to look up and nothing but an email and a first name to
@@ -63,9 +81,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'A valid session is required' }, { status: 400 });
     }
 
-    // Same validator the form uses, so the allowlists cannot drift and a
+    // Same validators the two forms use, so the allowlists cannot drift and a
     // hand-rolled POST cannot write values outside the published options.
-    const parsed = validateAnswers(body);
+    // `guest_signup` is opted into explicitly rather than inferred from a
+    // missing field, so the legacy gate can never silently lose its guard.
+    const guestSignup = body.mode === 'guest_signup';
+    const parsed = guestSignup ? validatePartialAnswers(body) : validateAnswers(body);
     if (!parsed.ok) {
       return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
@@ -133,24 +154,34 @@ export async function POST(req: NextRequest) {
     const code = generateVerificationCode();
     const now = new Date();
 
+    // The legacy gate NULLS what its branching did not ask, because it asked
+    // everything and an unasked question is genuinely unanswered. The post-call
+    // form OMITS instead — nulling there would wipe answers a previous visit
+    // collected, which is exactly what `leadFieldsFrom` exists to avoid.
+    const answerColumns = guestSignup
+      ? leadFieldsFrom(answers, session.station_id ?? null)
+      : {
+          station_id: session.station_id ?? null,
+          first_name: answers.firstName,
+          // Stored E.164 (+447…) so the SMS step and the founder's call both
+          // work straight off the row.
+          phone: toE164(answers.phone ?? '') ?? answers.phone,
+          training_stage: answers.trainingStage,
+          training_start_month: answers.trainingStartMonth || null,
+          training_start_year: answers.trainingStartYear || null,
+          akt_status: answers.aktStatus || null,
+          akt_sitting: answers.aktSitting || null,
+          sca_status: answers.scaStatus || null,
+          sca_sitting: answers.scaSitting || null,
+          not_in_training_role: answers.notInTrainingRole || null,
+          expected_start_month: answers.expectedStartMonth || null,
+          expected_start_year: answers.expectedStartYear || null,
+        };
+
     const leadRow = {
       session_id: sessionId,
-      station_id: session.station_id ?? null,
       email: normalizedEmail,
-      first_name: answers.firstName,
-      // Stored E.164 (+447…) so the SMS step and the founder's call both
-      // work straight off the row.
-      phone: toE164(answers.phone) ?? answers.phone,
-      training_stage: answers.trainingStage,
-      training_start_month: answers.trainingStartMonth || null,
-      training_start_year: answers.trainingStartYear || null,
-      akt_status: answers.aktStatus || null,
-      akt_sitting: answers.aktSitting || null,
-      sca_status: answers.scaStatus || null,
-      sca_sitting: answers.scaSitting || null,
-      not_in_training_role: answers.notInTrainingRole || null,
-      expected_start_month: answers.expectedStartMonth || null,
-      expected_start_year: answers.expectedStartYear || null,
+      ...answerColumns,
       verification_code_hash: hashVerificationCode(code, normalizedEmail),
       verification_expires_at: new Date(now.getTime() + CODE_TTL_MS).toISOString(),
       verification_attempts: 0,
@@ -184,7 +215,9 @@ export async function POST(req: NextRequest) {
 
     const emailResult = await sendVerificationEmail({
       toEmail: normalizedEmail,
-      firstName: answers.firstName,
+      // The post-call form has no name field; the email greets an unnamed lead
+      // as "there", the same as the portfolio banner's one-field send.
+      firstName: answers.firstName ?? null,
       code,
     });
     if (!emailResult.sent) {

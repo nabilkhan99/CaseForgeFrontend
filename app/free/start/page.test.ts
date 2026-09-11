@@ -28,7 +28,14 @@ function withoutComments(code: string): string {
 
 const PAGE = source('./page.tsx')
 const FORM = source('../../../components/free/FreeStart.tsx')
-const FORM_COPY = withoutComments(FORM)
+/**
+ * The three fields and the code step, which live in components/account since
+ * the post-consultation sign-up started asking for the same things. The rules
+ * below are rules about the FIELDS, so they follow the fields; what stays
+ * pinned to FreeStart is that it still composes all three of them.
+ */
+const FIELDS = source('../../../components/account/AccountFormFields.tsx')
+const FORM_COPY = withoutComments(`${FORM}\n${FIELDS}`)
 
 describe('what the page asks for', () => {
   it('leads with the account, not the mechanism', () => {
@@ -39,35 +46,36 @@ describe('what the page asks for', () => {
   })
 
   it('has exactly three fields: email, mobile, password', () => {
-    expect(FORM).toContain('id="start-email"')
-    expect(FORM).toContain('id="start-phone"')
-    expect(FORM).toContain('id="start-password"')
+    expect(FORM).toContain('<EmailField id="start-email"')
+    expect(FORM).toContain('<MobileField id="start-phone"')
+    expect(FORM).toContain('<PasswordField id="start-password"')
     // No first name, no exam date, no training stage. Those are asked on the
     // dashboard after the first station.
     expect(FORM).not.toContain('id="start-first-name"')
+    expect(FIELDS).not.toContain('First name')
   })
 
   it('does not require the mobile, and never calls it optional', () => {
     // Two halves of one rule: a field labelled with its own unimportance is a
     // field nobody fills in, and a `required` on it would contradict the label.
-    const phoneField = FORM.slice(FORM.indexOf('id="start-phone"'))
-    expect(phoneField.slice(0, phoneField.indexOf('/>'))).not.toContain('required')
+    const phoneField = FIELDS.slice(FIELDS.indexOf('export function MobileField'))
+    expect(phoneField.slice(0, phoneField.indexOf('</div>'))).not.toContain('required')
     expect(FORM_COPY.toLowerCase()).not.toContain('optional')
-    expect(FORM).toContain('Mobile')
-    expect(FORM).toContain('placeholder="+44 7…"')
+    expect(FIELDS).toContain('Mobile')
+    expect(FIELDS).toContain('placeholder="+44 7…"')
   })
 
   it('states the password rule once, from the same constant the server checks', () => {
     expect(MIN_PASSWORD_LENGTH).toBe(8)
     expect(PASSWORD_HINT).toBe('8 characters or more')
-    expect(FORM).toContain('{PASSWORD_HINT}')
+    expect(FIELDS).toContain('{PASSWORD_HINT}')
     expect(FORM).toContain('passwordLongEnough(password)')
-    expect(FORM).toContain('minLength={MIN_PASSWORD_LENGTH}')
+    expect(FIELDS).toContain('minLength={MIN_PASSWORD_LENGTH}')
   })
 
   it('lets the password be read back', () => {
-    expect(FORM).toContain("type={revealPassword ? 'text' : 'password'}")
-    expect(FORM).toContain("aria-label={revealPassword ? 'Hide password' : 'Show password'}")
+    expect(FIELDS).toContain("type={revealed ? 'text' : 'password'}")
+    expect(FIELDS).toContain("aria-label={revealed ? 'Hide password' : 'Show password'}")
   })
 })
 
