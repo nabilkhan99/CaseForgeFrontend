@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { mintEphemeralKey, unreliableEchoCancellation } from '@/lib/clinical-master/realtimeToken';
 import { voiceForStation } from '@/lib/clinical-master/realtimeSession';
 import { rejectIfSignedIn } from '@/lib/trial/guestOnly';
+import { GUEST_IP_LIMIT_BODY, withinGuestMintLimit } from '@/lib/trial/guestRateLimit';
 import {
   GUEST_COOKIE,
   guestCookieOptions,
@@ -61,6 +62,15 @@ export async function POST(req: NextRequest) {
   // callers have /api/realtime-token, which checks their entitlement.
   const signedIn = await rejectIfSignedIn();
   if (signedIn) return signedIn;
+
+  // Outside the cookie, because the cookie rules are all per-browser and a
+  // client that never keeps one is never counted by them. This is the endpoint
+  // that actually spends, so it gets its own budget rather than sharing the
+  // doors': one consultation legitimately re-mints on a reconnect.
+  if (!withinGuestMintLimit(req)) {
+    console.warn('[try/realtime-token] guest per-IP mint limit reached');
+    return NextResponse.json(GUEST_IP_LIMIT_BODY, { status: 429 });
+  }
 
   const { sessionId, stationId } = await req.json();
   if (!sessionId || !stationId) {

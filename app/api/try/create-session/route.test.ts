@@ -91,10 +91,14 @@ function openRow() {
   }
 }
 
-async function post(body: Record<string, unknown> = {}, cookie?: string) {
+/** Every call gets its own client address, so the per-IP brake never crosses tests. */
+let addresses = 0
+
+async function post(body: Record<string, unknown> = {}, cookie?: string, ip?: string) {
+  addresses += 1
   const response = await POST({
     json: async () => ({ sessionId: SESSION, stationId: STATION, ...body }),
-    headers: new Headers(),
+    headers: new Headers({ 'x-forwarded-for': ip ?? `203.0.113.${addresses}` }),
     cookies: { get: (name: string) => (cookie && name === 'ff_guest' ? { value: cookie } : undefined) },
   } as never)
   return {
@@ -104,8 +108,11 @@ async function post(body: Record<string, unknown> = {}, cookie?: string) {
   }
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.spyOn(console, 'warn').mockImplementation(() => {})
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const { resetGuestRateLimits } = await import('@/lib/trial/guestRateLimit')
+  resetGuestRateLimits()
   mocks.signedIn = false
   mocks.station = { id: STATION }
   mocks.stationFilters = []
@@ -268,5 +275,33 @@ describe('which case, and how many', () => {
 
   it('needs both ids', async () => {
     expect((await post({ stationId: null })).status).toBe(400)
+  })
+})
+
+describe('the per-IP brake', () => {
+  it('stops one client opening consultation after consultation', async () => {
+    // Everything else about a guest is counted in the ff_guest cookie, and a
+    // client that never keeps one is never counted at all.
+    const { GUEST_OPENS_PER_IP_PER_HOUR } = await import('@/lib/trial/guestRateLimit')
+    const ip = '198.51.100.9'
+
+    for (let attempt = 0; attempt < GUEST_OPENS_PER_IP_PER_HOUR; attempt += 1) {
+      expect((await post({}, undefined, ip)).status).toBe(200)
+    }
+
+    const { status, body } = await post({}, undefined, ip)
+    expect(status).toBe(429)
+    expect(body.code).toBe('guest_ip_limit')
+    expect(mocks.inserted).toHaveLength(GUEST_OPENS_PER_IP_PER_HOUR)
+  })
+
+  it('leaves a different client alone', async () => {
+    const { GUEST_OPENS_PER_IP_PER_HOUR } = await import('@/lib/trial/guestRateLimit')
+    const ip = '198.51.100.10'
+    for (let attempt = 0; attempt <= GUEST_OPENS_PER_IP_PER_HOUR; attempt += 1) {
+      await post({}, undefined, ip)
+    }
+
+    expect((await post({}, undefined, '198.51.100.11')).status).toBe(200)
   })
 })

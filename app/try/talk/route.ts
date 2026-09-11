@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
 import { rejectIfSignedIn } from '@/lib/trial/guestOnly'
+import { withinGuestOpenLimit } from '@/lib/trial/guestRateLimit'
 import { pickGuestStationId } from '@/lib/trial/guestStation'
 import {
   GUEST_COOKIE,
@@ -96,6 +97,14 @@ export async function GET(req: NextRequest) {
   // the customer's consultations live in the dashboard.
   if (await rejectIfSignedIn()) {
     return leave(req, '/dashboard')
+  }
+
+  // The backstop the cookie rules cannot be: a client with no cookie jar gets a
+  // fresh three-a-day budget on every request, and this route spends money.
+  // Same overflow page as the daily cap — it is the same thing to the visitor.
+  if (!withinGuestOpenLimit(req)) {
+    console.warn('[try/talk] guest per-IP open limit reached')
+    return leave(req, OVERFLOW)
   }
 
   const nowSeconds = Math.floor(Date.now() / 1000)

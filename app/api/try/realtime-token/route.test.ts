@@ -81,11 +81,20 @@ function boundCookie(sessionId = SESSION, openedSecondsAgo = 60) {
   return signGuestCookie(withGuestSession(null, sessionId, NOW_S - openedSecondsAgo))!
 }
 
-async function mint(cookie: string | undefined, body: Record<string, unknown> = {}) {
+/** Every call gets its own client address, so the per-IP brake never crosses tests. */
+let addresses = 0
+
+async function mint(
+  cookie: string | undefined,
+  body: Record<string, unknown> = {},
+  ip?: string,
+) {
+  addresses += 1
+  const address = ip ?? `203.0.113.${addresses}`
   const response = await POST({
     json: async () => ({ sessionId: SESSION, stationId: STATION, ...body }),
     cookies: { get: (name: string) => (cookie && name === 'ff_guest' ? { value: cookie } : undefined) },
-    headers: { get: () => null },
+    headers: { get: (name: string) => (name === 'x-forwarded-for' ? address : null) },
   } as never)
   return {
     status: response.status,
@@ -94,8 +103,10 @@ async function mint(cookie: string | undefined, body: Record<string, unknown> = 
   }
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const { resetGuestRateLimits } = await import('@/lib/trial/guestRateLimit')
+  resetGuestRateLimits()
   mocks.signedIn = false
   mocks.mintThrows = false
   mocks.stationFilters = []
@@ -228,5 +239,35 @@ describe('the mint that spends money', () => {
   it('still says no to a signed-in caller', async () => {
     mocks.signedIn = true
     expect((await mint(boundCookie())).status).toBe(403)
+  })
+})
+
+describe('the per-IP brake', () => {
+  it('stops one client minting key after key, whatever its cookies say', async () => {
+    // The nine cookie rules are all per-browser; a client that keeps no cookie
+    // jar gets a fresh set of them on every request, and this is the endpoint
+    // that charges Azure.
+    const { GUEST_MINTS_PER_IP_PER_HOUR } = await import('@/lib/trial/guestRateLimit')
+    const ip = '198.51.100.21'
+
+    for (let attempt = 0; attempt < GUEST_MINTS_PER_IP_PER_HOUR; attempt += 1) {
+      // A fresh cookie each time, so the two-minute per-session cooldown never
+      // fires and the per-IP budget is what is being measured.
+      expect((await mint(boundCookie(`session-${attempt}`), { sessionId: `session-${attempt}` }, ip)).status).toBe(200)
+    }
+
+    const { status, body } = await mint(boundCookie(), {}, ip)
+    expect(status).toBe(429)
+    expect(body.code).toBe('guest_ip_limit')
+  })
+
+  it('leaves a different client alone', async () => {
+    const { GUEST_MINTS_PER_IP_PER_HOUR } = await import('@/lib/trial/guestRateLimit')
+    const ip = '198.51.100.22'
+    for (let attempt = 0; attempt <= GUEST_MINTS_PER_IP_PER_HOUR; attempt += 1) {
+      await mint(boundCookie(`s-${attempt}`), { sessionId: `s-${attempt}` }, ip)
+    }
+
+    expect((await mint(boundCookie(), {}, '198.51.100.23')).status).toBe(200)
   })
 })

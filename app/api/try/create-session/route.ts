@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { rejectIfSignedIn } from '@/lib/trial/guestOnly';
+import { GUEST_IP_LIMIT_BODY, withinGuestOpenLimit } from '@/lib/trial/guestRateLimit';
 import { freeStationId } from '@/lib/trial/guestStation';
 import {
   GUEST_COOKIE,
@@ -61,6 +62,13 @@ export async function POST(req: NextRequest) {
   // dashboard.
   const signedIn = await rejectIfSignedIn();
   if (signedIn) return signedIn;
+
+  // Shares its budget with /try/talk: two doors onto the same act, and a limit
+  // either could dodge by using the other is not a limit.
+  if (!withinGuestOpenLimit(req)) {
+    console.warn('[try/create-session] guest per-IP open limit reached');
+    return NextResponse.json(GUEST_IP_LIMIT_BODY, { status: 429 });
+  }
 
   const { sessionId, stationId } = await req.json();
 
