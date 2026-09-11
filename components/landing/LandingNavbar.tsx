@@ -25,13 +25,22 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
     href: '/free',
   });
 
-  // A returning browser that has already finished a consultation gets the
-  // deep-link back to its own report instead. Unchanged, and it still outranks
-  // the offer: somebody with a report waiting is not looking for the pitch.
+  // A returning browser that has already run a consultation gets the deep-link
+  // back to it, and it still outranks the offer: somebody with a report waiting
+  // is not looking for the pitch.
+  //
+  // What the button SAYS depends on whether an account was ever made for that
+  // consultation. An abandoned run left `ff_trial_used` set and nothing else,
+  // so "See your feedback" led to the sign-up form — a promise of a report,
+  // answered by a form, which is the single most disappointing thing a navbar
+  // can do. Same destination; the honest word for an unfinished one is "finish".
   useEffect(() => {
     const trial = getTrialState();
     if (trial.used && trial.feedbackUrl) {
-      setTrialCta({ label: 'See your feedback', href: trial.feedbackUrl });
+      setTrialCta({
+        label: trial.claimed ? 'See your feedback' : 'Finish your free account',
+        href: trial.feedbackUrl,
+      });
     }
   }, []);
   const pathname = usePathname();

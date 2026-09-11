@@ -108,6 +108,18 @@ export interface EnsuredTrialAccount {
   userId: string | null;
   /** We created the auth user on this call. False for a returning address. */
   created: boolean;
+  /** The address already had an account. The ordinary case on door (c). */
+  alreadyExisted: boolean;
+  /**
+   * A password was typed on this call and the existing account kept its own.
+   *
+   * The rule it reports is deliberate (see lib/auth/accountSignUp) — a paying
+   * customer who types their address into the free form must not have their
+   * password rotated by it. What was NOT deliberate was doing it silently: the
+   * form said "Create my free account", the password went nowhere, and the
+   * person found out the next time they tried to sign in with it.
+   */
+  passwordKept: boolean;
   /** One-time URL that leaves the browser signed in on /dashboard, or null. */
   signInUrl: string | null;
   /** A grant is now in the table for this account — new or pre-existing. */
@@ -121,6 +133,8 @@ export interface EnsuredTrialAccount {
 const NOT_PROVISIONED: EnsuredTrialAccount = {
   userId: null,
   created: false,
+  alreadyExisted: false,
+  passwordKept: false,
   signInUrl: null,
   granted: false,
   state: 'none',
@@ -140,14 +154,17 @@ export async function ensureTrialAccount(
   // is for. Only a MISSING user id means we could not go on.
   const fullName = input.firstName?.trim() || null;
   const password = input.password?.trim() || '';
-  const provisioned = password
+  // Kept as its own binding: only this branch can be handed a password to
+  // discard, and only its result can say whether it did.
+  const withPassword = password
     ? await provisionAccountWithPassword({
         email,
         password,
         fullName,
         phone: input.phone ?? null,
       })
-    : await provisionAccountForPurchase({ email, fullName });
+    : null;
+  const provisioned = withPassword ?? (await provisionAccountForPurchase({ email, fullName }));
   const userId = provisioned.userId;
   if (!userId) {
     console.error('[trial-account] no account for a verified address', {
@@ -187,6 +204,10 @@ export async function ensureTrialAccount(
   return {
     userId,
     created: provisioned.created,
+    alreadyExisted: provisioned.alreadyExisted,
+    // Only the password door can keep one: the purchase provisioner is never
+    // handed a password to discard.
+    passwordKept: withPassword?.passwordKept ?? false,
     signInUrl,
     granted: grant !== null,
     state: access?.state ?? 'none',

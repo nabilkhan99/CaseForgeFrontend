@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { toPickerStations } from '@/lib/trial/freeStationPicks'
+import { accountFirstHref, toPickerStations } from '@/lib/trial/freeStationPicks'
 
 /**
  * The two pages the free door is now made of, checked against their source.
@@ -83,6 +83,39 @@ describe('/free lists the five cases', () => {
     expect(FREE_PAGE).toContain('guestNotice(params)')
     expect(PICKER).toContain('limit:')
     expect(PICKER).toContain('unavailable:')
+  })
+})
+
+describe('neither guest bounce is a loop', () => {
+  it('offers the account, not a dashboard the visitor has never had', () => {
+    // "Open your dashboard to carry on now", said to somebody who has never
+    // made an account, is an instruction they cannot follow.
+    expect(PICKER).toContain("That's three consultations today.")
+    expect(PICKER).toContain('Come back tomorrow, or')
+    expect(PICKER).toContain('create your free account')
+    expect(PICKER).toContain('to carry on now.')
+    expect(PICKER).toContain('href="/free/start"')
+    expect(withoutComments(PICKER)).not.toContain('open your dashboard to carry on now')
+  })
+
+  it('points the five Start buttons at the account once the door is shut', () => {
+    // /try/talk refuses a fourth consultation and bounces back to this page,
+    // so five buttons that still pointed at it had one possible outcome: the
+    // page they were already on.
+    expect(accountFirstHref('aaaaaaaa-0000-0000-0000-000000000001')).toBe(
+      '/free/start?station=aaaaaaaa-0000-0000-0000-000000000001',
+    )
+    expect(PICKER).toContain("notice === 'limit'")
+    expect(PICKER).toContain('accountFirstHref(station.id)')
+    // And the row still renders whatever href it was handed.
+    expect(PICKER).toContain('href={station.href}')
+  })
+
+  it('does not tell a visitor to pick another when every other is the same', () => {
+    // `unavailable` is not about the case: it is no station, or no signing
+    // secret, and the other four rows would bounce identically.
+    expect(PICKER).toContain('Nothing is wrong at your end. Try again in a few minutes.')
+    expect(withoutComments(PICKER)).not.toContain('Pick another below')
   })
 })
 

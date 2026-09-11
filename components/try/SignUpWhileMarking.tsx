@@ -8,6 +8,8 @@ import {
   CODE_LENGTH,
   CodeStep,
   EMAIL_RE,
+  EXISTING_ACCOUNT_NOTICE,
+  EXISTING_ACCOUNT_NOTICE_MS,
   EmailField,
   MobileField,
   PasswordField,
@@ -16,7 +18,12 @@ import VerdictReveal, { useVerdictPoll } from '@/components/try/VerdictReveal';
 import { passwordLongEnough } from '@/lib/auth/passwordPolicy';
 import { trackEvent } from '@/lib/analytics';
 import { trackTrialAccountCreated } from '@/lib/trial/trialEvents';
-import { TRIAL_EMAIL_KEY, TRIAL_USED_KEY, TRIAL_FEEDBACK_URL_KEY } from '@/lib/trial/storage';
+import {
+  TRIAL_EMAIL_KEY,
+  TRIAL_USED_KEY,
+  TRIAL_FEEDBACK_URL_KEY,
+  markTrialClaimed,
+} from '@/lib/trial/storage';
 
 /**
  * Set up your account while we mark your consultation. Contract C4.
@@ -35,6 +42,17 @@ import { TRIAL_EMAIL_KEY, TRIAL_USED_KEY, TRIAL_FEEDBACK_URL_KEY } from '@/lib/t
  * on the dashboard, once, while the first mark runs
  * (components/dashboard/TrialQuestionnaireCard).
  *
+ * ## When there is no mark to wait for
+ *
+ * The premise only holds while a mark is actually running. A consultation
+ * nobody ended — a closed tab, a dead connection — leaves a row that never
+ * moved past `live`, so no transcript was saved and nothing was ever sent to be
+ * marked; this page used to promise that person a mark for five solid minutes
+ * and then go quiet. `/api/try/gate-status` now says `unfinished` for those,
+ * and both the heading and the line under it follow the poll rather than the
+ * premise. The form does not change: the account is worth having either way,
+ * and the case can be run again from the dashboard.
+ *
  * ## Why the address is saved before the code is asked for
  *
  * `/api/try/save-lead` writes the lead the moment there is an address to write —
@@ -50,9 +68,15 @@ import { TRIAL_EMAIL_KEY, TRIAL_USED_KEY, TRIAL_FEEDBACK_URL_KEY } from '@/lib/t
  * browser ran the consultation (contract C3). A legacy report link opened in a
  * browser with no such cookie still makes the account, still claims the
  * consultation and still signs them in — the password simply does not take, and
- * the middleware sends them to /auth/set-password. Which is why nothing on this
- * screen promises the password was set: the button says what it does, "Create
- * my free account", and the rest is left to be true either way.
+ * the middleware sends them to /auth/set-password.
+ *
+ * So on those the field is not shown at all. `proven` comes from the page,
+ * which can read the httpOnly cookie this component cannot: asking for a
+ * password the server has already decided to discard is a field whose only
+ * function is to be ignored, and the line under it promised a report "in your
+ * dashboard" to somebody the middleware is about to send to a password form.
+ * Unproven, the form asks for an address and a mobile, and says what will
+ * actually happen — a code, then their report.
  */
 
 interface VerifyBody {
@@ -60,7 +84,14 @@ interface VerifyBody {
   error?: string;
   signedIn?: boolean;
   redirectTo?: string;
-  account?: { userId: string; created: boolean } | null;
+  account?: {
+    userId: string;
+    created: boolean;
+    /** The address already had an account; this call signed them into it. */
+    alreadyExisted?: boolean;
+    /** They typed a password and the account's existing one was kept. */
+    passwordKept?: boolean;
+  } | null;
 }
 
 type Step = 'details' | 'code' | 'stranded';
@@ -72,9 +103,23 @@ export interface SignUpWhileMarkingProps {
    * run THAT one properly. Null when the row carries no station.
    */
   stationId?: string | null;
+  /**
+   * The signed `ff_guest` cookie says this browser ran this consultation, so a
+   * password typed here will be honoured (contract C3).
+   *
+   * False on a legacy report link — forwarded, opened on another device, or
+   * from before the cookie existed. Defaults to true so the ordinary path is
+   * the one a caller gets by saying nothing; it is the page that knows, because
+   * the cookie is httpOnly and this component cannot see it.
+   */
+  proven?: boolean;
 }
 
-export default function SignUpWhileMarking({ sessionId, stationId }: SignUpWhileMarkingProps) {
+export default function SignUpWhileMarking({
+  sessionId,
+  stationId,
+  proven = true,
+}: SignUpWhileMarkingProps) {
   const [step, setStep] = useState<Step>('details');
 
   const [email, setEmail] = useState('');
@@ -83,6 +128,8 @@ export default function SignUpWhileMarking({ sessionId, stationId }: SignUpWhile
 
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
+  /** Said out loud before the redirect when the typed password was not applied. */
+  const [notice, setNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const codeInputRef = useRef<HTMLInputElement>(null);
@@ -94,7 +141,11 @@ export default function SignUpWhileMarking({ sessionId, stationId }: SignUpWhile
   const marking = useVerdictPoll(sessionId);
 
   const cleanEmail = email.trim().toLowerCase();
-  const detailsReady = EMAIL_RE.test(cleanEmail) && passwordLongEnough(password);
+  // No password asked for means none to check. The account is still made, still
+  // claims the consultation and still signs them in; they choose a password on
+  // /auth/set-password, which is where the middleware takes them.
+  const detailsReady =
+    EMAIL_RE.test(cleanEmail) && (!proven || passwordLongEnough(password));
   /** One click back into the same case, for a run that was too short to mark. */
   const retryHref = stationId
     ? `/try/talk?station=${encodeURIComponent(stationId)}`
@@ -212,6 +263,13 @@ export default function SignUpWhileMarking({ sessionId, stationId }: SignUpWhile
       await trackTrialAccountCreated('guest');
 
       if (data.signedIn && data.redirectTo) {
+        // They typed a password onto an address that already had one. It was
+        // kept, on purpose, and saying nothing about it is how somebody ends up
+        // locked out of an account they believe they just set a password on.
+        if (data.account?.alreadyExisted && data.account?.passwordKept) {
+          setNotice(EXISTING_ACCOUNT_NOTICE);
+          await new Promise((resolve) => setTimeout(resolve, EXISTING_ACCOUNT_NOTICE_MS));
+        }
         // A full navigation, not a router push: the session cookies arrived on
         // the response above and every server component past here — the report
         // included — has to be rendered with them.
@@ -236,6 +294,9 @@ export default function SignUpWhileMarking({ sessionId, stationId }: SignUpWhile
     } catch {
       // Storage unavailable — nothing here depends on it.
     }
+    // The account exists now, which is what turns the navbar's offer from
+    // "finish this" into "read your report". Only reached on a verified code.
+    markTrialClaimed();
   }
 
   function handleCodeChange(raw: string) {
@@ -245,8 +306,9 @@ export default function SignUpWhileMarking({ sessionId, stationId }: SignUpWhile
     if (digits.length === CODE_LENGTH) void submitCode(digits);
   }
 
+  // Short top padding: the layout above this one carries the brand mark.
   return (
-    <main className="px-5 pb-24 pt-16 sm:px-8 sm:pt-20">
+    <main className="px-5 pb-24 pt-8 sm:px-8 sm:pt-10">
       {/*
         Their own verdict, score and one-line summary, above the form — and the
         short-run notice when the run was too brief to grade. Renders nothing at
@@ -272,7 +334,7 @@ export default function SignUpWhileMarking({ sessionId, stationId }: SignUpWhile
           transition={{ duration: 0.45 }}
           className="text-[28px] font-medium leading-[1.12] tracking-tight text-heading sm:text-[34px]"
         >
-          Set up your account while we mark your consultation
+          {headingFor(marking.kind)}
         </motion.h1>
 
         <MarkingStatus kind={marking.kind} />
@@ -301,7 +363,9 @@ export default function SignUpWhileMarking({ sessionId, stationId }: SignUpWhile
                   onBlur={saveLead}
                 />
                 <MobileField id="marking-phone" value={phone} onChange={setPhone} />
-                <PasswordField id="marking-password" value={password} onChange={setPassword} />
+                {proven && (
+                  <PasswordField id="marking-password" value={password} onChange={setPassword} />
+                )}
 
                 <button
                   type="submit"
@@ -320,10 +384,26 @@ export default function SignUpWhileMarking({ sessionId, stationId }: SignUpWhile
               )}
 
               <p className="mt-3.5 text-[13px] leading-relaxed text-muted">
-                We&apos;ll email you a 6-digit code to confirm the address. Your report opens
-                in your dashboard, with four more cases and five days on the clock — no card.
+                {proven ? (
+                  <>
+                    We&apos;ll email you a 6-digit code to confirm the address. Your report
+                    opens in your dashboard, with four more cases and five days on the clock —
+                    no card.
+                  </>
+                ) : (
+                  <>We&apos;ll email you a code, then open your report.</>
+                )}
               </p>
             </>
+          )}
+
+          {notice && (
+            <div
+              role="status"
+              className="mb-4 rounded-lg border border-primary/20 bg-primary/[0.06] p-3"
+            >
+              <p className="text-center text-sm leading-relaxed text-heading">{notice}</p>
+            </div>
           )}
 
           {step === 'code' && (
@@ -379,14 +459,37 @@ export default function SignUpWhileMarking({ sessionId, stationId }: SignUpWhile
 }
 
 /**
+ * The heading, driven by the same poll as the line beneath it.
+ *
+ * "While we mark your consultation" is the offer on this page and it is true
+ * exactly while a mark is running. On a consultation nobody finished there is
+ * no mark — and a headline that says otherwise, over a line saying the run was
+ * never completed, reads as a page that has lost track of what happened. The
+ * account is still the thing being offered, so the heading names that instead.
+ */
+function headingFor(kind: MarkingKind): string {
+  switch (kind) {
+    case 'ready':
+      return 'Set up your account to open your report';
+    case 'unmarkable':
+    case 'unfinished':
+      return 'Set up your free account';
+    default:
+      return 'Set up your account while we mark your consultation';
+  }
+}
+
+type MarkingKind = 'waiting' | 'ready' | 'unmarkable' | 'unfinished' | 'silent';
+
+/**
  * One line, under the heading, saying where the mark has got to.
  *
  * The whole premise of the page is that the wait is free time, so the wait has
  * to be visible and finite. "About a minute" is the truth — marking runs 80–90
  * seconds on a full station — and it stops being a promise the moment the
- * result lands.
+ * result lands, or the moment the server says no mark is coming at all.
  */
-function MarkingStatus({ kind }: { kind: 'waiting' | 'ready' | 'unmarkable' | 'silent' }) {
+function MarkingStatus({ kind }: { kind: MarkingKind }) {
   if (kind === 'silent') return null;
 
   const line =
@@ -394,7 +497,9 @@ function MarkingStatus({ kind }: { kind: 'waiting' | 'ready' | 'unmarkable' | 's
       ? 'Marking your consultation. It takes about a minute.'
       : kind === 'ready'
         ? 'Your report is ready'
-        : 'You can still set up your free account and run it properly from your dashboard.';
+        : kind === 'unfinished'
+          ? "This one wasn't finished. Set up your account and run it again from your dashboard."
+          : 'You can still set up your free account and run it again.';
 
   return (
     <motion.p

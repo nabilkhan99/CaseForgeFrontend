@@ -39,6 +39,26 @@ export const FIELD =
 
 export const LABEL = 'mb-1.5 block text-[13px] font-medium text-heading';
 
+/**
+ * What to say when the password they just typed was not the one that counts.
+ *
+ * Both doors ask for a password, and both can be given an address that already
+ * has an account with one. That password is deliberately kept — rotating it
+ * because somebody typed the address into a free form would be a takeover with
+ * a friendly name (lib/auth/accountSignUp) — but the form had said "Create my
+ * free account" and then said nothing, so the person left believing they had
+ * set a password that did not work.
+ *
+ * Shown for {@link EXISTING_ACCOUNT_NOTICE_MS} before the redirect the response
+ * asked for. Long enough to read one sentence, short enough that nobody thinks
+ * the page has stopped: they ARE signed in, and the report or the dashboard is
+ * the next thing they see either way.
+ */
+export const EXISTING_ACCOUNT_NOTICE =
+  "You already have an account. We've signed you in; your existing password still applies.";
+
+export const EXISTING_ACCOUNT_NOTICE_MS = 3000;
+
 interface TextFieldProps {
   /** Unique per page — two of these can be on screen at once in principle. */
   id: string;

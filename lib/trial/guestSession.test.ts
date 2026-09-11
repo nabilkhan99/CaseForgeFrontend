@@ -125,6 +125,10 @@ describe('rule 3 — sessions per browser per day', () => {
     })
     expect(refusal?.code).toBe('guest_daily_limit')
     expect(refusal?.status).toBe(429)
+    // "Cases" is the noun on every free-offer surface: a visitor who has not
+    // sat one knows "station" from an exam blueprint, if at all.
+    expect(refusal?.error).toContain('five cases over five days')
+    expect(refusal?.error).not.toContain('stations')
   })
 })
 

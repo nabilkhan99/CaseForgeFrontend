@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { candidateRun } from '@/lib/clinical-master/candidateRun';
 import { toVerdictSummary } from '@/lib/trial/verdictSummary';
+import { isUnfinishedRun } from '@/lib/trial/unfinishedRun';
+
+/** PostgREST returns an embedded one-to-one as an object or a one-element array. */
+function stationDuration(embedded: unknown): unknown {
+  const station = Array.isArray(embedded) ? embedded[0] : embedded;
+  return (station as { consultation_duration_seconds?: unknown } | null | undefined)
+    ?.consultation_duration_seconds;
+}
 
 /**
  * Has this trial session already had its email verified — and, if it has been
@@ -16,6 +24,11 @@ import { toVerdictSummary } from '@/lib/trial/verdictSummary';
  * The second question is new. Roughly a quarter of people who finish the free
  * consultation abandon at the gate having seen nothing of their own result, so
  * the verdict, the score and the one-line summary are now shown above it.
+ *
+ * It also answers a third thing the caller cannot work out for itself: whether
+ * a mark is coming at all. `status: 'unfinished'` is a consultation nobody
+ * ended — no transcript was saved, no mark was ever requested — and it exists
+ * so the page stops promising one. See lib/trial/unfinishedRun.
  *
  * ## The boundary
  *
@@ -48,7 +61,7 @@ export async function GET(req: NextRequest) {
         .maybeSingle(),
       supabase
         .from('clinical_sessions')
-        .select('user_id, status, transcript')
+        .select('user_id, status, transcript, started_at, stations (consultation_duration_seconds)')
         .eq('id', sessionId)
         .maybeSingle(),
     ]);
@@ -95,9 +108,25 @@ export async function GET(req: NextRequest) {
 
     const summary = toVerdictSummary(result);
 
+    // Nobody ended this consultation, so nothing ever saved a transcript and
+    // nothing ever asked for a mark — a closed tab, a dead connection, a
+    // browser killed mid-call. The row still says `live`, which the poll read
+    // as "being marked" and waited five minutes on. Asked AFTER the result,
+    // so a mark that did somehow land is still the answer; see
+    // lib/trial/unfinishedRun for where the line is drawn.
+    const unfinished =
+      !summary &&
+      isUnfinishedRun({
+        status: session?.status,
+        startedAt: session?.started_at,
+        durationSeconds: stationDuration(session?.stations),
+        transcriptTurns: Array.isArray(session?.transcript) ? session.transcript.length : 0,
+        nowMs: Date.now(),
+      });
+
     return NextResponse.json({
       verified,
-      status: summary ? 'ready' : (session?.status ?? 'processing'),
+      status: summary ? 'ready' : unfinished ? 'unfinished' : (session?.status ?? 'processing'),
       summary,
     });
   } catch (error: unknown) {

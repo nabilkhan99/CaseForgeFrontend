@@ -6,7 +6,7 @@ import { pageMetadata } from '@/lib/seo/site';
 export const metadata: Metadata = pageMetadata({
   title: 'Open your dashboard | Fourteen Fisherman',
   description:
-    'Enter the email you used and we will send a 6-digit code, then open your dashboard — your stations, your reports and your board.',
+    'Enter the email you used and we will send a 6-digit code, then open your dashboard — your cases, your reports and your board.',
   path: '/free/open',
 });
 

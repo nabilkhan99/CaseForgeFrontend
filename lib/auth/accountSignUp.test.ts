@@ -119,7 +119,12 @@ describe('provisionAccountWithPassword', () => {
       phone: '+447700900123',
     })
 
-    expect(result).toEqual({ created: true, alreadyExisted: false, userId: 'user-1' })
+    expect(result).toEqual({
+      created: true,
+      alreadyExisted: false,
+      userId: 'user-1',
+      passwordKept: false,
+    })
 
     const args = mocks.createUser.mock.calls[0][0]
     expect(args.email).toBe('sarah@nhs.net')
@@ -169,6 +174,37 @@ describe('provisionAccountWithPassword', () => {
 
     expect(result.userId).toBe('user-7')
     expect(mocks.updateUserById).not.toHaveBeenCalled()
+    // And SAYS so, which is the half that was missing: the form promised an
+    // account with the password they typed, kept the old one, and left them to
+    // discover it on a failed sign-in.
+    expect(result.passwordKept).toBe(true)
+  })
+
+  it('does not call a password "kept" when it has just been set', async () => {
+    // A half-provisioned account gets the password it never had, so there is
+    // no older one still applying and nothing to warn anybody about.
+    mocks.createUser.mockResolvedValue({ data: null, error: { code: 'email_exists', message: 'already registered' } })
+    mocks.profile = { id: 'user-7' }
+    mocks.getUserById.mockResolvedValue({
+      data: { user: { user_metadata: { password_pending: true } } },
+      error: null,
+    })
+
+    const result = await provisionAccountWithPassword({
+      email: 'sarah@nhs.net',
+      password: 'longenough1',
+    })
+
+    expect(result.passwordKept).toBe(false)
+  })
+
+  it('keeps nothing on a freshly created account', async () => {
+    const result = await provisionAccountWithPassword({
+      email: 'new@nhs.net',
+      password: 'longenough1',
+    })
+
+    expect(result).toMatchObject({ created: true, alreadyExisted: false, passwordKept: false })
   })
 
   it('reports a real create failure rather than pretending', async () => {
@@ -179,6 +215,7 @@ describe('provisionAccountWithPassword', () => {
       alreadyExisted: false,
       userId: null,
       error: 'too weak',
+      passwordKept: false,
     })
   })
 

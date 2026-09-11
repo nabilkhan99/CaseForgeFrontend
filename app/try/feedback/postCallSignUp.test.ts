@@ -41,9 +41,9 @@ describe('which page a visitor gets', () => {
   })
 
   it('renders the sign-up for an unowned one, with the case it was on', () => {
-    expect(PAGE).toContain(
-      '<SignUpWhileMarking sessionId={sessionId} stationId={session.station_id ?? null} />',
-    )
+    expect(PAGE).toContain('<SignUpWhileMarking')
+    expect(PAGE).toContain('sessionId={sessionId}')
+    expect(PAGE).toContain('stationId={session.station_id ?? null}')
   })
 })
 
@@ -58,9 +58,24 @@ describe('what the page says while the mark runs', () => {
   })
 
   it('keeps offering the account when the run was too short to mark', () => {
+    expect(FORM).toContain('You can still set up your free account and run it again.')
+  })
+
+  it('stops promising a mark on a consultation nobody finished', () => {
+    // A closed tab leaves the row on `live`: no transcript was saved and no
+    // mark was ever requested, so the five-minute poll was five minutes of a
+    // promise nobody could keep.
     expect(FORM).toContain(
-      'You can still set up your free account and run it properly from your dashboard.',
+      "This one wasn't finished. Set up your account and run it again from your dashboard.",
     )
+    expect(FORM).toContain("case 'unfinished':")
+  })
+
+  it('drives the heading off the poll, not off the premise', () => {
+    // "While we mark your consultation" over a line saying it was never
+    // finished reads as a page that has lost track of what happened.
+    expect(FORM).toContain('{headingFor(marking.kind)}')
+    expect(FORM).toContain("return 'Set up your free account'")
   })
 
   it('polls once for the whole page', () => {
@@ -154,9 +169,102 @@ describe('a run too short to mark', () => {
   })
 
   it('still offers the account, because the account is still worth having', () => {
-    expect(FORM).toContain(
-      'You can still set up your free account and run it properly from your dashboard.',
+    expect(FORM).toContain('You can still set up your free account and run it again.')
+  })
+})
+
+describe('the poll ends when no mark is coming', () => {
+  const REVEAL = source('../../../components/try/VerdictReveal.tsx')
+
+  it('reads the server’s unfinished verdict instead of waiting five minutes', () => {
+    expect(REVEAL).toContain("if (data.status === 'unfinished')")
+    expect(REVEAL).toContain("setState({ kind: 'unfinished' })")
+  })
+
+  it('reveals nothing for it — there is no result to reveal', () => {
+    expect(REVEAL).toContain(
+      "if (state.kind === 'silent' || state.kind === 'unfinished') return null;",
     )
+  })
+})
+
+describe('a legacy report link, with no cookie behind it', () => {
+  it('asks the page, which can read the httpOnly proof the form cannot', () => {
+    expect(PAGE).toContain("from '@/lib/trial/guestSession'")
+    expect(PAGE).toContain('cookieOwnsSession(readGuestCookie(jar.get(GUEST_COOKIE)?.value), sessionId)')
+    expect(PAGE).toContain('proven={proven}')
+  })
+
+  it('shows no password field it cannot honour', () => {
+    // verify-code discards a password without the cookie proof (contract C3),
+    // so an unproven form was asking for a field whose only function was to be
+    // ignored — and then refusing to submit until it was filled in.
+    expect(FORM).toContain('{proven && (')
+    expect(FORM).toContain('<PasswordField id="marking-password"')
+    expect(FORM).toContain('(!proven || passwordLongEnough(password))')
+  })
+
+  it('promises a report rather than a dashboard it will not open', () => {
+    expect(FORM).toContain("We&apos;ll email you a code, then open your report.")
+    // And the dashboard promise stays for the path that can keep it.
+    expect(FORM).toContain('opens in your dashboard, with four more cases and five days on the clock')
+  })
+
+  it('defaults to the proven path, so only the page can take the field away', () => {
+    expect(FORM).toContain('proven = true,')
+  })
+})
+
+describe('an address that already has an account', () => {
+  const FREE_START = source('../../../components/free/FreeStart.tsx')
+  const FIELDS = source('../../../components/account/AccountFormFields.tsx')
+
+  it('says the typed password was not the one that counts', () => {
+    // verify-code keeps an existing password on purpose — rotating one because
+    // somebody typed the address into a free form would be a takeover with a
+    // friendly name. Keeping it silently is how people end up locked out of an
+    // account they believe they just set a password on.
+    expect(FIELDS).toContain(
+      "You already have an account. We've signed you in; your existing password still applies.",
+    )
+  })
+
+  it('shows it on BOTH doors, from one string', () => {
+    for (const form of [FORM, FREE_START]) {
+      expect(form).toContain('EXISTING_ACCOUNT_NOTICE')
+      expect(form).toContain('data.account?.alreadyExisted && data.account?.passwordKept')
+      expect(form).toContain('setNotice(EXISTING_ACCOUNT_NOTICE)')
+    }
+  })
+
+  it('waits for it to be read, then goes where the server said', () => {
+    // Still a redirect, and still the server's: they ARE signed in, and the
+    // report is what they are owed. The pause is long enough for one sentence.
+    for (const form of [FORM, FREE_START]) {
+      expect(form).toContain(
+        'await new Promise((resolve) => setTimeout(resolve, EXISTING_ACCOUNT_NOTICE_MS));',
+      )
+      expect(form).toContain('window.location.assign(data.redirectTo)')
+    }
+    expect(FIELDS).toContain('export const EXISTING_ACCOUNT_NOTICE_MS = 3000;')
+  })
+})
+
+describe('the header it has now', () => {
+  const LAYOUT = source('./layout.tsx')
+
+  it('names the tab after the thing being asked for', () => {
+    // The tab used to read "Fourteen Fisherman — The Complete SCA Course" over
+    // a form asking for a password.
+    expect(LAYOUT).toContain("title: { absolute: 'Set up your free account' }")
+  })
+
+  it('carries a brand mark and nothing else', () => {
+    // Every other link is a way out of the single conversion point in the
+    // funnel; the mark goes back to the five cases this visitor came from.
+    expect(LAYOUT).toContain('href="/free"')
+    expect(LAYOUT).toContain('alt="Fourteen Fisherman"')
+    expect(LAYOUT).not.toContain('LandingNavbar')
   })
 })
 

@@ -207,6 +207,8 @@ describe('failures', () => {
     expect(result).toEqual({
       userId: null,
       created: false,
+      alreadyExisted: false,
+      passwordKept: false,
       signInUrl: null,
       granted: false,
       state: 'none',
@@ -276,6 +278,40 @@ describe('the account-first door', () => {
       fullName: 'Sarah',
       phone: '+447700900123',
     })
+  })
+
+  it('passes on that an existing account kept its own password', async () => {
+    // The one fact the form needs to tell the truth on this path, and the one
+    // ensureTrialAccount used to drop on the floor.
+    mocks.provisionWithPassword.mockResolvedValue({
+      created: false,
+      alreadyExisted: true,
+      userId: 'user-7',
+      error: 'account_already_exists',
+      passwordKept: true,
+    })
+
+    const result = await ensureTrialAccount(admin, {
+      email: 'a@b.com',
+      source: 'signup',
+      password: 'longenough1',
+      mintSignIn: false,
+    })
+
+    expect(result).toMatchObject({ alreadyExisted: true, passwordKept: true })
+  })
+
+  it('never claims a password was kept on the door that asks for none', async () => {
+    // The purchase provisioner is handed no password, so it has none to keep.
+    mocks.provision.mockResolvedValue({ created: false, alreadyExisted: true, userId: 'user-7' })
+
+    const result = await ensureTrialAccount(admin, {
+      email: 'a@b.com',
+      source: 'guest_reveal',
+      mintSignIn: false,
+    })
+
+    expect(result).toMatchObject({ alreadyExisted: true, passwordKept: false })
   })
 
   it('still claims and grants exactly as the other doors do', async () => {
