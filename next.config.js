@@ -51,11 +51,12 @@ const nextConfig = {
       // hero of every cached copy of the old landing page and in people's
       // history, so it moves rather than 404ing.
       //
-      // EXACT PATH ONLY. `/try` here matches `/try` and nothing else. The two
-      // children that survive answer for themselves: `/try/talk` redirects to
-      // /free/start carrying its station, and `/try/feedback/…` is roughly
-      // eighty live report links in people's inboxes. A `/try/:path*` source
-      // would swallow both.
+      // EXACT PATH ONLY. `/try` here matches `/try` and nothing else. Every
+      // child of it is the live guest lane and answers for itself: `/try/talk`
+      // opens a consultation, `/try/session/…` is the call, `/try/station/…`
+      // the brief, and `/try/feedback/…` is both the post-call sign-up and
+      // roughly eighty live report links in people's inboxes. A `/try/:path*`
+      // source would swallow the whole funnel.
       //
       // Query params ride along on their own: Next forwards them to any
       // destination that does not name its own, so `?ref=…` and every utm tag
