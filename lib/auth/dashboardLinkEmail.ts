@@ -42,7 +42,7 @@ export function buildDashboardLinkCopy(firstNameRaw?: string | null) {
     greeting: `Hi ${firstName},`,
     lines: [
       'The button below signs you in and opens your dashboard. Your consultation, its report and your board are all there.',
-      'Five stations, five days from your first consultation, no card. Nothing to cancel.',
+      'Five cases, five days from your first consultation, no card. Nothing to cancel.',
     ],
     cta: 'Open my dashboard',
     expiryNote: 'This link signs you in, works once, and expires in 24 hours.',

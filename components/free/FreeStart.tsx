@@ -218,7 +218,7 @@ export default function FreeStart({ initialEmail, station, stationTitle }: FreeS
             transition={{ duration: 0.45, delay: 0.06 }}
             className="mt-3 text-base leading-relaxed text-body"
           >
-            Five stations, unlimited attempts, five days. Your first verdict is minutes away.
+            Five cases, unlimited attempts, five days. Your first verdict is minutes away.
           </motion.p>
 
           {stationTitle && (
@@ -348,7 +348,7 @@ export default function FreeStart({ initialEmail, station, stationTitle }: FreeS
                 )}
 
                 <p className="mt-3.5 text-[13px] leading-relaxed text-muted">
-                  We&apos;ll email you a 6-digit code to confirm the address. Five stations,
+                  We&apos;ll email you a 6-digit code to confirm the address. Five cases,
                   unlimited attempts, five days, no card.
                 </p>
               </>
@@ -480,7 +480,7 @@ export default function FreeStart({ initialEmail, station, stationTitle }: FreeS
                   You&apos;re in
                 </p>
                 <p className="mx-auto mt-3 mb-5 max-w-sm text-[14px] leading-relaxed text-muted">
-                  Your account and your five stations are ready. Sign in with the password you
+                  Your account and your five cases are ready. Sign in with the password you
                   just chose.
                 </p>
                 <Link

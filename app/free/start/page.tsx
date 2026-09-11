@@ -10,7 +10,7 @@ export const metadata: Metadata = pageMetadata({
   // up saying it twice in the tab. Several older pages do; this one does not.
   title: 'Create your free account',
   description:
-    'Five SCA stations with an AI patient, unlimited attempts, five days, no card. Create your account and your first verdict is minutes away.',
+    'Five SCA cases with an AI patient, unlimited attempts, five days, no card. Create your account and your first verdict is minutes away.',
   path: '/free/start',
 });
 

@@ -34,7 +34,7 @@ describe('what the page asks for', () => {
   it('leads with the account, not the mechanism', () => {
     expect(FORM).toContain('Create your free account')
     expect(FORM).toContain(
-      'Five stations, unlimited attempts, five days. Your first verdict is minutes away.',
+      'Five cases, unlimited attempts, five days. Your first verdict is minutes away.',
     )
   })
 

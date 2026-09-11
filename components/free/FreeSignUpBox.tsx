@@ -334,7 +334,7 @@ export default function FreeSignUpBox({ initialEmail, codeAlreadySent }: FreeSig
             You&apos;re in
           </p>
           <p className="mx-auto mt-3 mb-5 max-w-sm text-[14px] leading-relaxed text-muted">
-            Your five stations are ready. We could not open your dashboard automatically —
+            Your five cases are ready. We could not open your dashboard automatically —
             sign in with your password and it is there.
           </p>
           <Link
