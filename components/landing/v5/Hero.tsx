@@ -106,26 +106,27 @@ export default function Hero() {
             transition={{ duration: 0.5, delay: 0.18 }}
           >
             {/*
-              THE ACCOUNT IS THE CALL TO ACTION (7 September 2026).
-              This button opened a guest consultation for a while, which got a
-              patient on screen faster and left the work in a browser rather
-              than on a board. It now makes a free account in one go — email,
-              mobile, password, one code — and the five stations are sat in the
-              dashboard like everything else. /free is the picker, offered
-              underneath for somebody who would rather choose a case first.
+              THE CASES ARE THE CALL TO ACTION (11 September 2026).
+              One button, naming what is on the other side of it: five free
+              cases, at /free, where the five titles are the argument and Start
+              opens a consultation. The account is made afterwards, while the
+              consultation is being marked — so there is nothing to offer
+              underneath this button and the secondary text link is gone. Two
+              doors into the same offer only made the reader choose between
+              them.
 
               Filled, not the old "2d" outline. The outline treatment was drawn
               for a CTA competing with the receipt panel beside it, and this is
               the page's most valuable button, not its quietest.
             */}
             <motion.a
-              href="/free/start"
+              href="/free"
               whileHover={{ y: -2 }}
               whileTap={{ scale: 0.98 }}
               className="inline-flex items-center gap-3.5 rounded-full border-[3px] border-transparent py-2.5 pl-7 pr-2.5 text-lg font-bold tracking-[-0.01em] text-[#FFF8EF] shadow-[0_10px_28px_-14px_rgba(180,83,9,0.75)] sm:gap-4 sm:py-3 sm:pl-9 sm:pr-3 sm:text-xl"
               style={{ background: 'linear-gradient(135deg, #B45309 0%, #D97706 100%)' }}
             >
-              Start free
+              Try 5 free cases
               <span
                 className="flex h-11 w-11 items-center justify-center rounded-full bg-[#FFF8EF] text-[#B45309] sm:h-[52px] sm:w-[52px]"
                 aria-hidden="true"
@@ -133,18 +134,8 @@ export default function Hero() {
                 <ArrowRight className="h-5 w-5 sm:h-6 sm:w-6" />
               </span>
             </motion.a>
-            {/* The picker, as a text link: for somebody who wants to see what
-                the five are before they commit twelve minutes to one. */}
-            <p className="mt-4 text-xs sm:text-sm">
-              <a
-                href="/free"
-                className="text-[#78716C] underline decoration-[#78716C]/40 underline-offset-4 transition-colors hover:text-[#1C1917]"
-              >
-                See the five cases
-              </a>
-            </p>
-            <p className="mt-2.5 text-xs text-[#78716C] sm:text-sm">
-              Five stations · unlimited attempts · five days · no card
+            <p className="mt-4 text-xs text-[#78716C] sm:text-sm">
+              Live consultations with an AI patient · marked · no card
             </p>
           </motion.div>
         </div>

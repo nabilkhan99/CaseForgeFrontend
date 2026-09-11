@@ -311,11 +311,11 @@ function OwnedCta() {
 /**
  * Where the free column's button goes.
  *
- * Overridden here rather than read off `FREE_TIER.ctaHref`, which still says
- * /free: `lib/commerce/plans.ts` is the money catalogue and belongs to another
- * workstream on this build. "Start free" means make the account now, so it
- * points at the form; /free is the browse-first page, one link away from it.
- * ⚠️ Fold this back into FREE_TIER when plans.ts is next touched.
+ * Read off `FREE_TIER` — label and href both — so the pricing table has no
+ * opinion of its own about the free offer. The column is the deliberate,
+ * account-first door ("Create free account" → /free/start): somebody reading a
+ * price table is comparing plans, not looking for a patient, and the guest lane
+ * at /free is one link away on every other surface.
  */
 
 function PlanCta({ selfStudy, variant, selfStudyPlan, owned, canUpgrade }: CtaButtonsProps) {

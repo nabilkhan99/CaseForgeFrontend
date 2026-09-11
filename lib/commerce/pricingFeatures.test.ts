@@ -107,14 +107,37 @@ describe('FREE_TIER is display copy, not a plan', () => {
   })
 
   it('sends people to the account form rather than to checkout', () => {
+    // The one surface that still asks for the account FIRST, and deliberately:
+    // a reader comparing plans is not looking for a patient. Everywhere else
+    // the consultation comes first and the account follows it.
     expect(FREE_TIER.ctaHref).toBe('/free/start')
     expect(FREE_TIER.displayPrice).toBe('£0')
   })
 
+  it('says on the button what pressing it does', () => {
+    expect(FREE_TIER.ctaLabel).toBe('Create free account')
+    expect(FREE_TIER.tagline).toBe('Five cases · unlimited attempts · five days')
+  })
+
+  it('counts CASES to the reader, and stations only to the bank', () => {
+    // "Station" is the product's own word — the brief, the report, the
+    // library, and the 200 on the receipt. Somebody who has never sat one
+    // knows it from an exam blueprint, if at all, so the free offer is
+    // counted in cases wherever it is sold.
+    const freeColumn = [
+      FREE_TIER.tagline,
+      FREE_TIER.ctaLabel,
+      ...FEATURE_ROWS.map((row) => `${row.cells[FREE].text} ${row.cells[FREE].sub ?? ''}`),
+    ]
+      .join(' ')
+      .toLowerCase()
+    expect(freeColumn).not.toContain('station')
+
+    // The whole bank keeps the word: it is the thing being priced.
+    expect(rowFor('AI consultations').labelSub).toBe('200 stations')
+  })
+
   it('names an outcome on the button, and no mechanism anywhere', () => {
-    // /free is a case picker now: nothing is signed up for and no code is
-    // typed until somebody has seen their own verdict, so the column that
-    // sells the free tier must not promise either.
     const copy = [
       FREE_TIER.ctaLabel,
       FREE_TIER.tagline,
@@ -123,7 +146,6 @@ describe('FREE_TIER is display copy, not a plan', () => {
       .join(' ')
       .toLowerCase()
 
-    expect(FREE_TIER.ctaLabel).toBe('Start free')
     expect(copy).not.toMatch(/sign[ -]up/)
     expect(copy).not.toContain('code')
   })
