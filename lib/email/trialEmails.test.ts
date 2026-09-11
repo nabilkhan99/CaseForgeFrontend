@@ -272,7 +272,7 @@ describe('buildTrialDay3Email', () => {
 })
 
 describe('buildTrialDay5Email', () => {
-  it('is about the days running out, not stations being spent', () => {
+  it('is about the days running out, not cases being spent', () => {
     const email = buildTrialDay5Email({
       firstName: 'Dr Amina Patel',
       marks: [nearMissOnManagement, nearMissOnManagement, passOnGathering],
@@ -287,6 +287,11 @@ describe('buildTrialDay5Email', () => {
     )
     expect(email.text).toContain('Clinical management came up as the thing to change in two of them.')
     expect(email.text).toContain('your reports, your board and your development picture')
+    // The sentence the email exists to make: the account survives the week.
+    // In the reader's noun — CASES, not stations — so it names the same five
+    // things /free and the dashboard panel name.
+    expect(email.text).toContain('It is the cases that stop, not the account.')
+    expect(email.text).not.toContain('It is the stations that stop')
     expect(email.html).toContain('Open your dashboard')
     expect(email.html).toContain(DASHBOARD)
     expect(email.html.toLowerCase().startsWith('<!doctype html')).toBe(true)
@@ -336,12 +341,18 @@ describe('copy rules', () => {
       expect(body).not.toMatch(/\btrials?\b/i)
     })
 
-    it(`never counts stations left — ${email.subject}`, () => {
+    it(`never counts anything but days down — ${email.subject}`, () => {
       // The old offer was five consultations and the copy counted them down.
-      // Nothing but the calendar runs out now, so a "stations left" sentence
+      // Nothing but the calendar runs out now, so a "cases left" sentence
       // would be describing a product we do not sell.
-      expect(body).not.toMatch(/stations? (?:left|remaining)/i)
+      expect(body).not.toMatch(/(?:stations?|cases?) (?:left|remaining)/i)
       expect(body).not.toMatch(/\d+ of (?:your )?\d+ stations/i)
+    })
+
+    it(`says "station" to the reader nowhere — ${email.subject}`, () => {
+      // "Station" is the whole bank's word (200 of them). The five are cases,
+      // in these emails as on every other free surface.
+      expect(`${email.subject}\n${email.text}`).not.toMatch(/stations?/i)
     })
 
     it(`invents no scarcity and quotes nobody — ${email.subject}`, () => {

@@ -24,14 +24,14 @@ describe('trialTitleLine', () => {
     // "Unlimited attempts" first, deliberately: a trainee who saw the old
     // five-consultation offer is rationing, and that is the behaviour this
     // sentence exists to correct.
-    expect(trialTitleLine(5)).toBe('Unlimited attempts · five stations')
+    expect(trialTitleLine(5)).toBe('Unlimited attempts · five cases')
   })
 
   it('describes the bank it actually has', () => {
     // The flag decides which cases are free, so a bank with four flagged says
     // four rather than promising a fifth that does not exist.
-    expect(trialTitleLine(4)).toBe('Unlimited attempts · four stations')
-    expect(trialTitleLine(1)).toBe('Unlimited attempts · one station')
+    expect(trialTitleLine(4)).toBe('Unlimited attempts · four cases')
+    expect(trialTitleLine(1)).toBe('Unlimited attempts · one case')
   })
 })
 
@@ -90,6 +90,14 @@ describe('trialCountdown', () => {
     for (const days of [null, 0, 1, 2, 5]) {
       expect(trialCountdown(days, '2026-09-12T09:00:00Z', 5).headline).not.toMatch(/station/i)
     }
+  })
+
+  it('names the five in the same noun as the line above it', () => {
+    // The title and the progress line count the same five things. Naming them
+    // differently ("five stations" over "3 of 5 cases tried") reads as two
+    // separate allowances.
+    expect(trialTitleLine(5)).not.toMatch(/station/i)
+    expect(trialProgressLine(3, 5)).not.toMatch(/station/i)
   })
 })
 
