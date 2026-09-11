@@ -63,9 +63,15 @@ import { TRIAL_EMAIL_KEY, TRIAL_USED_KEY, TRIAL_FEEDBACK_URL_KEY } from '@/lib/t
  * browser ran the consultation (contract C3). A legacy report link opened in a
  * browser with no such cookie still makes the account, still claims the
  * consultation and still signs them in — the password simply does not take, and
- * the middleware sends them to /auth/set-password. Which is why nothing on this
- * screen promises the password was set: the button says what it does, "Create
- * my free account", and the rest is left to be true either way.
+ * the middleware sends them to /auth/set-password.
+ *
+ * So on those the field is not shown at all. `proven` comes from the page,
+ * which can read the httpOnly cookie this component cannot: asking for a
+ * password the server has already decided to discard is a field whose only
+ * function is to be ignored, and the line under it promised a report "in your
+ * dashboard" to somebody the middleware is about to send to a password form.
+ * Unproven, the form asks for an address and a mobile, and says what will
+ * actually happen — a code, then their report.
  */
 
 interface VerifyBody {
@@ -92,9 +98,23 @@ export interface SignUpWhileMarkingProps {
    * run THAT one properly. Null when the row carries no station.
    */
   stationId?: string | null;
+  /**
+   * The signed `ff_guest` cookie says this browser ran this consultation, so a
+   * password typed here will be honoured (contract C3).
+   *
+   * False on a legacy report link — forwarded, opened on another device, or
+   * from before the cookie existed. Defaults to true so the ordinary path is
+   * the one a caller gets by saying nothing; it is the page that knows, because
+   * the cookie is httpOnly and this component cannot see it.
+   */
+  proven?: boolean;
 }
 
-export default function SignUpWhileMarking({ sessionId, stationId }: SignUpWhileMarkingProps) {
+export default function SignUpWhileMarking({
+  sessionId,
+  stationId,
+  proven = true,
+}: SignUpWhileMarkingProps) {
   const [step, setStep] = useState<Step>('details');
 
   const [email, setEmail] = useState('');
@@ -116,7 +136,11 @@ export default function SignUpWhileMarking({ sessionId, stationId }: SignUpWhile
   const marking = useVerdictPoll(sessionId);
 
   const cleanEmail = email.trim().toLowerCase();
-  const detailsReady = EMAIL_RE.test(cleanEmail) && passwordLongEnough(password);
+  // No password asked for means none to check. The account is still made, still
+  // claims the consultation and still signs them in; they choose a password on
+  // /auth/set-password, which is where the middleware takes them.
+  const detailsReady =
+    EMAIL_RE.test(cleanEmail) && (!proven || passwordLongEnough(password));
   /** One click back into the same case, for a run that was too short to mark. */
   const retryHref = stationId
     ? `/try/talk?station=${encodeURIComponent(stationId)}`
@@ -330,7 +354,9 @@ export default function SignUpWhileMarking({ sessionId, stationId }: SignUpWhile
                   onBlur={saveLead}
                 />
                 <MobileField id="marking-phone" value={phone} onChange={setPhone} />
-                <PasswordField id="marking-password" value={password} onChange={setPassword} />
+                {proven && (
+                  <PasswordField id="marking-password" value={password} onChange={setPassword} />
+                )}
 
                 <button
                   type="submit"
@@ -349,8 +375,15 @@ export default function SignUpWhileMarking({ sessionId, stationId }: SignUpWhile
               )}
 
               <p className="mt-3.5 text-[13px] leading-relaxed text-muted">
-                We&apos;ll email you a 6-digit code to confirm the address. Your report opens
-                in your dashboard, with four more cases and five days on the clock — no card.
+                {proven ? (
+                  <>
+                    We&apos;ll email you a 6-digit code to confirm the address. Your report
+                    opens in your dashboard, with four more cases and five days on the clock —
+                    no card.
+                  </>
+                ) : (
+                  <>We&apos;ll email you a code, then open your report.</>
+                )}
               </p>
             </>
           )}

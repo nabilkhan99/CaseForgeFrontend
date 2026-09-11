@@ -47,7 +47,10 @@ import {
  * the password (no `password_pending`, no trip to /auth/set-password), the
  * mobile is stored, and the five-day window starts FROM THE CONSULTATION rather
  * than from whenever they next open a station. Without it, the branch does
- * exactly what it did before.
+ * exactly what it did before — except for where it lands, which is the report
+ * either way: the session is claimed on both paths and that page checks
+ * ownership itself, so the dashboard was never the honest destination for a
+ * page that spends its whole copy on the report being marked.
  *
  * ## Why the account is created HERE
  *
@@ -96,10 +99,14 @@ function redirectFor(station: unknown): string {
 /**
  * The report of the consultation they have just sat, inside the dashboard.
  *
- * Only for a proven guest: the claim has just made the session theirs and the
- * cookies on this response sign them in, so the dashboard's own ownership check
- * passes. Rebuilt from a matched uuid for the same reason {@link redirectFor}
- * is — the id came off the request.
+ * For EVERY guest, proven or not. The claim has just made the session theirs
+ * (by `claimSessionId` with the proof, through the lead's own `session_id`
+ * without it) and the cookies on this response sign them in, so the report page
+ * can answer the ownership question itself — which it does, and which is why
+ * pointing an unproven guest at it is safe. It used to send them to a bare
+ * /dashboard instead, on a page whose whole copy was about the report they had
+ * just earned. Rebuilt from a matched uuid for the same reason
+ * {@link redirectFor} is — the id came off the request.
  */
 function reportFor(sessionId: string): string {
   return UUID_RE.test(sessionId)
@@ -188,9 +195,10 @@ export async function POST(req: NextRequest) {
     // does. NOTHING TEXTS IT — there is no SMS step on either door.
     const normalizedPhone = phone ? (toE164(phone) ?? phone) : '';
 
-    // A proven guest goes straight to the report of the consultation they just
-    // sat; everyone else to the station they carried, or the dashboard.
-    const redirectTo = guestProven ? reportFor(sessionId ?? '') : redirectFor(body.station);
+    // A guest goes to the report of the consultation they just sat; the
+    // account-first door, which has no consultation, to the station it carried
+    // or the dashboard.
+    const redirectTo = sessionId ? reportFor(sessionId) : redirectFor(body.station);
     if (password && password.length < MIN_PASSWORD_LENGTH) {
       return NextResponse.json(
         { error: `Use ${MIN_PASSWORD_LENGTH} characters or more` },

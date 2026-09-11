@@ -26,6 +26,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  * when the signed `ff_guest` cookie carries that session id. Every way of not
  * having that proof (no cookie, a forged one, one for a different session) has
  * to land on the old behaviour, so all three are pinned below.
+ *
+ * The proof governs what is COLLECTED, not where they land. Both guest paths
+ * claim the consultation and both end at its report; a legacy link used to be
+ * sent to a bare /dashboard from a page whose every line was about the report
+ * being marked.
  */
 
 process.env.TRIAL_GUEST_COOKIE_SECRET = 'test-secret'
@@ -433,7 +438,7 @@ describe('C3: the guest who proves the consultation was theirs', () => {
 describe('C3: every way of not having the proof', () => {
   const claimed = () => mocks.ensure.mock.calls[0][1] as Record<string, unknown>
 
-  it('no cookie at all: no password, no clock, no report redirect', async () => {
+  it('no cookie at all: no password, no mobile, no clock', async () => {
     const { body } = await post({
       sessionId: GUEST_SESSION,
       code: '123456',
@@ -443,7 +448,10 @@ describe('C3: every way of not having the proof', () => {
 
     expect(claimed()).toMatchObject({ password: null, phone: null, windowStartsAt: null })
     expect(mocks.updates[0]).not.toHaveProperty('phone')
-    expect(body.redirectTo).toBe('/dashboard')
+    // The REPORT is still where they land. The lead names this session, so the
+    // claim still attaches it, and that page checks ownership for itself —
+    // sending them to a bare dashboard was the page contradicting its own copy.
+    expect(body.redirectTo).toBe(`/clinical-master/feedback/${GUEST_SESSION}`)
   })
 
   it('a forged cookie is no cookie', async () => {
@@ -458,7 +466,7 @@ describe('C3: every way of not having the proof', () => {
     )
 
     expect(claimed()).toMatchObject({ password: null, windowStartsAt: null })
-    expect(body.redirectTo).toBe('/dashboard')
+    expect(body.redirectTo).toBe(`/clinical-master/feedback/${GUEST_SESSION}`)
   })
 
   it('a valid cookie for somebody else’s session is no cookie', async () => {
@@ -470,7 +478,7 @@ describe('C3: every way of not having the proof', () => {
     )
 
     expect(claimed()).toMatchObject({ password: null, windowStartsAt: null })
-    expect(body.redirectTo).toBe('/dashboard')
+    expect(body.redirectTo).toBe(`/clinical-master/feedback/${GUEST_SESSION}`)
   })
 
   it('the account-first door needs no cookie and is untouched by any of this', async () => {

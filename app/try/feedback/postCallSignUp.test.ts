@@ -41,9 +41,9 @@ describe('which page a visitor gets', () => {
   })
 
   it('renders the sign-up for an unowned one, with the case it was on', () => {
-    expect(PAGE).toContain(
-      '<SignUpWhileMarking sessionId={sessionId} stationId={session.station_id ?? null} />',
-    )
+    expect(PAGE).toContain('<SignUpWhileMarking')
+    expect(PAGE).toContain('sessionId={sessionId}')
+    expect(PAGE).toContain('stationId={session.station_id ?? null}')
   })
 })
 
@@ -185,6 +185,33 @@ describe('the poll ends when no mark is coming', () => {
     expect(REVEAL).toContain(
       "if (state.kind === 'silent' || state.kind === 'unfinished') return null;",
     )
+  })
+})
+
+describe('a legacy report link, with no cookie behind it', () => {
+  it('asks the page, which can read the httpOnly proof the form cannot', () => {
+    expect(PAGE).toContain("from '@/lib/trial/guestSession'")
+    expect(PAGE).toContain('cookieOwnsSession(readGuestCookie(jar.get(GUEST_COOKIE)?.value), sessionId)')
+    expect(PAGE).toContain('proven={proven}')
+  })
+
+  it('shows no password field it cannot honour', () => {
+    // verify-code discards a password without the cookie proof (contract C3),
+    // so an unproven form was asking for a field whose only function was to be
+    // ignored — and then refusing to submit until it was filled in.
+    expect(FORM).toContain('{proven && (')
+    expect(FORM).toContain('<PasswordField id="marking-password"')
+    expect(FORM).toContain('(!proven || passwordLongEnough(password))')
+  })
+
+  it('promises a report rather than a dashboard it will not open', () => {
+    expect(FORM).toContain("We&apos;ll email you a code, then open your report.")
+    // And the dashboard promise stays for the path that can keep it.
+    expect(FORM).toContain('opens in your dashboard, with four more cases and five days on the clock')
+  })
+
+  it('defaults to the proven path, so only the page can take the field away', () => {
+    expect(FORM).toContain('proven = true,')
   })
 })
 

@@ -1,7 +1,9 @@
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import SignUpWhileMarking from '@/components/try/SignUpWhileMarking';
+import { GUEST_COOKIE, cookieOwnsSession, readGuestCookie } from '@/lib/trial/guestSession';
 
 /**
  * The minute after a guest consultation ends. Contract C4.
@@ -18,12 +20,22 @@ import SignUpWhileMarking from '@/components/try/SignUpWhileMarking';
  * this page any more; only the trainee's own verdict summary, which
  * `/api/try/gate-status` has always been allowed to show.
  *
- * ## A server component for two questions
+ * ## A server component for three questions
  *
- * Whether the session already has an owner, and which case it was on. If it does, the report belongs in
+ * Whether the session already has an owner, which case it was on, and whether
+ * this browser is the one that ran it. If it is owned, the report belongs in
  * the dashboard and there is no account to make, so the browser is sent there
  * before anything paints rather than after two client fetches. Everything else
  * on the page is client work — the poll, the form, the code.
+ *
+ * ## Why the cookie is read HERE
+ *
+ * The signed `ff_guest` cookie is contract C3's proof, and `verify-code` will
+ * only honour a password behind it. The form could not see that — it is
+ * httpOnly — so a legacy report link (no cookie, opened on a phone, forwarded
+ * from an email) showed a password field whose value the server was always
+ * going to discard, over a line promising a report in a dashboard those people
+ * do not get sent to. The page knows, so it tells the form.
  */
 export const dynamic = 'force-dynamic';
 
@@ -33,6 +45,11 @@ interface PageProps {
 
 export default async function TryFeedbackPage({ params }: PageProps) {
   const { sessionId } = await params;
+
+  // Contract C3's proof, asked exactly as /api/try/verify-code asks it: this
+  // browser opened this consultation, so the password it types will be honoured.
+  const jar = await cookies();
+  const proven = cookieOwnsSession(readGuestCookie(jar.get(GUEST_COOKIE)?.value), sessionId);
 
   const { data: session } = await getSupabaseAdmin()
     .from('clinical_sessions')
@@ -71,5 +88,11 @@ export default async function TryFeedbackPage({ params }: PageProps) {
 
   // The station travels with it so "run it properly" can point back at THIS
   // case rather than at the five in general.
-  return <SignUpWhileMarking sessionId={sessionId} stationId={session.station_id ?? null} />;
+  return (
+    <SignUpWhileMarking
+      sessionId={sessionId}
+      stationId={session.station_id ?? null}
+      proven={proven}
+    />
+  );
 }
