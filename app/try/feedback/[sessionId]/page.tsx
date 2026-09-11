@@ -18,9 +18,9 @@ import SignUpWhileMarking from '@/components/try/SignUpWhileMarking';
  * this page any more; only the trainee's own verdict summary, which
  * `/api/try/gate-status` has always been allowed to show.
  *
- * ## A server component for exactly one question
+ * ## A server component for two questions
  *
- * Whether the session already has an owner. If it does, the report belongs in
+ * Whether the session already has an owner, and which case it was on. If it does, the report belongs in
  * the dashboard and there is no account to make, so the browser is sent there
  * before anything paints rather than after two client fetches. Everything else
  * on the page is client work — the poll, the form, the code.
@@ -36,7 +36,7 @@ export default async function TryFeedbackPage({ params }: PageProps) {
 
   const { data: session } = await getSupabaseAdmin()
     .from('clinical_sessions')
-    .select('id, user_id')
+    .select('id, user_id, station_id')
     .eq('id', sessionId)
     .maybeSingle();
 
@@ -69,5 +69,7 @@ export default async function TryFeedbackPage({ params }: PageProps) {
     );
   }
 
-  return <SignUpWhileMarking sessionId={sessionId} />;
+  // The station travels with it so "run it properly" can point back at THIS
+  // case rather than at the five in general.
+  return <SignUpWhileMarking sessionId={sessionId} stationId={session.station_id ?? null} />;
 }

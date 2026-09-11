@@ -46,6 +46,18 @@ interface TextFieldProps {
   onChange: (value: string) => void;
 }
 
+interface EmailFieldProps extends TextFieldProps {
+  /**
+   * Fired when the field loses focus.
+   *
+   * The post-call sign-up saves the lead here, because the address is the one
+   * thing worth keeping from a form somebody walks away from and the submit
+   * button is exactly what they do not press. Optional: the account-first form
+   * has no early save to make.
+   */
+  onBlur?: () => void;
+}
+
 /**
  * The address, with the typo catch under it.
  *
@@ -53,7 +65,7 @@ interface TextFieldProps {
  * that goes to gmial.com, which on this funnel is the difference between an
  * account and nothing at all.
  */
-export function EmailField({ id, value, onChange }: TextFieldProps) {
+export function EmailField({ id, value, onChange, onBlur }: EmailFieldProps) {
   const suggestion = suggestEmailFix(value);
 
   return (
@@ -70,6 +82,7 @@ export function EmailField({ id, value, onChange }: TextFieldProps) {
         placeholder="doctor@nhs.net"
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onBlur={onBlur}
         className={`${FIELD} ${suggestion ? '!border-[#D9A67C]' : ''}`}
       />
       {suggestion && (

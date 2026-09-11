@@ -37,9 +37,12 @@ import { TRIAL_EMAIL_KEY, TRIAL_USED_KEY, TRIAL_FEEDBACK_URL_KEY } from '@/lib/t
  *
  * ## Why the address is saved before the code is asked for
  *
- * `/api/try/save-lead` writes the lead the moment there is an address to write.
- * Everyone who typed one and then abandoned used to leave nothing behind at
- * all. Fire-and-forget: it must never delay the code or show an error.
+ * `/api/try/save-lead` writes the lead the moment there is an address to write —
+ * ON BLUR, not on submit. Everyone who typed one and then abandoned used to
+ * leave nothing behind at all, and the button is precisely what an abandoning
+ * visitor does not press; the gate this replaced saved per question, so saving
+ * only at the end would have been a step backwards. Fire-and-forget: it must
+ * never delay the code or show an error.
  *
  * ## The password, and when it actually takes
  *
@@ -64,9 +67,14 @@ type Step = 'details' | 'code' | 'stranded';
 
 export interface SignUpWhileMarkingProps {
   sessionId: string;
+  /**
+   * The case this consultation was on, so a run too short to mark can offer to
+   * run THAT one properly. Null when the row carries no station.
+   */
+  stationId?: string | null;
 }
 
-export default function SignUpWhileMarking({ sessionId }: SignUpWhileMarkingProps) {
+export default function SignUpWhileMarking({ sessionId, stationId }: SignUpWhileMarkingProps) {
   const [step, setStep] = useState<Step>('details');
 
   const [email, setEmail] = useState('');
@@ -78,6 +86,8 @@ export default function SignUpWhileMarking({ sessionId }: SignUpWhileMarkingProp
   const [submitting, setSubmitting] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const codeInputRef = useRef<HTMLInputElement>(null);
+  /** The address+mobile last written, so a blur per focus change is not a POST each. */
+  const savedLead = useRef('');
 
   // One poll for the whole page: the status line reads it, and VerdictReveal is
   // handed the same value rather than opening a second loop of its own.
@@ -85,6 +95,10 @@ export default function SignUpWhileMarking({ sessionId }: SignUpWhileMarkingProp
 
   const cleanEmail = email.trim().toLowerCase();
   const detailsReady = EMAIL_RE.test(cleanEmail) && passwordLongEnough(password);
+  /** One click back into the same case, for a run that was too short to mark. */
+  const retryHref = stationId
+    ? `/try/talk?station=${encodeURIComponent(stationId)}`
+    : '/try/talk';
 
   useEffect(() => {
     void trackEvent('trial_gate_shown', { session: sessionId, door: 'signup_while_marking' });
@@ -96,8 +110,16 @@ export default function SignUpWhileMarking({ sessionId }: SignUpWhileMarkingProp
     return () => clearTimeout(timer);
   }, [cooldown]);
 
-  /** Write the lead now, without waiting for it. See the header. */
+  /**
+   * Write the lead now, without waiting for it. See the header.
+   *
+   * Called on blur as well as on submit, and does nothing until there is an
+   * address worth writing or when nothing has changed since the last write.
+   */
   function saveLead() {
+    const fingerprint = `${cleanEmail}|${phone.trim()}`;
+    if (!EMAIL_RE.test(cleanEmail) || savedLead.current === fingerprint) return;
+    savedLead.current = fingerprint;
     void fetch('/api/try/save-lead', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -232,10 +254,16 @@ export default function SignUpWhileMarking({ sessionId }: SignUpWhileMarkingProp
         better, and a reveal that could get in the way of the form would be
         worse than no reveal.
 
-        `retryHref` is null on purpose. "Run it properly" belongs after the
-        account exists, from the dashboard, which the copy under the form says.
+        "Run it properly" points back at THIS case. A run too short to mark is
+        the one state where the person has nothing yet and every reason to try
+        again, and a dead end there costs the consultation AND the account.
       */}
-      <VerdictReveal sessionId={sessionId} state={marking} showWaiting={false} retryHref={null} />
+      <VerdictReveal
+        sessionId={sessionId}
+        state={marking}
+        showWaiting={false}
+        retryHref={retryHref}
+      />
 
       <div className="mx-auto mt-10 max-w-[27rem]">
         <motion.h1
@@ -266,7 +294,12 @@ export default function SignUpWhileMarking({ sessionId }: SignUpWhileMarkingProp
                   void requestCode();
                 }}
               >
-                <EmailField id="marking-email" value={email} onChange={setEmail} />
+                <EmailField
+                  id="marking-email"
+                  value={email}
+                  onChange={setEmail}
+                  onBlur={saveLead}
+                />
                 <MobileField id="marking-phone" value={phone} onChange={setPhone} />
                 <PasswordField id="marking-password" value={password} onChange={setPassword} />
 

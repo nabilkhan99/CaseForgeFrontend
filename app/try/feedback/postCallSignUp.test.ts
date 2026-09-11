@@ -31,7 +31,7 @@ describe('which page a visitor gets', () => {
   it('hands an owned session to the dashboard report', () => {
     // The claim has happened — in another tab, or on an account made later.
     // The dashboard's report checks ownership itself; this only points at it.
-    expect(PAGE).toContain("select('id, user_id')")
+    expect(PAGE).toContain("select('id, user_id, station_id')")
     expect(PAGE).toContain('if (session?.user_id) redirect(`/clinical-master/feedback/${sessionId}`)')
   })
 
@@ -40,8 +40,10 @@ describe('which page a visitor gets', () => {
     expect(PAGE).toContain('Try 5 free cases')
   })
 
-  it('renders the sign-up for an unowned one', () => {
-    expect(PAGE).toContain('<SignUpWhileMarking sessionId={sessionId} />')
+  it('renders the sign-up for an unowned one, with the case it was on', () => {
+    expect(PAGE).toContain(
+      '<SignUpWhileMarking sessionId={sessionId} stationId={session.station_id ?? null} />',
+    )
   })
 })
 
@@ -72,7 +74,7 @@ describe('what the page says while the mark runs', () => {
 
 describe('what it asks for', () => {
   it('has exactly three fields: email, mobile, password', () => {
-    expect(FORM).toContain('<EmailField id="marking-email"')
+    expect(FORM).toMatch(/<EmailField\s+id="marking-email"/)
     expect(FORM).toContain('<MobileField id="marking-phone"')
     expect(FORM).toContain('<PasswordField id="marking-password"')
   })
@@ -103,6 +105,16 @@ describe('the three requests it makes', () => {
     expect(FORM).toContain('saveLead();')
   })
 
+  it('saves it on BLUR, which is what an abandoning visitor actually does', () => {
+    // The button is precisely what somebody walking away does not press. The
+    // gate this replaced saved per question, so submit-only would be a step
+    // backwards: every address typed and left would leave nothing behind.
+    expect(FORM).toContain('onBlur={saveLead}')
+    // And only once there is an address worth writing, and not twice for the
+    // same one — blur fires on every focus change.
+    expect(FORM).toContain('if (!EMAIL_RE.test(cleanEmail) || savedLead.current === fingerprint) return;')
+  })
+
   it('asks for the code on the guest door, opting into the relaxed validation', () => {
     const send = FORM.slice(FORM.indexOf("'/api/try/send-code'"))
     expect(send).toContain('sessionId,')
@@ -124,6 +136,27 @@ describe('the three requests it makes', () => {
     // The session cookies arrive on the verify response and the report is a
     // server component, so a client-side push would render it signed out.
     expect(FORM).toContain('window.location.assign(data.redirectTo)')
+  })
+})
+
+describe('a run too short to mark', () => {
+  it('offers to run THAT case properly, not the five in general', () => {
+    // It was a dead end: the person has no report, no account and no way back
+    // into the case they just tried, which costs the consultation AND the
+    // account it was going to earn.
+    expect(FORM).toContain('`/try/talk?station=${encodeURIComponent(stationId)}`')
+    expect(FORM).toContain('retryHref={retryHref}')
+    expect(FORM).not.toContain('retryHref={null}')
+  })
+
+  it('falls back to the first free case when the row names no station', () => {
+    expect(FORM).toContain(": '/try/talk'")
+  })
+
+  it('still offers the account, because the account is still worth having', () => {
+    expect(FORM).toContain(
+      'You can still set up your free account and run it properly from your dashboard.',
+    )
   })
 })
 
