@@ -60,6 +60,14 @@ const MARKED = {
 /** A guest free-mock session: nobody owns it, and it has been marked. */
 const GUEST_SESSION = { user_id: null, status: 'completed', transcript: [] }
 
+/** A 12-minute station, embedded the way PostgREST returns a one-to-one. */
+const STATION = { consultation_duration_seconds: 720 }
+
+/** An ISO timestamp this many seconds ago. */
+function secondsAgo(seconds: number): string {
+  return new Date(Date.now() - seconds * 1000).toISOString()
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -147,6 +155,54 @@ describe('GET /api/try/gate-status', () => {
 
     expect(body.status).toBe('processing')
     expect(body.summary).toBeNull()
+  })
+
+  it('says so when nobody ever ended the consultation', async () => {
+    // A closed tab: the row never left `live`, so no transcript was saved and
+    // no mark was ever requested. The page used to promise one for five
+    // minutes and then go quiet.
+    mocks.session = {
+      user_id: null,
+      status: 'live',
+      transcript: [{ speaker: 'candidate', text: 'Hello', start_ms: 2_000 }],
+      started_at: secondsAgo(720 + 200),
+      stations: STATION,
+    }
+
+    const { body } = await get()
+
+    expect(body.status).toBe('unfinished')
+    expect(body.summary).toBeNull()
+  })
+
+  it('does not call a consultation abandoned while it could still be running', async () => {
+    mocks.session = {
+      user_id: null,
+      status: 'live',
+      transcript: [{ speaker: 'candidate', text: 'Hello', start_ms: 2_000 }],
+      started_at: secondsAgo(300),
+      stations: STATION,
+    }
+
+    expect((await get()).body.status).toBe('live')
+  })
+
+  it('never hides a mark behind the abandonment inference', async () => {
+    // An unfinished row has no result in practice. If one exists, the mark is
+    // what the page is here for and the inference must not shadow it.
+    mocks.session = {
+      user_id: null,
+      status: 'live',
+      transcript: [],
+      started_at: secondsAgo(3_600),
+      stations: STATION,
+    }
+    mocks.result = MARKED
+
+    const { body } = await get()
+
+    expect(body.status).toBe('ready')
+    expect(body.summary).toMatchObject({ verdict: 'Bare Fail' })
   })
 
   it('still reports verification when the email is confirmed', async () => {

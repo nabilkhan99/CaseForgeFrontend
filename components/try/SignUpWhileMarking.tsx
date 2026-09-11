@@ -35,6 +35,17 @@ import { TRIAL_EMAIL_KEY, TRIAL_USED_KEY, TRIAL_FEEDBACK_URL_KEY } from '@/lib/t
  * on the dashboard, once, while the first mark runs
  * (components/dashboard/TrialQuestionnaireCard).
  *
+ * ## When there is no mark to wait for
+ *
+ * The premise only holds while a mark is actually running. A consultation
+ * nobody ended — a closed tab, a dead connection — leaves a row that never
+ * moved past `live`, so no transcript was saved and nothing was ever sent to be
+ * marked; this page used to promise that person a mark for five solid minutes
+ * and then go quiet. `/api/try/gate-status` now says `unfinished` for those,
+ * and both the heading and the line under it follow the poll rather than the
+ * premise. The form does not change: the account is worth having either way,
+ * and the case can be run again from the dashboard.
+ *
  * ## Why the address is saved before the code is asked for
  *
  * `/api/try/save-lead` writes the lead the moment there is an address to write —
@@ -272,7 +283,7 @@ export default function SignUpWhileMarking({ sessionId, stationId }: SignUpWhile
           transition={{ duration: 0.45 }}
           className="text-[28px] font-medium leading-[1.12] tracking-tight text-heading sm:text-[34px]"
         >
-          Set up your account while we mark your consultation
+          {headingFor(marking.kind)}
         </motion.h1>
 
         <MarkingStatus kind={marking.kind} />
@@ -379,14 +390,37 @@ export default function SignUpWhileMarking({ sessionId, stationId }: SignUpWhile
 }
 
 /**
+ * The heading, driven by the same poll as the line beneath it.
+ *
+ * "While we mark your consultation" is the offer on this page and it is true
+ * exactly while a mark is running. On a consultation nobody finished there is
+ * no mark — and a headline that says otherwise, over a line saying the run was
+ * never completed, reads as a page that has lost track of what happened. The
+ * account is still the thing being offered, so the heading names that instead.
+ */
+function headingFor(kind: MarkingKind): string {
+  switch (kind) {
+    case 'ready':
+      return 'Set up your account to open your report';
+    case 'unmarkable':
+    case 'unfinished':
+      return 'Set up your free account';
+    default:
+      return 'Set up your account while we mark your consultation';
+  }
+}
+
+type MarkingKind = 'waiting' | 'ready' | 'unmarkable' | 'unfinished' | 'silent';
+
+/**
  * One line, under the heading, saying where the mark has got to.
  *
  * The whole premise of the page is that the wait is free time, so the wait has
  * to be visible and finite. "About a minute" is the truth — marking runs 80–90
  * seconds on a full station — and it stops being a promise the moment the
- * result lands.
+ * result lands, or the moment the server says no mark is coming at all.
  */
-function MarkingStatus({ kind }: { kind: 'waiting' | 'ready' | 'unmarkable' | 'silent' }) {
+function MarkingStatus({ kind }: { kind: MarkingKind }) {
   if (kind === 'silent') return null;
 
   const line =
@@ -394,7 +428,9 @@ function MarkingStatus({ kind }: { kind: 'waiting' | 'ready' | 'unmarkable' | 's
       ? 'Marking your consultation. It takes about a minute.'
       : kind === 'ready'
         ? 'Your report is ready'
-        : 'You can still set up your free account and run it properly from your dashboard.';
+        : kind === 'unfinished'
+          ? "This one wasn't finished. Set up your account and run it again from your dashboard."
+          : 'You can still set up your free account and run it again.';
 
   return (
     <motion.p

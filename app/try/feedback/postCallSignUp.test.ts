@@ -58,9 +58,24 @@ describe('what the page says while the mark runs', () => {
   })
 
   it('keeps offering the account when the run was too short to mark', () => {
+    expect(FORM).toContain('You can still set up your free account and run it again.')
+  })
+
+  it('stops promising a mark on a consultation nobody finished', () => {
+    // A closed tab leaves the row on `live`: no transcript was saved and no
+    // mark was ever requested, so the five-minute poll was five minutes of a
+    // promise nobody could keep.
     expect(FORM).toContain(
-      'You can still set up your free account and run it properly from your dashboard.',
+      "This one wasn't finished. Set up your account and run it again from your dashboard.",
     )
+    expect(FORM).toContain("case 'unfinished':")
+  })
+
+  it('drives the heading off the poll, not off the premise', () => {
+    // "While we mark your consultation" over a line saying it was never
+    // finished reads as a page that has lost track of what happened.
+    expect(FORM).toContain('{headingFor(marking.kind)}')
+    expect(FORM).toContain("return 'Set up your free account'")
   })
 
   it('polls once for the whole page', () => {
@@ -154,8 +169,21 @@ describe('a run too short to mark', () => {
   })
 
   it('still offers the account, because the account is still worth having', () => {
-    expect(FORM).toContain(
-      'You can still set up your free account and run it properly from your dashboard.',
+    expect(FORM).toContain('You can still set up your free account and run it again.')
+  })
+})
+
+describe('the poll ends when no mark is coming', () => {
+  const REVEAL = source('../../../components/try/VerdictReveal.tsx')
+
+  it('reads the server’s unfinished verdict instead of waiting five minutes', () => {
+    expect(REVEAL).toContain("if (data.status === 'unfinished')")
+    expect(REVEAL).toContain("setState({ kind: 'unfinished' })")
+  })
+
+  it('reveals nothing for it — there is no result to reveal', () => {
+    expect(REVEAL).toContain(
+      "if (state.kind === 'silent' || state.kind === 'unfinished') return null;",
     )
   })
 })

@@ -44,6 +44,12 @@ export type RevealState =
   | { kind: 'ready'; summary: TrialVerdictSummary }
   /** The Azure guard refused the run as too short to grade fairly. */
   | { kind: 'unmarkable'; seconds: number }
+  /**
+   * Nobody ended the consultation, so no transcript was ever saved and no mark
+   * was ever asked for. Renders nothing here — there is no result to reveal —
+   * and the page says what happened instead of waiting five minutes for one.
+   */
+  | { kind: 'unfinished' }
   /** Nothing to show, and nothing more to wait for. Renders nothing. */
   | { kind: 'silent' };
 
@@ -113,6 +119,14 @@ export function useVerdictPoll(sessionId: string | null): RevealState {
           return;
         }
 
+        // Nobody ended this consultation, so no mark was ever requested. The
+        // poll stops here rather than spending its five minutes on a promise
+        // the server has just said it cannot keep.
+        if (data.status === 'unfinished') {
+          setState({ kind: 'unfinished' });
+          return;
+        }
+
         // Nothing was captured, so no mark is coming. Say nothing here and let
         // the report explain it properly once they are through the gate.
         if (data.status === 'no_transcript' || data.status === 'error') {
@@ -156,7 +170,10 @@ export default function VerdictReveal({
   const state = controlled ?? polled;
   const shouldReduceMotion = useReducedMotion();
 
-  if (state.kind === 'silent') return null;
+  // 'unfinished' has no result to show and nothing to retry from here: the
+  // page's own line says what happened and points at the account, which is
+  // where the case can be run again.
+  if (state.kind === 'silent' || state.kind === 'unfinished') return null;
   if (state.kind === 'waiting' && !showWaiting) return null;
 
   return (
