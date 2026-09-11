@@ -309,9 +309,29 @@ describe('a lead that is already verified', () => {
     expect(written.verification_code_hash).toEqual(expect.any(String))
   })
 
-  it('deletes nothing belonging to the session it is not moving to', async () => {
+  it('clears an unverified first attempt off this session, so the code it mailed is the one that answers', async () => {
+    // They typed one address, changed their mind, and typed the verified one.
+    // `verify-code` looks a guest up by session; the abandoned row would be
+    // what it found, and its code is not the one that just went out.
     mocks.leadByEmail = { ...VERIFIED_ELSEWHERE }
-    mocks.leadBySession = { id: 'lead-2', verification_last_sent_at: null }
+    mocks.leadBySession = { id: 'lead-2', verification_last_sent_at: null, email_verified_at: null }
+
+    await post(
+      { sessionId: SESSION_ID, mode: 'guest_signup', email: 'sarah@nhs.net' },
+      { cookie: heldCookie() },
+    )
+
+    expect(mocks.deletes).toEqual(['lead-2'])
+  })
+
+  it('never deletes a verified row to tidy up, whoever it belongs to', async () => {
+    // A verified lead is a proven address and a claim on a consultation.
+    mocks.leadByEmail = { ...VERIFIED_ELSEWHERE }
+    mocks.leadBySession = {
+      id: 'lead-3',
+      verification_last_sent_at: null,
+      email_verified_at: '2026-08-01T00:00:00.000Z',
+    }
 
     await post(
       { sessionId: SESSION_ID, mode: 'guest_signup', email: 'sarah@nhs.net' },

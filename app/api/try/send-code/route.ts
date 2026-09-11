@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
     const [{ data: leadBySession }, { data: leadByEmail }] = await Promise.all([
       supabase
         .from('trial_leads')
-        .select('id, verification_last_sent_at')
+        .select('id, verification_last_sent_at, email_verified_at')
         .eq('session_id', sessionId)
         .maybeSingle(),
       supabase
@@ -262,7 +262,18 @@ export async function POST(req: NextRequest) {
       // the person behind the unique email index. A verified one is written in
       // place — `leadRow.session_id` above is its own — and this is the branch
       // that reaches it because it is still the row keyed by the address.
-      if (!verifiedLead && leadBySession && leadBySession.id !== leadByEmail.id) {
+      //
+      // Either way the OTHER row on this session goes: it is a first attempt
+      // under an address they then changed, and leaving it would mean
+      // `verify-code` looks this session up and finds a lead whose code is not
+      // the one we just sent. Never a verified row, though — that is somebody's
+      // proven address and their claim on a consultation, and no amount of
+      // tidying is worth it.
+      if (
+        leadBySession &&
+        leadBySession.id !== leadByEmail.id &&
+        !leadBySession.email_verified_at
+      ) {
         await supabase.from('trial_leads').delete().eq('id', leadBySession.id);
       }
       ({ error: upsertError } = await supabase
