@@ -6,6 +6,8 @@ import {
   GUEST_COOKIE,
   canOpenGuestSession,
   guestCookieOptions,
+  guestResumeRefusal,
+  logGuestRefusal,
   readGuestCookie,
   signGuestCookie,
   withGuestSession,
@@ -42,6 +44,16 @@ import {
  *
  * The cookie and the mint rules in lib/trial/guestSession.ts are the other half
  * of the control, not a replacement for this one.
+ *
+ * ⚠️ **The idempotent branch is not a cookie oracle.** It used to re-sign the
+ * cookie for ANY unowned session id in the body, which made this route a way to
+ * mint the very proof the rest of the lane rests on: POST a session id you do
+ * not hold, get back a signed cookie carrying it, and rule 2 of the mint (and
+ * contract C3's password proof) are both satisfied for somebody else's
+ * consultation. A resume now re-signs only what the caller's cookie ALREADY
+ * holds, and only while the row is still startable and inside its half hour —
+ * `guestResumeRefusal`. A browser that genuinely lost its cookie starts a new
+ * consultation, which is one click and costs it nothing.
  */
 export async function POST(req: NextRequest) {
   // Guests only. A signed-in caller would otherwise create a consultation
@@ -71,9 +83,10 @@ export async function POST(req: NextRequest) {
 
   // Idempotent: the station page can be re-submitted, and `/try/talk` hands its
   // own session id to that page when someone opens the full brief mid-flow.
+  // `status` and `started_at` come back because the resume rules read them.
   const { data: existing } = await supabase
     .from('clinical_sessions')
-    .select('id, user_id')
+    .select('id, user_id, status, started_at')
     .eq('id', sessionId)
     .maybeSingle();
 
@@ -81,10 +94,17 @@ export async function POST(req: NextRequest) {
     if (existing.user_id) {
       return NextResponse.json({ error: 'This consultation belongs to an account' }, { status: 403 });
     }
-    // Re-sign rather than skip: a browser that already holds this session keeps
-    // its cookie, and one that lost it (a reload on a fresh cookie jar) gets it
-    // back for a session it demonstrably knows the id of.
-    return withCookie(NextResponse.json({ status: 'exists', sessionId }), cookie, sessionId, nowSeconds);
+    // Rules 2, 7 and 8. Knowing the id is not the same as having been given it,
+    // so the cookie has to carry this session already for the re-sign to happen
+    // at all — see the oracle note at the top of this file.
+    const refusal = guestResumeRefusal({ cookie, sessionId, session: existing, nowMs: Date.now() });
+    if (refusal) {
+      logGuestRefusal('try/create-session', sessionId, refusal);
+      return NextResponse.json({ error: refusal.error, code: refusal.code }, { status: refusal.status });
+    }
+    const resigned = signGuestCookie(withGuestSession(cookie, sessionId, nowSeconds));
+    if (!resigned) return unsignable();
+    return withCookie(NextResponse.json({ status: 'exists', sessionId }), resigned);
   }
 
   // Three guest consultations per browser per day — the creation-time half of
@@ -96,6 +116,13 @@ export async function POST(req: NextRequest) {
       { status: 429 },
     );
   }
+
+  // Signed BEFORE the row is written, and the write abandoned if it cannot be.
+  // A session whose cookie never got signed is a row that can never mint — the
+  // trainee grants their microphone and the call silently never connects — so
+  // this fails here instead, the same way `/try/talk` does.
+  const signed = signGuestCookie(withGuestSession(cookie, sessionId, nowSeconds));
+  if (!signed) return unsignable();
 
   const { error } = await supabase
     .from('clinical_sessions')
@@ -113,16 +140,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return withCookie(NextResponse.json({ status: 'created', sessionId }), cookie, sessionId, nowSeconds);
+  return withCookie(NextResponse.json({ status: 'created', sessionId }), signed);
 }
 
-function withCookie(
-  response: NextResponse,
-  cookie: ReturnType<typeof readGuestCookie>,
-  sessionId: string,
-  nowSeconds: number,
-): NextResponse {
-  const signed = signGuestCookie(withGuestSession(cookie, sessionId, nowSeconds));
-  if (signed) response.cookies.set(GUEST_COOKIE, signed, guestCookieOptions());
+function withCookie(response: NextResponse, signed: string): NextResponse {
+  response.cookies.set(GUEST_COOKIE, signed, guestCookieOptions());
   return response;
+}
+
+/** No `TRIAL_GUEST_COOKIE_SECRET` and no service-role key: nothing can be opened. */
+function unsignable(): NextResponse {
+  console.error('[try/create-session] no signing secret — refusing to open a consultation');
+  return NextResponse.json(
+    {
+      error: 'Free consultations are unavailable right now. Please try again shortly.',
+      code: 'guest_cookie_unsignable',
+    },
+    { status: 503 },
+  );
 }

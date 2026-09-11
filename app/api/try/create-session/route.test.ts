@@ -9,6 +9,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  * come back, and the `is_free_trial` allowlist (contract C2) must NOT go away
  * again — it is what keeps an endpoint that spends Azure minutes with no
  * account behind it pointed at five cases instead of two hundred.
+ *
+ * The third, added 11 September: the idempotent branch must NOT hand a signed
+ * cookie back for a session the caller cannot already prove it holds. That
+ * re-sign is where the whole guest lane's proof comes from — rule 2 of the mint
+ * and contract C3's password both read this cookie — so an unguarded one turns
+ * this route into an oracle that mints proof for any unowned session id.
  */
 
 process.env.TRIAL_GUEST_COOKIE_SECRET = 'test-secret'
@@ -19,7 +25,9 @@ const mocks = vi.hoisted(() => ({
   station: null as { id: string } | null,
   /** Every set of filters a `stations` query applied. */
   stationFilters: [] as Record<string, unknown>[],
-  existing: null as { id: string; user_id: string | null } | null,
+  existing: null as
+    | { id: string; user_id: string | null; status?: string; started_at?: string }
+    | null,
   inserted: [] as Record<string, unknown>[],
   insertError: null as { message: string } | null,
   leadLookups: 0,
@@ -60,13 +68,33 @@ vi.mock('@/lib/supabase/admin', () => ({
 }))
 
 const { POST } = await import('./route')
+// The real signer, not a stand-in: a test that forged its own cookies would
+// prove nothing about the only thing the re-sign guard rests on.
+const { signGuestCookie, withGuestSession } = await import('@/lib/trial/guestSession')
 
 const SESSION = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const STATION = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 
+/** The cookie this server would have written when it opened `sessionId`. */
+function heldCookie(sessionId = SESSION, openedSecondsAgo = 60): string {
+  const now = Math.floor(Date.now() / 1000)
+  return signGuestCookie(withGuestSession(null, sessionId, now - openedSecondsAgo))!
+}
+
+/** A row the resume rules are happy with: unowned, still reading, a minute old. */
+function openRow() {
+  return {
+    id: SESSION,
+    user_id: null,
+    status: 'reading',
+    started_at: new Date(Date.now() - 60_000).toISOString(),
+  }
+}
+
 async function post(body: Record<string, unknown> = {}, cookie?: string) {
   const response = await POST({
     json: async () => ({ sessionId: SESSION, stationId: STATION, ...body }),
+    headers: new Headers(),
     cookies: { get: (name: string) => (cookie && name === 'ff_guest' ? { value: cookie } : undefined) },
   } as never)
   return {
@@ -118,15 +146,83 @@ describe('create-session', () => {
     expect(readGuestCookie(value)?.s.map((entry) => entry.i)).toContain(SESSION)
   })
 
-  it('is idempotent, and re-signs the cookie for a session it already has', async () => {
-    mocks.existing = { id: SESSION, user_id: null }
-    const { status, body, setCookie } = await post()
+  it('is idempotent, and re-signs the cookie for a session the browser already holds', async () => {
+    mocks.existing = openRow()
+    const { status, body, setCookie } = await post({}, heldCookie())
     expect(status).toBe(200)
     expect(body.status).toBe('exists')
     expect(mocks.inserted).toHaveLength(0)
     expect(setCookie).toMatch(/^ff_guest=/)
   })
 
+  it('refuses to open a consultation it cannot sign a cookie for', async () => {
+    // No secret means the mint would refuse this session anyway, so the row is
+    // never written — a guest row that can never mint is a dead consultation.
+    const secret = process.env.TRIAL_GUEST_COOKIE_SECRET
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    delete process.env.TRIAL_GUEST_COOKIE_SECRET
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY
+    try {
+      const { status, body, setCookie } = await post()
+      expect(status).toBe(503)
+      expect(body.code).toBe('guest_cookie_unsignable')
+      expect(mocks.inserted).toHaveLength(0)
+      expect(setCookie).toBe('')
+    } finally {
+      process.env.TRIAL_GUEST_COOKIE_SECRET = secret
+      if (serviceKey !== undefined) process.env.SUPABASE_SERVICE_ROLE_KEY = serviceKey
+    }
+  })
+})
+
+describe('the re-sign is not a cookie oracle', () => {
+  it('refuses a session id the caller cannot prove it holds, and signs nothing', async () => {
+    // The whole finding: this used to answer `exists` and hand back a signed
+    // cookie carrying somebody else's session, which is the proof the Azure
+    // mint and the post-call password both read.
+    mocks.existing = openRow()
+    const { status, body, setCookie } = await post()
+    expect(status).toBe(403)
+    expect(body.code).toBe('guest_session_unrecognised')
+    expect(setCookie).toBe('')
+  })
+
+  it('refuses when the cookie holds a different session', async () => {
+    mocks.existing = openRow()
+    const { status, body, setCookie } = await post({}, heldCookie('99999999-9999-4999-8999-999999999999'))
+    expect(status).toBe(403)
+    expect(body.code).toBe('guest_session_unrecognised')
+    expect(setCookie).toBe('')
+  })
+
+  it('refuses a forged cookie, which is the point of signing it', async () => {
+    mocks.existing = openRow()
+    const real = heldCookie()
+    const forged = `${real.slice(0, -1)}${real.endsWith('A') ? 'B' : 'A'}`
+    const { status, body } = await post({}, forged)
+    expect(status).toBe(403)
+    expect(body.code).toBe('guest_session_unrecognised')
+  })
+
+  it('refuses a consultation that is over', async () => {
+    mocks.existing = { ...openRow(), status: 'completed' }
+    const { status, body } = await post({}, heldCookie())
+    expect(status).toBe(403)
+    expect(body.code).toBe('guest_session_not_startable')
+  })
+
+  it('refuses a session older than half an hour', async () => {
+    mocks.existing = {
+      ...openRow(),
+      started_at: new Date(Date.now() - 31 * 60_000).toISOString(),
+    }
+    const { status, body } = await post({}, heldCookie(SESSION, 31 * 60))
+    expect(status).toBe(403)
+    expect(body.code).toBe('guest_session_expired')
+  })
+})
+
+describe('which case, and how many', () => {
   it('asks for BOTH C2 filters, never is_active alone', async () => {
     await post()
     expect(mocks.stationFilters).not.toHaveLength(0)
