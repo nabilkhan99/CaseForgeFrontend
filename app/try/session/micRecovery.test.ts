@@ -66,6 +66,26 @@ describe('connect() asks for the microphone before it spends anything', () => {
   })
 })
 
+describe('the brief arrives before the patient does', () => {
+  const CONNECTING = source('../../../components/clinical-master/ConnectingScreen.tsx')
+
+  it('reads the two lines during the handshake', () => {
+    // The one-click door has no reading page, and the patient speaks first, so
+    // the case used to arrive at the same moment the first "Hello" did. The
+    // handshake is dead time that has to be spent anyway.
+    expect(CONNECTING).toContain('brief?: { who: string; complaint?: string | null }')
+    expect(CONNECTING).toContain('{brief.who}')
+    expect(CONNECTING).toContain('{brief.complaint}')
+    expect(GUEST).toContain('brief={brief}')
+  })
+
+  it('leaves the signed-in session exactly as it was', () => {
+    // It comes off a reading page, so the prop is optional and unused there.
+    expect(CONNECTING).toContain('{brief && (')
+    expect(SIGNED_IN).not.toContain('brief={')
+  })
+})
+
 describe('the guest call screen owns the mic-blocked state', () => {
   it('reads errorKind off the hook, as the signed-in screen does', () => {
     expect(GUEST).toContain('errorKind')

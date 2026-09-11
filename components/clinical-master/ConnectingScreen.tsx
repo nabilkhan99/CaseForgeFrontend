@@ -36,6 +36,19 @@ export interface ConnectingScreenProps {
   /** Shown in the headline. Falls back to a generic phrase before the row loads. */
   patientName?: string;
   /**
+   * The two lines of the brief: who is on the line, and why they came.
+   *
+   * For the ONE-CLICK door, where this screen is the only quiet moment there
+   * is. A guest arriving from /free has read no brief — there is no reading
+   * page in that path — and the patient speaks first, so without this the case
+   * arrives at the same instant the patient does and the first question is
+   * asked by somebody who has just started reading. The handshake is dead time
+   * that has to be spent anyway; this is what it is for.
+   *
+   * Omitted on the signed-in session, which comes off a reading page.
+   */
+  brief?: { who: string; complaint?: string | null };
+  /**
    * True only while the handshake is genuinely running. `status` distinguishes
    * this from `disconnected`, which is the brief window before the page's
    * auto-connect effect fires and is not worth animating. The gate around this
@@ -49,6 +62,7 @@ export interface ConnectingScreenProps {
 
 export default function ConnectingScreen({
   patientName,
+  brief,
   connecting,
   onCancel,
 }: ConnectingScreenProps) {
@@ -86,6 +100,17 @@ export default function ConnectingScreen({
         <h3 className="text-[18px] font-semibold text-heading mb-1">
           Connecting you to {patientName || 'your patient'}
         </h3>
+
+        {/* The brief, while there is nothing else to do with the wait. */}
+        {brief && (
+          <div className="mb-3 mt-2 border-y border-black/[0.06] py-3">
+            <p className="text-[14px] font-semibold leading-snug text-heading">{brief.who}</p>
+            {brief.complaint && (
+              <p className="mt-1 text-[13px] leading-snug text-muted">{brief.complaint}</p>
+            )}
+          </div>
+        )}
+
         <p className="text-[14px] leading-[1.65] text-muted">
           Your browser will ask for your microphone &mdash;{' '}
           choose <span className="font-semibold text-heading">Allow</span>. Headphones help. The

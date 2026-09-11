@@ -205,6 +205,10 @@ export default function GuestCallScreen({
     return (
       <ConnectingScreen
         patientName={patientName}
+        // The brief, during the handshake rather than at the same moment the
+        // patient starts talking. This door has no reading page in front of it,
+        // so these two lines used to arrive with the first "Hello".
+        brief={brief}
         connecting={status === 'connecting'}
         onCancel={handleLeaveWithoutFinishing}
       />
