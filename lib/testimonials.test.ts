@@ -23,8 +23,8 @@ describe('testimonials', () => {
   })
 
   it('claims no exam result, because none of them told us one', () => {
-    // "pass"/"fail" appear inside Zain's quote as exam vocabulary, which is his
-    // words about the lectures — the attribution line is what must stay clean.
+    // Exam vocabulary may appear inside a quote, as the speaker's own words
+    // about the course. The attribution line is what must stay clean.
     for (const t of TESTIMONIALS) {
       expect(t.meta.toLowerCase()).not.toMatch(/pass|fail|resit|attempt/)
     }

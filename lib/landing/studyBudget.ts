@@ -457,7 +457,7 @@ export function buildEmailBody(
     'I am an ST3 on the [scheme name] programme preparing for the SCA. Before booking, I would like to confirm eligibility for study budget reimbursement for the following as my SCA preparation course claim' +
     gpCode +
     ':\n\n' +
-    'Complete SCA Course, £599 for a fixed 3-month course term, paid once with no renewal. A structured course with 3 months of access: 8 hours of on-demand lectures, a full-day small-group coaching session (9am to 5pm, max class size 6), and consultation practice across 200 stations built from the RCGP curriculum, mapped to the three SCA marking domains. Full course specification: fourteenfisherman.com/course-spec\n\n' +
+    'Complete SCA Course, £599 for a fixed 3-month course term, paid once with no renewal. A structured course with 3 months of access: 8.5 hours of on-demand lectures, a remote 3 hour one to one coaching session with a GP educator, and consultation practice across 200 stations built from the RCGP curriculum, mapped to the three SCA marking domains. Full course specification: fourteenfisherman.com/course-spec\n\n' +
     extra +
     // The email no longer says the sender has discussed this with their ES and
     // put it on their PDP. It is a claim about something the reader may not have

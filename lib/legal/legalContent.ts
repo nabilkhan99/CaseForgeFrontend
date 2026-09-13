@@ -3,8 +3,10 @@
  * Source of truth: fourteen-fisherman-legal.md (founder-supplied, approved).
  * Rendered via react-markdown + remark-gfm on app/terms/page.tsx.
  *
- * The only edit from the source file is filling the `[privacy email]`
- * placeholder with the contact address used throughout the document.
+ * Edits from the source file: filling the `[privacy email]` placeholder with
+ * the contact address used throughout the document, and (13 September 2026,
+ * founder approved) aligning clauses 3.1, 5.2, 6.1 and 6.2 with the 3 hour one
+ * to one coaching session and its move-once reschedule policy.
  */
 export const LEGAL_MARKDOWN = `# Legal
 
@@ -30,7 +32,7 @@ Contact: hello@fourteenfisherman.com
 
 ### 3. What we provide
 
-3.1 Depending on the plan you purchase, we provide some or all of: access to AI voice consultation practice stations, on-demand recorded lectures, small-group coaching sessions, and one-to-one coaching.
+3.1 Depending on the plan you purchase, we provide some or all of: access to AI voice consultation practice stations, on-demand recorded lectures, a one-to-one coaching session, and ongoing one-to-one coaching.
 
 3.2 Plan contents, prices and access periods are as described on the pricing page at the time of purchase. The Self-Study and Complete plans are sold as a fixed 3-month course term: you make one payment, the term does not renew, and no further charge is made. The monthly Self-Study plan is a rolling monthly plan that renews until you cancel it.
 
@@ -48,7 +50,7 @@ Contact: hello@fourteenfisherman.com
 
 5.1 **Digital content (AI stations and on-demand lectures).** By purchasing, you request immediate access to digital content and acknowledge that once access begins you lose your statutory 14-day right to cancel in respect of that content, in accordance with the Consumer Contracts Regulations 2013.
 
-5.2 **Coaching (small-group and one-to-one).** The coaching element of a plan carries a 14-day cooling-off period from the date of purchase. If you attend a coaching session within that period, you agree that we may deduct a reasonable amount reflecting the sessions delivered before refunding the balance. After 14 days, coaching fees are non-refundable except where required by law.
+5.2 **Coaching.** The coaching element of a plan carries a 14-day cooling-off period from the date of purchase. If you attend a coaching session within that period, you agree that we may deduct a reasonable amount reflecting the sessions delivered before refunding the balance. After 14 days, coaching fees are non-refundable except where required by law.
 
 5.3 Where your plan includes both digital content and coaching, the cancellation right in clause 5.2 applies only to the coaching element. The refundable amount is the part of your plan price attributable to coaching, being the difference between your plan price and the price of the equivalent plan without coaching, less any deduction under clause 5.2. Your access to the digital content is unaffected.
 
@@ -56,9 +58,9 @@ Contact: hello@fourteenfisherman.com
 
 ### 6. Coaching sessions
 
-6.1 Small-group coaching sessions run remotely on scheduled dates confirmed at booking. Places are limited per session.
+6.1 Where your plan includes a coaching session, it is a 3-hour one-to-one session delivered remotely on the date and at the time you choose at booking. Each session slot can be booked by one person only.
 
-6.2 If you cannot attend a booked session, tell us as early as possible. Where you give us advance notice we will try to offer a place on a later session within your access period, but places are limited and we cannot guarantee one. Missed sessions are not refunded and are not automatically rescheduled.
+6.2 You may move your coaching session once, free of charge, if you give us at least 14 days' notice before the session, into any session slot that is still available. If you give us less than 14 days' notice, we will do our best to find you another date, but we cannot guarantee one. A session missed without notice is not refunded and is not automatically rescheduled.
 
 6.3 We may reschedule a session where necessary (for example, coach illness). If we do, we will offer you an alternative date. Coaching sessions are not recorded.
 

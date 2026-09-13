@@ -16,16 +16,17 @@ import { CROSSHATCH } from './editorial';
  * receipt card is what makes the first half credible, so it earns its place
  * beside the headline rather than below it.
  *
- * One correction to the canvas: it reads "10 hours of lectures", which the
- * copy change of 29 August retired. Eight is the current figure everywhere
- * else on the site.
+ * One correction to the canvas: its lecture and coaching lines predate the
+ * current course. The receipt below uses the current figures, as the rest of
+ * the site does: 8.5 hours of lectures, a 3 hour one to one coaching session
+ * valued at £749, and so a total value of £1,647.
  */
 
 /** The itemised receipt, exactly as the canvas orders it. */
 const LINE_ITEMS: ReadonlyArray<{ label: string; amount: string }> = [
   { label: '200 AI stations, unlimited', amount: '£299' },
-  { label: '8 hours of lectures', amount: '£599' },
-  { label: '8-hour live coaching day', amount: '£599' },
+  { label: '8.5 hours of lectures', amount: '£599' },
+  { label: '3 hour 1:1 coaching session', amount: '£749' },
 ];
 
 export default function Hero() {
@@ -150,7 +151,7 @@ export default function Hero() {
 
           <div className="flex items-baseline justify-between border-b border-[#E4DDC9] py-3">
             <span className="text-[15px] font-semibold text-heading">Total value</span>
-            <span className="font-mono text-[15px] font-medium text-heading">£1,497</span>
+            <span className="font-mono text-[15px] font-medium text-heading">£1,647</span>
           </div>
           <div className="flex items-baseline justify-between border-b border-[#F5F0E7] py-3">
             <span className="text-[15px] text-body">Course price</span>

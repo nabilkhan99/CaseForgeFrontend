@@ -14,7 +14,7 @@ describe('the deanery pre-approval email', () => {
     for (const deanery of DEANERIES) {
       for (const hasResat of [false, true]) {
         const body = buildEmailBody(deanery, hasResat)
-        const where = `${deanery.slug} resat=${hasResat}`
+        const where = `${deanery.id} resat=${hasResat}`
         expect(body, where).not.toContain('added SCA preparation to my PDP')
         expect(body, where).not.toContain('I have discussed this with my Educational Supervisor')
       }
@@ -24,9 +24,23 @@ describe('the deanery pre-approval email', () => {
   it('still asks the question the email exists to ask', () => {
     for (const deanery of DEANERIES) {
       for (const hasResat of [false, true]) {
-        expect(buildEmailBody(deanery, hasResat), `${deanery.slug} resat=${hasResat}`).toContain(
+        expect(buildEmailBody(deanery, hasResat), `${deanery.id} resat=${hasResat}`).toContain(
           'Could you confirm whether this would be approved',
         )
+      }
+    }
+  })
+
+  it('describes the course as it is sold now: 8.5 hours of lectures and a 3 hour one to one session', () => {
+    for (const deanery of DEANERIES) {
+      for (const hasResat of [false, true]) {
+        const body = buildEmailBody(deanery, hasResat)
+        const where = `${deanery.id} resat=${hasResat}`
+        expect(body, where).toContain('8.5 hours of on-demand lectures')
+        expect(body, where).toContain('3 hour one to one coaching session with a GP educator')
+        expect(body, where).toMatch(/\bcourse\b/)
+        expect(body, where).not.toMatch(/small.group|full.day|9am|max(imum)?\sclass|class\ssize|examiner/i)
+        expect(body, where).not.toMatch(/[\u2013\u2014]/)
       }
     }
   })
@@ -34,7 +48,7 @@ describe('the deanery pre-approval email', () => {
   it('joins its paragraphs without leaving a gap where one was removed', () => {
     for (const deanery of DEANERIES) {
       for (const hasResat of [false, true]) {
-        expect(buildEmailBody(deanery, hasResat), `${deanery.slug} resat=${hasResat}`).not.toContain(
+        expect(buildEmailBody(deanery, hasResat), `${deanery.id} resat=${hasResat}`).not.toContain(
           '\n\n\n',
         )
       }
