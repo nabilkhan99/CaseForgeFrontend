@@ -208,7 +208,7 @@ export default function OneToOneCoaching() {
         {/* Heading: claim on the left, subhead sitting on its baseline on the right */}
         <motion.div {...fadeUp} className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr] lg:items-end lg:gap-12">
           <div>
-            <Eyebrow>Three hours, one to one</Eyebrow>
+            <Eyebrow>One to one coaching</Eyebrow>
             <h2 className="mt-5 font-[family-name:var(--font-display)] text-[2.25rem] font-semibold leading-[1.06] tracking-[-0.03em] text-heading sm:mt-6 sm:text-5xl lg:text-[3.4rem]">
               Three hours to find out what is <Accent>actually</Accent> holding you
               back.
