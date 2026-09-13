@@ -14,7 +14,7 @@ const DESTINATIONS: readonly AdminDestination[] = [
   {
     href: '/admin/orders',
     title: 'Orders',
-    blurb: 'Every purchase — revenue, refunds, plan split, coaching-day capacity.',
+    blurb: 'Every purchase: revenue, refunds, plan split and coaching session bookings.',
   },
   {
     href: '/admin/referrals',

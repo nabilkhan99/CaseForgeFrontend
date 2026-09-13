@@ -15,6 +15,7 @@
  */
 
 import type { PlanKey } from '@/lib/commerce/plans'
+import { COMPLETE_TOTAL_TAUGHT_HOURS } from '@/lib/commerce/coachingSlots'
 
 /** The plans a receipt can be issued for. Intensive is sold on a call. */
 export type ReceiptPlanKey = Extract<PlanKey, 'complete' | 'self_study' | 'self_study_monthly'>
@@ -29,14 +30,18 @@ export function isReceiptPlanKey(key: string | null | undefined): key is Receipt
 export interface ReceiptFacts {
   planKey: ReceiptPlanKey
   receiptNumber: string
-  /** The CHARGE date. Not the coaching day — see {@link coachingDayLabel}. */
+  /** The CHARGE date. Not the coaching session, see {@link sessionLabel}. */
   paidAt: Date
   customerName: string
   paymentMethod: PaymentMethodLabel
   /** What was actually charged, in pence, straight from Stripe. */
   amountPence: number
-  /** "Saturday 12 September 2026". Complete only. */
-  coachingDayLabel?: string | null
+  /**
+   * The booked one to one coaching session, "Saturday 7 November 2026, 09:00 to
+   * 12:00". Complete only. A booking made before sessions had slots carries the
+   * date alone. Stored in the `receipts.coaching_day_label` column.
+   */
+  sessionLabel?: string | null
   /** Rolling plan only: the billing period this charge bought. */
   periodStart?: Date | null
   periodEnd?: Date | null
@@ -104,8 +109,8 @@ export function receiptFileName(receiptNumber: string): string {
 /**
  * A date that belongs on the receipt but may be missing.
  *
- * Every caller of this should have the value — the coaching day is required at
- * checkout for Complete, and Stripe always reports a subscription's period. The
+ * Every caller of this should have the value: the coaching session is required
+ * at checkout for Complete, and Stripe always reports a subscription's period. The
  * placeholder exists so that a receipt with one field missing is still a valid,
  * sendable proof of payment rather than a crash on the payment path, and so the
  * gap is obvious to whoever reads it rather than silently blank.
@@ -132,14 +137,17 @@ export function buildReceiptContent(facts: ReceiptFacts): ReceiptContent {
   }
 
   if (facts.planKey === 'complete') {
-    const sessionDate = orMissing(facts.coachingDayLabel, 'session date')
+    const session = orMissing(facts.sessionLabel, 'session date and time')
     return {
       ...common,
       planStrapline: COURSE_STRAPLINE,
       lineItems: [
-        `Full-day small-group coaching, ${sessionDate}, 09:00 to 17:00`,
-        'On-demand lecture series',
+        `One to one coaching session, ${session}`,
+        'On-demand lecture series, 14 lectures',
         '200 consultation practice stations, 3 month access',
+        // One figure for the whole course. Coaching hours are deliberately not
+        // itemised: a study budget claim is assessed on total taught hours.
+        `${COMPLETE_TOTAL_TAUGHT_HOURS} total taught hours`,
       ],
       totalLabel: 'Total paid',
       terms: [

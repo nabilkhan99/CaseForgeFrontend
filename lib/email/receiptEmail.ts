@@ -11,6 +11,13 @@ import {
 } from './chrome'
 import { SET_PASSWORD_EXPIRY_NOTE } from './accountEmail'
 import type { ReceiptPlanKey } from '@/lib/receipts/receiptContent'
+import {
+  formatCoachingDate,
+  isCoachingSlotKey,
+  isIsoDate,
+  slotTimeRange,
+  type CoachingSlotKey,
+} from '@/lib/commerce/coachingSlots'
 
 /**
  * The one email a buyer gets when a payment clears: the receipt PDF attached,
@@ -35,8 +42,18 @@ export interface ReceiptEmailCopyArgs {
   planKey: ReceiptPlanKey
   /** Buyer's name; only the first word is used. Blank falls back to "there". */
   firstName?: string | null
-  /** "Saturday 12 September 2026". Complete only. */
-  sessionDate?: string | null
+  /**
+   * The booked coaching session's date, ISO ("2026-11-07"). Complete only. The
+   * email formats it itself so the weekday and date and the time can be stated
+   * as two separate pieces.
+   */
+  coachingDate?: string | null
+  /**
+   * The booked coaching session's slot. Null for a booking made before sessions
+   * had slots, in which case the email states the date and no time rather than
+   * inventing one.
+   */
+  coachingSlot?: CoachingSlotKey | null
   /** "27 September 2026". Monthly only — a consumer-law requirement. */
   nextBillingDate?: string | null
   /**
@@ -77,6 +94,28 @@ const SUBJECTS: Record<ReceiptPlanKey, string> = {
 const SETUP_PREHEADER = 'Set up your account and get started.'
 
 /**
+ * What a Complete buyer is told about their coaching session, in this order:
+ * when it is, what it is, how to move it, and what to have done beforehand.
+ * Empty when no session is booked or the date is unreadable, so a buyer is
+ * never sent a paragraph with a gap where the date should be.
+ */
+export function coachingSessionParagraphs(
+  coachingDate: string | null | undefined,
+  coachingSlot: CoachingSlotKey | null | undefined,
+): string[] {
+  if (!isIsoDate(coachingDate)) return []
+  const when = isCoachingSlotKey(coachingSlot)
+    ? `${formatCoachingDate(coachingDate)}, ${slotTimeRange(coachingSlot)}`
+    : formatCoachingDate(coachingDate)
+  return [
+    `Your coaching session: ${when}.`,
+    '3 hours, one to one, remote. Six 12 minute stations back to back, then feedback on each station and a review of your AI dashboard.',
+    'You can move your session once, free, with 14 days notice. Inside 14 days we will do our best to find you another date, but we cannot guarantee one.',
+    'There is no requirement for how much AI practice you do beforehand, but most trainees will have completed at least 25 stations by then, which gives us enough to work with in the dashboard review.',
+  ]
+}
+
+/**
  * Build the email copy. Pure — no I/O, no env, no Brevo — so the wording of all
  * three variants, and the two renewal/existing-account cases, is unit-testable
  * without sending anything.
@@ -84,7 +123,8 @@ const SETUP_PREHEADER = 'Set up your account and get started.'
 export function buildReceiptEmailCopy({
   planKey,
   firstName,
-  sessionDate,
+  coachingDate,
+  coachingSlot,
   nextBillingDate,
   hasSetupLink,
   renewalAmount,
@@ -139,11 +179,7 @@ export function buildReceiptEmailCopy({
         ? "Once you're in, you can start on the practice stations and the lecture series straight away."
         : 'The practice stations and the lecture series are ready for you now.',
     )
-    if (sessionDate) {
-      outro.push(
-        `Your coaching day is ${sessionDate}, 09:00 to 17:00, online. Your joining link will appear on your dashboard under "Coaching day" a few days beforehand.`,
-      )
-    }
+    outro.push(...coachingSessionParagraphs(coachingDate, coachingSlot))
   } else if (planKey === 'self_study') {
     outro.push(
       hasSetupLink
@@ -243,8 +279,6 @@ export async function sendReceiptEmail(args: SendReceiptEmailArgs): Promise<Send
     ...copy.outro,
     'Best wishes,',
     'The Fourteen Fisherman Team',
-    '',
-    '—',
     `${BRAND.senderName} · ${BRAND.siteUrl}`,
   ].join('\n\n')
 

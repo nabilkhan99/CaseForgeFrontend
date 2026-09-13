@@ -3,11 +3,13 @@ import type { Metadata } from 'next';
 
 import { getStripe } from '@/lib/commerce/stripe';
 import { getPlan, isRollingPlan } from '@/lib/commerce/plans';
+import { readCoachingSessionMetadata, type CoachingSlotKey } from '@/lib/commerce/coachingSlots';
 import { SET_PASSWORD_LINK_EXPIRY } from '@/lib/email/accountEmail';
 import PurchaseTracker from '@/components/common/PurchaseTracker';
 
 export const metadata: Metadata = {
-  title: 'You’re in — Fourteen Fisherman',
+  // The root layout's template appends "| Fourteen Fisherman".
+  title: 'You’re in',
   robots: { index: false },
 };
 
@@ -18,7 +20,10 @@ interface ThanksPageProps {
 interface OrderSummary {
   planKey: string;
   planName: string;
-  coachingDayLabel: string | null;
+  coachingDate: string | null;
+  coachingSlot: CoachingSlotKey | null;
+  /** "Saturday 7 November 2026, 09:00 to 12:00"; just the date for an older booking. */
+  coachingSessionLabel: string | null;
   email: string | null;
 }
 
@@ -28,10 +33,15 @@ async function getOrderSummary(sessionId: string | undefined): Promise<OrderSumm
     const session = await getStripe().checkout.sessions.retrieve(sessionId);
     if (session.payment_status !== 'paid') return null;
     const plan = getPlan(session.metadata?.plan ?? '');
+    // Reads the legacy coaching_day keys too, for a session opened before the
+    // switch to one to one sessions.
+    const booking = readCoachingSessionMetadata(session.metadata);
     return {
       planKey: session.metadata?.plan ?? 'unknown',
       planName: plan?.name ?? 'your plan',
-      coachingDayLabel: session.metadata?.coaching_day_label ?? null,
+      coachingDate: booking.date,
+      coachingSlot: booking.slot,
+      coachingSessionLabel: booking.label,
       email: session.customer_details?.email ?? null,
     };
   } catch (error: unknown) {
@@ -50,7 +60,8 @@ export default async function ThanksPage({ searchParams }: ThanksPageProps) {
         <PurchaseTracker
           stripeSessionId={session_id}
           plan={order.planKey}
-          coachingDay={order.coachingDayLabel}
+          coachingDate={order.coachingDate}
+          coachingSlot={order.coachingSlot}
         />
       )}
       <div className="max-w-xl w-full text-center py-24">
@@ -66,22 +77,22 @@ export default async function ThanksPage({ searchParams }: ThanksPageProps) {
 
         {order ? (
           <p className="text-body text-lg leading-relaxed mb-3">
-            Your place on <span className="font-semibold text-heading">{order.planName}</span>
-            {order.coachingDayLabel ? (
+            Your place on <span className="font-semibold text-heading">{order.planName}</span> is
+            confirmed.
+            {order.coachingSessionLabel ? (
               <>
-                {' '}— coaching day{' '}
-                <span className="font-semibold text-heading">{order.coachingDayLabel}</span> —
+                {' '}Your coaching session:{' '}
+                <span className="font-semibold text-heading">{order.coachingSessionLabel}</span>.
               </>
-            ) : null}{' '}
-            is confirmed.
+            ) : null}
           </p>
         ) : (
           <p className="text-body text-lg leading-relaxed mb-3">Your order is confirmed.</p>
         )}
 
         {/* The one step between paying and getting in. A buyer has no password
-            yet — the account is created for them and the link that sets it
-            rides in on the receipt — and a page that only mentioned the receipt
+            yet: the account is created for them and the link that sets it
+            rides in on the receipt, and a page that only mentioned the receipt
             left them with nothing to do. Stripe's checkout page already says
             this at the point of payment; saying it again here is the whole job
             of this paragraph. The expiry is imported rather than typed: it is a
@@ -95,7 +106,7 @@ export default async function ThanksPage({ searchParams }: ThanksPageProps) {
             'your inbox'
           )}
           . It carries a <span className="font-medium text-heading">Set up your account</span>{' '}
-          button &mdash; that link is how you choose a password and get in.
+          button. That link is how you choose a password and get in.
         </p>
 
         <p className="text-muted leading-relaxed mb-10">
@@ -104,9 +115,8 @@ export default async function ThanksPage({ searchParams }: ThanksPageProps) {
           {/* The access term is read off the plan, not asserted. The rolling
               monthly has no three-month window, and telling a monthly buyer
               their access "starts today" for 3 months is a claim the billing
-              does not honour. The coaching day is not repeated here: the line
-              above already names it, and only for a plan that has one, which
-              the sentence this replaced did not check. */}
+              does not honour. The coaching session is not repeated here: the
+              line above already names it, and only for a plan that has one. */}
           {order && !isRollingPlan(order.planKey) ? (
             <>Your AI practice and lectures are ready as soon as you&rsquo;re in, and your 3
               months&rsquo; access starts today.</>

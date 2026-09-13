@@ -100,7 +100,7 @@ export const PLANS: readonly Plan[] = [
     priceSuffix: '/ 3 months',
     tagline: "One payment · 3 months' access",
     cta: 'checkout',
-    ctaLabel: 'Choose your coaching day',
+    ctaLabel: 'Choose your coaching date',
     highlighted: true,
     billing: FIXED_THREE_MONTH_TERM,
   },
@@ -249,7 +249,7 @@ export function stripePortalConfigurationId(): string | null {
  * allow-list and the switcher is symmetric over whatever it contains, so any
  * configuration that can sell Complete to a Self-Study customer can also sell
  * Self-Study to a Complete one. On a non-renewing term that downgrade is a
- * genuine loss for both sides: the customer's lectures and coaching day vanish
+ * genuine loss for both sides: the customer's lectures and coaching session vanish
  * and Stripe issues a customer-balance CREDIT rather than a refund (negative
  * prorations are never refunded automatically), which nothing on a plan with no
  * next invoice will ever consume. The only mechanism that prevents it is
@@ -266,14 +266,8 @@ export function stripePortalNoSwitchConfigurationId(): string | null {
 /** Intensive booking link. */
 export const BOOK_A_CALL_URL = 'https://calendly.com/hello-fourteenfisherman/30min'
 
-export interface CoachingDayAvailability {
-  day: string // ISO date of the coaching day, e.g. "2026-09-12"
-  label: string // "Saturday 12 September 2026"
-  capacity: number // displayed capacity, capped at 6
-  places_left: number // displayed places remaining, capped at 6
-  cutoff_at: string // bookings close: midnight (London) the day before
-  status: 'open' | 'closed' | 'sold_out'
-}
+// Coaching session availability is per slot, not per date: see
+// `CoachingSlotAvailability` in lib/commerce/coachingSlots.ts.
 
 /**
  * The date the course went live.

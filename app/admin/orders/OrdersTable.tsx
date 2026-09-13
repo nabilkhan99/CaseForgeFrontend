@@ -4,7 +4,15 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { getPlan } from '@/lib/commerce/plans';
-import type { OrderStats } from '@/lib/commerce/orderStats';
+import type { OrderStats, SessionDateBookings, SlotBooking } from '@/lib/commerce/orderStats';
+import {
+  COACHING_SLOTS,
+  COACHING_SLOT_ORDER,
+  formatCoachingDate,
+  formatCoachingDateCompact,
+  isCoachingSlotKey,
+  slotTimeRange,
+} from '@/lib/commerce/coachingSlots';
 
 /** One purchase, as the admin orders API returns it. */
 interface Order {
@@ -13,6 +21,7 @@ interface Order {
   full_name: string | null;
   plan: string;
   coaching_day: string | null;
+  coaching_slot: string | null;
   amount: number;
   currency: string;
   status: string;
@@ -20,15 +29,8 @@ interface Order {
   created_at: string;
 }
 
-/** One coaching day from the availability view. */
-interface CoachingDay {
-  day: string;
-  label: string;
-  capacity: number;
-  places_left: number;
-  status: 'open' | 'closed' | 'sold_out';
-  past: boolean;
-}
+/** What an empty cell shows. Not a dash: no em or en dashes in this product's copy. */
+const EMPTY_CELL = '·';
 
 const EMPTY_STATS: OrderStats = {
   paidCount: 0,
@@ -56,6 +58,15 @@ function fmtOrderedAt(iso: string): string {
   return `${day}, ${time}`;
 }
 
+/** An order's coaching session, short form: "Sat 7 Nov, 09:00 to 12:00". */
+function fmtOrderSession(order: Order): string {
+  if (!order.coaching_day) return EMPTY_CELL;
+  const date = formatCoachingDateCompact(order.coaching_day);
+  return isCoachingSlotKey(order.coaching_slot)
+    ? `${date}, ${slotTimeRange(order.coaching_slot)}`
+    : date;
+}
+
 function fmtTimestamp(date: Date): string {
   return date.toLocaleString('en-GB', {
     day: '2-digit',
@@ -76,7 +87,7 @@ interface StatDef {
 export default function OrdersTable() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [stats, setStats] = useState<OrderStats>(EMPTY_STATS);
-  const [coachingDays, setCoachingDays] = useState<CoachingDay[]>([]);
+  const [sessionBookings, setSessionBookings] = useState<SessionDateBookings[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
@@ -90,13 +101,13 @@ export default function OrdersTable() {
         setError(res.status === 403 ? 'Not authorized.' : 'Failed to load orders.');
         setOrders([]);
         setStats(EMPTY_STATS);
-        setCoachingDays([]);
+        setSessionBookings([]);
         return;
       }
       const data = await res.json();
       setOrders(data.orders ?? []);
       setStats(data.stats ?? EMPTY_STATS);
-      setCoachingDays(data.coachingDays ?? []);
+      setSessionBookings(data.sessionBookings ?? []);
       setUpdatedAt(new Date());
     } catch {
       setError('Failed to load orders.');
@@ -108,9 +119,6 @@ export default function OrdersTable() {
   useEffect(() => {
     load();
   }, [load]);
-
-  // Coaching-day labels are keyed by ISO date so an order can name its day.
-  const dayLabels = new Map(coachingDays.map((d) => [d.day, d.label]));
 
   const statDefs: StatDef[] = [
     { label: 'Orders', value: stats.paidCount.toLocaleString('en-GB') },
@@ -124,7 +132,7 @@ export default function OrdersTable() {
     {
       label: 'Referred',
       value: stats.referredPaidCount.toLocaleString('en-GB'),
-      sub: stats.referredPct === null ? '—' : `${stats.referredPct}% of orders`,
+      sub: stats.referredPct === null ? EMPTY_CELL : `${stats.referredPct}% of orders`,
     },
   ];
 
@@ -135,7 +143,7 @@ export default function OrdersTable() {
         <header className="flex items-end justify-between gap-6 flex-wrap">
           <div>
             <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-heading">Orders</h1>
-            <p className="mt-2 text-sm text-muted">Every purchase — referred or not</p>
+            <p className="mt-2 text-sm text-muted">Every purchase, referred or not</p>
           </div>
           <div className="flex items-center gap-4 text-xs text-muted">
             <span>
@@ -144,7 +152,7 @@ export default function OrdersTable() {
                   Updated <span className="font-mono">{fmtTimestamp(updatedAt)}</span>
                 </>
               ) : (
-                '—'
+                EMPTY_CELL
               )}
             </span>
             <Link
@@ -233,36 +241,37 @@ export default function OrdersTable() {
           )}
         </section>
 
-        {/* ── Coaching days ── */}
+        {/* ── Coaching sessions ── */}
         <section className="mt-16">
           <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
-            Coaching days
+            Coaching sessions
           </h2>
 
-          {loading && coachingDays.length === 0 ? (
+          {loading && sessionBookings.length === 0 ? (
             <p className="mt-8 text-sm text-muted animate-pulse">Loading…</p>
-          ) : coachingDays.length === 0 ? (
-            <p className="mt-8 text-sm text-muted">No coaching days scheduled.</p>
+          ) : sessionBookings.length === 0 ? (
+            <p className="mt-8 text-sm text-muted">No coaching dates scheduled.</p>
           ) : (
             <div className="mt-4">
-              {coachingDays.map((d, i) => (
+              {sessionBookings.map((d, i) => (
                 <motion.div
                   key={d.day}
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.35, delay: Math.min(i * 0.04, 0.4), ease: 'easeOut' }}
-                  className={`flex items-center justify-between gap-4 px-1 py-4 border-b border-border ${
+                  className={`grid grid-cols-1 md:grid-cols-[1.2fr_1fr_1fr] gap-x-6 gap-y-2 px-1 py-4 border-b border-border items-center ${
                     d.past ? 'opacity-45' : ''
                   }`}
                 >
-                  <span className="text-sm text-heading truncate">{d.label}</span>
-                  <span className="flex items-center gap-5 shrink-0">
-                    <span className="font-mono text-sm text-body tabular-nums">
-                      {d.places_left}/{d.capacity}
-                      <span className="ml-1.5 text-[11px] text-muted">left</span>
-                    </span>
-                    <DayStatusBadge status={d.status} />
-                  </span>
+                  <span className="text-sm text-heading truncate">{formatCoachingDate(d.day)}</span>
+                  {COACHING_SLOT_ORDER.map((slot) => (
+                    <SlotCell
+                      key={slot}
+                      name={COACHING_SLOTS[slot].name}
+                      time={slotTimeRange(slot)}
+                      booking={d.slots[slot]}
+                    />
+                  ))}
                 </motion.div>
               ))}
             </div>
@@ -293,7 +302,7 @@ export default function OrdersTable() {
                 <span>Email</span>
                 <span>Plan</span>
                 <span className="text-right">Amount</span>
-                <span>Coaching day</span>
+                <span>Coaching session</span>
                 <span>Status</span>
                 <span className="text-right">Code</span>
               </div>
@@ -314,7 +323,7 @@ export default function OrdersTable() {
                       {fmtOrderedAt(o.created_at)}
                     </div>
                     <div className="text-sm text-heading truncate text-right md:text-left">
-                      {o.full_name || '—'}
+                      {o.full_name || EMPTY_CELL}
                     </div>
                     <div className="text-[11px] font-mono text-muted truncate col-span-2 md:col-span-1">
                       {o.email}
@@ -330,14 +339,12 @@ export default function OrdersTable() {
                     >
                       {gbp(o.amount)}
                     </div>
-                    <div className="text-[11px] text-muted truncate">
-                      {o.coaching_day ? (dayLabels.get(o.coaching_day) ?? o.coaching_day) : '—'}
-                    </div>
+                    <div className="text-[11px] text-muted truncate">{fmtOrderSession(o)}</div>
                     <div className="flex md:block justify-end">
                       <OrderStatusBadge status={o.status} />
                     </div>
                     <div className="text-right font-mono text-[11px] text-muted truncate">
-                      {o.referral_code || '—'}
+                      {o.referral_code || EMPTY_CELL}
                     </div>
                   </motion.div>
                 );
@@ -350,21 +357,47 @@ export default function OrdersTable() {
   );
 }
 
-/** Availability badge for a coaching day — sold out gets the amber accent. */
-function DayStatusBadge({ status }: { status: CoachingDay['status'] }) {
-  const label = status === 'sold_out' ? 'Sold out' : status === 'closed' ? 'Closed' : 'Open';
+/**
+ * One slot of a coaching date: its time, its state, and who is booked into it.
+ * Booked gets the amber accent. Two names in one slot is a double booking and
+ * is flagged, because it needs a phone call.
+ */
+function SlotCell({ name, time, booking }: { name: string; time: string; booking: SlotBooking }) {
+  const label =
+    booking.state === 'booked'
+      ? 'Booked'
+      : booking.state === 'held'
+        ? 'In checkout'
+        : booking.state === 'closed'
+          ? 'Closed'
+          : 'Open';
   const tone =
-    status === 'sold_out'
+    booking.state === 'booked'
       ? 'bg-primary/10 text-primary'
-      : status === 'closed'
-        ? 'bg-border/60 text-muted'
-        : 'bg-success/10 text-success';
+      : booking.state === 'held'
+        ? 'bg-primary/5 text-primary'
+        : booking.state === 'closed'
+          ? 'bg-border/60 text-muted'
+          : 'bg-success/10 text-success';
+  const doubleBooked = booking.bookedBy.length > 1;
   return (
-    <span
-      className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full whitespace-nowrap ${tone}`}
-    >
-      {label}
-    </span>
+    <div className="flex items-center justify-between md:justify-start gap-3 min-w-0">
+      <span className="text-[11px] text-muted whitespace-nowrap">
+        {name} <span className="font-mono">{time}</span>
+      </span>
+      <span
+        className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full whitespace-nowrap ${
+          doubleBooked ? 'bg-danger/10 text-danger' : tone
+        }`}
+      >
+        {doubleBooked ? 'Double booked' : label}
+      </span>
+      {booking.bookedBy.length > 0 && (
+        <span className="text-[11px] text-body truncate" title={booking.bookedBy.join(', ')}>
+          {booking.bookedBy.join(', ')}
+        </span>
+      )}
+    </div>
   );
 }
 

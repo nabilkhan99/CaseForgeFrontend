@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { isMonthlyPlan, type EntitlementState } from '@/lib/commerce/entitlements';
 import { getPlan } from '@/lib/commerce/plans';
 import { getServerEntitlement } from '@/lib/commerce/serverEntitlement';
+import type { CoachingSlotKey } from '@/lib/commerce/coachingSlots';
 
 export interface SubscriptionResponse {
   /** Plan key of the purchase the access derives from, null when there is none. */
@@ -31,8 +32,13 @@ export interface SubscriptionResponse {
   isMonthly: boolean;
   /** Lectures are Complete-only; true for an active Complete plan or a bypass. */
   hasLectures: boolean;
-  /** Complete's coaching day (ISO date), when one was booked. */
+  /** Date of Complete's one to one coaching session (ISO), when one is booked. */
   coachingDay: string | null;
+  /**
+   * Which slot of {@link coachingDay} the session takes. Null when no session
+   * is booked, and on a booking made before sessions were split into slots.
+   */
+  coachingSlot: CoachingSlotKey | null;
   /**
    * The trainer-pilot seat this access rests on, when it rests on one alone.
    *
@@ -108,6 +114,7 @@ export async function GET() {
     isMonthly: plan ? isMonthlyPlan(plan) : false,
     hasLectures: (entitlement.hasLectures && allowed) || bypass,
     coachingDay: entitlement.coachingDay ?? null,
+    coachingSlot: entitlement.coachingSlot ?? null,
     // `cohortOnly`, not `cohort !== null` — see AccessDecision. The distinction
     // is about PURCHASES, not roles: a cohort member who also bought, or an
     // admin, keeps the whole bank. The trainer is not an exception to that and

@@ -106,8 +106,9 @@ function checkoutSession(overrides: Record<string, unknown> = {}) {
         customer_details: { email: 'buyer@x.com', name: 'Jane Okonkwo' },
         metadata: {
           plan: 'complete',
-          coaching_day: '2026-09-12',
-          coaching_day_label: 'Saturday 12 September 2026',
+          coaching_date: '2026-11-07',
+          coaching_slot: 'morning',
+          coaching_session_label: 'Saturday 7 November 2026, 09:00 to 12:00',
         },
         ...overrides,
       },
@@ -288,11 +289,42 @@ describe('a completed checkout issues and sends a receipt', () => {
     expect(mocks.issueReceipt.mock.calls[0][1].paidAt).toEqual(new Date(EVENT_CREATED * 1000))
   })
 
-  it('keeps the coaching day out of the payment date', async () => {
+  it('keeps the coaching session out of the payment date', async () => {
     const args = (await deliver(checkoutSession()), mocks.issueReceipt.mock.calls[0][1])
 
-    expect(args.coachingDayLabel).toBe('Saturday 12 September 2026')
-    expect(args.paidAt).not.toEqual(new Date('2026-09-12'))
+    expect(args.sessionLabel).toBe('Saturday 7 November 2026, 09:00 to 12:00')
+    expect(args.paidAt).not.toEqual(new Date('2026-11-07'))
+  })
+
+  it('prints the label of a session opened by the previous deploy', async () => {
+    // Legacy metadata: a date and its label, no slot. The receipt must still
+    // name the date rather than print a placeholder.
+    await deliver(
+      checkoutSession({
+        metadata: {
+          plan: 'complete',
+          coaching_day: '2026-09-12',
+          coaching_day_label: 'Saturday 12 September 2026',
+        },
+      }),
+    )
+
+    expect(mocks.issueReceipt.mock.calls[0][1].sessionLabel).toBe('Saturday 12 September 2026')
+    expect(mocks.sendReceiptEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ coachingDate: '2026-09-12', coachingSlot: null }),
+    )
+  })
+
+  it('builds the label from the date and slot when the session carries none', async () => {
+    await deliver(
+      checkoutSession({
+        metadata: { plan: 'complete', coaching_date: '2026-11-07', coaching_slot: 'afternoon' },
+      }),
+    )
+
+    expect(mocks.issueReceipt.mock.calls[0][1].sessionLabel).toBe(
+      'Saturday 7 November 2026, 13:00 to 16:00',
+    )
   })
 
   it('reads the payment method off the session', async () => {
@@ -307,7 +339,8 @@ describe('a completed checkout issues and sends a receipt', () => {
       expect.objectContaining({
         toEmail: 'buyer@x.com',
         planKey: 'complete',
-        sessionDate: 'Saturday 12 September 2026',
+        coachingDate: '2026-11-07',
+        coachingSlot: 'morning',
         setupUrl: SETUP_URL,
         hasSetupLink: true,
         fileName: 'Fourteen-Fisherman-receipt-FF-26-4478.pdf',

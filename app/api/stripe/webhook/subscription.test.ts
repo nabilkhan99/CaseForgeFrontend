@@ -130,7 +130,10 @@ function completedSession(plan: string) {
         amount_total: 29900,
         currency: 'gbp',
         subscription: 'sub_123',
-        metadata: { plan, ...(plan === 'complete' ? { coaching_day: '2026-09-12' } : {}) },
+        metadata: {
+          plan,
+          ...(plan === 'complete' ? { coaching_date: '2026-11-07', coaching_slot: 'morning' } : {}),
+        },
       },
     },
   }
