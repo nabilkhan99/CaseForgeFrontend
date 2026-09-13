@@ -20,7 +20,7 @@ const FAQS: QA[] = [
     question: 'Will this actually help me pass?',
     answer: [
       "We're confident enough to put real money behind it. Pass all 200 stations, sit your SCA, and if you don't pass, we pay you £500 in cash. No other provider takes that risk with you.",
-      "It's also the most comprehensive SCA preparation you'll find. Most options give you one dimension in isolation: a set of lectures, a day of small-group coaching, or an AI subscription on its own. The Complete SCA Course combines all three. You get AI voice practice on 200 stations, 8 hours of lectures, and a full-day Small-Group Coaching session with a GP tutor (9am to 5pm), where you consult full mock stations live and get each one broken down for you. All three are built from the RCGP curriculum and the three marking domains, so nothing in the real exam catches you out.",
+      "It's also the most comprehensive SCA preparation you'll find. Most options give you one dimension in isolation: a set of lectures, one to one coaching, or an AI subscription on its own. The Complete SCA Course combines all three. You get AI voice practice on 200 stations, 8.5 hours of lectures, and a 3 hour one to one coaching session with a GP tutor, where you consult six timed stations back to back, then get feedback on each one and a review of your AI practice dashboard. All three are built from the RCGP curriculum and the three marking domains, so nothing in the real exam catches you out.",
     ],
   },
   {
@@ -49,7 +49,7 @@ const FAQS: QA[] = [
   {
     question: 'Which plan do I actually need?',
     answer: [
-      'Most trainees choose the Complete SCA Course and it is the one that we recommend. It has everything you need to pass the SCA (AI practice + on-demand lectures + small-group coaching). The Self-Study plan is the AI practice on its own, best if you just want stations to work through. The Intensive plan adds weekly one-to-one coaching and starts with a call rather than checkout, for trainees who want individual support throughout.',
+      'Most trainees choose the Complete SCA Course and it is the one that we recommend. It has everything you need to pass the SCA (AI practice + on-demand lectures + one to one coaching). The Self-Study plan is the AI practice on its own, best if you just want stations to work through. The Intensive plan adds weekly one-to-one coaching and starts with a call rather than checkout, for trainees who want individual support throughout.',
     ],
   },
   {
