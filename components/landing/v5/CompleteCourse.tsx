@@ -59,7 +59,7 @@ const AI_PRACTICE_ROWS: FeatureRow[] = [
 const LECTURE_ROWS: FeatureRow[] = [
   {
     lead: 'Everything you need for the exam',
-    tail: 'the whole SCA, taught in 8 structured hours',
+    tail: 'the whole SCA, taught across 14 lectures and 8.5 hours',
     icon: (
       <>
         <path d="M12 7c-2-1.5-4.5-2.1-8-2.1V18.4c3.5 0 6 .6 8 2.1 2-1.5 4.5-2.1 8-2.1V4.9c-3.5 0-6 .6-8 2.1z" />
@@ -101,22 +101,16 @@ const LECTURE_ROWS: FeatureRow[] = [
   },
 ];
 
+/**
+ * The one to one coaching session, in the order the course sells it: the
+ * circuit, whose stations they are, the feedback, then the dashboard review.
+ * Four rows, deliberately: the other tiles carry four too, and this one is not
+ * padded to look bigger than it is.
+ */
 const COACHING_ROWS: FeatureRow[] = [
   {
-    lead: 'Max 6 per class',
-    tail: 'so the whole day stays interactive',
-    icon: (
-      <>
-        <circle cx="12" cy="8.5" r="3" />
-        <path d="M6.5 19.5a5.5 5.5 0 0 1 11 0" />
-        <path d="M17.5 7.2a2.2 2.2 0 1 1 1.3 4.1M21.5 17a4.2 4.2 0 0 0-3.2-3.6" />
-        <path d="M6.5 7.2a2.2 2.2 0 1 0-1.3 4.1M2.5 17a4.2 4.2 0 0 1 3.2-3.6" />
-      </>
-    ),
-  },
-  {
-    lead: '12 full timed mocks',
-    tail: 'you consult 2 yourself, live with the tutor',
+    lead: 'Half a full SCA circuit',
+    tail: '6 timed 12 minute stations, run back to back under exam conditions',
     icon: (
       <>
         <circle cx="12" cy="13.5" r="7" />
@@ -126,8 +120,18 @@ const COACHING_ROWS: FeatureRow[] = [
     ),
   },
   {
-    lead: 'Every station broken down',
-    tail: 'by a GP tutor: the marking, the fixes',
+    lead: 'Every station is yours',
+    tail: 'you consult all six yourself',
+    icon: (
+      <>
+        <circle cx="12" cy="8.5" r="3" />
+        <path d="M6.5 19.5a5.5 5.5 0 0 1 11 0" />
+      </>
+    ),
+  },
+  {
+    lead: 'Detailed feedback on each station',
+    tail: 'the marking, the fixes, and written feedback to take away',
     icon: (
       <>
         <path d="M4 5.5h9M4 9.5h5.5M4 13.5h4" />
@@ -138,58 +142,46 @@ const COACHING_ROWS: FeatureRow[] = [
     ),
   },
   {
-    lead: 'High-yield teaching blocks',
-    tail: 'exam technique and the marks most candidates miss',
+    lead: 'Your AI dashboard, reviewed with you',
+    tail: 'the mistakes that recur across your practice, and the systemic fix',
     icon: (
       <>
-        <circle cx="12" cy="12" r="8" />
-        <circle cx="12" cy="12" r="4.4" />
-        <circle cx="12" cy="12" r="1.4" fill="currentColor" />
+        <path d="M12 3.5 20 7.5 12 11.5 4 7.5Z" />
+        <path d="M4 12l8 4 8-4" />
+        <path d="M4 16.5l8 4 8-4" />
       </>
     ),
   },
-  {
-    lead: 'Learn from your peers',
-    tail: 'different cases, different mistakes',
-    icon: (
-      <>
-        <circle cx="6.5" cy="13" r="2.5" />
-        <path d="M2.5 20.5a4 4 0 0 1 8 0" />
-        <circle cx="17.5" cy="13" r="2.5" />
-        <path d="M13.5 20.5a4 4 0 0 1 8 0" />
-        <path d="M7.7 6.3a6 6 0 0 1 8.6 0M9.7 4.8 7.5 6.5l2.3 1M14.3 4.8l2.2 1.7-2.3 1" />
-      </>
-    ),
-  },
-];
-
-type TimetableStyle = 'teaching' | 'standard' | 'muted';
-
-// The 8-hour coaching day: 09:00 start, 17:00 finish.
-const TIMETABLE: { time: string; item: string; style: TimetableStyle }[] = [
-  { time: '09:00', item: 'Teaching: planning the consultation from the case brief', style: 'teaching' },
-  { time: '09:15', item: 'Mock stations 1 to 4', style: 'standard' },
-  { time: '11:15', item: 'Break', style: 'muted' },
-  { time: '11:30', item: 'Mock stations 5 and 6', style: 'standard' },
-  { time: '12:30', item: 'Lunch', style: 'muted' },
-  { time: '13:00', item: 'Teaching: the 6-minute transition to management', style: 'teaching' },
-  { time: '13:15', item: 'Mock stations 7 to 9', style: 'standard' },
-  { time: '14:45', item: 'Break', style: 'muted' },
-  { time: '15:00', item: 'Mock stations 10 to 12', style: 'standard' },
-  { time: '16:30', item: 'Teaching: delivering a complete management plan', style: 'teaching' },
-  { time: '17:00', item: 'Finish', style: 'standard' },
 ];
 
 const TEAL = '#0F6E56';
 const AMBER = '#854F0B';
 
-function FeatureRows({ rows, color, tint }: { rows: FeatureRow[]; color: string; tint: string }) {
+interface FeatureRowsProps {
+  rows: FeatureRow[];
+  color: string;
+  tint: string;
+  /**
+   * Two columns from sm up, one on phones. For a full-width tile, where a
+   * single column of rows would leave most of the tile empty on desktop.
+   */
+  twoColumn?: boolean;
+}
+
+/** Hairline above a row: never the first, and in two columns not the top pair. */
+function rowDivider(index: number, twoColumn: boolean): string {
+  if (index === 0) return '';
+  if (twoColumn && index === 1) return 'border-t border-heading/[0.06] sm:border-t-0';
+  return 'border-t border-heading/[0.06]';
+}
+
+function FeatureRows({ rows, color, tint, twoColumn = false }: FeatureRowsProps) {
   return (
-    <div>
+    <div className={twoColumn ? 'sm:grid sm:grid-cols-2 sm:gap-x-10' : undefined}>
       {rows.map((row, index) => (
         <div
           key={row.lead}
-          className={`flex items-start gap-3.5 py-3 ${index > 0 ? 'border-t border-heading/[0.06]' : ''}`}
+          className={`flex items-start gap-3.5 py-3 ${rowDivider(index, twoColumn)}`}
         >
           <span
             className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[10px]"
@@ -226,32 +218,6 @@ function ZoneLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Timetable() {
-  return (
-    <div>
-      <p className="pb-2 text-sm font-semibold text-heading">Your coaching day</p>
-      <div className="flex flex-col gap-1.5">
-        {TIMETABLE.map((slot) => (
-          <div key={`${slot.time}-${slot.item}`} className="flex gap-3 text-[13px] leading-relaxed">
-            <span className="w-11 flex-shrink-0 font-mono text-muted">{slot.time}</span>
-            <span
-              className={
-                slot.style === 'teaching'
-                  ? 'font-medium text-[#854F0B]'
-                  : slot.style === 'muted'
-                    ? 'text-muted'
-                    : 'text-heading'
-              }
-            >
-              {slot.item}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 const fadeUp = {
   initial: { opacity: 0, y: 16 },
   whileInView: { opacity: 1, y: 0 },
@@ -259,7 +225,12 @@ const fadeUp = {
   transition: { duration: 0.5, ease: 'easeOut' as const },
 };
 
-/** "The Complete Course" section: what you get, and your coaching day. */
+/**
+ * "The Complete Course" section: what the course includes. Two self-paced
+ * tiles (AI practice and lectures), then the 3 hour one to one coaching
+ * session as a full-width tile. There is no timetable for the session, here
+ * or anywhere: its own homepage section says how the three hours run.
+ */
 export default function CompleteCourse() {
   return (
     <section className="px-5 py-10 sm:px-8 sm:py-16">
@@ -269,10 +240,10 @@ export default function CompleteCourse() {
           <Pill>The Complete Course</Pill>
           <h2 className="mx-auto mt-7 max-w-2xl text-3xl font-medium leading-[1.14] tracking-tight text-heading sm:text-5xl">
             3 months of unlimited AI stations and lectures.{' '}
-            <Accent>Plus one live coaching day.</Accent>
+            <Accent>Plus a private 3 hour coaching session.</Accent>
           </h2>
           <p className="mx-auto mt-7 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-[15px] font-medium text-heading sm:text-lg">
-            {['Unlimited AI Practice', '8 Hours of On-Demand Lectures', 'One Full-Day Coaching Session'].map(
+            {['Unlimited AI Practice', '8.5 Hours of On-Demand Lectures', 'One to One Coaching'].map(
               (chip, index) => (
                 <span key={chip} className="contents">
                   {index > 0 && (
@@ -287,7 +258,7 @@ export default function CompleteCourse() {
           </p>
         </motion.div>
 
-        {/* Zone 1 — every day, at your pace */}
+        {/* Zone 1: every day, at your pace */}
         <motion.div {...fadeUp} className="mt-14 sm:mt-16">
           <ZoneLabel>Every day, at your pace</ZoneLabel>
           <div className="grid gap-5 sm:grid-cols-2 sm:gap-6">
@@ -319,33 +290,22 @@ export default function CompleteCourse() {
           </div>
         </motion.div>
 
-        {/* Zone 2 — one day, live */}
+        {/* Zone 2: the one to one coaching session */}
         <motion.div {...fadeUp} className="mt-12 sm:mt-14">
-          <ZoneLabel>One day, live</ZoneLabel>
+          <ZoneLabel>3 hours, one to one</ZoneLabel>
           <div className={`${TILE} px-6 py-6 sm:px-7`}>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xl font-semibold text-heading">Small-Group Coaching</p>
+              <p className="text-xl font-semibold text-heading">One to One Coaching</p>
               <span className="self-start rounded-full bg-[#FAEEDA] px-3 py-1 text-[12px] font-medium text-[#854F0B]">
-                One full day · 9am to 5pm · Remote
+                3 hours · Just you and your coach · Remote
               </span>
             </div>
 
-            <div className="mt-4 flex flex-col sm:flex-row sm:gap-10">
-              <div className="sm:flex-1">
-                <FeatureRows rows={COACHING_ROWS} color={AMBER} tint="rgba(133,79,11,0.10)" />
-                {/* Desktop: value under the rows; mobile: moved below the timetable */}
-                <p className="mt-2 hidden border-t border-heading/[0.06] pt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-muted sm:block">
-                  Max 6 · £599 value
-                </p>
-              </div>
-
-              <div className="mt-5 border-t border-heading/[0.06] pt-5 sm:mt-0 sm:w-[46%] sm:flex-shrink-0 sm:border-l sm:border-t-0 sm:pl-10 sm:pt-0">
-                <Timetable />
-              </div>
+            <div className="mt-3">
+              <FeatureRows rows={COACHING_ROWS} color={AMBER} tint="rgba(133,79,11,0.10)" twoColumn />
             </div>
-
-            <p className="mt-4 border-t border-heading/[0.06] pt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-muted sm:hidden">
-              Max 6 · £599 value
+            <p className="mt-2 border-t border-heading/[0.06] pt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-muted">
+              3 hours 1:1 · £749 value
             </p>
           </div>
         </motion.div>

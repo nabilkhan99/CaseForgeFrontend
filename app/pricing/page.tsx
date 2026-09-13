@@ -35,7 +35,7 @@ export default async function PricingPage() {
             {customer ? `Your plan${planName ? ` · ${planName}` : ''}` : 'Start today'}
           </p>
           <h1 className="mx-auto max-w-2xl text-3xl font-semibold tracking-tight text-heading sm:text-5xl">
-            AI Practice + On-demand Lectures + Small-Group Coaching.
+            AI Practice + On-demand Lectures + 1:1 Coaching Session.
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-body sm:text-base">
             Pass all 200 mock AI SCA stations. Still fail your SCA? We pay you £500.
@@ -46,8 +46,8 @@ export default async function PricingPage() {
             </p>
           ) : (
             <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-body sm:text-base">
-              AI practice and on-demand lectures start the moment you buy. Your coaching day
-              runs on the date you choose.
+              AI practice and on-demand lectures start the moment you buy. Your coaching
+              session runs on the date and time you choose.
             </p>
           )}
         </header>

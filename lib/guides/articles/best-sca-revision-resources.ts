@@ -165,8 +165,8 @@ export const bestScaRevisionResources: GuideArticle = {
                     columns: ['Course provider', 'Format', 'Indicative price', 'Notes'],
                     rows: [
                         [
-                            '**Fourteen Fisherman — Complete Bundle**',
-                            '**Unlimited AI Practice + On-Demand Lectures + Small Group Coaching Day**',
+                            '**Fourteen Fisherman: Complete Bundle**',
+                            '**Unlimited AI Practice + On-Demand Lectures + One to One Coaching Session**',
                             '**£599 (eligible for the NHSE study budget)**',
                             '**The only option that combines all three, and the only one with a pass guarantee**',
                         ],
