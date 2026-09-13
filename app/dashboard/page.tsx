@@ -22,6 +22,12 @@ import {
 } from '@/lib/dashboard/trainingIntensity';
 import type { UserStats } from '@/lib/dashboard/types';
 import type { SubscriptionResponse } from '@/app/api/subscription/route';
+import {
+  coachingSessionLabel,
+  isCoachingSlotKey,
+  isIsoDate,
+  type CoachingSlotKey,
+} from '@/lib/commerce/coachingSlots';
 import { claimTrialSessionsOnce } from '@/lib/trial/claimOnce';
 
 const defaultStats: UserStats = {
@@ -33,6 +39,13 @@ const defaultStats: UserStats = {
 };
 
 const DAY_MS = 86_400_000;
+
+/**
+ * The subscription payload as this page reads it. `coachingSlot` is optional
+ * because it lands on `SubscriptionResponse` with the backend half of the one
+ * to one coaching change, and a legacy booking has no slot either way.
+ */
+type DashboardAccess = SubscriptionResponse & { coachingSlot?: CoachingSlotKey | null };
 
 /** How long before expiry the renewal nudge appears. */
 const RENEWAL_WARNING_DAYS = 7;
@@ -61,7 +74,7 @@ function daysUntilExamDate(value: string): number | null {
  */
 const REVEAL = {
   welcome: 0,
-  coachingDay: 0.06,
+  coachingSession: 0.06,
   onboarding: 0.06,
   quickStart: 0.12,
   intensity: 0.18,
@@ -124,7 +137,7 @@ function DashboardContent() {
   const [passProgress, setPassProgress] = useState<{ passed: number; total: number } | null>(null);
   // `undefined` = not fetched yet; `null` = the lookup failed. Only a loaded
   // answer may drive a "you have no plan" message.
-  const [access, setAccess] = useState<SubscriptionResponse | null | undefined>(undefined);
+  const [access, setAccess] = useState<DashboardAccess | null | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   // The inline exam-date affordance, shown only where the countdown can't be.
   const [examDraft, setExamDraft] = useState('');
@@ -180,7 +193,7 @@ function DashboardContent() {
             ? { passed: stationIndex.filter((s) => s.passed).length, total: stationIndex.length }
             : null,
         );
-        setAccess(accessRes?.state ? (accessRes as SubscriptionResponse) : null);
+        setAccess(accessRes?.state ? (accessRes as DashboardAccess) : null);
 
         // The picker only ever offers a station the user has never attempted,
         // so it runs out once the bank is exhausted; a random case is still a
@@ -449,46 +462,53 @@ function DashboardContent() {
           controls; on the home page they were a fact restated every visit. The
           expiry prompts above stay — those are deadlines, not status. */}
 
-      {/* Coaching day.
+      {/* Coaching session.
           The purchase receipt tells every Complete buyer their joining link
-          "will appear on your dashboard under Coaching day", and there was no
-          such place — a booked day existed only in Stripe metadata and the
-          confirmation email. This is that place. It is a deadline rather than
-          status, so it sits with the expiry prompts above rather than in
-          Settings, and it stays for the whole run-up: one line of type, and
-          the single most time-bound thing a Complete customer owns.
+          will appear on their dashboard, and there was no such place: a booked
+          session existed only in Stripe metadata and the confirmation email.
+          This is that place. It is a deadline rather than status, so it sits
+          with the expiry prompts above rather than in Settings, and it stays
+          for the whole run-up: one line of type, and the single most time-bound
+          thing a Complete customer owns.
 
           Complete with a date only. The not-yet-booked case is the picker,
-          which Settings already links to, and Self-Study has no coaching day
-          at all — telling them about one is the /thanks bug in a new place. */}
+          which Settings already links to, and Self-Study has no coaching
+          session at all; telling them about one is the /thanks bug in a new
+          place. */}
       {(() => {
         if (access?.plan !== 'complete' || !access.coachingDay) return null;
         // Stored as YYYY-MM-DD, so read it in UTC or a BST evening shows the
-        // next day — the same reason the expiry dates above format in UTC.
+        // next day. Same reason the expiry dates above format in UTC.
         const days = daysUntil(access.coachingDay);
         if (days < 0) return null;
-        const when = new Date(access.coachingDay).toLocaleDateString('en-GB', {
-          timeZone: 'UTC',
-          weekday: 'long',
-          day: 'numeric',
-          month: 'long',
-        });
+        // `coachingSlot` is new on /api/subscription and absent on a legacy
+        // booking, so it is optional here and validated before use: with a
+        // slot the card names the time as well, without one just the date.
+        const slot = access.coachingSlot;
+        const when =
+          isCoachingSlotKey(slot) && isIsoDate(access.coachingDay)
+            ? coachingSessionLabel(access.coachingDay, slot)
+            : new Date(access.coachingDay).toLocaleDateString('en-GB', {
+                timeZone: 'UTC',
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+              });
         const countdown = days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `In ${days} days`;
         return (
           <Reveal
-            delay={REVEAL.coachingDay}
+            delay={REVEAL.coachingSession}
             className="mb-10 tall:mb-14 border-y border-hairline py-6 tall:py-8"
           >
             <div className="text-[11px] font-semibold text-primary uppercase tracking-[0.1em] mb-3">
-              Coaching day
+              Coaching session
             </div>
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
               <div className="text-[22px] font-semibold text-heading tracking-[-0.01em]">{when}</div>
               <div className="text-[15px] text-primary font-medium">{countdown}</div>
             </div>
             <p className="mt-2 text-[13px] leading-relaxed text-muted">
-              09:00 to 17:00, online, in a class of six. Your joining link arrives by email a few
-              days beforehand and will appear here too.
+              3 hours, one to one, remote. We&apos;ll email your joining link a few days beforehand.
             </p>
           </Reveal>
         );

@@ -46,6 +46,20 @@ const nextConfig = {
         destination: '/dashboard/development',
         permanent: true,
       },
+      // Coaching moved from a coaching day to a one to one coaching session.
+      // The old URLs are in sent emails, receipts and Stripe cancel links.
+      // statusCode 301, not `permanent: true`: that emits a 308, and the spec
+      // asks for a 301.
+      {
+        source: '/coaching-day',
+        destination: '/coaching-session',
+        statusCode: 301,
+      },
+      {
+        source: '/dashboard/coaching-day',
+        destination: '/dashboard/coaching-session',
+        statusCode: 301,
+      },
     ];
   },
   async rewrites() {
