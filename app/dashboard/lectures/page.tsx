@@ -126,8 +126,8 @@ function UpgradeHero({ lectures, upgradeHref }: { lectures: LectureSummary[]; up
       </h2>
       <p className="text-[15px] leading-[1.65] text-muted max-w-xl mb-5">
         {substantial ? `${n} lectures across the three SCA domains` : 'Lectures across the three SCA domains'}, taught
-        against the marking framework your consultations are scored on &mdash; watch as often as you like for the
-        length of your plan. Complete also adds a coaching day.
+        against the marking framework your consultations are scored on. Watch as often as you like for the
+        length of your plan. Complete also adds a 3 hour one to one coaching session.
       </p>
       {/* A live Self-Study customer asks for the upgrade by email and it is
           quoted by hand — the Portal cannot switch a one-off plan (see

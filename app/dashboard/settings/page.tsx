@@ -134,10 +134,10 @@ export default function SettingsPage() {
             // plan is a renewal, not an upgrade, and Complete has nothing above it.
             const canUpgrade =
               !ended && (access.plan === 'self_study' || access.plan === 'self_study_monthly');
-            // A Complete bought at checkout picks its coaching day before
+            // A Complete bought at checkout picks its coaching session before
             // paying; one upgraded to in Stripe's Portal cannot, so the row
             // lands without a date and the customer books it in the app.
-            const needsCoachingDay =
+            const needsCoachingSession =
               !ended && access.plan === 'complete' && !access.coachingDay;
             const expiry = access.expiresAt ? new Date(access.expiresAt) : null;
             const renews = access.renewsAt ? new Date(access.renewsAt) : null;
@@ -227,12 +227,12 @@ export default function SettingsPage() {
                     </a>
                   )}
                   {/* Complete without a date: the one thing they still owe us. */}
-                  {needsCoachingDay && (
+                  {needsCoachingSession && (
                     <Link
-                      href="/dashboard/coaching-day"
+                      href="/dashboard/coaching-session"
                       className="text-[13px] text-primary font-medium hover:underline"
                     >
-                      Choose your coaching day &rarr;
+                      Choose your coaching date &rarr;
                     </Link>
                   )}
                   {/* Every plan is a subscription now, so every plan has a
