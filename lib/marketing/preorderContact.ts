@@ -5,20 +5,25 @@ interface PushPreorderContactArgs {
   email: string
   fullName?: string | null
   planKey: string
-  coachingDayLabel?: string | null
+  /**
+   * The booked coaching session, e.g. "Saturday 7 November 2026, 09:00 to 12:00".
+   * Complete only.
+   */
+  coachingSessionLabel?: string | null
   amountPence: number
 }
 
 /**
  * Upsert the buyer as a Brevo contact on the pre-order list so launch comms can
- * be segmented by plan and coaching day. Best-effort: a Brevo failure must never
- * fail the Stripe webhook — the purchase is already recorded in Supabase.
+ * be segmented by plan and coaching session. Best-effort: a Brevo failure must
+ * never fail the Stripe webhook, because the purchase is already recorded in
+ * Supabase.
  */
 export async function pushPreorderContactToBrevo({
   email,
   fullName,
   planKey,
-  coachingDayLabel,
+  coachingSessionLabel,
   amountPence,
 }: PushPreorderContactArgs): Promise<void> {
   const brevoKey = process.env.BREVO_API_KEY
@@ -40,7 +45,9 @@ export async function pushPreorderContactToBrevo({
         FIRSTNAME: nameParts[0] ?? '',
         LASTNAME: nameParts.slice(1).join(' '),
         PLAN: planKey,
-        COACHING_DAY: coachingDayLabel ?? '',
+        // The attribute key predates one to one sessions and is referenced by
+        // Brevo segments, so it keeps its name. The value is the session label.
+        COACHING_DAY: coachingSessionLabel ?? '',
         PREORDER_DATE: new Date().toISOString().slice(0, 10),
         AMOUNT_PAID: amountPence / 100,
       },

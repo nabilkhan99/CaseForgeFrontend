@@ -66,7 +66,7 @@ const PURCHASE = {
   currency: 'gbp',
   paymentMethod: 'Card',
   paidAt: new Date('2026-08-27T10:30:00Z'),
-  coachingDayLabel: 'Saturday 12 September 2026',
+  sessionLabel: 'Saturday 7 November 2026, 09:00 to 12:00',
   kind: 'purchase',
 } as const
 
@@ -211,7 +211,7 @@ describe('failures never take the webhook down with them', () => {
 })
 
 describe('what reaches the database', () => {
-  it('passes the charge date, the period and the coaching day as separate fields', async () => {
+  it('passes the charge date, the period and the coaching session as separate fields', async () => {
     const { supabase, rpc } = fakeIssueReceiptRpc()
 
     await issueReceipt(supabase, {
@@ -225,14 +225,35 @@ describe('what reaches the database', () => {
     expect(params.p_paid_at).toBe('2026-08-27T10:30:00.000Z')
     expect(params.p_period_start).toBe('2026-08-27T10:30:00.000Z')
     expect(params.p_period_end).toBe('2026-09-27T10:30:00.000Z')
-    // The coaching day is its own field and is never mistaken for the charge date.
-    expect(params.p_coaching_day_label).toBe('Saturday 12 September 2026')
+    // The coaching session is its own field and is never mistaken for the charge
+    // date. The RPC parameter keeps its old name; it now carries the session label.
+    expect(params.p_coaching_day_label).toBe('Saturday 7 November 2026, 09:00 to 12:00')
   })
 
   it('sends nulls, not undefined, for the fields a one-off plan does not have', async () => {
     const { supabase, rpc } = fakeIssueReceiptRpc()
 
-    await issueReceipt(supabase, { ...PURCHASE, planKey: 'self_study', coachingDayLabel: null })
+    await issueReceipt(supabase, { ...PURCHASE, planKey: 'self_study', sessionLabel: null })
+
+    const params = rpc.mock.calls[0][1]
+    expect(params.p_period_start).toBeNull()
+    expect(params.p_period_end).toBeNull()
+    expect(params.p_coaching_day_label).toBeNull()
+  })
+
+  it('renders the session label the database stored, not the one passed in', async () => {
+    const { supabase } = fakeIssueReceiptRpc()
+
+    await issueReceipt(supabase, PURCHASE)
+
+    const [facts] = mocks.renderReceipt.mock.calls[0]
+    expect(facts.sessionLabel).toBe('Saturday 7 November 2026, 09:00 to 12:00')
+  })
+
+  it('sends a null session label for a plan with no session', async () => {
+    const { supabase, rpc } = fakeIssueReceiptRpc()
+
+    await issueReceipt(supabase, { ...PURCHASE, planKey: 'self_study', sessionLabel: undefined })
 
     const params = rpc.mock.calls[0][1]
     expect(params.p_period_start).toBeNull()

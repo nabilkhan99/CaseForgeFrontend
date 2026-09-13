@@ -42,13 +42,17 @@ export interface IssueReceiptArgs {
   amountPence: number
   currency: string
   paymentMethod: PaymentMethodLabel
-  /** The CHARGE date. Not the coaching day. */
+  /** The CHARGE date. Not the coaching session. */
   paidAt: Date
   /** Rolling plan only. */
   periodStart?: Date | null
   periodEnd?: Date | null
-  /** Complete only: "Saturday 12 September 2026". */
-  coachingDayLabel?: string | null
+  /**
+   * Complete only: the booked session, "Saturday 7 November 2026, 09:00 to
+   * 12:00". Written to the `coaching_day_label` column, whose name predates
+   * one to one sessions.
+   */
+  sessionLabel?: string | null
   kind: ReceiptKind
 }
 
@@ -149,7 +153,7 @@ export async function issueReceipt(
       p_paid_at: args.paidAt.toISOString(),
       p_period_start: args.periodStart?.toISOString() ?? null,
       p_period_end: args.periodEnd?.toISOString() ?? null,
-      p_coaching_day_label: args.coachingDayLabel ?? null,
+      p_coaching_day_label: args.sessionLabel ?? null,
       p_kind: args.kind,
     }))
   } catch (thrown: unknown) {
@@ -185,7 +189,7 @@ export async function issueReceipt(
       customerName: row.customer_name ?? '',
       paymentMethod: row.payment_method === 'Bank transfer' ? 'Bank transfer' : 'Card',
       amountPence: row.amount_pence,
-      coachingDayLabel: row.coaching_day_label,
+      sessionLabel: row.coaching_day_label,
       periodStart: row.period_start ? new Date(row.period_start) : null,
       periodEnd,
     })

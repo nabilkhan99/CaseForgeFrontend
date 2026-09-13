@@ -126,6 +126,38 @@ export function coachingSessionCheckoutLine(dayIso: string, slot: CoachingSlotKe
   return `Coaching session: ${formatCoachingDateNoYear(dayIso)}, ${slotTimeRange(slot)}`
 }
 
+/** The coaching session a Stripe Checkout Session was for, read off its metadata. */
+export interface CoachingSessionMetadata {
+  /** ISO date, or null when absent or malformed. */
+  date: string | null
+  /** Null when absent, unknown, or on a session opened before slots existed. */
+  slot: CoachingSlotKey | null
+  /** "Saturday 7 November 2026, 09:00 to 12:00"; the date alone on an older session. */
+  label: string | null
+}
+
+/**
+ * Reads the coaching session off Stripe Checkout metadata. Checkout writes
+ * `coaching_date`, `coaching_slot` and `coaching_session_label`; sessions
+ * created before one to one sessions carry `coaching_day` and
+ * `coaching_day_label`, so both spellings are accepted. Server-side readers
+ * (webhook, thanks page, admin) share this so they cannot disagree.
+ */
+export function readCoachingSessionMetadata(
+  metadata: Readonly<Record<string, string | undefined>> | null | undefined,
+): CoachingSessionMetadata {
+  const rawDate = metadata?.coaching_date ?? metadata?.coaching_day ?? null
+  const date = isIsoDate(rawDate) ? rawDate : null
+  const rawSlot = metadata?.coaching_slot
+  const slot = isCoachingSlotKey(rawSlot) ? rawSlot : null
+  const label =
+    metadata?.coaching_session_label ??
+    (date && slot ? coachingSessionLabel(date, slot) : null) ??
+    metadata?.coaching_day_label ??
+    null
+  return { date, slot, label }
+}
+
 /** One row of `coaching_slot_availability`, as `GET /api/coaching-sessions` returns it. */
 export interface CoachingSlotAvailability {
   /** ISO date, e.g. "2026-11-07" */

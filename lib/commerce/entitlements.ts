@@ -1,4 +1,5 @@
 import { ACCESS_OPENS, PLANS, isRollingPlan } from './plans'
+import { isCoachingSlotKey, type CoachingSlotKey } from './coachingSlots'
 import type { CohortAccess } from './cohortAccess'
 
 /**
@@ -34,7 +35,7 @@ import type { CohortAccess } from './cohortAccess'
  *   rolling row is the NEXT renewal date, and is display-only.
  * - Lapsed access is read-only: history and feedback stay visible, stations
  *   and lectures lock behind a renew prompt.
- * - Lectures and coaching days belong to Complete only.
+ * - Lectures and the one to one coaching session belong to Complete only.
  */
 
 /**
@@ -56,7 +57,14 @@ export interface EntitlementRow {
   plan: string
   status: string
   created_at: string
+  /** Date of the booked coaching session (ISO). Null until one is booked. */
   coaching_day?: string | null
+  /**
+   * Which half of `coaching_day` the session takes: 'morning' | 'afternoon'.
+   * Null on a booking made before sessions were split into slots, and on any
+   * value that is not a known slot key.
+   */
+  coaching_slot?: string | null
   /**
    * Start of the Stripe billing period behind this row. Optional: rows written
    * before the subscription migration (Sarah, Phyo, Pavi and the test rows)
@@ -76,9 +84,12 @@ export interface Entitlement {
   state: EntitlementState
   /** The plan the entitlement derives from; undefined when there is no purchase. */
   plan?: string
-  /** Complete-tier extras: lectures, coaching day. Active state only. */
+  /** Complete-tier extras: lectures, the coaching session. Active state only. */
   hasLectures: boolean
+  /** Date of the booked coaching session (ISO), null when none is booked yet. */
   coachingDay?: string | null
+  /** Slot of the booked coaching session, populated exactly like {@link coachingDay}. */
+  coachingSlot?: CoachingSlotKey | null
   /** Fixed-term plans only; undefined for the rolling plan (runs until canceled). */
   expiresAt?: Date
   /**
@@ -227,6 +238,11 @@ function fixedTermWindow(row: EntitlementRow, launchDate: Date): { start: Date; 
     : accessWindow(row.created_at, launchDate)
 }
 
+/** The row's slot, when it is one we recognise. Anything else reads as no slot. */
+function slotOf(row: EntitlementRow): CoachingSlotKey | null {
+  return isCoachingSlotKey(row.coaching_slot) ? row.coaching_slot : null
+}
+
 function entitlementOf(row: EntitlementRow, now: Date, launchDate: Date): Entitlement | null {
   if (row.status === 'refunded') return null
 
@@ -276,14 +292,15 @@ function entitlementOf(row: EntitlementRow, now: Date, launchDate: Date): Entitl
   // agreed in writing (terms 3.3) and recorded ahead of `now`, so it is rare
   // rather than routine — but it must still not read as "no purchase".
   // `expiresAt` is populated so callers can say when access ends, and the
-  // coaching day comes with it: "you have not booked your day" is true — and
-  // worth prompting — before the course opens.
+  // coaching session comes with it: "you have not booked your session" is true,
+  // and worth prompting, before the course opens.
   if (now < start)
     return {
       state: 'none',
       plan: row.plan,
       hasLectures: false,
       coachingDay: complete ? row.coaching_day ?? null : undefined,
+      coachingSlot: complete ? slotOf(row) : undefined,
       expiresAt: end,
     }
   if (now > end) return { state: 'read_only', plan: row.plan, hasLectures: false, expiresAt: end }
@@ -292,6 +309,7 @@ function entitlementOf(row: EntitlementRow, now: Date, launchDate: Date): Entitl
     plan: row.plan,
     hasLectures: complete,
     coachingDay: complete ? row.coaching_day ?? null : undefined,
+    coachingSlot: complete ? slotOf(row) : undefined,
     expiresAt: end,
   }
 }

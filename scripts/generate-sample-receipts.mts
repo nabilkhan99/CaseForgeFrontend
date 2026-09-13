@@ -31,7 +31,7 @@ const samples: ReadonlyArray<{ label: string; facts: ReceiptFacts }> = [
       customerName: 'Jane Okonkwo',
       paymentMethod: 'Card',
       amountPence: 59900,
-      coachingDayLabel: 'Saturday 12 September 2026',
+      sessionLabel: 'Saturday 7 November 2026, 09:00 to 12:00',
     },
   },
   {
@@ -69,7 +69,7 @@ const samples: ReadonlyArray<{ label: string; facts: ReceiptFacts }> = [
       customerName: 'Christopher Wainwright-Bailey',
       paymentMethod: 'Bank transfer',
       amountPence: 59900,
-      coachingDayLabel: 'Saturday 12 September 2026',
+      sessionLabel: 'Sunday 8 November 2026, 13:00 to 16:00',
     },
   },
   {
