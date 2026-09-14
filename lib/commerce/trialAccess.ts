@@ -16,9 +16,8 @@ import { visibleStationStates } from '@/lib/stations/visibility'
  * consequences run through everything below:
  *   * the chokepoints must check the station id, which they did not before;
  *   * nothing derived from marking can refuse a consultation any more, so the
- *     "was it genuinely marked" rule that used to decide the cap is gone from
- *     the enforcement path entirely (it survives only as a checkout analytics
- *     property — see {@link countTrialConsumption}).
+ *     "was it genuinely marked" rule that used to decide the cap is gone
+ *     entirely.
  *
  * Deliberately a peer of {@link import('./entitlements').Entitlement}, for the
  * same reason {@link import('./cohortAccess').CohortAccess} is one: a grant has
@@ -44,13 +43,17 @@ export const TRIAL_ALLOWANCE = 5
 export const TRIAL_WINDOW_DAYS = 5
 
 /**
- * How long a started consultation is treated as still running, for the
+ * How long a `live` consultation is treated as still running, for the
  * one-at-a-time rule below.
  *
- * Longer than any station (12 minutes at most) plus the marking that follows it
- * (~90 seconds), so a genuine consultation is never cut short by it — and short
- * enough that a browser that crashed mid-consultation frees the slot in a
- * quarter of an hour rather than stranding the trainee.
+ * Measured from `started_at`, which `create-session` stamps when the BRIEF is
+ * opened, so it has to cover the reading time as well as the longest station
+ * (12 minutes). Marking is NOT part of it any more: a consultation that ended
+ * is `processing`, spends no realtime minutes, and is not counted at all.
+ *
+ * The bound only matters for a row nobody closed: a browser that crashed
+ * mid-call without its `abandoned` beacon landing stays `live`, and this is
+ * what frees the slot in a quarter of an hour rather than never.
  */
 export const TRIAL_OPEN_SESSION_MINUTES = 15
 
@@ -148,7 +151,7 @@ export interface TrialAccess {
    * The gate itself, not a recommendation: {@link isStationOpenToTrial} is the
    * only thing standing between a trial account and two hundred cases of Azure
    * realtime minutes. Empty means the trial opens NOTHING, which is the
-   * fail-closed reading and is deliberate — see {@link loadTrialAccess}.
+   * fail-closed reading and is deliberate — see {@link loadTrialAccessForGrant}.
    */
   freeStationIds: string[]
   /** Attempts so far on each of the five. Display only. */
@@ -242,14 +245,22 @@ export function computeTrialAccess(
   return { ...base, state: 'trial' }
 }
 
-/** What a server chokepoint answers when an ENDED trial asks for a consultation. */
-export interface TrialRefusal {
-  error: 'trial_expired'
-  trial: true
-  /** Cases tried of the five, so the client can render the wall without a second fetch. */
-  used: number
-  remaining: number
-  reason: TrialEndReason
+/**
+ * Where a grant stands, from the grant ALONE — no station or usage read.
+ *
+ * Exact for everything access is decided on: `state`, `startedAt`,
+ * `expiresAt` and `windowDays` depend on the row and the clock and nothing
+ * else, which is all {@link import('./entitlements').decideAccess} reads. So
+ * this is what the hot paths decide with, and the two extra round trips are
+ * paid only by an account whose access actually rests on the grant (see
+ * {@link loadTrialAccessForGrant}).
+ *
+ * NOT a picture of the trial: `freeStationIds` is empty and usage is zero. It
+ * must never reach {@link trialStationRefusal} (it would lock every case — the
+ * safe failure, but a wrong one) or a progress line.
+ */
+export function trialAccessFromGrant(grant: TrialGrant | null, now: Date = new Date()): TrialAccess {
+  return computeTrialAccess(grant, NO_USAGE, [], now)
 }
 
 /** What a chokepoint answers when a LIVE trial asks for a case outside its five. */
@@ -261,27 +272,12 @@ export interface TrialStationRefusal {
 }
 
 /**
- * The refusal body for a trial whose five days are up, or null when the trial
- * is not the reason access was refused.
- *
- * Null for `state: 'none'` as well as for a live trial: somebody with no grant
- * and no purchase is refused with the existing `no_active_plan`, which is what
- * the "see plans" prompts already key off.
- */
-export function trialRefusal(trial: TrialAccess | null): TrialRefusal | null {
-  if (!trial || trial.state !== 'trial_ended') return null
-  return {
-    error: 'trial_expired',
-    trial: true,
-    used: trial.used,
-    remaining: trial.remaining,
-    reason: 'expiry',
-  }
-}
-
-/**
  * The refusal body for a live trial reaching for a case outside its five, or
  * null when there is nothing to refuse.
+ *
+ * An ENDED trial is not refused here. It is an expired plan like any other:
+ * `allowed` is false for it, and the chokepoints answer `no_active_plan`
+ * before they ever look at the station.
  *
  * Only ever fires for an account whose access rests on the grant ALONE — the
  * caller passes `trialOnly`, exactly as the cohort check does, so a trialist
@@ -402,7 +398,7 @@ export async function loadTrialGrant(
  * outcomes mean opposite things to the caller and only one of them is safe to
  * assume: an empty list is a legitimate answer ("nobody has flagged anything
  * yet") that locks the trial to nothing, and a thrown error must be able to
- * reach {@link loadTrialAccess}'s own fail-closed branch and be logged there
+ * reach {@link loadTrialAccessForGrant}'s own fail-closed branch and be logged there
  * rather than silently becoming the same lock-out for a different reason.
  *
  * Nulls sort last so a flagged station nobody has ordered yet still appears —
@@ -455,7 +451,7 @@ interface TrialSessionRow {
  * somebody has had the account.
  *
  * Throws on failure. The caller decides what an unknown count means; see
- * {@link loadTrialAccess}.
+ * {@link loadTrialAccessForGrant}.
  */
 export async function countTrialUsage(
   supabase: SupabaseClient,
@@ -481,87 +477,24 @@ export async function countTrialUsage(
   return { casesTried: Object.keys(attemptsByStation).length, attemptsByStation }
 }
 
-/** One `clinical_sessions` row with its mark, as PostgREST returns the embed. */
-interface TrialConsumptionRow {
-  id: string
-  session_results:
-    | { weighted_score: number | string | null }
-    | { weighted_score: number | string | null }[]
-    | null
-}
-
 /**
- * How many consultations this account has had GENUINELY MARKED since the grant.
+ * The five and the progress through them, for a grant already in hand.
  *
- * NOT A CAP AND NOT A GATE — that is what it used to be, and it is now one
- * thing only: the `trial_stations_used` property on the buy-path events (see
- * app/api/checkout/route.ts), which answers "how much had they actually done
- * when they decided to pay". Nothing here can refuse a consultation.
- *
- * Kept on the old rule — a distinct session carrying a `session_results` row
- * with `weighted_score > 0`, started on or after the grant — precisely because
- * it is an analytics series: changing what it counts halfway through would make
- * the numbers before and after the change incomparable.
- *
- * Throws rather than returning a number on failure; the caller decides.
- */
-export async function countTrialConsumption(
-  supabase: SupabaseClient,
-  userId: string,
-  since: Date,
-): Promise<number> {
-  const { data, error } = await supabase
-    .from('clinical_sessions')
-    .select('id, session_results(weighted_score)')
-    .eq('user_id', userId)
-    .gte('started_at', since.toISOString())
-  if (error) throw error
-
-  // The score is filtered HERE rather than as a `.gt()` on the embed, matching
-  // lib/supabase/queries/development.ts and passTracking.ts. Not a stylistic
-  // choice: `weighted_score` is typed `number | string | null` throughout this
-  // codebase because PostgREST can hand a numeric back as a string, and a
-  // server-side `gt.0` on a string column is a lexicographic comparison.
-  const spent = new Set<string>()
-  for (const row of (data ?? []) as TrialConsumptionRow[]) {
-    const results = Array.isArray(row.session_results)
-      ? row.session_results
-      : row.session_results
-        ? [row.session_results]
-        : []
-    const scored = results.some((result) => {
-      const score = Number(result?.weighted_score)
-      return Number.isFinite(score) && score > 0
-    })
-    if (scored) spent.add(row.id)
-  }
-  return spent.size
-}
-
-/**
- * The whole trial picture for a user: the grant, the five, and how far through
- * them they are.
- *
- * Three round trips at most, and two of them only for people who actually have
- * a grant — the station and usage reads are skipped entirely when there is
- * none, which is everybody who has bought and everybody who has not been
- * offered a trial. That matters: this runs inside the entitlement path, which
- * is on every navigation into a consultation and every navbar poll of
- * `/api/subscription`.
+ * Two round trips, run in sequence because the usage read is scoped to the
+ * station ids. Only worth paying for an account whose access RESTS on the
+ * grant: everybody else is decided by {@link trialAccessFromGrant}, which is
+ * exact for access and costs nothing on top of the grant read.
  *
  * FAILS CLOSED TO AN EMPTY ALLOWLIST. If the flagged stations cannot be read,
  * the trial opens nothing rather than everything. The trainee sees an upsell on
  * every case until the read recovers, which is recoverable and loud; two
  * hundred cases of free Azure realtime minutes are neither.
  */
-export async function loadTrialAccess(
+export async function loadTrialAccessForGrant(
   supabase: SupabaseClient,
-  userId: string,
+  grant: TrialGrant,
   now: Date = new Date(),
 ): Promise<TrialAccess> {
-  const grant = await loadTrialGrant(supabase, userId)
-  if (!grant) return NO_TRIAL
-
   let freeStationIds: string[] = []
   try {
     freeStationIds = await loadFreeTrialStationIds(supabase)
@@ -576,7 +509,7 @@ export async function loadTrialAccess(
   }
 
   try {
-    const usage = await countTrialUsage(supabase, userId, freeStationIds)
+    const usage = await countTrialUsage(supabase, grant.userId, freeStationIds)
     return computeTrialAccess(grant, usage, freeStationIds, now)
   } catch (error: unknown) {
     // Unlike the allowlist above, an unknown usage count is COSMETIC: it is a
@@ -588,21 +521,45 @@ export async function loadTrialAccess(
 }
 
 /**
- * Consultations this trialist already has running, other than `exceptSessionId`.
+ * The whole trial picture for a user: the grant, the five, and how far through
+ * them they are.
  *
- * WHY THIS SURVIVED THE REWRITE. It was built as a backstop for the allowance —
- * a mark lands ~90 seconds after a consultation, so five parallel mints could
- * all read the same low `used` and all be allowed — and the allowance is gone.
- * It stays because the reason underneath it did not change: a trial account is
- * free minutes on Azure's realtime API, and one person is one consultation at a
- * time. Without it, "unlimited attempts" is literally unlimited — a script
- * could hold fifty concurrent sessions on the same free station.
+ * Three round trips for a grant holder, one for everybody else. NOT for the
+ * entitlement hot paths — they read the grant in the same batch as the
+ * purchases and call {@link loadTrialAccessForGrant} only when the grant is
+ * what grants access. This is for callers that want the picture regardless.
+ */
+export async function loadTrialAccess(
+  supabase: SupabaseClient,
+  userId: string,
+  now: Date = new Date(),
+): Promise<TrialAccess> {
+  const grant = await loadTrialGrant(supabase, userId)
+  if (!grant) return NO_TRIAL
+  return loadTrialAccessForGrant(supabase, grant, now)
+}
+
+/**
+ * Consultations this trialist has GENUINELY RUNNING, other than `exceptSessionId`.
  *
- * `reading` is excluded on purpose. That status is written by `create-session`,
- * which the station BRIEF page calls — so counting it would mean a trainee who
- * opened three briefs to choose between them could not start any of them. Only
- * `live` and `processing` mean minutes are actually being spent or a mark is
- * pending.
+ * WHY IT EXISTS. A trial account is free minutes on Azure's realtime API, and
+ * one person is one consultation at a time. Without it, "unlimited attempts" is
+ * literally unlimited — a script could hold fifty concurrent sessions on the
+ * same free station.
+ *
+ * ONLY `live`, AND ONLY RECENTLY STARTED, because the rule must never outlive
+ * the call it protects against — a trainee whose call dropped has to be able to
+ * start again:
+ *   * `reading` is written by `create-session` when a BRIEF is opened, so
+ *     counting it would stop a trainee who looked at three briefs from starting
+ *     any of them.
+ *   * `processing` is a call that has ENDED — gracefully, or because the
+ *     connection dropped and the transcript was saved — and is waiting for its
+ *     mark. No realtime minutes are being spent, and counting it would refuse
+ *     the retry for as long as marking takes, or indefinitely if marking died.
+ *   * `abandoned`, `completed`, `unmarkable` and the rest are over.
+ *   * a `live` row older than {@link TRIAL_OPEN_SESSION_MINUTES} is a call
+ *     whose browser vanished without saying so, not a call.
  *
  * `exceptSessionId` keeps a reconnect working: the browser re-mints a key for
  * the SAME session after a dropped connection, and that must not be refused as
@@ -624,7 +581,7 @@ export async function countOpenTrialSessions(
       .from('clinical_sessions')
       .select('id')
       .eq('user_id', userId)
-      .in('status', ['live', 'processing'])
+      .eq('status', 'live')
       .gte('started_at', since.toISOString())
       .neq('id', exceptSessionId)
     if (error) throw error
@@ -646,11 +603,13 @@ export async function countOpenTrialSessions(
  * which is a five-day window that never ends. Calling it from both is free
  * because the stamp is a compare-and-set.
  *
- * The grant is re-read with the SERVICE-ROLE client rather than reusing the one
- * the entitlement path already loaded, for two reasons: `trial_grants` has no
- * write policy at all, so the user's own client cannot update it; and the
- * `started_at` that read saw is a snapshot a concurrent request may already
- * have moved.
+ * Takes the trial the entitlement path ALREADY LOADED rather than re-reading
+ * the grant. A snapshot is safe in both directions: a window it saw open cannot
+ * close again (nothing ever clears `started_at`), so skipping the write is
+ * right; and a window it saw unstarted is written with `started_at is null` in
+ * the predicate, so a concurrent request that stamped first makes this a
+ * no-op. The write itself goes through the SERVICE-ROLE client, because
+ * `trial_grants` has no write policy at all.
  *
  * Only for accounts running on the grant alone — somebody who has bought is not
  * spending a trial, and starting their clock would put a countdown on a
@@ -663,14 +622,12 @@ export async function startTrialWindowFor(
   admin: SupabaseClient,
   trialOnly: boolean,
   userId: string,
+  trial: Pick<TrialAccess, 'startedAt' | 'windowDays'> | null,
 ): Promise<void> {
-  if (!trialOnly) return
-  try {
-    const grant = await loadTrialGrant(admin, userId)
-    if (grant && !grant.startedAt) await startTrialWindow(admin, grant)
-  } catch (error: unknown) {
-    console.error('[trial] could not start the window', error)
-  }
+  // The overwhelmingly common case — every consultation after the first — does
+  // no IO at all.
+  if (!trialOnly || !trial || trial.startedAt) return
+  await startTrialWindow(admin, { userId, windowDays: trial.windowDays, startedAt: null })
 }
 
 export interface GrantTrialInput {
@@ -757,7 +714,7 @@ export async function grantTrial(
  */
 export async function startTrialWindow(
   admin: SupabaseClient,
-  grant: TrialGrant,
+  grant: Pick<TrialGrant, 'userId' | 'windowDays' | 'startedAt'>,
   now: Date = new Date(),
 ): Promise<boolean> {
   // Cheap early out for the overwhelmingly common case — every consultation

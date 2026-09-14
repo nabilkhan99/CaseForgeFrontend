@@ -5,7 +5,6 @@ import {
   TRIAL_OPEN_SESSION_MINUTES,
   countOpenTrialSessions,
   startTrialWindowFor,
-  trialRefusal,
   trialStationRefusal,
 } from '@/lib/commerce/trialAccess';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
@@ -42,18 +41,9 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  // Checked here as well as in create-session, not instead of it: this is the
-  // endpoint that spends Azure realtime minutes, and a session row could exist
-  // already — created before the window closed, or by a client that skipped
-  // straight here. The five days are only as real as this refusal.
-  //
-  // `!entitlement.plan` for the same reason create-session has it: a lapsed
-  // customer is told to renew, not shown the trial wall.
-  const refusal = entitlement.plan ? null : trialRefusal(trial);
-  if (!allowed && refusal) {
-    return NextResponse.json({ ...refusal, state: entitlement.state }, { status: 403 });
-  }
   // `state` rides along so the caller can pick renew-vs-buy without guessing.
+  // An ENDED trial lands here too: it is an expired plan like any other, and
+  // this refusal is what makes its five days real at the endpoint that spends.
   if (!allowed) {
     return NextResponse.json(
       { error: 'no_active_plan', state: entitlement.state, pending: entitlement.state === 'none' && Boolean(entitlement.plan) },
@@ -162,7 +152,7 @@ export async function POST(req: NextRequest) {
     // would spend Azure minutes against a grant whose window never opened, and
     // a window that never opens never ends. The stamp is a compare-and-set, so
     // the normal flow (create-session first) is unaffected.
-    await startTrialWindowFor(admin, trialOnly, user.id);
+    await startTrialWindowFor(admin, trialOnly, user.id, trial);
 
     const durationSeconds = Number(station.consultation_duration_seconds) || 480;
     // `result` carries `origin` ('primary' | 'fallback') — which slot minted

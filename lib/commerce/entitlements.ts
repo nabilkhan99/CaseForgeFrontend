@@ -422,7 +422,8 @@ export interface AccessContext {
   /**
    * Where the user's free trial stands, when they have a grant. Loaded by the
    * caller (see lib/commerce/trialAccess.ts) for the same reason the cohort is:
-   * this function must stay pure and edge-safe.
+   * this function must stay pure and edge-safe. Only `state` is read, so the
+   * grant alone (`trialAccessFromGrant`) is enough to decide with.
    */
   trial?: TrialAccess | null
 }
@@ -453,8 +454,12 @@ export interface AccessDecision {
   cohortOnly: boolean
   /**
    * The free trial behind this account, or null. Present whether or not it is
-   * what granted access, so a caller can tell an ENDED trial (the two-plan
-   * wall) apart from never having had one (the pricing page).
+   * what granted access, so a caller can tell an ENDED trial apart from never
+   * having had one.
+   *
+   * Only `state` and the dates are decided on. The five (`freeStationIds`) and
+   * the progress through them are loaded by `getServerEntitlement` only when
+   * {@link trialOnly} is true; everywhere else they are empty.
    */
   trial: TrialAccess | null
   /**

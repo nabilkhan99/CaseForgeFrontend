@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { decideAccess } from '@/lib/commerce/entitlements';
 import { loadCohortAccess } from '@/lib/commerce/cohortAccess';
-import { loadTrialAccess } from '@/lib/commerce/trialAccess';
+import { loadTrialGrant, trialAccessFromGrant } from '@/lib/commerce/trialAccess';
 import { exactEmailPattern } from '@/lib/commerce/emailFilter';
 import { effectiveLaunchDate } from '@/lib/commerce/launchDate';
 import { parseAdminEmails } from '@/lib/admin/guard';
@@ -156,17 +156,22 @@ export async function updateSession(request: NextRequest) {
             // second round trip in front of every page in the product's hot path.
             // The cohort read fails closed inside loadCohortAccess — a trainer
             // pilot student seeing the paywall is a far cheaper failure than a
-            // broken lookup handing five cases to everyone. The trial read
+            // broken lookup handing five cases to everyone. The trial grant read
             // fails closed for the same reason and a sharper one: failing open
             // there would hand a free five-station grant to every signed-in
             // account, which is real money in Azure realtime minutes.
-            const [{ data: purchases, error: purchasesError }, cohort, trial] = await Promise.all([
+            // The GRANT ONLY — one indexed lookup. Whether a trial is live is
+            // the row and the clock; which five cases it opens and how far
+            // through them somebody is are questions for the chokepoints and
+            // the dashboard, never for a page navigation, so this path never
+            // reads stations or sessions.
+            const [{ data: purchases, error: purchasesError }, cohort, grant] = await Promise.all([
                 supabase
                     .from('preorders')
                     .select('plan, status, created_at, coaching_day, coaching_slot, access_starts_at, access_ends_at')
                     .ilike('email', exactEmailPattern(user.email)),
                 loadCohortAccess(supabase, user.id),
-                loadTrialAccess(supabase, user.id),
+                loadTrialGrant(supabase, user.id),
             ]);
             if (purchasesError) {
                 // supabase-js reports query failures as { error }, not a throw —
@@ -183,49 +188,24 @@ export async function updateSession(request: NextRequest) {
                 // (create-session, realtime-token), not by path. That is
                 // deliberate: the case brief for a locked station is meant to be
                 // reachable — it is where the upsell lives.
-                // A live trial is now exactly the same shape, and reaches every
-                // page here for exactly the same reason. Since 7 September the
-                // trial IS an allowlist (`trial.freeStationIds`) rather than a
-                // count, so there is a per-station question — and it is
-                // deliberately not answered here. A trialist who has clicked a
-                // case outside their five should read its brief and meet the
-                // "unlock all 200 stations" line, not bounce off a redirect
-                // wondering what happened. What refuses the consultation is the
-                // chokepoint; what stops a trialist navigating at all is
-                // `allowed` going false below once the five days are up.
-                const { entitlement, allowed, trial: trialAccess } = decideAccess(purchases ?? [], {
+                // A live trial is exactly the same shape, and reaches every
+                // page here for exactly the same reason: the per-station
+                // question is deliberately not answered here. A trialist who
+                // has clicked a case outside their five should read its brief
+                // and meet the upsell, not bounce off a redirect. What refuses
+                // the consultation is the chokepoint; what stops a trialist
+                // navigating at all is `allowed` going false below once the
+                // five days are up — at which point they are an expired plan
+                // like any other, and take the same redirect.
+                const { entitlement, allowed } = decideAccess(purchases ?? [], {
                     email: user.email,
                     launchDate: effectiveLaunchDate(),
                     admins: parseAdminEmails(process.env.ADMIN_EMAILS),
                     cohort,
-                    trial,
+                    trial: grant ? trialAccessFromGrant(grant) : null,
                 });
                 if (!allowed) {
                     const url = request.nextUrl.clone();
-                    // An ENDED trial is read-only in exactly the way a lapsed
-                    // plan is — reports, board and Development page all stay
-                    // open, only stations lock — but it does NOT go to
-                    // /pricing?renew=true. There is nothing to renew, and the
-                    // offer for someone whose five days have just run out is
-                    // two plans chosen by their exam date, which lives on the
-                    // dashboard. `?trial=ended` is what draws that wall.
-                    //
-                    // Unchanged by the September rewrite, and re-checked
-                    // against it: the only way to reach `trial_ended` now is
-                    // expiry, which is precisely the case this branch was
-                    // written for.
-                    //
-                    // `!entitlement.plan` keeps that to people whose access
-                    // rested on the grant ALONE. Somebody who once bought and
-                    // lapsed has a purchase to renew and a plan name to be told
-                    // about, and their own story outranks the grant's here for
-                    // the same reason it does everywhere else.
-                    if (trialAccess?.state === 'trial_ended' && !entitlement.plan) {
-                        url.pathname = '/dashboard';
-                        url.search = '';
-                        url.searchParams.set('trial', 'ended');
-                        return NextResponse.redirect(url);
-                    }
                     // state 'none' WITH a plan is a preorder whose window hasn't
                     // opened — a paying customer. Sending them to /pricing reads
                     // as "your purchase doesn't exist"; the dashboard explains

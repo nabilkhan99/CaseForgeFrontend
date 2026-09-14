@@ -7,7 +7,7 @@ import { ArrowRight, Info } from 'lucide-react';
 import { BOOK_A_CALL_URL, FREE_TIER, type PlanKey } from '@/lib/commerce/plans';
 import { FEATURE_ROWS } from '@/lib/commerce/pricingFeatures';
 import ManageBillingButton from '@/components/commerce/ManageBillingButton';
-import { trackEvent, trialFunnelProperties } from '@/lib/analytics';
+import { trackEvent } from '@/lib/analytics';
 import { Pill } from './editorial';
 import PaymentMethodsRow from './PaymentMethodsRow';
 
@@ -92,7 +92,7 @@ function useSelfStudyCheckout() {
         return;
       }
       // Awaited so the capture flushes before we leave for Stripe.
-      await trackEvent('checkout_started', { plan, ...(await trialFunnelProperties()) });
+      await trackEvent('checkout_started', { plan });
       window.location.assign(data.url);
     } catch {
       setError('Something went wrong, please try again.');
@@ -325,7 +325,6 @@ function PlanCta({ selfStudy, variant, selfStudyPlan, owned, canUpgrade }: CtaBu
     return (
       <Link
         href={FREE_TIER.ctaHref}
-        onClick={() => trackEvent('checkout_clicked', { plan: 'free' })}
         className="block w-full rounded-full border border-heading/15 bg-white px-2 py-3 text-center text-[13px] font-semibold text-heading transition-colors hover:bg-surface-warm sm:py-2.5 sm:text-sm"
       >
         {FREE_TIER.ctaLabel}

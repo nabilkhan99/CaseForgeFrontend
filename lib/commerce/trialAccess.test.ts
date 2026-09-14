@@ -12,10 +12,11 @@ import {
   isStationOpenToTrial,
   loadFreeTrialStationIds,
   loadTrialAccess,
+  loadTrialAccessForGrant,
   loadTrialGrant,
   startTrialWindow,
   startTrialWindowFor,
-  trialRefusal,
+  trialAccessFromGrant,
   trialStationRefusal,
   type TrialGrant,
   type TrialUsage,
@@ -205,24 +206,37 @@ describe('computeTrialAccess', () => {
   })
 })
 
-describe('trialRefusal', () => {
-  it('says nothing when the trial is live', () => {
-    expect(trialRefusal(computeTrialAccess(grant(), NO_USAGE, FIVE, NOW))).toBeNull()
+describe('trialAccessFromGrant', () => {
+  /**
+   * What the hot paths decide access with: the grant row and the clock, no
+   * station or usage read. It has to agree with the full picture about
+   * everything access is decided on, or a trialist would be let in by one path
+   * and refused by the other.
+   */
+  it.each([
+    ['unstarted', grant()],
+    ['live', started(1)],
+    ['last day', started(4.5)],
+    ['expired', started(6)],
+  ])('agrees with the full picture on state and dates (%s)', (_label, g) => {
+    const light = trialAccessFromGrant(g, NOW)
+    const full = computeTrialAccess(g, usage({ 'st-1': 3 }), FIVE, NOW)
+    expect(light.state).toBe(full.state)
+    expect(light.startedAt).toEqual(full.startedAt)
+    expect(light.expiresAt).toEqual(full.expiresAt)
+    expect(light.windowDays).toBe(full.windowDays)
+    expect(light.reason).toBe(full.reason)
   })
 
-  it('says nothing when there is no trial — the caller answers no_active_plan', () => {
-    expect(trialRefusal(NO_TRIAL)).toBeNull()
+  it('carries no cases and no progress, so it can never open a station', () => {
+    const light = trialAccessFromGrant(started(1), NOW)
+    expect(light.freeStationIds).toEqual([])
+    expect(light.used).toBe(0)
+    expect(trialStationRefusal(light, 'st-1')?.error).toBe('trial_station_locked')
   })
 
-  it('names expiry, the only way a trial ends now', () => {
-    const refusal = trialRefusal(computeTrialAccess(started(6), usage({ 'st-1': 1 }), FIVE, NOW))
-    expect(refusal).toMatchObject({
-      error: 'trial_expired',
-      trial: true,
-      used: 1,
-      remaining: 4,
-      reason: 'expiry',
-    })
+  it('reports no trial for no grant', () => {
+    expect(trialAccessFromGrant(null, NOW)).toEqual(NO_TRIAL)
   })
 })
 
@@ -246,9 +260,10 @@ describe('trialStationRefusal', () => {
     expect(trialStationRefusal(nothingFlagged, 'st-1')?.error).toBe('trial_station_locked')
   })
 
-  it('says nothing for an ENDED trial — expiry is the refusal, not the station', () => {
-    // Order matters at the chokepoints: somebody whose days are up must be sent
-    // to the wall, not told this particular case is not one of their five.
+  it('says nothing for an ENDED trial — it is refused as an expired plan instead', () => {
+    // Order matters at the chokepoints: somebody whose days are up is refused
+    // with `no_active_plan` before the station is looked at, not told this
+    // particular case is not one of their five.
     const ended = computeTrialAccess(started(6), NO_USAGE, FIVE, NOW)
     expect(trialStationRefusal(ended, 'st-99')).toBeNull()
   })
@@ -589,6 +604,29 @@ describe('loadTrialAccess', () => {
   })
 })
 
+describe('loadTrialAccessForGrant', () => {
+  it('builds the picture from a grant already in hand, without re-reading it', async () => {
+    const tables: string[] = []
+    const client = stubTrialClient({
+      stations: FIVE.map((id) => ({ id })),
+      sessions: [{ station_id: 'st-4', status: 'abandoned' }],
+    }) as unknown as { from: (table: string) => unknown }
+    const recording = {
+      from: (table: string) => {
+        tables.push(table)
+        return client.from(table)
+      },
+    } as never
+
+    const access = await loadTrialAccessForGrant(recording, started(1), NOW)
+
+    expect(access.state).toBe('trial')
+    expect(access.freeStationIds).toEqual(FIVE)
+    expect(access.attemptsByStation).toEqual({ 'st-4': 1 })
+    expect(tables).toEqual(['stations', 'clinical_sessions'])
+  })
+})
+
 describe('grantTrial', () => {
   /**
    * The insert path is `upsert(..., ignoreDuplicates)` followed by an
@@ -743,19 +781,40 @@ describe('countOpenTrialSessions', () => {
       cutoffs.push(value)
       return { neq }
     })
-    const inFilter = vi.fn(() => ({ gte }))
-    const eq = vi.fn(() => ({ in: inFilter }))
-    const select = vi.fn(() => ({ eq }))
-    return { client: { from: vi.fn(() => ({ select })) } as never, eq, inFilter, gte, neq, cutoffs }
+    const inFilter = vi.fn()
+    const chain: { eq: ReturnType<typeof vi.fn>; in: typeof inFilter; gte: typeof gte } = {
+      eq: vi.fn(() => chain),
+      in: inFilter,
+      gte,
+    }
+    const select = vi.fn(() => chain)
+    return {
+      client: { from: vi.fn(() => ({ select })) } as never,
+      eq: chain.eq,
+      inFilter,
+      gte,
+      neq,
+      cutoffs,
+    }
   }
 
   it('counts only consultations that are actually running', async () => {
-    const { client, inFilter } = stubOpen([{ id: 'other' }])
+    const { client, eq } = stubOpen([{ id: 'other' }])
     expect(await countOpenTrialSessions(client, 'user-1', 'sess-1', NOW)).toBe(1)
-    // `reading` is excluded on purpose: it is written when the station BRIEF is
-    // opened, so counting it would stop a trainee who looked at three briefs
-    // from starting any of them.
-    expect(inFilter).toHaveBeenCalledWith('status', ['live', 'processing'])
+    expect(eq).toHaveBeenCalledWith('user_id', 'user-1')
+    // `live` ONLY. `reading` is a brief that was opened, and counting it would
+    // stop a trainee who looked at three briefs from starting any of them.
+    expect(eq).toHaveBeenCalledWith('status', 'live')
+  })
+
+  it('does not count a call that has ended and is waiting for its mark', async () => {
+    // A dropped call saves its transcript and goes to `processing`. No realtime
+    // minutes are being spent, and counting it would refuse the retry for as
+    // long as marking takes — or for good, if marking died.
+    const { client, eq, inFilter } = stubOpen([])
+    await countOpenTrialSessions(client, 'user-1', 'sess-1', NOW)
+    expect(inFilter).not.toHaveBeenCalled()
+    expect(eq).not.toHaveBeenCalledWith('status', 'processing')
   })
 
   it('excludes this session, so a reconnect is not a second consultation', async () => {
@@ -776,8 +835,8 @@ describe('countOpenTrialSessions', () => {
   it('does not refuse an honest trainee when the check itself breaks', async () => {
     const neq = vi.fn().mockResolvedValue({ data: null, error: { message: 'down' } })
     const gte = vi.fn(() => ({ neq }))
-    const inFilter = vi.fn(() => ({ gte }))
-    const eq = vi.fn(() => ({ in: inFilter }))
+    const chain: { eq: ReturnType<typeof vi.fn>; gte: typeof gte } = { eq: vi.fn(() => chain), gte }
+    const eq = chain.eq
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
     expect(
       await countOpenTrialSessions(
@@ -792,51 +851,55 @@ describe('countOpenTrialSessions', () => {
 })
 
 describe('startTrialWindowFor', () => {
-  function stubGrant(row: Record<string, unknown> | null) {
-    const update = vi.fn(() => ({
-      eq: () => ({ is: () => ({ select: async () => ({ data: [{}], error: null }) }) }),
-    }))
-    const select = vi.fn(() => ({
-      eq: () => ({ maybeSingle: async () => ({ data: row, error: null }) }),
-    }))
-    return { client: { from: vi.fn(() => ({ select, update })) } as never, update, select }
+  /**
+   * Works from the trial the entitlement path already loaded, so the call that
+   * starts a consultation does not pay a second read of the grant — and every
+   * consultation after the first does no IO here at all.
+   */
+  function stubWrite() {
+    const writes: { started_at: string; expires_at: string }[] = []
+    const eq = vi.fn(() => ({ is: () => ({ select: async () => ({ data: [{}], error: null }) }) }))
+    const update = vi.fn((written: { started_at: string; expires_at: string }) => {
+      writes.push(written)
+      return { eq }
+    })
+    const select = vi.fn()
+    const from = vi.fn(() => ({ select, update }))
+    return { client: { from } as never, from, update, select, eq, writes }
   }
 
-  const UNSTARTED = {
-    id: 'grant-1',
-    user_id: 'user-1',
-    email: 'gp@example.com',
-    allowance: 5,
-    window_days: 5,
-    source: 'signup',
-    started_at: null,
-    expires_at: null,
-    created_at: '2026-09-08T09:00:00Z',
-  }
-
-  it('stamps an unstarted grant', async () => {
-    const { client, update } = stubGrant(UNSTARTED)
-    await startTrialWindowFor(client, true, 'user-1')
+  it('stamps an unstarted window without re-reading the grant', async () => {
+    const { client, update, select, eq, writes } = stubWrite()
+    await startTrialWindowFor(client, true, 'user-1', trialAccessFromGrant(grant(), NOW))
     expect(update).toHaveBeenCalledTimes(1)
+    expect(select).not.toHaveBeenCalled()
+    expect(eq).toHaveBeenCalledWith('user_id', 'user-1')
+    const [stamp] = writes
+    expect(Date.parse(stamp.expires_at) - Date.parse(stamp.started_at)).toBe(TRIAL_WINDOW_DAYS * DAY)
+  })
+
+  it('uses the window length on the row', async () => {
+    const { client, writes } = stubWrite()
+    await startTrialWindowFor(client, true, 'user-1', trialAccessFromGrant(grant({ windowDays: 30 }), NOW))
+    const [stamp] = writes
+    expect(Date.parse(stamp.expires_at) - Date.parse(stamp.started_at)).toBe(30 * DAY)
   })
 
   it('does nothing at all for somebody who is not on a trial', async () => {
-    // Not just "does not stamp": it must not even read. This runs on every
-    // consultation start, for every customer.
-    const { client, select, update } = stubGrant(UNSTARTED)
-    await startTrialWindowFor(client, false, 'user-1')
-    expect(select).not.toHaveBeenCalled()
-    expect(update).not.toHaveBeenCalled()
+    // Not just "does not stamp": it must not touch the database. This runs on
+    // every consultation start, for every customer.
+    const { client, from } = stubWrite()
+    await startTrialWindowFor(client, false, 'user-1', trialAccessFromGrant(grant(), NOW))
+    await startTrialWindowFor(client, true, 'user-1', null)
+    expect(from).not.toHaveBeenCalled()
   })
 
-  it('leaves an already-open window alone', async () => {
-    const { client, update } = stubGrant({
-      ...UNSTARTED,
-      started_at: '2026-09-09T09:00:00Z',
-      expires_at: '2026-09-14T09:00:00Z',
-    })
-    await startTrialWindowFor(client, true, 'user-1')
-    expect(update).not.toHaveBeenCalled()
+  it('does no IO once the window is open', async () => {
+    // Every consultation after the first. A window seen open cannot close again,
+    // so skipping the write on a snapshot is safe.
+    const { client, from } = stubWrite()
+    await startTrialWindowFor(client, true, 'user-1', trialAccessFromGrant(started(2), NOW))
+    expect(from).not.toHaveBeenCalled()
   })
 
   it('never throws — a consultation must not die over a clock', async () => {
@@ -850,6 +913,7 @@ describe('startTrialWindowFor', () => {
         } as never,
         true,
         'user-1',
+        trialAccessFromGrant(grant(), NOW),
       ),
     ).resolves.toBeUndefined()
     spy.mockRestore()

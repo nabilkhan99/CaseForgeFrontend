@@ -12,7 +12,7 @@ import CoachingSessionPicker, {
   type CoachingSlotSelection,
 } from '@/components/commerce/CoachingSessionPicker';
 import { isSelectionOpen } from '@/lib/commerce/coachingPicker';
-import { trackEvent, trialFunnelProperties } from '@/lib/analytics';
+import { trackEvent } from '@/lib/analytics';
 
 const GENERIC_ERROR = 'Something went wrong, please try again.';
 const SLOT_GONE_ERROR = 'That session is no longer available. Please choose another date or time.';
@@ -75,14 +75,11 @@ export default function CoachingSessionPage() {
         setSubmitting(false);
         return;
       }
-      // Awaited so the capture flushes before we leave for Stripe. The trial
-      // context rides along when the buyer has a grant ({} otherwise, and
-      // abandoned after its own short timeout), so it cannot hold this up.
+      // Awaited so the capture flushes before we leave for Stripe.
       await trackEvent('checkout_started', {
         plan: 'complete',
         coaching_date: selected.day,
         coaching_slot: selected.slot,
-        ...(await trialFunnelProperties()),
       });
       window.location.assign(data.url);
     } catch {

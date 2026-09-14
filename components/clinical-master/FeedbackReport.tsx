@@ -27,7 +27,6 @@ import {
   Verdict,
 } from '@/lib/clinical-master/types';
 import PassCelebration from '@/components/clinical-master/PassCelebration';
-import { reportTrialStationCompleted } from '@/lib/trial/trialEvents';
 import { LearningPointsDisplay } from '@/components/cases/LearningPoints';
 import { MarkSchemeDomains } from '@/components/cases/MarkScheme';
 import {
@@ -1443,19 +1442,6 @@ export default function FeedbackReport({
           setTranscript(normaliseTranscript(data.transcript));
           setLoading(false);
           if (data.feedback.overall) onResultRef.current?.(data.feedback.overall);
-          // One of the five free cases has just been marked, if this is a
-          // trial account — the helper decides that itself, and does nothing
-          // for everybody else. Fired HERE rather than on mount because "a
-          // station was completed" is the moment the mark lands, which is what
-          // makes the counts in the event the server's own. The station id goes
-          // with it so the event can carry WHICH GO this was: attempts are
-          // unlimited, so a repeat and a first sitting are otherwise the same
-          // row. Not awaited: the report is already on screen.
-          void reportTrialStationCompleted(
-            sessionId,
-            data.feedback.overall?.verdict ?? '',
-            data.feedback.station_id ?? null,
-          );
           return;
         }
 
@@ -1650,8 +1636,7 @@ export default function FeedbackReport({
           }
           body="A real station runs to about twelve minutes, and a mark off a few opening
                 lines would say more about the transcript than about you. Nothing has been
-                marked and this hasn't used one of your stations. Run it properly and
-                you'll get the full report."
+                marked. Run it properly and you'll get the full report."
         >
           {retryHref && (
             <Link

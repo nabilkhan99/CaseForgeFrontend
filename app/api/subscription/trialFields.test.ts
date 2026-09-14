@@ -148,6 +148,26 @@ describe('the trial block', () => {
     expect((await body()).trial.daysLeft).toBe(1)
   })
 
+  it('does not look up the exam hint once the trial has ended', async () => {
+    // The hint feeds the live panel's plan offer. An ended trial has no panel,
+    // so it pays no service-role round trip for one.
+    const startedAt = new Date(Date.now() - 6 * DAY)
+    getSupabaseAdmin.mockReturnValue(stubLeads('oct_2026'))
+    signedIn({
+      trial: computeTrialAccess(
+        grant({ startedAt, expiresAt: new Date(startedAt.getTime() + 5 * DAY) }),
+        NO_USAGE,
+        [],
+      ),
+      allowed: false,
+      trialOnly: false,
+    })
+    const trial = (await body()).trial
+    expect(trial.state).toBe('trial_ended')
+    expect(trial.examHint).toBeNull()
+    expect(getSupabaseAdmin).not.toHaveBeenCalled()
+  })
+
   it('floors daysLeft at zero once the window has closed', async () => {
     const startedAt = new Date(Date.now() - 6 * DAY)
     signedIn({
@@ -178,6 +198,17 @@ describe('the trial block', () => {
     getSupabaseAdmin.mockReturnValue(stubLeads('oct_2026'))
     signedIn({ trial: computeTrialAccess(grant(), NO_USAGE, FIVE) })
     expect((await body()).trial.examHint).toBe('2026-10-15')
+  })
+
+  it('never looks up the exam hint for a buyer', async () => {
+    signedIn({
+      trial: computeTrialAccess(grant(), NO_USAGE, FIVE),
+      entitlement: { state: 'active', plan: 'self_study', hasLectures: false },
+      allowed: true,
+      trialOnly: false,
+    })
+    await body()
+    expect(getSupabaseAdmin).not.toHaveBeenCalled()
   })
 
   it('tells a buyer nothing about a trial they are not using', async () => {
