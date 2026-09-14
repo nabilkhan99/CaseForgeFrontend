@@ -53,12 +53,9 @@ function ReadingPhaseContent() {
   const allowlist = useCohortAllowlist();
   const cohortLocked = isStationLocked(allowlist, stationId);
   /**
-   * Outside the five cases the free trial opens.
-   *
-   * Kept separate from the cohort lock because the two are different offers.
-   * A cohort student's locked case needs their trainer to assign it; a trial
-   * account's needs a plan, which is a thing they can buy from this page — so
-   * this one gets the price link and the cohort one keeps its quieter line.
+   * Outside the five cases the free trial opens. Either lock renders the same
+   * quiet line and link below; they are kept apart only because the trial one
+   * can also be learnt from the server's refusal.
    */
   const trialLocked =
     isStationLockedForTrial(trialStationAllowlist(useTrialStatus()), stationId) ||
@@ -135,13 +132,6 @@ function ReadingPhaseContent() {
         if (body?.error === 'trial_station_locked') {
           setServerTrialLocked(true);
           setStarting(false);
-          return;
-        }
-        // The five days are up. The two-plan wall lives on the dashboard, and
-        // the middleware sends a page navigation to exactly this URL — the API
-        // must not name a different destination.
-        if (body?.error === 'trial_expired') {
-          router.push('/dashboard?trial=ended');
           return;
         }
         const renewing = body?.state === 'read_only';
@@ -306,32 +296,19 @@ function ReadingPhaseContent() {
                 panel, no price, and nothing about scores or feedback. This is
                 the pre-consultation view a paying customer sees, minus the one
                 button, which is exactly as much as we owe someone who cannot
-                sit it.
-
-                The trial wording differs from the cohort's on purpose. A
-                trialist has five cases of their own that DO open, so the useful
-                sentence is "this one is not one of them, and here is what
-                unlocks it" — and it points at /#pricing, where the plans are,
-                rather than the standalone /pricing page. */}
+                sit it. */}
             <div>
               {locked ? (
                 <div className="border-t border-hairline pt-5">
                   <p className="flex items-center gap-1.5 text-[14px] font-medium text-heading">
                     <LockGlyph label="Locked" className="opacity-50" />
-                    {trialLocked
-                      ? 'Not one of your five free cases'
-                      : 'Included with the full library'}
+                    Included with the full library
                   </p>
-                  {trialLocked && (
-                    <p className="mt-1 text-[13px] leading-relaxed text-muted">
-                      Your five are on your dashboard, with as many attempts as you like.
-                    </p>
-                  )}
                   <Link
-                    href={trialLocked ? '/#pricing' : '/pricing'}
+                    href="/pricing"
                     className="mt-2 inline-flex min-h-[44px] items-center text-[13px] font-semibold text-primary hover:underline focus-visible-ring"
                   >
-                    {trialLocked ? 'Unlock all 200 stations' : 'Unlock all 200 cases'} &rarr;
+                    Unlock all 200 cases &rarr;
                   </Link>
                 </div>
               ) : (
