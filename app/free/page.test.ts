@@ -72,7 +72,7 @@ describe('/free lists the five cases', () => {
     // And says what the free account holds, not how long a case takes.
     expect(PICKER).toContain('Unlimited attempts on all five cases')
     expect(PICKER).toContain('Your own dashboard and analytics')
-    expect(PICKER).toContain('A detailed, holistic analysis of how you are progressing')
+    expect(PICKER).toContain('A detailed, holistic progress analysis')
   })
 
   it('promises the verdict before anything is asked for, because it is', () => {
