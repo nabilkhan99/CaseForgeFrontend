@@ -7,7 +7,15 @@ import { examDateFromSitting } from '@/lib/commerce/trialWallPlans';
 import type { TrialEndReason, TrialState } from '@/lib/commerce/trialAccess';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
-/** What a trial account needs to render its panel and, once the days are up, its wall. */
+/**
+ * What a trial account needs to render its panel and, once the days are up, a
+ * short note that it has ended.
+ *
+ * The five, the progress and the exam hint are loaded for a LIVE trial only —
+ * they are what the panel is drawn from, and an ended trial is an expired plan
+ * with nothing left to open. On `trial_ended` they come back empty (no cases,
+ * nothing tried, no hint); the state, the dates and the reason are always real.
+ */
 export interface TrialSubscription {
   /** Never 'none' — the field is null instead, so a truthy `trial` means "this is a trial account". */
   state: Exclude<TrialState, 'none'>;
@@ -17,7 +25,7 @@ export interface TrialSubscription {
    *
    * Also what the library and the brief page draw their locks from, so the
    * client and the two server chokepoints are working from one answer. Empty
-   * means the trial opens nothing (see loadTrialAccess: it fails closed), which
+   * means the trial opens nothing (see loadTrialAccessForGrant: it fails closed), which
    * the surfaces render as "everything is locked" rather than "everything is
    * open".
    */
@@ -67,10 +75,9 @@ export interface TrialSubscription {
    * both the panel and the wall pick their two plans on that date. Resolved
    * here rather than in the browser because `trial_leads` is RLS deny-all.
    *
-   * Loaded for a LIVE trial too, not only at the wall — the upgrade offer is
-   * now on the dashboard from day one, so the date has to be known from day
-   * one. It costs one indexed lookup, and only for accounts actually on a
-   * trial.
+   * Loaded for a LIVE trial only — the panel's upgrade offer turns on it. It
+   * costs one indexed lookup, and nobody else pays it: not a buyer, not an
+   * account whose trial has ended.
    */
   examHint: string | null;
 }
@@ -144,9 +151,9 @@ export interface SubscriptionResponse {
    * therefore reads as "this is a trial account", which is exactly the question
    * the dashboard strip and the wall ask.
    *
-   * Present for BOTH states: 'trial' draws the strip, 'trial_ended' draws the
-   * wall. Squashing the second to null would leave the wall with nothing to
-   * distinguish a spent trial from someone who never had one.
+   * Present for BOTH states: 'trial' draws the panel, 'trial_ended' draws a
+   * short ended note. Squashing the second to null would leave the dashboard
+   * with nothing to distinguish a spent trial from someone who never had one.
    */
   trial: TrialSubscription | null;
   /**
@@ -180,9 +187,9 @@ function daysLeftUntil(expiresAt: Date | null, now: Date = new Date()): number |
  * The exam date behind a trialist's questionnaire answer, or null.
  *
  * Service role because `trial_leads` is RLS deny-all; scoped to the signed-in
- * user's own address, and it reads one column. Only ever called for accounts
- * that are actually on a trial, so nobody else pays a round trip for it — this
- * route is polled by the navbar on every page.
+ * user's own address, and it reads one column. Only ever called for an account
+ * on a LIVE trial, so nobody else pays a round trip for it — this route is
+ * polled by the navbar on every page.
  *
  * Never throws: a missing hint costs the wall its plan choice (it falls back to
  * the £299 pair), which is not worth failing a subscription lookup over.
@@ -256,10 +263,9 @@ export async function GET() {
         startedAt: trial.startedAt?.toISOString() ?? null,
         expiresAt: trial.expiresAt?.toISOString() ?? null,
         reason: trial.reason ?? null,
-        // Both states now: the two-plan offer is on the dashboard for the whole
-        // trial, not only after it, so the date it turns on has to be there for
-        // the whole trial too.
-        examHint: await examHintFor(user.email),
+        // Live only: the panel's two-plan offer is what turns on it, and an
+        // ended trial has no panel.
+        examHint: trial.state === 'trial' ? await examHintFor(user.email) : null,
       }
     : null;
 

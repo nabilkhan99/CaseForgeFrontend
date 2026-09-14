@@ -200,23 +200,24 @@ describe('the five fixed cases', () => {
 })
 
 describe('the five days', () => {
-  it('refuses an expired window with its own code', async () => {
-    signedIn({ trial: expiredTrial(), allowed: false })
+  it('refuses an ended trial exactly as an expired plan is refused', async () => {
+    // An ended trial is an expired plan: the same `no_active_plan` somebody
+    // with no grant gets, and nothing trial-shaped for a client to branch on.
+    const sessions = stubSessions()
+    signedIn({ trial: expiredTrial(), allowed: false, sessions })
     const res = await POST(request())
     expect(res.status).toBe(403)
-    expect(await res.json()).toMatchObject({
-      error: 'trial_expired',
-      trial: true,
-      reason: 'expiry',
-    })
+    const body = await res.json()
+    expect(body).toEqual({ error: 'no_active_plan', state: 'none', pending: false })
+    expect(sessions.insert).not.toHaveBeenCalled()
   })
 
-  it('answers expiry, not the station lock, for an expired trial on a locked case', async () => {
-    // Order matters: the useful sentence is "your five days are up", and the
-    // destination is the wall — not "that is not one of your five".
+  it('answers no_active_plan, not the station lock, for an ended trial on a locked case', async () => {
+    // Order matters: the refusal is that there is no plan, not "that is not one
+    // of your five".
     signedIn({ trial: expiredTrial(), allowed: false })
     const res = await POST(request({ sessionId: 'sess-1', stationId: 'st-99' }))
-    expect(await res.json()).toMatchObject({ error: 'trial_expired' })
+    expect(await res.json()).toMatchObject({ error: 'no_active_plan' })
   })
 
   it('still answers no_active_plan for somebody who never had a trial', async () => {
@@ -241,11 +242,8 @@ describe('the five days', () => {
 
 describe('starting the five-day window', () => {
   it('stamps it on the first consultation', async () => {
-    signedIn({
-      trial: computeTrialAccess(grant(), NO_USAGE, FIVE, NOW),
-      allowed: true,
-      trialOnly: true,
-    })
+    const trial = computeTrialAccess(grant(), NO_USAGE, FIVE, NOW)
+    signedIn({ trial, allowed: true, trialOnly: true })
 
     await POST(request())
 
@@ -253,6 +251,9 @@ describe('starting the five-day window', () => {
     // `trialOnly` is the gate the helper applies; the compare-and-set on
     // `started_at is null` is what makes a second call a no-op.
     expect(startTrialWindowFor.mock.calls[0][1]).toBe(true)
+    // The trial the entitlement path already loaded, so the grant is not read
+    // a second time just to learn whether its clock is running.
+    expect(startTrialWindowFor.mock.calls[0][3]).toBe(trial)
   })
 
   it('stamps on a retry that finds the session already there', async () => {
@@ -313,7 +314,7 @@ describe('starting the five-day window', () => {
 })
 
 describe('a lapsed customer who also holds an expired grant', () => {
-  it('is told to renew, not shown the trial wall', async () => {
+  it('is told to renew', async () => {
     // The API must not name a different wall from the one a page navigation
     // would reach: the middleware sends this person to /pricing?renew=true.
     signedIn({

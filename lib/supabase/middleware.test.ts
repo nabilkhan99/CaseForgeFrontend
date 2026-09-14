@@ -19,11 +19,13 @@ import { NextRequest } from 'next/server'
 
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
+  from: vi.fn(),
 }))
 
 vi.mock('@supabase/ssr', () => ({
   createServerClient: () => ({
     auth: { getUser: mocks.getUser },
+    from: mocks.from,
   }),
 }))
 
@@ -121,5 +123,118 @@ describe('everyone else', () => {
     mocks.getUser.mockResolvedValue({ data: { user: null } })
 
     expect((await go('/dashboard')).to).toBe('/auth/sign-in')
+  })
+})
+
+describe('navigating into a consultation', () => {
+  /**
+   * The subscription gate, and what it costs. This runs on every page under
+   * /clinical-master, an ocean away from the database, so the query plan is
+   * pinned: purchases, cohort and the trial GRANT, together — and never the
+   * trial's stations or its usage, which no navigation needs.
+   *
+   * An ENDED trial is an expired plan here like any other: it takes the same
+   * redirect as an account with no plan, not a trial-shaped one.
+   */
+  const DAY = 86_400_000
+
+  type Answer = { data: unknown; error: unknown }
+
+  function chain(answer: Answer) {
+    const builder: Record<string, unknown> = {}
+    for (const method of ['select', 'eq', 'ilike', 'in', 'neq', 'gte', 'order', 'limit', 'is']) {
+      builder[method] = () => builder
+    }
+    builder.maybeSingle = async () => answer
+    builder.then = (resolve: (value: Answer) => unknown) => Promise.resolve(answer).then(resolve)
+    return builder
+  }
+
+  function grantRow(daysSinceStart: number) {
+    const startedAt = new Date(Date.now() - daysSinceStart * DAY)
+    return {
+      id: 'grant-1',
+      user_id: 'u1',
+      email: 'student@nhs.net',
+      allowance: 5,
+      window_days: 5,
+      source: 'signup',
+      started_at: startedAt.toISOString(),
+      expires_at: new Date(startedAt.getTime() + 5 * DAY).toISOString(),
+      created_at: new Date(startedAt.getTime() - DAY).toISOString(),
+    }
+  }
+
+  function database(opts: { purchases?: unknown[]; grant?: unknown }) {
+    const tables: string[] = []
+    mocks.from.mockImplementation((table: string) => {
+      tables.push(table)
+      if (table === 'preorders') return chain({ data: opts.purchases ?? [], error: null })
+      if (table === 'cohort_members') return chain({ data: null, error: null })
+      if (table === 'trial_grants') return chain({ data: opts.grant ?? null, error: null })
+      // Anything else — stations, clinical_sessions — is a read this path
+      // must never make. Answer it so a regression shows up in `tables`, not
+      // as a thrown error swallowed by the fail-open catch.
+      return chain({ data: [], error: null })
+    })
+    return tables
+  }
+
+  async function navigate(path: string) {
+    const response = await updateSession(
+      new NextRequest(new URL(path, 'https://www.fourteenfisherman.com')),
+    )
+    const location = response.headers.get('location')
+    return {
+      to: location ? new URL(location).pathname : null,
+      search: location ? new URL(location).search : null,
+      failedOpen: response.headers.get('x-entitlement-fail-open'),
+    }
+  }
+
+  beforeEach(() => {
+    signedIn({ full_name: 'Jane Doe' })
+    delete process.env.ADMIN_EMAILS
+  })
+
+  it('lets a paying user through on purchases, cohort and grant alone', async () => {
+    const tables = database({
+      purchases: [
+        { plan: 'self_study', status: 'paid', created_at: new Date(Date.now() - DAY).toISOString() },
+      ],
+      grant: grantRow(1),
+    })
+
+    const result = await navigate('/clinical-master/station/st-1')
+
+    expect(result).toEqual({ to: null, search: null, failedOpen: null })
+    expect([...tables].sort()).toEqual(['cohort_members', 'preorders', 'trial_grants'])
+  })
+
+  it('lets a live trial through without reading its stations or usage', async () => {
+    const tables = database({ grant: grantRow(1) })
+
+    const result = await navigate('/clinical-master/station/st-99')
+
+    expect(result).toEqual({ to: null, search: null, failedOpen: null })
+    expect([...tables].sort()).toEqual(['cohort_members', 'preorders', 'trial_grants'])
+  })
+
+  it('sends an ended trial where it sends anybody with no plan', async () => {
+    const tables = database({ grant: grantRow(6) })
+    const ended = await navigate('/clinical-master/station/st-1')
+
+    database({})
+    const never = await navigate('/clinical-master/station/st-1')
+
+    expect(ended).toEqual({ to: '/pricing', search: '?upgrade=true', failedOpen: null })
+    expect(ended).toEqual(never)
+    expect([...tables].sort()).toEqual(['cohort_members', 'preorders', 'trial_grants'])
+  })
+
+  it('does not gate the feedback pages at all', async () => {
+    const tables = database({ grant: grantRow(6) })
+    expect((await navigate('/clinical-master/feedback/sess-1')).to).toBeNull()
+    expect(tables).toEqual([])
   })
 })

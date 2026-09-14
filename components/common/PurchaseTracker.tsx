@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { trackEvent, trialFunnelProperties } from '@/lib/analytics';
+import { trackEvent } from '@/lib/analytics';
 
 interface PurchaseTrackerProps {
   stripeSessionId: string;
@@ -30,21 +30,12 @@ export default function PurchaseTracker({
     } catch {
       // Storage unavailable: still record the event. Worst case a refresh double-counts.
     }
-    // The trial context is looked up first so the sale carries how much of the
-    // five free stations this buyer had used when they decided — the one
-    // number the old 5.1% baseline (1 station before purchase) is compared
-    // against. It resolves to {} for a cold buyer, and cannot delay this event
-    // by more than its own timeout, so `purchase` keeps every property it has
-    // today whatever happens.
-    void trialFunnelProperties().then((trial) =>
-      trackEvent('purchase', {
-        plan,
-        coaching_date: coachingDate ?? '',
-        coaching_slot: coachingSlot ?? '',
-        stripe_session: stripeSessionId,
-        ...trial,
-      }),
-    );
+    trackEvent('purchase', {
+      plan,
+      coaching_date: coachingDate ?? '',
+      coaching_slot: coachingSlot ?? '',
+      stripe_session: stripeSessionId,
+    });
   }, [stripeSessionId, plan, coachingDate, coachingSlot]);
 
   return null;

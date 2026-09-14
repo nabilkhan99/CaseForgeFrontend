@@ -157,15 +157,17 @@ describe('the realtime mint and the five fixed cases', () => {
     expect(mintEphemeralKey).not.toHaveBeenCalled()
   })
 
-  it('refuses once the five days are up, with a distinct code', async () => {
+  it('refuses once the five days are up, exactly as an expired plan is refused', async () => {
     const expired = grant({
       startedAt: new Date(NOW.getTime() - 6 * DAY),
       expiresAt: new Date(NOW.getTime() - DAY),
     })
     signedIn({ trial: computeTrialAccess(expired, NO_USAGE, FIVE, NOW), allowed: false })
     const res = await POST(request())
-    expect(await res.json()).toMatchObject({ error: 'trial_expired', reason: 'expiry' })
+    expect(res.status).toBe(403)
+    expect(await res.json()).toEqual({ error: 'no_active_plan', state: 'none', pending: false })
     expect(mintEphemeralKey).not.toHaveBeenCalled()
+    expect(countOpenTrialSessions).not.toHaveBeenCalled()
   })
 
   it('mints for one of the five', async () => {
@@ -263,6 +265,8 @@ describe('starting the five-day window', () => {
 
     expect(startTrialWindowFor).toHaveBeenCalledTimes(1)
     expect(startTrialWindowFor.mock.calls[0][1]).toBe(true)
+    // Reuses the trial the entitlement path loaded rather than re-reading the grant.
+    expect(startTrialWindowFor.mock.calls[0][3]).toMatchObject({ startedAt: null, windowDays: 5 })
   })
 
   it('does not stamp for a case the trial cannot open', async () => {
