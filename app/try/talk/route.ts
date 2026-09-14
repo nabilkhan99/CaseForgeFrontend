@@ -18,11 +18,11 @@ import {
  *
  * The curious door used to be three pages — a picker, a brief with an
  * exam-style reading clock, and only then the call — and every one of them was
- * a place to leave. This route is the whole of the default path: it opens the
- * consultation server-side and redirects into the call screen, which asks for
- * the microphone the moment it paints. The brief is two lines on that screen;
- * the full brief and its reading timer are still there, one quiet link away,
- * for the trainee who wants to sit the thing properly.
+ * a place to leave. This route opens the consultation server-side and lands
+ * the guest on the case details page for that consultation (the brief and its
+ * exam-style reading clock), whose Begin button goes to the call screen. The
+ * reading page is the one step kept on purpose: talking to a patient without
+ * having read who they are is not a consultation.
  *
  * `GET /try/talk?station=<uuid>` — the station is optional and advisory, and
  * it may only ever name one of the five free cases (contract C2). A station
@@ -143,7 +143,7 @@ export async function GET(req: NextRequest) {
     return leave(req, UNAVAILABLE)
   }
 
-  const response = leave(req, `/try/session/${sessionId}`)
+  const response = leave(req, `/try/station/${stationId}?session=${sessionId}`)
   response.cookies.set(GUEST_COOKIE, signed, guestCookieOptions())
   return response
 }

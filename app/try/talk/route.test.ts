@@ -130,7 +130,7 @@ describe('what one click opens', () => {
   it('opens a guest consultation and sends the visitor into the call', async () => {
     const { status, location } = await talk(`?station=${OTHER_FREE}`)
     expect(status).toBe(307)
-    expect(location).toMatch(/\/try\/session\/[0-9a-f-]{36}$/)
+    expect(location).toMatch(/\/try\/station\/[0-9a-f-]{36}\?session=[0-9a-f-]{36}$/)
     expect(mocks.inserted[0]).toMatchObject({
       station_id: OTHER_FREE,
       user_id: null,
@@ -185,7 +185,7 @@ describe('what it leaves behind', () => {
 
   it('records the session the browser is being sent to, so the mint recognises it', async () => {
     const { location, setCookie } = await talk()
-    const sessionId = location.split('/').pop()!
+    const sessionId = new URL(location, 'http://x').searchParams.get('session')!
     const { readGuestCookie, cookieOwnsSession } = await import('@/lib/trial/guestSession')
     const value = decodeURIComponent(setCookie.split(';')[0].replace('ff_guest=', ''))
     expect(cookieOwnsSession(readGuestCookie(value), sessionId)).toBe(true)
@@ -241,7 +241,7 @@ describe('the per-IP brake', () => {
 
     for (let attempt = 0; attempt < GUEST_OPENS_PER_IP_PER_HOUR; attempt += 1) {
       const { location } = await talk('', undefined, headers)
-      expect(location).toMatch(/\/try\/session\//)
+      expect(location).toMatch(/\/try\/station\/[0-9a-f-]{36}\?session=/)
     }
 
     const { location } = await talk('', undefined, headers)
@@ -256,6 +256,6 @@ describe('the per-IP brake', () => {
     }
 
     const { location } = await talk('', undefined, { 'x-forwarded-for': '198.51.100.33' })
-    expect(location).toMatch(/\/try\/session\//)
+    expect(location).toMatch(/\/try\/station\/[0-9a-f-]{36}\?session=/)
   })
 })

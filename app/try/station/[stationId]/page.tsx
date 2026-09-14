@@ -16,9 +16,9 @@ import GuestReadingScreen from './GuestReadingScreen';
  * HERE, by a page that says the case is not available, rather than by a button
  * that fails after the brief has been read.
  *
- * `?session=` carries a consultation already in progress — the call screen's
- * "Read the full brief first" link — so the detour returns to that same
- * consultation instead of spending another of the three a browser gets a day.
+ * `?session=` carries the consultation /try/talk has just opened, so Begin
+ * starts that same consultation instead of spending another of the three a
+ * browser gets a day.
  */
 export const dynamic = 'force-dynamic';
 

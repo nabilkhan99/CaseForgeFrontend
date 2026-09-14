@@ -86,7 +86,7 @@ export default function GuestReadingScreen({
     }
   }, [stationId, sessionId, router, starting]);
 
-  const backHref = sessionId ? `/try/session/${sessionId}` : '/';
+  const backHref = '/free';
 
   return (
     <div className="min-h-[100dvh] bg-surface font-sans">

@@ -10,19 +10,14 @@ import ConsultationStage from '@/components/clinical-master/ConsultationStage';
 import SessionControls from '@/components/clinical-master/SessionControls';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import { micRecoveryHint } from '@/lib/clinical-master/micErrors';
-import type { CallBrief } from '@/lib/trial/callBrief';
 import { markTrialSessionStarted } from '@/lib/trial/storage';
 
 export interface GuestCallScreenProps {
   sessionId: string;
   stationId: string;
-  /** Two lines: who is on the line, and why they came. */
-  brief: CallBrief;
   patientName: string;
   patientInitials: string;
   durationSeconds: number;
-  /** The optional exam-style reading page, carrying this same session. */
-  fullBriefHref: string;
 }
 
 /**
@@ -32,28 +27,20 @@ export interface GuestCallScreenProps {
  * there is nothing to fetch and `connect()` — which asks for the microphone —
  * runs on arrival rather than after two round trips.
  *
- * Three things this screen owns that the authed session does not:
+ * What this screen owns that the authed session does not:
  *
- * - **The brief is on the screen.** Two lines, above the orb. There is no
- *   reading page in the default path, so without them the trainee is talking to
- *   a stranger about nothing.
  * - **The clock starts at the first word, not at connect.** A guest arriving
  *   cold spends the first seconds finding out that the thing is live at all,
  *   and burning their twelve minutes on the WebRTC handshake would be a
  *   consultation they never had. `isConnected` is what ConsultationStage uses
  *   to start the clock, so it is handed the later moment deliberately.
- * - **"End whenever you like."** The offer is a live patient, not an exam, and
- *   the sentence next to the End button says so — with the one caveat that
- *   matters, which is that a full run is what gets marked.
  */
 export default function GuestCallScreen({
   sessionId,
   stationId,
-  brief,
   patientName,
   patientInitials,
   durationSeconds,
-  fullBriefHref,
 }: GuestCallScreenProps) {
   const router = useRouter();
 
@@ -117,14 +104,6 @@ export default function GuestCallScreen({
     disconnect();
     router.push('/');
   }, [disconnect, router]);
-
-  // The reading page is the same consultation, not a new one — it is handed
-  // this session id, so taking the detour does not spend a second of the
-  // three-a-day guest allowance.
-  const handleReadFullBrief = useCallback(() => {
-    disconnect();
-    router.push(fullBriefHref);
-  }, [disconnect, router, fullBriefHref]);
 
   if (isProcessing) {
     return (
@@ -205,10 +184,6 @@ export default function GuestCallScreen({
     return (
       <ConnectingScreen
         patientName={patientName}
-        // The brief, during the handshake rather than at the same moment the
-        // patient starts talking. This door has no reading page in front of it,
-        // so these two lines used to arrive with the first "Hello".
-        brief={brief}
         connecting={status === 'connecting'}
         onCancel={handleLeaveWithoutFinishing}
       />
@@ -240,23 +215,6 @@ export default function GuestCallScreen({
         </div>
       </div>
 
-      {/* The brief, on the screen. Two lines and a quiet way to the real one. */}
-      <div className="flex-shrink-0 border-b border-black/[0.05] px-5 py-3 sm:px-7">
-        <div className="mx-auto flex max-w-[560px] flex-col gap-1">
-          <p className="text-[14px] font-semibold leading-snug text-heading">{brief.who}</p>
-          {brief.complaint && (
-            <p className="text-[13px] leading-snug text-muted">{brief.complaint}</p>
-          )}
-          <button
-            type="button"
-            onClick={handleReadFullBrief}
-            className="mt-1 self-start text-[12px] text-muted underline decoration-black/20 underline-offset-2 transition-colors hover:text-heading cursor-pointer"
-          >
-            Read the full brief first
-          </button>
-        </div>
-      </div>
-
       <ConsultationStage
         patientInitials={patientInitials}
         isSpeaking={isSpeaking}
@@ -268,10 +226,6 @@ export default function GuestCallScreen({
         showTranscript={showTranscript}
         transcript={transcript}
       />
-
-      <p className="flex-shrink-0 px-6 pb-1 text-center text-[12px] leading-snug text-muted">
-        End whenever you like. A full run gets a marked report.
-      </p>
 
       <SessionControls
         isConnected={isConnected}

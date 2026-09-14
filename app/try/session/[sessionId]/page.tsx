@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { loadGuestConsultation } from '@/lib/trial/guestStation';
-import { buildCallBrief, patientInitials } from '@/lib/trial/callBrief';
+import { patientInitials } from '@/lib/trial/callBrief';
 import GuestCallScreen from './GuestCallScreen';
 
 /**
@@ -50,14 +50,12 @@ export default async function GuestLiveConsultationPage({ params }: PageProps) {
     <GuestCallScreen
       sessionId={sessionId}
       stationId={station.id}
-      brief={buildCallBrief(station)}
       patientName={station.patient_name || 'Patient'}
       patientInitials={patientInitials(station.patient_name)}
       // Every station in the library is 720s; the fallback matters only for a
       // row with no duration, which is also the one case the token route and
       // this page would disagree on (it falls back to 480).
       durationSeconds={station.consultation_duration_seconds || 720}
-      fullBriefHref={`/try/station/${station.id}?session=${sessionId}`}
     />
   );
 }

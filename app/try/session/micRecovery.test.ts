@@ -25,22 +25,23 @@ function source(relativePath: string): string {
 const GUEST = source('./[sessionId]/GuestCallScreen.tsx')
 const SIGNED_IN = source('../../clinical-master/session/[sessionId]/page.tsx')
 
-describe('the brief arrives before the patient does', () => {
+describe('the brief is read before the call, not during it', () => {
   const CONNECTING = source('../../../components/clinical-master/ConnectingScreen.tsx')
+  const TALK = source('../../try/talk/route.ts')
 
-  it('reads the two lines during the handshake', () => {
-    // The one-click door has no reading page, and the patient speaks first, so
-    // the case used to arrive at the same moment the first "Hello" did. The
-    // handshake is dead time that has to be spent anyway.
-    expect(CONNECTING).toContain('brief?: { who: string; complaint?: string | null }')
-    expect(CONNECTING).toContain('{brief.who}')
-    expect(CONNECTING).toContain('{brief.complaint}')
-    expect(GUEST).toContain('brief={brief}')
+  it('opens the guest on the case details page, not straight into the call', () => {
+    expect(TALK).toContain('`/try/station/${stationId}?session=${sessionId}`')
+    expect(TALK).not.toContain("leave(req, `/try/session/${sessionId}`)")
   })
 
-  it('leaves the signed-in session exactly as it was', () => {
-    // It comes off a reading page, so the prop is optional and unused there.
-    expect(CONNECTING).toContain('{brief && (')
+  it('keeps the call screen to the call', () => {
+    for (const gone of ['Read the full brief first', 'End whenever you like', 'brief={brief}']) {
+      expect(GUEST, gone).not.toContain(gone)
+    }
+  })
+
+  it('uses the same connecting screen as the signed-in session', () => {
+    expect(CONNECTING).not.toContain('brief?:')
     expect(SIGNED_IN).not.toContain('brief={')
   })
 })

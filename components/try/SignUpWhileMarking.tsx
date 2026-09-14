@@ -319,13 +319,20 @@ export default function SignUpWhileMarking({
         "Run it properly" points back at THIS case. A run too short to mark is
         the one state where the person has nothing yet and every reason to try
         again, and a dead end there costs the consultation AND the account.
+
+        That offer is for the moment they are deciding. Once they have given
+        an address and are typing the code, they have chosen the account, so
+        the short-run card steps aside rather than sitting above the code boxes.
+        A real verdict stays: it is the reason to finish.
       */}
-      <VerdictReveal
-        sessionId={sessionId}
-        state={marking}
-        showWaiting={false}
-        retryHref={retryHref}
-      />
+      {!(step === 'code' && (marking.kind === 'unmarkable' || marking.kind === 'unfinished')) && (
+        <VerdictReveal
+          sessionId={sessionId}
+          state={marking}
+          showWaiting={false}
+          retryHref={retryHref}
+        />
+      )}
 
       <div className="mx-auto mt-10 max-w-[27rem]">
         <motion.h1
