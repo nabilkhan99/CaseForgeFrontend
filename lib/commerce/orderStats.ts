@@ -1,14 +1,16 @@
 /**
  * Pure, dependency-free aggregation for the admin orders view.
  *
- * Imports only the plan catalogue (no Supabase / next) so it is trivially
- * unit-testable and safe to import from server routes and server components
- * alike. Every value is a snapshot — no I/O, no mutation of the inputs.
+ * Imports only the plan catalogue and the coaching slot contract (no Supabase /
+ * next) so it is trivially unit-testable and safe to import from server routes,
+ * server components and the client table alike. Every value is a snapshot — no
+ * I/O, no mutation of the inputs.
  *
  * Money is always pence (integers); percentages are numbers.
  */
 
 import { getPlan } from './plans'
+import { COACHING_SLOT_ORDER, isCoachingSlotKey, type CoachingSlotKey } from './coachingSlots'
 
 /** One purchase, as stored in `preorders`. */
 export interface OrderRow {
@@ -17,7 +19,10 @@ export interface OrderRow {
   /** 'paid' | 'refunded' | 'canceled' — only 'paid' counts as revenue. */
   status: string
   referral_code: string | null
+  /** Date of the booked coaching session (ISO), Complete only. */
   coaching_day: string | null
+  /** Slot of the booked coaching session; null on a booking made before slots existed. */
+  coaching_slot?: string | null
 }
 
 /** Per-plan rollup. Paid-only counts; the plan appears if it has any order. */
@@ -115,4 +120,95 @@ export function computeOrderStats(orders: readonly OrderRow[]): OrderStats {
     referredPct: referredShare(referredPaidCount, paidCount),
     byPlan,
   }
+}
+
+/** One row of `coaching_slot_availability`, as the admin view reads it. */
+export interface SlotAvailabilityRow {
+  day: string
+  slot: string
+  /** 'open' | 'booked' | 'closed'. 'booked' covers a live checkout hold too. */
+  status: string
+  past: boolean
+}
+
+/** A purchase, as far as coaching session bookings are concerned. */
+export interface SessionBookingOrder {
+  email: string
+  full_name: string | null
+  plan: string
+  status: string
+  coaching_day: string | null
+  coaching_slot?: string | null
+}
+
+/**
+ * booked: a paid Complete order occupies the slot. held: no paid order, but a
+ * buyer is in checkout on it right now. open: bookable. closed: bookings for the
+ * date have closed with nobody in the slot.
+ */
+export type SlotBookingState = 'booked' | 'held' | 'open' | 'closed'
+
+export interface SlotBooking {
+  state: SlotBookingState
+  /**
+   * Who is booked into the slot (name, or email when there is no name). More
+   * than one entry is a double booking and needs sorting out by hand.
+   */
+  bookedBy: string[]
+}
+
+/** One coaching date, with who (if anyone) is booked into each of its slots. */
+export interface SessionDateBookings {
+  day: string
+  past: boolean
+  slots: Record<CoachingSlotKey, SlotBooking>
+}
+
+/** Does this paid order occupy that slot? A booking with no slot takes the whole date. */
+function occupies(order: SessionBookingOrder, day: string, slot: CoachingSlotKey): boolean {
+  if (order.plan !== 'complete' || order.status !== 'paid' || order.coaching_day !== day) return false
+  return !isCoachingSlotKey(order.coaching_slot) || order.coaching_slot === slot
+}
+
+function slotBooking(
+  day: string,
+  slot: CoachingSlotKey,
+  availability: readonly SlotAvailabilityRow[],
+  orders: readonly SessionBookingOrder[],
+): SlotBooking {
+  const bookedBy = orders
+    .filter((o) => occupies(o, day, slot))
+    .map((o) => o.full_name?.trim() || o.email)
+  if (bookedBy.length > 0) return { state: 'booked', bookedBy }
+
+  const viewStatus = availability.find((a) => a.day === day && a.slot === slot)?.status
+  const state: SlotBookingState =
+    viewStatus === 'booked' ? 'held' : viewStatus === 'closed' ? 'closed' : 'open'
+  return { state, bookedBy: [] }
+}
+
+/**
+ * Per-slot bookings for every configured coaching date, oldest date first.
+ *
+ * Each slot takes one booking. Who is in it comes from the paid orders (so the
+ * view can name them); whether an empty slot is held, open or closed comes from
+ * the availability view. A legacy booking with no slot shows in both slots of
+ * its date, because that is the capacity it actually takes.
+ */
+export function computeSessionBookings(
+  availability: readonly SlotAvailabilityRow[],
+  orders: readonly SessionBookingOrder[],
+): SessionDateBookings[] {
+  const days = Array.from(new Set(availability.map((a) => a.day))).sort()
+  return days.map((day) => {
+    const past = availability.some((a) => a.day === day && a.past)
+    const entries = COACHING_SLOT_ORDER.map(
+      (slot) => [slot, slotBooking(day, slot, availability, orders)] as const,
+    )
+    return {
+      day,
+      past,
+      slots: Object.fromEntries(entries) as Record<CoachingSlotKey, SlotBooking>,
+    }
+  })
 }

@@ -27,7 +27,7 @@ const COMPLETE: ReceiptFacts = {
   ...BASE,
   planKey: 'complete',
   amountPence: 59900,
-  coachingDayLabel: 'Saturday 12 September 2026',
+  sessionLabel: 'Saturday 7 November 2026, 09:00 to 12:00',
 }
 
 const SELF_STUDY: ReceiptFacts = { ...BASE, planKey: 'self_study', amountPence: 29900 }
@@ -50,12 +50,30 @@ describe('Complete SCA Course — £599 one-off', () => {
     )
   })
 
-  it('lists the coaching day, the lectures and the stations', () => {
+  it('lists the coaching session, the lectures, the stations and the taught hours', () => {
     expect(c.lineItems).toEqual([
-      'Full-day small-group coaching, Saturday 12 September 2026, 09:00 to 17:00',
-      'On-demand lecture series',
+      'One to one coaching session, Saturday 7 November 2026, 09:00 to 12:00',
+      'On-demand lecture series, 14 lectures',
       '200 consultation practice stations, 3 month access',
+      '11.5 total taught hours',
     ])
+  })
+
+  it('states taught hours as one figure, never itemising coaching hours', () => {
+    const everything = c.lineItems.join(' ')
+    expect(everything.match(/hours/g)).toHaveLength(1)
+    expect(everything).not.toMatch(/3 hours?|3 hour/)
+  })
+
+  it('prints a booking made before slots existed with its date alone', () => {
+    const legacy = buildReceiptContent({ ...COMPLETE, sessionLabel: 'Saturday 12 September 2026' })
+    expect(legacy.lineItems[0]).toBe('One to one coaching session, Saturday 12 September 2026')
+  })
+
+  it('carries none of the old coaching format', () => {
+    const everything = [c.planStrapline, ...c.lineItems, ...c.terms].join(' ')
+    expect(everything).not.toMatch(/small.group|full.day|09:00 to 17|coaching.day/i)
+    expect(everything).not.toMatch(/[\u2013\u2014]/)
   })
 
   it('is a total paid, at £599.00', () => {
@@ -152,15 +170,15 @@ describe('the two blocks that must never be swapped', () => {
   })
 })
 
-describe('the charge date is not the coaching day', () => {
-  it('dates the payment from paidAt, whatever the coaching day says', () => {
+describe('the charge date is not the coaching session', () => {
+  it('dates the payment from paidAt, whatever the coaching session says', () => {
     const c = buildReceiptContent({
       ...COMPLETE,
       paidAt: new Date('2026-08-27T10:30:00Z'),
-      coachingDayLabel: 'Saturday 12 September 2026',
+      sessionLabel: 'Saturday 7 November 2026, 09:00 to 12:00',
     })
     expect(c.paymentDate).toBe('27 August 2026')
-    expect(c.lineItems[0]).toContain('Saturday 12 September 2026')
+    expect(c.lineItems[0]).toContain('Saturday 7 November 2026, 09:00 to 12:00')
   })
 
   it('dates a payment in London time, not UTC', () => {
@@ -196,10 +214,10 @@ describe('formatting helpers', () => {
 })
 
 describe('missing values are visible, not blank', () => {
-  it('marks a missing coaching day rather than printing an empty gap', () => {
+  it('marks a missing coaching session rather than printing an empty gap', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    const c = buildReceiptContent({ ...COMPLETE, coachingDayLabel: null })
-    expect(c.lineItems[0]).toContain('[session date]')
+    const c = buildReceiptContent({ ...COMPLETE, sessionLabel: null })
+    expect(c.lineItems[0]).toBe('One to one coaching session, [session date and time]')
   })
 
   it('marks a missing billing period rather than printing an empty gap', () => {

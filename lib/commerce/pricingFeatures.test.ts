@@ -10,7 +10,7 @@ import { FREE_TIER, PLANS } from './plans'
  * The cells are POSITIONAL — index 0 is Free, index 3 is Intensive — and
  * nothing in the markup says so. The table renders twice off these rows (a
  * desktop grid and a stack of mobile cards), so an off-by-one does not throw:
- * it silently offers Complete's coaching day in the Free column. That is what
+ * it silently offers Complete's coaching session in the Free column. That is what
  * this file exists to catch.
  *
  * The other invariant here is the one that matters for money: `FREE_TIER` must
@@ -64,7 +64,7 @@ describe('what the free column offers', () => {
     }
   })
 
-  it.each(['On-demand Lectures', 'Small-Group Coaching', '1:1 weekly coaching'])(
+  it.each(['On-demand Lectures', '1:1 Coaching Session', 'Ongoing 1:1 coaching'])(
     'crosses %s',
     (label) => {
       expect(rowFor(label).cells[FREE].cross).toBe(true)
@@ -80,16 +80,17 @@ describe('the paid columns are unchanged', () => {
     expect(cells[INTENSIVE].text).toBe('Unlimited')
   })
 
-  it('still puts the coaching day on Complete and Intensive only', () => {
-    const cells = rowFor('Small-Group Coaching').cells
+  it('still puts the coaching session on Complete and Intensive only', () => {
+    const cells = rowFor('1:1 Coaching Session').cells
     expect(cells[FREE].cross).toBe(true)
     expect(cells[SELF_STUDY].cross).toBe(true)
-    expect(cells[COMPLETE].text).toContain('One full day')
-    expect(cells[INTENSIVE].text).toContain('One full day')
+    expect(cells[COMPLETE].text).toBe('3 hours, 6 stations')
+    expect(cells[COMPLETE].sub).toBe('Just you and your coach · £749 value')
+    expect(cells[INTENSIVE].text).toBe('3 hours, 6 stations')
   })
 
   it('still keeps 1:1 coaching to Intensive', () => {
-    const cells = rowFor('1:1 weekly coaching').cells
+    const cells = rowFor('Ongoing 1:1 coaching').cells
     expect(cells[INTENSIVE].text).toBe('12 x 1hr sessions')
     expect(cells[COMPLETE].cross).toBe(true)
   })

@@ -90,7 +90,7 @@ export interface TrialCountdown {
 /**
  * "Thursday 12 September", in the reader's own timezone.
  *
- * NOT forced to UTC, unlike the coaching-day and plan-expiry dates on the
+ * NOT forced to UTC, unlike the coaching-session and plan-expiry dates on the
  * dashboard. Those are stored as calendar days (`YYYY-MM-DD`) and reading them
  * locally would shift them by one; this is a real instant, so the reader's own
  * day is the true answer to "when does this stop working".

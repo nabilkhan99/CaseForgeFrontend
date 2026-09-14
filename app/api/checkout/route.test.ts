@@ -4,14 +4,16 @@ import type { Entitlement } from '@/lib/commerce/entitlements'
 /**
  * The commerce-correctness rules this endpoint enforces:
  *
- * 1. Every plan opens a `mode: 'subscription'` session — Self-Study and
- *    Complete included, since they became fixed-term subscriptions.
+ * 1. Each plan opens a session in the mode it is sold in: the course terms are
+ *    one-off `payment` sessions, the rolling monthly is a `subscription`.
  * 2. A signed-in buyer's ACCOUNT email is what Stripe collects, because
  *    entitlements match purchases to accounts by email.
  * 3. That buyer gets ONE Stripe Customer, resolved server-side and passed as
  *    `customer:`. `customer_email` on a subscription session mints a new
  *    Customer per purchase, which splits a repeat buyer's subscriptions across
- *    two `cus_…` objects — the Portal only ever opens on one of them.
+ *    two `cus_…` objects, and the Portal only ever opens on one of them.
+ * 4. A Complete checkout claims its one to one coaching slot before Stripe is
+ *    called, and a slot that cannot be claimed never reaches payment.
  *
  * Asserted on the params handed to `checkout.sessions.create` — no real Stripe
  * call is ever made.
@@ -28,15 +30,12 @@ const mocks = vi.hoisted(() => ({
   },
   /** Rows the cookie-scoped client returns for the caller's own purchases. */
   preorderRows: [] as Array<Record<string, unknown>>,
-  coachingDay: {
-    day: '2026-09-12',
-    label: 'Saturday 12 September 2026',
-    capacity: 6,
-    places_left: 4,
-    cutoff_at: '2026-09-11T23:00:00Z',
-    status: 'open',
-  } as Record<string, unknown> | null,
-  holdInsert: vi.fn(),
+  /** What `claim_coaching_slot` answers. */
+  claim: { data: [{ hold_id: 'hold-1', outcome: 'held' }] as unknown, error: null as unknown },
+  rpc: vi.fn(),
+  holdUpdate: vi.fn(),
+  holdUpdateError: null as unknown,
+  holdDelete: vi.fn(),
 }))
 
 vi.mock('server-only', () => ({}))
@@ -71,20 +70,25 @@ vi.mock('@/lib/commerce/serverEntitlement', () => ({
 
 vi.mock('@/lib/supabase/admin', () => ({
   getSupabaseAdmin: () => ({
+    rpc: async (name: string, params: unknown) => {
+      mocks.rpc(name, params)
+      return mocks.claim
+    },
     from: (table: string) => {
-      if (table === 'coaching_day_availability') {
-        return {
-          select: () => ({
-            eq: () => ({ maybeSingle: async () => ({ data: mocks.coachingDay, error: null }) }),
-          }),
-        }
-      }
       if (table === 'checkout_holds') {
         return {
-          insert: async (values: unknown) => {
-            mocks.holdInsert(values)
-            return { error: null }
-          },
+          update: (values: unknown) => ({
+            eq: async (column: string, value: unknown) => {
+              mocks.holdUpdate(values, column, value)
+              return { error: mocks.holdUpdateError }
+            },
+          }),
+          delete: () => ({
+            eq: async (column: string, value: unknown) => {
+              mocks.holdDelete(column, value)
+              return { error: null }
+            },
+          }),
         }
       }
       // referral_codes — no cookie is set in these tests, so this is unused.
@@ -124,6 +128,8 @@ beforeEach(() => {
     failedOpen: false,
   }
   mocks.preorderRows = []
+  mocks.claim = { data: [{ hold_id: 'hold-1', outcome: 'held' }], error: null }
+  mocks.holdUpdateError = null
   mocks.createSession.mockResolvedValue({ id: 'cs_test_1', url: 'https://checkout.stripe.com/c/cs_test_1' })
   mocks.customersSearch.mockResolvedValue({ data: [] })
   mocks.customersCreate.mockResolvedValue({ id: 'cus_new' })
@@ -141,7 +147,7 @@ describe('checkout mode per plan', () => {
     // The course terms are one-off sales; only the rolling plan is a
     // subscription. The mode is what Stripe's own page reads from, so getting
     // it wrong tells the buyer their course renews.
-    const { status } = await post({ plan, coachingDay: '2026-09-12' })
+    const { status } = await post({ plan, coachingDate: '2026-11-07', coachingSlot: 'morning' })
 
     expect(status).toBe(200)
     const params = sessionParams()
@@ -205,7 +211,11 @@ describe('checkout mode per plan', () => {
     // It is not a plan any more: the upgrade is a Stripe Portal plan switch.
     signedInAs('buyer@nhs.net', { plan: 'self_study' })
 
-    const { status } = await post({ plan: 'complete_upgrade', coachingDay: '2026-09-12' })
+    const { status } = await post({
+      plan: 'complete_upgrade',
+      coachingDate: '2026-11-07',
+      coachingSlot: 'morning',
+    })
 
     expect(status).toBe(400)
     expect(mocks.createSession).not.toHaveBeenCalled()
@@ -284,42 +294,176 @@ describe('linking a purchase to the buyer’s account', () => {
   })
 })
 
-describe('coaching day', () => {
-  it('is required for Complete', async () => {
-    const { status } = await post({ plan: 'complete' })
+const COMPLETE_BODY = { plan: 'complete', coachingDate: '2026-11-07', coachingSlot: 'morning' }
+
+describe('a Complete checkout and its coaching session', () => {
+  it.each([
+    ['no date or slot', { plan: 'complete' }],
+    ['no slot', { plan: 'complete', coachingDate: '2026-11-07' }],
+    ['no date', { plan: 'complete', coachingSlot: 'morning' }],
+    ['an impossible date', { plan: 'complete', coachingDate: '2026-02-30', coachingSlot: 'morning' }],
+    ['an unknown slot', { plan: 'complete', coachingDate: '2026-11-07', coachingSlot: 'evening' }],
+  ])('is refused with %s, before anything is claimed', async (_label, body) => {
+    const { status, body: response } = await post(body)
 
     expect(status).toBe(400)
+    expect(response.error).toBe('Please choose a date and time for your coaching session.')
+    expect(mocks.rpc).not.toHaveBeenCalled()
     expect(mocks.createSession).not.toHaveBeenCalled()
   })
 
-  it('soft-holds the place and carries the label into metadata', async () => {
-    const { status } = await post({ plan: 'complete', coachingDay: '2026-09-12' })
+  it('claims the slot before creating the Stripe session', async () => {
+    const order: string[] = []
+    mocks.rpc.mockImplementation(() => order.push('claim'))
+    mocks.createSession.mockImplementation(async () => {
+      order.push('stripe')
+      return { id: 'cs_test_1', url: 'https://checkout.stripe.com/c/cs_test_1' }
+    })
+
+    const { status } = await post(COMPLETE_BODY)
 
     expect(status).toBe(200)
-    expect(mocks.holdInsert).toHaveBeenCalledWith(
-      expect.objectContaining({ coaching_day: '2026-09-12', stripe_session_id: 'cs_test_1' }),
+    expect(order).toEqual(['claim', 'stripe'])
+    expect(mocks.rpc).toHaveBeenCalledWith(
+      'claim_coaching_slot',
+      expect.objectContaining({ p_day: '2026-11-07', p_slot: 'morning' }),
     )
-    expect(sessionParams().metadata).toMatchObject({
-      coaching_day: '2026-09-12',
-      coaching_day_label: 'Saturday 12 September 2026',
-    })
   })
 
-  it('refuses a sold-out day', async () => {
-    mocks.coachingDay = { ...(mocks.coachingDay as Record<string, unknown>), status: 'sold_out', places_left: 0 }
+  it('holds the slot 10 minutes longer than the session it guards', async () => {
+    const before = Date.now()
+    await post(COMPLETE_BODY)
 
-    const { status } = await post({ plan: 'complete', coachingDay: '2026-09-12' })
+    const sessionExpiresMs = (sessionParams().expires_at as number) * 1000
+    const holdExpiresMs = Date.parse(
+      (mocks.rpc.mock.calls[0][1] as { p_expires_at: string }).p_expires_at,
+    )
+    // Never under Stripe's 30 minute floor, with a little room for the round trip.
+    expect(sessionExpiresMs - before).toBeGreaterThanOrEqual(30 * 60 * 1000)
+    expect(sessionExpiresMs - before).toBeLessThanOrEqual(32 * 60 * 1000)
+    expect(holdExpiresMs - sessionExpiresMs).toBeGreaterThanOrEqual(10 * 60 * 1000)
+    expect(holdExpiresMs - sessionExpiresMs).toBeLessThanOrEqual(10 * 60 * 1000 + 1000)
+  })
+
+  it('links the hold to the session and returns the url', async () => {
+    const { status, body } = await post(COMPLETE_BODY)
+
+    expect(status).toBe(200)
+    expect(body).toEqual({ url: 'https://checkout.stripe.com/c/cs_test_1' })
+    expect(mocks.holdUpdate).toHaveBeenCalledWith({ stripe_session_id: 'cs_test_1' }, 'id', 'hold-1')
+    expect(mocks.holdDelete).not.toHaveBeenCalled()
+  })
+
+  it('carries the date, slot and label in the metadata, in both places', async () => {
+    await post(COMPLETE_BODY)
+
+    const expected = {
+      plan: 'complete',
+      coaching_date: '2026-11-07',
+      coaching_slot: 'morning',
+      coaching_session_label: 'Saturday 7 November 2026, 09:00 to 12:00',
+    }
+    const params = sessionParams()
+    expect(params.metadata).toMatchObject(expected)
+    expect((params.payment_intent_data as { metadata: unknown }).metadata).toMatchObject(expected)
+    expect(params.metadata).not.toHaveProperty('coaching_day')
+    expect(params.metadata).not.toHaveProperty('coaching_day_label')
+  })
+
+  it('shows the slot on Stripe’s page and on Stripe’s receipt before payment', async () => {
+    await post(COMPLETE_BODY)
+
+    const params = sessionParams()
+    expect((params.custom_text as { submit: { message: string } }).submit.message).toBe(
+      "Coaching session: Saturday 7 November, 09:00 to 12:00. After payment we'll email you a link to set your password. That's how you get into the course.",
+    )
+    expect((params.payment_intent_data as { description: string }).description).toBe(
+      'The Complete SCA Course. Coaching session: Saturday 7 November, 09:00 to 12:00',
+    )
+  })
+
+  it('sends a cancelled buyer back to the booking page with the hold to release', async () => {
+    await post(COMPLETE_BODY)
+
+    expect(sessionParams().cancel_url).toBe(
+      'https://www.fourteenfisherman.com/coaching-session?release=hold-1',
+    )
+  })
+
+  it('answers 409 slot_taken when the slot has gone, and never reaches Stripe', async () => {
+    mocks.claim = { data: [{ hold_id: null, outcome: 'taken' }], error: null }
+
+    const { status, body } = await post(COMPLETE_BODY)
 
     expect(status).toBe(409)
+    expect(body).toEqual({
+      error: 'That slot has just been booked. Please choose another.',
+      code: 'slot_taken',
+    })
     expect(mocks.createSession).not.toHaveBeenCalled()
+  })
 
-    mocks.coachingDay = {
-      day: '2026-09-12',
-      label: 'Saturday 12 September 2026',
-      capacity: 6,
-      places_left: 4,
-      cutoff_at: '2026-09-11T23:00:00Z',
-      status: 'open',
-    }
+  it('answers 409 slot_closed when bookings for the date have closed', async () => {
+    mocks.claim = { data: [{ hold_id: null, outcome: 'closed' }], error: null }
+
+    const { status, body } = await post(COMPLETE_BODY)
+
+    expect(status).toBe(409)
+    expect(body).toEqual({
+      error: 'Bookings for that date have closed. Please choose another.',
+      code: 'slot_closed',
+    })
+    expect(mocks.createSession).not.toHaveBeenCalled()
+  })
+
+  it('blocks checkout when the claim itself fails', async () => {
+    // With one booking per slot a hold cannot be best-effort any more: going
+    // on to Stripe without one is how two buyers pay for the same slot.
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.claim = { data: null, error: { message: 'connection reset' } }
+
+    const { status } = await post(COMPLETE_BODY)
+
+    expect(status).toBe(500)
+    expect(mocks.createSession).not.toHaveBeenCalled()
+  })
+
+  it('gives the slot back when Stripe will not create the session', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.createSession.mockRejectedValue(new Error('Stripe is down'))
+
+    const { status } = await post(COMPLETE_BODY)
+
+    expect(status).toBe(500)
+    expect(mocks.holdDelete).toHaveBeenCalledWith('id', 'hold-1')
+  })
+
+  it('still returns the url when the hold cannot be linked to the session', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.holdUpdateError = { message: 'timeout' }
+
+    const { status, body } = await post(COMPLETE_BODY)
+
+    expect(status).toBe(200)
+    expect(body.url).toBe('https://checkout.stripe.com/c/cs_test_1')
+    expect(mocks.holdDelete).not.toHaveBeenCalled()
+  })
+})
+
+describe('a Self-Study checkout', () => {
+  it('claims nothing, keeps the pricing cancel url and the plain submit message', async () => {
+    await post({ plan: 'self_study' })
+
+    const params = sessionParams()
+    expect(mocks.rpc).not.toHaveBeenCalled()
+    // Nothing is held, so the session keeps Stripe's default lifetime.
+    expect(params.expires_at).toBeUndefined()
+    expect(params.cancel_url).toBe('https://www.fourteenfisherman.com/#pricing')
+    expect((params.custom_text as { submit: { message: string } }).submit.message).toBe(
+      "After payment we'll email you a link to set your password. That's how you get into the course.",
+    )
+    expect((params.payment_intent_data as { description: string }).description).toBe(
+      'Fourteen Fisherman, Self-Study',
+    )
   })
 })

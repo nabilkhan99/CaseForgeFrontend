@@ -40,6 +40,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
             changeFrequency: 'monthly',
             priority: 0.85,
         },
+        // The Complete plan's booking page: where a buyer picks their
+        // coaching date. Transactional rather than editorial, so it sits
+        // below the guide index.
+        {
+            url: absoluteUrl('/coaching-session'),
+            lastModified: now,
+            changeFrequency: 'weekly',
+            priority: 0.8,
+        },
         ...guideArticles.map(article => ({
             url: absoluteUrl(guidePath(article.slug)),
             lastModified: now,

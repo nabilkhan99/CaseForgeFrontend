@@ -70,9 +70,9 @@ describe('the hero’s call to action', () => {
 describe('the receipt block is untouched', () => {
   it('still itemises the course against the study budget', () => {
     expect(HERO).toContain("{ label: '200 AI stations, unlimited', amount: '£299' }")
-    expect(HERO).toContain("{ label: '8 hours of lectures', amount: '£599' }")
-    expect(HERO).toContain("{ label: '8-hour live coaching day', amount: '£599' }")
-    expect(HERO).toContain('£1,497')
+    expect(HERO).toContain("{ label: '8.5 hours of lectures', amount: '£599' }")
+    expect(HERO).toContain("{ label: '3 hour 1:1 coaching session', amount: '£749' }")
+    expect(HERO).toContain('£1,647')
     expect(HERO).toContain('Study budget (GP0001)')
   })
 

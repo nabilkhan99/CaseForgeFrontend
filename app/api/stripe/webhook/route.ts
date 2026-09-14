@@ -13,6 +13,7 @@ import {
   referralUrl,
 } from '@/lib/commerce/referrals';
 import { isFixedTermPlan, isRollingPlan, planForStripePriceId } from '@/lib/commerce/plans';
+import { readCoachingSessionMetadata, type CoachingSlotKey } from '@/lib/commerce/coachingSlots';
 import { resolvePurchaseEmail } from '@/lib/commerce/buyerEmail';
 import { sendReferralEmail } from '@/lib/email/referralEmail';
 import { sendReceiptEmail } from '@/lib/email/receiptEmail';
@@ -34,11 +35,16 @@ type SupabaseAdmin = ReturnType<typeof getSupabaseAdmin>;
 /**
  * Stripe webhook.
  *
- * `checkout.session.completed` -> record the paid pre-order (drives the seat
- * counter), attribute any referral, mint the buyer's own advocate code +
- * invite email, and — because every plan is now a subscription — DISARM the
- * renewal on the two fixed-term course plans and record the Stripe billing
- * period. Every write is idempotent so Stripe retries are safe.
+ * `checkout.session.completed` -> record the paid pre-order (for Complete this
+ * is what books the one to one coaching slot, and then retires its checkout
+ * hold), attribute any referral, mint the buyer's own advocate code + invite
+ * email, and, for a subscription session, DISARM the renewal on a fixed-term
+ * plan and record the Stripe billing period. Every write is idempotent so
+ * Stripe retries are safe.
+ *
+ * `checkout.session.expired` / `checkout.session.async_payment_failed` ->
+ * release the coaching slot hold behind that session, so the slot is free
+ * again at once rather than when the hold runs out.
  *
  * `charge.refunded` -> void the linked referral on ANY genuine refund (partial
  * or full) so it can't be paid out; the pre-order is flipped to refunded only on
@@ -62,9 +68,12 @@ type SupabaseAdmin = ReturnType<typeof getSupabaseAdmin>;
  * the settings page's "next payment" date follows Stripe.
  *
  * Ops: the Stripe webhook endpoint must have `charge.refunded`,
- * `customer.subscription.deleted`, `customer.subscription.updated` AND
- * `invoice.paid` enabled. Without the third, a subscription that dies by
- * dunning rather than by cancellation keeps its `paid` row and its entitlement.
+ * `customer.subscription.deleted`, `customer.subscription.updated`,
+ * `invoice.paid`, `checkout.session.expired` AND
+ * `checkout.session.async_payment_failed` enabled. Without
+ * `customer.subscription.updated`, a subscription that dies by dunning rather
+ * than by cancellation keeps its `paid` row and its entitlement. Without the
+ * two checkout events, an abandoned slot stays held until its hold expires.
  */
 export async function POST(request: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -99,6 +108,12 @@ export async function POST(request: Request) {
       // is when the customer opened Checkout, which can be a different day.
       new Date(event.created * 1000),
     );
+  }
+  if (
+    event.type === 'checkout.session.expired' ||
+    event.type === 'checkout.session.async_payment_failed'
+  ) {
+    return handleCheckoutAbandoned(event.data.object as Stripe.Checkout.Session, event.type);
   }
   if (event.type === 'charge.refunded') {
     return handleChargeRefunded(event.data.object as Stripe.Charge);
@@ -337,6 +352,82 @@ async function writeSubscriptionState(
   return 'ok';
 }
 
+/**
+ * Loud check for a slot sold twice. It should be impossible: checkout claims
+ * the slot under a lock before anyone reaches payment. But a paying customer is
+ * never turned away, so the order is always recorded, and this is how somebody
+ * finds out they need a phone call.
+ *
+ * A legacy booking with no slot occupies its whole date, so it collides with
+ * any booking that date, and any booking that date collides with it.
+ */
+async function reportDoubleBooking(
+  supabase: SupabaseAdmin,
+  args: { sessionId: string; date: string; slot: CoachingSlotKey | null },
+): Promise<void> {
+  try {
+    const { data, error } = await supabase
+      .from('preorders')
+      .select('id, email, coaching_slot, stripe_session_id')
+      .eq('plan', 'complete')
+      .eq('status', 'paid')
+      .eq('coaching_day', args.date);
+    if (error) {
+      console.error('[stripe-webhook] could not check the coaching slot for a double booking', {
+        sessionId: args.sessionId,
+        error,
+      });
+      return;
+    }
+    // Filtered here rather than in SQL: a hand-entered booking has no session
+    // id, and `stripe_session_id <> $1` would silently drop exactly those rows.
+    const others = (data ?? []).filter(
+      (row) =>
+        row.stripe_session_id !== args.sessionId &&
+        (!args.slot || !row.coaching_slot || row.coaching_slot === args.slot),
+    );
+    if (others.length > 0) {
+      console.error('[stripe-webhook] CRITICAL: coaching slot booked twice, the order was recorded anyway', {
+        sessionId: args.sessionId,
+        date: args.date,
+        slot: args.slot,
+        otherOrders: others.map((row) => ({ id: row.id, email: row.email, slot: row.coaching_slot })),
+      });
+    }
+  } catch (error: unknown) {
+    console.error('[stripe-webhook] could not check the coaching slot for a double booking', {
+      sessionId: args.sessionId,
+      error,
+    });
+  }
+}
+
+/**
+ * A checkout that will never be paid: it expired (Stripe's own timer, or our
+ * release route expiring it) or its delayed payment failed. Frees the coaching
+ * slot it was holding, if any.
+ *
+ * Only the hold is touched. No order exists for an unpaid session, so there is
+ * nothing else to undo. Idempotent: a redelivery deletes nothing.
+ */
+async function handleCheckoutAbandoned(session: Stripe.Checkout.Session, eventType: string) {
+  const { error } = await getSupabaseAdmin()
+    .from('checkout_holds')
+    .delete()
+    .eq('stripe_session_id', session.id);
+  if (error) {
+    // Worth a retry: until it lands the slot reads as booked. It is not lost
+    // either way, the hold expires on its own shortly after the session.
+    console.error('[stripe-webhook] could not release the checkout hold', {
+      sessionId: session.id,
+      eventType,
+      error,
+    });
+    return NextResponse.json({ error: 'Failed to release hold' }, { status: 500 });
+  }
+  return NextResponse.json({ received: true });
+}
+
 async function handleCheckoutCompleted(
   session: Stripe.Checkout.Session,
   origin: string,
@@ -370,16 +461,19 @@ async function handleCheckoutCompleted(
   }
   const email = resolvedEmail.email;
   const plan = session.metadata?.plan;
-  const coachingDay = session.metadata?.coaching_day ?? null;
+  // Sessions opened by the previous deploy carry the legacy `coaching_day` keys
+  // and can still complete after this one ships; the reader accepts both.
+  const booking = readCoachingSessionMetadata(session.metadata);
   const intakeMonth = session.metadata?.intake_month ?? null; // legacy sessions
-  const needsCoachingDay = plan === 'complete';
+  const needsCoachingSession = plan === 'complete';
 
-  if (!email || !plan || (needsCoachingDay && !coachingDay && !intakeMonth)) {
+  if (!email || !plan || (needsCoachingSession && !booking.date && !intakeMonth)) {
     console.error('[stripe-webhook] session missing required fields', {
       sessionId: session.id,
       hasEmail: Boolean(email),
       plan,
-      coachingDay,
+      coachingDate: booking.date,
+      coachingSlot: booking.slot,
       intakeMonth,
     });
     // 200 so Stripe doesn't retry forever — this needs manual follow-up, not retries.
@@ -387,16 +481,6 @@ async function handleCheckoutCompleted(
   }
 
   const supabase = getSupabaseAdmin();
-
-  // The hold's job ends with the session: the paid preorder now occupies the
-  // place, so drop the hold rather than double-counting until it expires.
-  const { error: holdError } = await supabase
-    .from('checkout_holds')
-    .delete()
-    .eq('stripe_session_id', session.id);
-  if (holdError) {
-    console.error('[stripe-webhook] hold release failed (non-fatal)', { sessionId: session.id, error: holdError });
-  }
 
   const buyerEmail = email; // already normalized by resolvePurchaseEmail
   const buyerName = session.customer_details?.name ?? null;
@@ -411,7 +495,10 @@ async function handleCheckoutCompleted(
       email: buyerEmail,
       full_name: buyerName,
       plan,
-      coaching_day: coachingDay,
+      // Recording the paid order IS the booking: from this row on, the slot is
+      // occupied. Nothing earlier (the hold, the Stripe page) marks it booked.
+      coaching_day: booking.date,
+      coaching_slot: booking.slot,
       intake_month: intakeMonth,
       amount: session.amount_total ?? 0,
       currency: session.currency ?? 'gbp',
@@ -453,6 +540,27 @@ async function handleCheckoutCompleted(
       .eq('stripe_session_id', session.id)
       .maybeSingle();
     preorderId = existing?.id ?? null;
+  }
+
+  // Only now that the paid order occupies the slot is the hold retired. The
+  // other order would leave a moment in which neither held it, and a buyer
+  // could claim the slot in between. On a retry this deletes nothing.
+  const { error: holdError } = await supabase
+    .from('checkout_holds')
+    .delete()
+    .eq('stripe_session_id', session.id);
+  if (holdError) {
+    // Non-fatal: the order already occupies the slot, and the hold expires on
+    // its own. It only ever makes the slot look booked twice over.
+    console.error('[stripe-webhook] hold release failed (non-fatal)', { sessionId: session.id, error: holdError });
+  }
+
+  if (isNewPreorder && plan === 'complete' && booking.date) {
+    await reportDoubleBooking(supabase, {
+      sessionId: session.id,
+      date: booking.date,
+      slot: booking.slot,
+    });
   }
 
   // Referral attribution: a genuine DB failure here returns 500 so Stripe
@@ -529,7 +637,7 @@ async function handleCheckoutCompleted(
         email: buyerEmail,
         fullName: buyerName,
         planKey: plan,
-        coachingDayLabel: session.metadata?.coaching_day_label ?? null,
+        coachingSessionLabel: booking.label,
         amountPence: session.amount_total ?? 0,
       });
     } catch (error: unknown) {
@@ -687,7 +795,7 @@ async function deliverPurchaseReceipt(
     return sendAccountEmailInstead({ ...args, reason: 'no_receipt_template' });
   }
 
-  const coachingDayLabel = session.metadata?.coaching_day_label ?? null;
+  const booking = readCoachingSessionMetadata(session.metadata);
   const periodStart = period?.startsAt ? new Date(period.startsAt) : null;
   const periodEnd = period?.endsAt ? new Date(period.endsAt) : null;
 
@@ -704,7 +812,7 @@ async function deliverPurchaseReceipt(
     paidAt: chargedAt,
     periodStart,
     periodEnd,
-    coachingDayLabel,
+    sessionLabel: booking.label,
     kind: 'purchase',
   });
 
@@ -715,7 +823,11 @@ async function deliverPurchaseReceipt(
     toName: buyerName,
     firstName: buyerName,
     planKey: plan,
-    sessionDate: coachingDayLabel,
+    // The date and the slot separately, not a finished label: the email states
+    // the weekday and date, then the time, and omits the time rather than
+    // inventing one for a booking made before slots existed.
+    coachingDate: booking.date,
+    coachingSlot: booking.slot,
     // The renewal date and amount, which the monthly buyer is entitled to be
     // told before the second charge lands.
     nextBillingDate: receipt.periodEnd ? formatReceiptDate(receipt.periodEnd) : null,

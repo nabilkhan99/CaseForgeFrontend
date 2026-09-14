@@ -42,6 +42,15 @@ vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({
     from: () => ({
       delete: () => ({ eq: async () => ({ error: null }) }),
+      // The Complete double-booking check: no other booking on the date.
+      select: () => {
+        const builder = {
+          eq: () => builder,
+          then: (resolve: (value: unknown) => unknown) =>
+            Promise.resolve({ data: [], error: null }).then(resolve),
+        }
+        return builder
+      },
       insert: (values: Record<string, unknown>) => {
         mocks.insert(values)
         return { select: () => ({ single: async () => ({ data: { id: 'p1' }, error: null }) }) }
@@ -174,20 +183,26 @@ describe('checkout.session.completed — purchase email', () => {
     error.mockRestore()
   })
 
-  it('records a Complete purchase with its coaching day', async () => {
+  it('records a Complete purchase with its coaching session', async () => {
     await deliver(
       completedSession({
         customerEmail: 'buyer@nhs.net',
         metadata: {
           plan: 'complete',
-          coaching_day: '2026-09-12',
+          coaching_date: '2026-11-07',
+          coaching_slot: 'morning',
           account_email: 'buyer@nhs.net',
         },
       }),
     )
 
     expect(mocks.insert).toHaveBeenCalledWith(
-      expect.objectContaining({ plan: 'complete', coaching_day: '2026-09-12', email: 'buyer@nhs.net' }),
+      expect.objectContaining({
+        plan: 'complete',
+        coaching_day: '2026-11-07',
+        coaching_slot: 'morning',
+        email: 'buyer@nhs.net',
+      }),
     )
   })
 

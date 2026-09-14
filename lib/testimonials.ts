@@ -34,9 +34,9 @@ export const TESTIMONIALS: readonly Testimonial[] = [
     meta: 'GP Registrar, Wessex',
     image: '/images/reviews/amir-hussain.jpeg',
     quote:
-      'Consulting a full mock in front of five other trainees was as grim as it sounds, at first. But there were only six of us, so the tutor had time to take my consultation apart properly, show me exactly where I was going wrong, and explain how to fix it. I picked up as much from watching the others as I did from having my own consultation reviewed in detail.',
+      'I’d sat through plenty of exam technique teaching before and mostly found it generic. These were genuinely different: each lecture took one part of the exam and showed exactly where the marks are and where most people lose them. Being able to rewatch the difficult consultations one in the run up to the exam took a lot of the fear out of those cases.',
     short:
-      'there were only six of us, so the tutor had time to take my consultation apart properly, show me exactly where I was going wrong, and explain how to fix it',
+      'each lecture took one part of the exam and showed exactly where the marks are and where most people lose them',
   },
   {
     name: 'Dr Harmeet Makan',
@@ -53,9 +53,9 @@ export const TESTIMONIALS: readonly Testimonial[] = [
     image: '/images/reviews/zain-chowdhary.jpeg',
     imageClass: 'object-top',
     quote:
-      'I expected the usual exam-technique waffle from the lectures. Instead, they were genuinely high yield: the things that separate a pass from a fail in each domain, the small habits that cost people marks, and exactly how to improve them. I’ve carried so much of it into the way I structure consultations and communicate with patients in everyday practice.',
+      'The one to one coaching was the part that made the biggest difference. Six stations back to back, then a review of my dashboard where my coach showed me the same mistake turning up across completely different cases, something I had never once spotted in months of practice. Fixing that one habit changed more than any individual station feedback did.',
     short:
-      'the things that separate a pass from a fail in each domain, the small habits that cost people marks, and exactly how to improve them',
+      'my coach showed me the same mistake turning up across completely different cases, something I had never once spotted in months of practice',
   },
 ] as const;
 
@@ -65,8 +65,9 @@ const TRIAL_LEAD_NAME = 'Dr Harmeet Makan';
 /**
  * Same three, led by Harmeet: on the reveal page the reader has just finished
  * an AI consultation and read its feedback, and hers is the quote about exactly
- * that. The other two speak to the coaching day and the lectures, which matter
- * to the same person a moment later, when they are reading the plans.
+ * that. The other two speak to the lectures and the one to one coaching
+ * session, which matter to the same person a moment later, when they are
+ * reading the plans.
  */
 export const TESTIMONIALS_FOR_TRIAL: readonly Testimonial[] = [
   ...TESTIMONIALS.filter((t) => t.name === TRIAL_LEAD_NAME),

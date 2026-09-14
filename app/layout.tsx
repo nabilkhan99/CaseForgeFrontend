@@ -40,7 +40,7 @@ export const metadata: Metadata = {
     default: 'Fourteen Fisherman — The Complete SCA Course',
     template: '%s | Fourteen Fisherman',
   },
-  description: 'AI practice on 200 stations, 8 hours of on-demand lectures and a full-day Small-Group Coaching session. Fail your SCA after passing all 200 stations, and we pay you £500.',
+  description: 'AI practice on 200 stations, 8.5 hours of on-demand lectures and a 3 hour one to one coaching session. Fail your SCA after passing all 200 stations, and we pay you £500.',
   // No `keywords`. The meta-keywords tag has been ignored by every major engine
   // for well over a decade, and because it lived on the ROOT layout it stamped
   // the SCA keyword set onto every page including /gp-portfolio-tool, where the
@@ -62,7 +62,7 @@ export const metadata: Metadata = {
     siteName: 'Fourteen Fisherman',
     url: 'https://www.fourteenfisherman.com/',
     title: 'Fourteen Fisherman — The Complete SCA Course',
-    description: 'AI practice on 200 stations, 8 hours of on-demand lectures and a full-day Small-Group Coaching session. Fail your SCA after passing all 200 stations, and we pay you £500.',
+    description: 'AI practice on 200 stations, 8.5 hours of on-demand lectures and a 3 hour one to one coaching session. Fail your SCA after passing all 200 stations, and we pay you £500.',
     images: [
       {
         url: 'https://www.fourteenfisherman.com/og/sca-default.jpg',
@@ -75,7 +75,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Fourteen Fisherman — The Complete SCA Course',
-    description: 'AI practice on 200 stations, 8 hours of on-demand lectures and a full-day Small-Group Coaching session. Fail your SCA after passing all 200 stations, and we pay you £500.',
+    description: 'AI practice on 200 stations, 8.5 hours of on-demand lectures and a 3 hour one to one coaching session. Fail your SCA after passing all 200 stations, and we pay you £500.',
     images: ['https://www.fourteenfisherman.com/og/sca-default.jpg'],
   },
   alternates: {

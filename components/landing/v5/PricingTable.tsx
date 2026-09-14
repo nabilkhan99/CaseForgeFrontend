@@ -67,8 +67,9 @@ function OwnedBadge({ className = '' }: { className?: string }) {
 
 /**
  * Kicks off Stripe checkout for whichever Self-Study plan the billing toggle has
- * selected (no coaching day needed either way). The plan key is passed in rather
- * than captured so one hook serves both the fixed-term and rolling variants.
+ * selected (no coaching session to book either way). The plan key is passed in
+ * rather than captured so one hook serves both the fixed-term and rolling
+ * variants.
  */
 function useSelfStudyCheckout() {
   const [submitting, setSubmitting] = useState(false);
@@ -340,7 +341,7 @@ function PlanCta({ selfStudy, variant, selfStudyPlan, owned, canUpgrade }: CtaBu
     // the whole of turning self-serve upgrades back on.
     // A Self-Study customer would need a subscription: Stripe swaps its Price
     // and invoices only the time left on their term. Sending them through
-    // /coaching-day would charge the full £599 for what they part-own.
+    // /coaching-session would charge the full £599 for what they part-own.
     return (
       <ManageBillingButton
         flow="subscription_update"
@@ -372,11 +373,11 @@ function PlanCta({ selfStudy, variant, selfStudyPlan, owned, canUpgrade }: CtaBu
   if (variant === 'complete') {
     return (
       <Link
-        href="/coaching-day"
+        href="/coaching-session"
         onClick={() => trackEvent('checkout_clicked', { plan: 'complete' })}
         className="cta-button w-full gap-1.5 !rounded-full px-2 py-3.5 text-[13px] sm:py-3 sm:text-sm"
       >
-        Choose your coaching day <ArrowRight className="h-3.5 w-3.5" />
+        Choose your coaching date <ArrowRight className="h-3.5 w-3.5" />
       </Link>
     );
   }
@@ -451,7 +452,7 @@ function MobileCards({ selfStudy, billing, owned, canUpgrade }: MobileCardsProps
       tagline: 'One payment · nothing renews',
       highlighted: true,
       badge: 'Most popular',
-      valueLine: '£1,497 total value',
+      valueLine: '£1,647 total value',
       cellIndex: 2,
     },
     {
@@ -652,7 +653,7 @@ export default function PricingTable({ ownedPlan, accountEmail, canUpgrade = fal
                 </p>
                 <p className="mt-1 text-[10px] text-muted sm:text-xs">
                   One payment, nothing renews ·{' '}
-                  <span className="line-through">£1,497 value</span>
+                  <span className="line-through">£1,647 value</span>
                 </p>
               </div>
               <div className="relative px-3 pb-5 pt-9 text-center">

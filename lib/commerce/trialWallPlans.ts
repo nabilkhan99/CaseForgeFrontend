@@ -13,7 +13,7 @@ import type { PlanKey } from './plans'
  *   exam further out, or unknown → £299 Self-Study (3 months) + Complete
  *
  * Complete is on both because it is the only tier that carries the lectures and
- * the coaching day, and that argument does not change with the date.
+ * the one to one coaching session, and that argument does not change with the date.
  *
  * A quiet "see all plans" link belongs beside whichever pair this returns; the
  * point is to make a choice easy, not to hide the other two.

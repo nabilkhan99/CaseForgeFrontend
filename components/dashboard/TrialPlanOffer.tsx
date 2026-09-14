@@ -64,10 +64,10 @@ function PlanRow({ planKey, lead, why, checkout }: PlanRowProps) {
   const plan = getPlan(planKey);
   if (!plan) return null;
 
-  // Complete is never bought straight from a button: the coaching day is the
-  // unit of scarcity (a class of six) and has to be chosen before Stripe sees
-  // the order. Same split as the pricing table.
-  const picksADay = planKey === 'complete';
+  // Complete is never bought straight from a button: the coaching session slot
+  // is the unit of scarcity (one booking per slot) and has to be chosen before
+  // Stripe sees the order. Same split as the pricing table.
+  const picksASession = planKey === 'complete';
   const busy = checkout.submitting === planKey;
 
   return (
@@ -83,9 +83,9 @@ function PlanRow({ planKey, lead, why, checkout }: PlanRowProps) {
         <p className="mt-1 text-[13px] leading-relaxed text-muted">{why}</p>
       </div>
 
-      {picksADay ? (
+      {picksASession ? (
         <Link
-          href="/coaching-day"
+          href="/coaching-session"
           className={
             lead
               ? 'flex-shrink-0 rounded-full bg-primary px-5 py-2.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90'
@@ -134,11 +134,11 @@ export default function TrialPlanOffer({
     wall.proximity === 'imminent'
       ? {
           primary: 'Month by month, cancel any time — the right shape when the exam is weeks away.',
-          secondary: 'Adds the lectures and a coaching day in a class of six.',
+          secondary: 'Adds the lectures and a 3 hour one to one coaching session.',
         }
       : {
           primary: 'One payment, three months, nothing renews. All 200 cases, every one marked.',
-          secondary: 'Everything in Self-Study, plus the lectures and a coaching day.',
+          secondary: 'Everything in Self-Study, plus the lectures and a one to one coaching session.',
         };
 
   return (

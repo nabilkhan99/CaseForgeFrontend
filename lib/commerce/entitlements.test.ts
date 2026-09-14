@@ -107,12 +107,56 @@ describe('computeEntitlement', () => {
     expect(e.expiresAt?.toISOString()).toBe('2026-12-04T23:59:59.999Z')
   })
 
-  it('complete is active with lectures and its coaching day', () => {
+  it('complete is active with lectures and its coaching session date and slot', () => {
     const e = computeEntitlement(
-      [row({ plan: 'complete', coaching_day: '2026-09-20' })],
+      [row({ plan: 'complete', coaching_day: '2026-09-20', coaching_slot: 'afternoon' })],
       DURING,
     )
-    expect(e).toMatchObject({ state: 'active', hasLectures: true, coachingDay: '2026-09-20' })
+    expect(e).toMatchObject({
+      state: 'active',
+      hasLectures: true,
+      coachingDay: '2026-09-20',
+      coachingSlot: 'afternoon',
+    })
+  })
+
+  it('reads a legacy booking with a date but no slot as slot null', () => {
+    const e = computeEntitlement([row({ plan: 'complete', coaching_day: '2026-09-20' })], DURING)
+    expect(e).toMatchObject({ coachingDay: '2026-09-20', coachingSlot: null })
+  })
+
+  it('never passes an unrecognised slot string through', () => {
+    // The column has a check constraint, but a hand-edited or future value must
+    // read as "no slot" rather than reach copy that formats a time range.
+    const e = computeEntitlement(
+      [row({ plan: 'complete', coaching_day: '2026-09-20', coaching_slot: 'evening' })],
+      DURING,
+    )
+    expect(e.coachingSlot).toBeNull()
+  })
+
+  it('surfaces the booked session on a Complete whose agreed start is still ahead', () => {
+    const e = computeEntitlement(
+      [
+        row({
+          plan: 'complete',
+          created_at: '2026-10-01T00:00:00Z',
+          coaching_day: '2026-11-07',
+          coaching_slot: 'morning',
+        }),
+      ],
+      DURING,
+    )
+    expect(e).toMatchObject({ state: 'none', coachingDay: '2026-11-07', coachingSlot: 'morning' })
+  })
+
+  it('carries no coaching session on a Self-Study plan, even if the row has one', () => {
+    const e = computeEntitlement(
+      [row({ plan: 'self_study', coaching_day: '2026-09-20', coaching_slot: 'morning' })],
+      DURING,
+    )
+    expect(e.coachingDay).toBeUndefined()
+    expect(e.coachingSlot).toBeUndefined()
   })
 
   it('preorder buy (Sarah) starts 1 Sept and runs to 1 Dec', () => {
@@ -342,7 +386,7 @@ describe('computeEntitlement', () => {
 
 
 
-  it('intensive is complete-tier: active with lectures and its coaching day', () => {
+  it('intensive is complete-tier: active with lectures and its coaching session', () => {
     const e = computeEntitlement(
       [row({ plan: 'intensive', coaching_day: '2026-09-20' })],
       DURING,
@@ -493,21 +537,23 @@ describe('computeEntitlement with a recorded Stripe period', () => {
     expect(computeEntitlement([term, monthly], DURING).plan).toBe('self_study_monthly')
   })
 
-  it('surfaces the coaching day on a pre-launch Complete, so it can be booked', () => {
-    // A Portal upgrade lands a `complete` row with no coaching day. The prompt
-    // to book one has to appear as soon as the purchase exists.
-    const withDay = computeEntitlement(
-      [preLaunchStripeRow({ plan: 'complete', coaching_day: '2026-09-12' })],
+  it('surfaces the coaching session on a pre-launch Complete, so it can be booked', () => {
+    // A Portal upgrade lands a `complete` row with no coaching session. The
+    // prompt to book one has to appear as soon as the purchase exists.
+    const withSession = computeEntitlement(
+      [preLaunchStripeRow({ plan: 'complete', coaching_day: '2026-09-12', coaching_slot: 'morning' })],
       new Date('2026-08-25T00:00:00Z'),
     )
-    expect(withDay.state).toBe('active')
-    expect(withDay.coachingDay).toBe('2026-09-12')
+    expect(withSession.state).toBe('active')
+    expect(withSession.coachingDay).toBe('2026-09-12')
+    expect(withSession.coachingSlot).toBe('morning')
 
     const without = computeEntitlement(
       [preLaunchStripeRow({ plan: 'complete' })],
       new Date('2026-08-25T00:00:00Z'),
     )
     expect(without.coachingDay).toBeNull()
+    expect(without.coachingSlot).toBeNull()
   })
 
   // ── The end of a fixed term is a `canceled` subscription ──

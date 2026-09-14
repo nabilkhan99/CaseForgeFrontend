@@ -1,14 +1,16 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import type Stripe from 'stripe';
 import { getStripe } from '@/lib/commerce/stripe';
 import { countTrialConsumption, loadTrialGrant } from '@/lib/commerce/trialAccess';
+import { checkoutModeFor, getPlan, stripePriceIdFor, type PlanKey } from '@/lib/commerce/plans';
 import {
-  checkoutModeFor,
-  getPlan,
-  stripePriceIdFor,
-  type CoachingDayAvailability,
-  type PlanKey,
-} from '@/lib/commerce/plans';
+  coachingSessionCheckoutLine,
+  coachingSessionLabel,
+  isCoachingSlotKey,
+  isIsoDate,
+  type CoachingSlotKey,
+} from '@/lib/commerce/coachingSlots';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { REFERRAL_COOKIE, normalizeCode, normalizeEmail } from '@/lib/commerce/referrals';
 import { getServerEntitlement } from '@/lib/commerce/serverEntitlement';
@@ -17,16 +19,117 @@ import { exactEmailPattern } from '@/lib/commerce/emailFilter';
 
 interface CheckoutBody {
   plan?: string;
-  coachingDay?: string; // ISO date of the chosen coaching day, e.g. "2026-09-12"
+  /** Complete only: ISO date of the coaching session, e.g. "2026-11-07". */
+  coachingDate?: unknown;
+  /** Complete only: 'morning' | 'afternoon'. */
+  coachingSlot?: unknown;
 }
 
-/** How long a place is soft-held while the buyer is on Stripe checkout. */
-const HOLD_MINUTES = 10;
+/** The coaching session a Complete checkout is for. */
+interface CoachingBooking {
+  date: string;
+  slot: CoachingSlotKey;
+}
+
+/**
+ * Stripe's minimum Checkout Session lifetime is 30 minutes from creation. The
+ * extra minute covers the time between computing `expires_at` here and Stripe
+ * receiving the create call, so a slow round trip cannot push the value under
+ * Stripe's floor and fail the checkout.
+ */
+const SESSION_LIFETIME_MS = 30 * 60 * 1000 + 60 * 1000;
+
+/**
+ * The hold outlives the session by this much, so a buyer who submits payment
+ * in the session's last seconds still owns the slot while the charge clears
+ * and the webhook records the order. After it, the slot frees on its own even
+ * if no webhook ever arrives.
+ */
+const HOLD_GRACE_MS = 10 * 60 * 1000;
+
+const SESSION_REQUIRED_MESSAGE = 'Please choose a date and time for your coaching session.';
+const SLOT_TAKEN_MESSAGE = 'That slot has just been booked. Please choose another.';
+const SLOT_CLOSED_MESSAGE = 'Bookings for that date have closed. Please choose another.';
+
+const PASSWORD_MESSAGE =
+  "After payment we'll email you a link to set your password. That's how you get into the course.";
+
+type UnclaimedOutcome = 'taken' | 'closed' | 'invalid' | 'error';
+
+type ClaimResult = { outcome: 'held'; holdId: string } | { outcome: UnclaimedOutcome };
+
+/** What the buyer is told when their slot could not be held. Nothing reaches Stripe. */
+function unclaimedResponse(outcome: UnclaimedOutcome) {
+  switch (outcome) {
+    case 'taken':
+      return NextResponse.json({ error: SLOT_TAKEN_MESSAGE, code: 'slot_taken' }, { status: 409 });
+    case 'closed':
+      return NextResponse.json({ error: SLOT_CLOSED_MESSAGE, code: 'slot_closed' }, { status: 409 });
+    case 'invalid':
+      return NextResponse.json({ error: SESSION_REQUIRED_MESSAGE }, { status: 400 });
+    case 'error':
+      // With one booking per slot there is no going ahead without a hold.
+      return NextResponse.json(
+        { error: 'We could not reserve your coaching session. Please try again.' },
+        { status: 500 },
+      );
+  }
+}
+
+/**
+ * Reserve the slot for this checkout, atomically. `claim_coaching_slot` locks
+ * the date row, so of two buyers racing for one slot exactly one gets a hold.
+ */
+async function claimSlot(booking: CoachingBooking, holdExpiresAt: Date): Promise<ClaimResult> {
+  const { data, error } = await getSupabaseAdmin().rpc('claim_coaching_slot', {
+    p_day: booking.date,
+    p_slot: booking.slot,
+    p_expires_at: holdExpiresAt.toISOString(),
+  });
+  if (error) {
+    console.error('[checkout] slot claim failed', { booking, error });
+    return { outcome: 'error' };
+  }
+
+  // `returns table` comes back as an array of rows.
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | { hold_id?: string | null; outcome?: string }
+    | null
+    | undefined;
+
+  if (row?.outcome === 'held' && typeof row.hold_id === 'string' && row.hold_id) {
+    return { outcome: 'held', holdId: row.hold_id };
+  }
+  if (row?.outcome === 'taken' || row?.outcome === 'closed' || row?.outcome === 'invalid') {
+    return { outcome: row.outcome };
+  }
+  console.error('[checkout] slot claim returned an unexpected result', { booking, data });
+  return { outcome: 'error' };
+}
+
+/** Give the slot back when no Stripe session came of the hold. */
+async function deleteHold(holdId: string): Promise<void> {
+  try {
+    const { error } = await getSupabaseAdmin().from('checkout_holds').delete().eq('id', holdId);
+    if (error) {
+      // It still expires on its own; the slot is only held up until then.
+      console.error('[checkout] could not release the hold (it will expire on its own)', {
+        holdId,
+        error,
+      });
+    }
+  } catch (error: unknown) {
+    console.error('[checkout] could not release the hold (it will expire on its own)', {
+      holdId,
+      error,
+    });
+  }
+}
 
 /**
  * Read the `ff_ref` cookie and re-validate it against `referral_codes`
  * (must exist and be active). Returns the normalized code or null. Never
- * throws — any failure degrades to "no referral". Uses the strict service-role
+ * throws: any failure degrades to "no referral". Uses the strict service-role
  * client (referral_codes is RLS deny-all for anon): a missing service key
  * fails loudly in the logs here rather than silently dropping attribution.
  */
@@ -56,26 +159,30 @@ async function resolveReferralCode(): Promise<string | null> {
 }
 
 /**
- * Creates a Stripe Checkout session for a pre-order.
+ * Creates a Stripe Checkout session.
  * Body: { plan: 'self_study' | 'self_study_monthly' | 'complete',
- *         coachingDay?: 'YYYY-MM-DD' }
+ *         coachingDate?: 'YYYY-MM-DD', coachingSlot?: 'morning' | 'afternoon' }
  *
- * ALL three plans open a `mode: 'subscription'` session (2026-08-22): the two
- * course plans are fixed-term subscriptions — one charge, a 3-month Stripe
- * period, and `cancel_at_period_end` armed by the webhook so nothing renews —
- * and the monthly plan rolls. Nothing is sold in `payment` mode any more, which
- * is what gives every customer a Stripe Customer, a Portal, and an invoice
- * whose printed service period doubles as study-budget evidence.
+ * The two course plans are one-off `payment` sessions; only the rolling monthly
+ * plan is a `subscription` session (see lib/commerce/plans.ts).
  *
- * Complete requires a coaching day (unit of scarcity, max class of 6) and
- * soft-holds the place for 10 minutes while the buyer pays. A Self-Study
- * customer moving up to Complete does NOT come through here — that is a Stripe
- * Portal plan switch (`POST /api/billing/portal`), priced by proration.
+ * Complete comes with one 3 hour one to one coaching session, and each slot
+ * takes exactly one booking. So a Complete checkout claims its slot BEFORE the
+ * Stripe session exists, and a failed claim blocks the checkout outright: with
+ * a capacity of one there is no such thing as a best-effort hold. The hold
+ * lasts as long as the Stripe session plus a short grace period, and is released
+ * early by the webhook (`checkout.session.expired`, `async_payment_failed`) or
+ * by `POST /api/checkout/release` when the buyer comes back from Stripe. The
+ * slot is only marked booked when the webhook records the paid order.
+ *
+ * A Self-Study customer moving up to Complete does NOT come through here; they
+ * book their session afterwards via `POST /api/coaching-session/select`.
  *
  * A signed-in buyer's account email is pre-filled and locked on Stripe's page.
  * Returns: { url } to redirect the buyer to Stripe's hosted checkout.
  */
 export async function POST(request: Request) {
+  let holdId: string | null = null;
   try {
     const body = (await request.json()) as CheckoutBody;
     const plan = getPlan(body.plan ?? '');
@@ -84,88 +191,39 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
     }
 
+    let booking: CoachingBooking | null = null;
+    if (plan.key === 'complete') {
+      if (!isIsoDate(body.coachingDate) || !isCoachingSlotKey(body.coachingSlot)) {
+        return NextResponse.json({ error: SESSION_REQUIRED_MESSAGE }, { status: 400 });
+      }
+      booking = { date: body.coachingDate, slot: body.coachingSlot };
+    }
+
     // Who is buying. Purchases are matched to accounts BY EMAIL, so a signed-in
     // buyer's account address is stamped onto the session (and pre-filled +
-    // locked on Stripe's page) — otherwise a different address at checkout buys
+    // locked on Stripe's page); otherwise a different address at checkout buys
     // access that attaches to no account. Signed-out buyers are unaffected.
     const { user, supabase } = await getServerEntitlement();
     const accountEmail = user?.email ? normalizeEmail(user.email) : null;
 
-    const needsCoachingDay = plan.key === 'complete';
-    let coachingDay: CoachingDayAvailability | null = null;
-
-    if (needsCoachingDay) {
-      if (!body.coachingDay || !/^\d{4}-\d{2}-\d{2}$/.test(body.coachingDay)) {
-        return NextResponse.json({ error: 'A coaching day is required' }, { status: 400 });
-      }
-
-      const admin = getSupabaseAdmin();
-      const { data, error } = await admin
-        .from('coaching_day_availability')
-        .select('day, label, capacity, places_left, cutoff_at, status')
-        .eq('day', body.coachingDay)
-        .maybeSingle();
-
-      if (error) {
-        console.error('[checkout] coaching day lookup failed', error);
-        return NextResponse.json({ error: 'Failed to validate coaching day' }, { status: 500 });
-      }
-
-      coachingDay = data as CoachingDayAvailability | null;
-      if (!coachingDay || coachingDay.status === 'closed') {
-        return NextResponse.json(
-          { error: 'Bookings for this coaching day have closed — please choose another date' },
-          { status: 409 },
-        );
-      }
-      if (coachingDay.status === 'sold_out' || coachingDay.places_left <= 0) {
-        return NextResponse.json(
-          { error: `${coachingDay.label} is sold out — please choose another date` },
-          { status: 409 },
-        );
-      }
-    }
-
     // Attribution (cookie-only, v1): if a valid, still-active referral code was
     // dropped by /r/[code], carry it into the session metadata. Invalid or absent
-    // codes degrade silently — checkout must never fail on a bad referral.
+    // codes degrade silently: checkout must never fail on a bad referral.
     const referralCode = await resolveReferralCode();
 
     // Referred buyers are NOT discounted here: they pay list price so their
     // receipt covers the whole course, and their side of the referral reaches
     // them afterwards as cash (see REFEREE_REWARD_BY_PLAN). That also keeps
-    // Stripe's promo-code box available on every session — Stripe allows an
+    // Stripe's promo-code box available on every session. Stripe allows an
     // automatic discount or the code box, never both.
 
     const origin = new URL(request.url).origin;
-    const productLine = plan.name;
-    const description = coachingDay
-      ? `Fourteen Fisherman — ${productLine}, coaching day ${coachingDay.label}`
-      : `Fourteen Fisherman — ${productLine}`;
-
-    // The metadata block is the contract with the webhook: it reads plan (and
-    // referral_code) off the session to record the order. It is repeated on
-    // `subscription_data` because renewal, cancellation and plan-change events
-    // arrive with the SUBSCRIPTION, long after the checkout session is out of
-    // reach — and those events carry neither session metadata nor
-    // client_reference_id.
-    const metadata = {
-      plan: plan.key,
-      // The account the buyer was signed into. The webhook files the purchase
-      // under this address, whatever they typed on Stripe's page.
-      ...(accountEmail ? { account_email: accountEmail } : {}),
-      ...(user ? { supabase_user_id: user.id } : {}),
-      ...(coachingDay
-        ? { coaching_day: coachingDay.day, coaching_day_label: coachingDay.label }
-        : {}),
-      ...(referralCode ? { referral_code: referralCode } : {}),
-    };
-
     const stripe = getStripe();
 
     // Resolve the Customer ourselves. `customer_email` on a subscription
     // session mints a NEW customer per purchase; a repeat buyer would then own
-    // two, and the Portal only ever opens on one of them.
+    // two, and the Portal only ever opens on one of them. Done before the slot
+    // is claimed, so a slow Stripe lookup never eats into the hold.
     let customerId: string | null = null;
     if (accountEmail) {
       // A customer id we already recorded is the cheapest and most exact
@@ -185,67 +243,128 @@ export async function POST(request: Request) {
       });
     }
 
+    // Both expiries are computed together, right before the claim, so the hold
+    // always outlives the Stripe session it guards.
+    const sessionExpiresAt = new Date(Date.now() + SESSION_LIFETIME_MS);
+    const holdExpiresAt = new Date(sessionExpiresAt.getTime() + HOLD_GRACE_MS);
+
+    if (booking) {
+      const claim = await claimSlot(booking, holdExpiresAt);
+      if (claim.outcome !== 'held') return unclaimedResponse(claim.outcome);
+      holdId = claim.holdId;
+    }
+
+    const checkoutLine = booking ? coachingSessionCheckoutLine(booking.date, booking.slot) : null;
+
+    // Complete is sold in payment mode, so this lands on the PaymentIntent and
+    // Stripe's own receipt names the slot. A saved Price's line item text cannot
+    // change per session, which is why the slot is spelled out here and in the
+    // submit message rather than on the line item.
+    const description = checkoutLine
+      ? `The Complete SCA Course. ${checkoutLine}`
+      : `Fourteen Fisherman, ${plan.name}`;
+
+    // The metadata block is the contract with the webhook: it reads plan (and
+    // referral_code, and the coaching session) off the session to record the
+    // order. It is repeated on the PaymentIntent or the subscription because
+    // refunds, renewals and cancellations arrive with those objects, long after
+    // the checkout session is out of reach.
+    const metadata: Stripe.MetadataParam = {
+      plan: plan.key,
+      // The account the buyer was signed into. The webhook files the purchase
+      // under this address, whatever they typed on Stripe's page.
+      ...(accountEmail ? { account_email: accountEmail } : {}),
+      ...(user ? { supabase_user_id: user.id } : {}),
+      ...(booking
+        ? {
+            coaching_date: booking.date,
+            coaching_slot: booking.slot,
+            coaching_session_label: coachingSessionLabel(booking.date, booking.slot),
+          }
+        : {}),
+      ...(referralCode ? { referral_code: referralCode } : {}),
+    };
+
     // One-off for the course terms, subscription for the rolling monthly. The
     // mode decides what Stripe's own page says: `payment` renders "Pay", while
-    // `subscription` renders "Pay and subscribe ... until you cancel" — wrong
-    // for a course that does not renew. See lib/commerce/plans.ts.
+    // `subscription` renders "Pay and subscribe ... until you cancel", which is
+    // wrong for a course that does not renew. See lib/commerce/plans.ts.
     const mode = checkoutModeFor(plan.key);
 
-    const session = await stripe.checkout.sessions.create({
-      mode,
-      line_items: [{ price: stripePriceIdFor(plan.key as PlanKey), quantity: 1 }],
-      success_url: `${origin}/thanks?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: coachingDay ? `${origin}/coaching-day` : `${origin}/#pricing`,
-      // Stripe locks the email field when the Customer already has one, so a
-      // signed-in buyer still cannot pay under an address their account will
-      // never match. A signed-out buyer has no account to attach to, and
-      // Checkout creates the Customer from what they type.
-      ...(customerId
-        ? { customer: customerId, customer_update: { name: 'auto', address: 'auto' as const } }
-        : {}),
-      ...(user ? { client_reference_id: user.id } : {}),
-      allow_promotion_codes: true,
-      // What happens after they pay. An account is created for them from the
-      // email on this page and the password is set from a link — without saying
-      // so, a buyer lands on /thanks not knowing to go and look for it, which is
-      // the one step between paying and actually getting in.
-      custom_text: {
-        submit: {
-          message:
-            "After payment we'll email you a link to set your password — that's how you get into the course.",
+    let session: Stripe.Checkout.Session;
+    try {
+      session = await stripe.checkout.sessions.create({
+        mode,
+        line_items: [{ price: stripePriceIdFor(plan.key as PlanKey), quantity: 1 }],
+        success_url: `${origin}/thanks?session_id={CHECKOUT_SESSION_ID}`,
+        // The booking page releases the hold when the buyer comes back, so the
+        // slot is free again at once rather than when the hold runs out.
+        cancel_url: holdId ? `${origin}/coaching-session?release=${holdId}` : `${origin}/#pricing`,
+        // Complete only: the hold is sized to this, and Stripe fires
+        // `checkout.session.expired` when it passes so the webhook frees the
+        // slot. Other plans hold nothing and keep Stripe's default lifetime.
+        ...(holdId ? { expires_at: Math.floor(sessionExpiresAt.getTime() / 1000) } : {}),
+        // Stripe locks the email field when the Customer already has one, so a
+        // signed-in buyer still cannot pay under an address their account will
+        // never match. A signed-out buyer has no account to attach to, and
+        // Checkout creates the Customer from what they type.
+        ...(customerId
+          ? { customer: customerId, customer_update: { name: 'auto', address: 'auto' as const } }
+          : {}),
+        ...(user ? { client_reference_id: user.id } : {}),
+        allow_promotion_codes: true,
+        // What the buyer is paying for, and what happens after. The coaching
+        // session goes first so it is on the page before they pay. The password
+        // line follows: an account is created for them from the email on this
+        // page and the password is set from a link, and without saying so a
+        // buyer lands on /thanks not knowing to go and look for it.
+        custom_text: {
+          submit: {
+            message: checkoutLine ? `${checkoutLine}. ${PASSWORD_MESSAGE}` : PASSWORD_MESSAGE,
+          },
         },
-      },
-      metadata,
-      // Renewal, cancellation and plan-change events arrive attached to the
-      // SUBSCRIPTION, long after the session is out of reach, and carry neither
-      // session metadata nor client_reference_id — so the rolling plan repeats
-      // it there. A one-off has no such follow-up events; its metadata is put on
-      // the PaymentIntent instead, which is what a later refund arrives with.
-      ...(mode === 'subscription'
-        ? { subscription_data: { description, metadata } }
-        : { payment_intent_data: { description, metadata } }),
-    });
+        metadata,
+        // Renewal, cancellation and plan-change events arrive attached to the
+        // SUBSCRIPTION, long after the session is out of reach, and carry neither
+        // session metadata nor client_reference_id, so the rolling plan repeats
+        // it there. A one-off has no such follow-up events; its metadata is put on
+        // the PaymentIntent instead, which is what a later refund arrives with.
+        ...(mode === 'subscription'
+          ? { subscription_data: { description, metadata } }
+          : { payment_intent_data: { description, metadata } }),
+      });
+    } catch (error: unknown) {
+      console.error('[checkout] Stripe session create failed', { holdId, error });
+      if (holdId) await deleteHold(holdId);
+      return NextResponse.json({ error: 'Failed to start checkout' }, { status: 500 });
+    }
 
     if (!session.url) {
+      console.error('[checkout] Stripe returned a session with no url', { sessionId: session.id });
+      if (holdId) await deleteHold(holdId);
       return NextResponse.json({ error: 'Failed to create checkout session' }, { status: 500 });
     }
 
-    // Soft-hold the place while they pay. Best-effort: a failed hold must not
-    // block checkout — the webhook still validates nothing structurally.
-    if (coachingDay) {
-      const { error: holdError } = await getSupabaseAdmin().from('checkout_holds').insert({
-        coaching_day: coachingDay.day,
-        stripe_session_id: session.id,
-        expires_at: new Date(Date.now() + HOLD_MINUTES * 60 * 1000).toISOString(),
-      });
-      if (holdError) {
-        console.error('[checkout] hold insert failed (non-fatal)', holdError);
+    if (holdId) {
+      // Ties the hold to the session so the webhook can release or retire it.
+      // Not fatal on failure: the hold still expires on its own shortly after
+      // the session does, and the release route handles an unlinked hold.
+      const { error: linkError } = await getSupabaseAdmin()
+        .from('checkout_holds')
+        .update({ stripe_session_id: session.id })
+        .eq('id', holdId);
+      if (linkError) {
+        console.error('[checkout] could not link the hold to its session (non-fatal)', {
+          holdId,
+          sessionId: session.id,
+          error: linkError,
+        });
       }
     }
 
     return NextResponse.json({ url: session.url });
   } catch (error: unknown) {
-    console.error('[checkout] unexpected error', error);
+    console.error('[checkout] unexpected error', { holdId, error });
     return NextResponse.json({ error: 'Failed to start checkout' }, { status: 500 });
   }
 }

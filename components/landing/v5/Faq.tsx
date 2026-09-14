@@ -20,7 +20,7 @@ const FAQS: QA[] = [
     question: 'Will this actually help me pass?',
     answer: [
       "We're confident enough to put real money behind it. Pass all 200 stations, sit your SCA, and if you don't pass, we pay you £500 in cash. No other provider takes that risk with you.",
-      "It's also the most comprehensive SCA preparation you'll find. Most options give you one dimension in isolation: a set of lectures, a day of small-group coaching, or an AI subscription on its own. The Complete SCA Course combines all three. You get AI voice practice on 200 stations, 8 hours of lectures, and a full-day Small-Group Coaching session with a GP tutor (9am to 5pm), where you consult full mock stations live and get each one broken down for you. All three are built from the RCGP curriculum and the three marking domains, so nothing in the real exam catches you out.",
+      "It's also the most comprehensive SCA preparation you'll find. Most options give you one dimension in isolation: a set of lectures, one to one coaching, or an AI subscription on its own. The Complete SCA Course combines all three. You get AI voice practice on 200 stations, 8.5 hours of lectures, and a 3 hour one to one coaching session with a GP tutor, where you consult six timed stations back to back, then get feedback on each one and a review of your AI practice dashboard. All three are built from the RCGP curriculum and the three marking domains, so nothing in the real exam catches you out.",
     ],
   },
   {
@@ -49,43 +49,49 @@ const FAQS: QA[] = [
   {
     question: 'Which plan do I actually need?',
     answer: [
-      'Most trainees choose the Complete SCA Course and it is the one that we recommend. It has everything you need to pass the SCA (AI practice + on-demand lectures + small-group coaching). The Self-Study plan is the AI practice on its own, best if you just want stations to work through. The Intensive plan adds weekly one-to-one coaching and starts with a call rather than checkout, for trainees who want individual support throughout.',
+      'Most trainees choose the Complete SCA Course and it is the one that we recommend. It has everything you need to pass the SCA (AI practice + on-demand lectures + one to one coaching). The Self-Study plan is the AI practice on its own, best if you just want stations to work through. The Intensive plan adds weekly one-to-one coaching and starts with a call rather than checkout, for trainees who want individual support throughout.',
     ],
   },
   {
     question: 'Can I start practising straight away?',
     answer: [
-      "Yes. Your AI practice and on-demand lectures start the moment you buy, and your 3 months' access runs from that day. Your coaching day will be on whichever date you pick at checkout.",
+      "Yes. Your AI practice and on-demand lectures start the moment you buy, and your 3 months' access runs from that day. Your coaching session will be on whichever date and time you pick at checkout.",
     ],
   },
   {
     question: 'Is this actually like the real SCA?',
     answer: [
-      "Yes, deliberately so. Every AI station is a voice consultation, exactly like sitting across from a simulated patient on the day, built from the RCGP curriculum and scored across the three official marking domains: data gathering, clinical management, and relating to others. But practice alone isn't what gets you over the line. The lectures cover the core curriculum in a structured way, so you learn the frameworks properly rather than picking them up piecemeal. The Small-Group Coaching puts you in front of a GP tutor who watches you consult a live case and gives you feedback on your own performance, not a generic model answer. That is the point of combining all three: the AI gives you the volume and repetition, the lectures give you the structure and raw learning, and the coaching gives you the personalisation. By the time you walk into your SCA, the format, the pressure, and the marking already feel familiar.",
+      "Yes, deliberately so. Every AI station is a voice consultation, exactly like sitting across from a simulated patient on the day, built from the RCGP curriculum and scored across the three official marking domains: data gathering, clinical management, and relating to others. But practice alone isn't what gets you over the line. The lectures cover the core curriculum in a structured way, so you learn the frameworks properly rather than picking them up piecemeal. The one to one coaching puts you in front of a GP tutor who watches you consult six timed stations and gives you feedback on your own performance, not a generic model answer. That is the point of combining all three: the AI gives you the volume and repetition, the lectures give you the structure and raw learning, and the coaching gives you the personalisation. By the time you walk into your SCA, the format, the pressure, and the marking already feel familiar.",
     ],
   },
   {
-    question: 'When do the lectures and the coaching day happen?',
+    question: 'When does my coaching session happen?',
     answer: [
-      "The lectures are on demand, so you watch them whenever suits you, from any device, as often as you like, throughout your 3 months' access. Your Small-Group Coaching runs as one full day, 9am to 5pm, on a Saturday or Sunday: you pick your date from the available coaching days at checkout. The coaching day is remote and live, and a link to join is sent in advance.",
+      'The lectures are on demand, so they are available the moment you join and you watch them whenever suits. The only fixed date in the programme is your coaching session, and you choose that yourself at checkout. Sessions run at weekends, either 09:00 to 12:00 or 13:00 to 16:00, and last 3 hours.',
     ],
   },
   {
-    question: "What happens if I can't make my coaching day?",
+    question: "What happens if I can't make my coaching session?",
     answer: [
-      "The coaching day runs live and isn't recorded, so tell us as early as you can if your date no longer works. We'll do our best to move you onto another coaching day where a place is free, but places are capped at six per class, so we can't promise it.",
+      'You can move it once, free, with 14 days notice, into any slot still available. Inside 14 days we will do our best to find you another date, but we cannot guarantee one.',
+    ],
+  },
+  {
+    question: 'How much AI practice should I do before my session?',
+    answer: [
+      'There is no requirement, but the dashboard review is only as good as the data behind it. Most trainees will have done at least 25 stations by then, which is enough for us to see what is recurring across your practice.',
     ],
   },
   {
     question: 'What if my exam is soon?',
     answer: [
-      "That's exactly what this is built for. Your AI practice is unlimited and available the moment you buy, and the lectures are on demand, so you can work through all 8 hours as quickly as your exam date demands: there is no fixed schedule holding you to a slower pace. For the coaching day, simply pick the date at checkout that falls before your exam.",
+      "That's exactly what this is built for. Your AI practice is unlimited and available the moment you buy, and the lectures are on demand, so you can work through all 8.5 hours as quickly as your exam date demands: there is no fixed schedule holding you to a slower pace. For your coaching session, simply pick a date at checkout that falls before your exam.",
     ],
   },
   {
     question: 'How much time will this take each week?',
     answer: [
-      'The AI patients are available to practise with 24/7, and the lectures are on demand, so you set the pace around your timetable and fit both in whenever you have a gap. The only fixed commitment is one full coaching day, 9am to 5pm on a weekend, on a date you choose at checkout.',
+      'The AI patients are available to practise with 24/7, and the lectures are on demand, so you set the pace around your timetable and fit both in whenever you have a gap. The only fixed commitment is your 3 hour coaching session, on a weekend morning or afternoon that you choose at checkout.',
     ],
   },
   {

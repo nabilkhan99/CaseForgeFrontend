@@ -74,7 +74,7 @@ export async function getServerEntitlement(): Promise<ServerEntitlement> {
     // `active` and hand the whole product to any signed-in account.
     const { data: purchases, error } = await supabase
       .from('preorders')
-      .select('plan, status, created_at, coaching_day, access_starts_at, access_ends_at')
+      .select('plan, status, created_at, coaching_day, coaching_slot, access_starts_at, access_ends_at')
       .ilike('email', exactEmailPattern(user.email))
     if (error) throw error
 

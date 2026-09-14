@@ -80,7 +80,8 @@ describe('Complete SCA Course', () => {
   const copy = buildReceiptEmailCopy({
     planKey: 'complete',
     firstName: 'Jane',
-    sessionDate: 'Saturday 12 September 2026',
+    coachingDate: '2026-11-07',
+    coachingSlot: 'morning',
     hasSetupLink: true,
   })
 
@@ -95,15 +96,65 @@ describe('Complete SCA Course', () => {
     expect(copy.preheader).toBe('Set up your account and get started.')
   })
 
-  it('states the coaching day and where the joining link will appear', () => {
-    const body = copy.outro.join(' ')
-    expect(body).toContain('Saturday 12 September 2026, 09:00 to 17:00')
-    expect(body).toContain('"Coaching day"')
+  it('states the session, its format, the reschedule terms and the practice guidance, in order', () => {
+    expect(copy.outro).toEqual([
+      "Once you're in, you can start on the practice stations and the lecture series straight away.",
+      'Your coaching session: Saturday 7 November 2026, 09:00 to 12:00.',
+      '3 hours, one to one, remote. Six 12 minute stations back to back, then feedback on each station and a review of your AI dashboard.',
+      'You can move your session once, free, with 14 days notice. Inside 14 days we will do our best to find you another date, but we cannot guarantee one.',
+      'There is no requirement for how much AI practice you do beforehand, but most trainees will have completed at least 25 stations by then, which gives us enough to work with in the dashboard review.',
+      'Any questions, just reply to this email.',
+    ])
   })
 
-  it('omits the coaching paragraph when no day was booked', () => {
-    const noDay = buildReceiptEmailCopy({ planKey: 'complete', hasSetupLink: true })
-    expect(noDay.outro.join(' ')).not.toContain('coaching day is')
+  it('states the afternoon slot’s time', () => {
+    const afternoon = buildReceiptEmailCopy({
+      planKey: 'complete',
+      coachingDate: '2026-10-04',
+      coachingSlot: 'afternoon',
+      hasSetupLink: true,
+    })
+    expect(afternoon.outro).toContain('Your coaching session: Sunday 4 October 2026, 13:00 to 16:00.')
+  })
+
+  it('gives a booking made before slots existed its date and no invented time', () => {
+    const legacy = buildReceiptEmailCopy({
+      planKey: 'complete',
+      coachingDate: '2026-09-12',
+      coachingSlot: null,
+      hasSetupLink: true,
+    })
+    expect(legacy.outro).toContain('Your coaching session: Saturday 12 September 2026.')
+    expect(legacy.outro.join(' ')).not.toMatch(/\d{2}:\d{2}/)
+  })
+
+  it('omits the coaching session paragraphs when no session was booked', () => {
+    const none = buildReceiptEmailCopy({ planKey: 'complete', hasSetupLink: true })
+    expect(none.outro.join(' ')).not.toContain('coaching session')
+    const unreadable = buildReceiptEmailCopy({
+      planKey: 'complete',
+      coachingDate: 'soon',
+      coachingSlot: 'morning',
+      hasSetupLink: true,
+    })
+    expect(unreadable.outro.join(' ')).not.toContain('coaching session')
+  })
+
+  it('carries none of the old coaching format and no dashes', () => {
+    const body = [...copy.intro, ...copy.outro].join(' ')
+    expect(body).not.toMatch(/coaching.day|small.group|full.day|09:00 to 17|joining link/i)
+    expect(body).not.toMatch(/feedback after each station/i)
+    expect(body).not.toMatch(/[\u2013\u2014]/)
+  })
+
+  it('never mentions a coaching session to a Self-Study buyer', () => {
+    const selfStudy = buildReceiptEmailCopy({
+      planKey: 'self_study',
+      coachingDate: '2026-11-07',
+      coachingSlot: 'morning',
+      hasSetupLink: true,
+    })
+    expect(selfStudy.outro.join(' ')).not.toContain('coaching session')
   })
 })
 

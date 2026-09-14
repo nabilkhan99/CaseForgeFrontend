@@ -11,6 +11,7 @@ import {
   GuaranteeCard,
   VideoProof,
   CompleteCourse,
+  OneToOneCoaching,
   LecturePreview,
   Testimonials,
   Faq,
@@ -37,6 +38,7 @@ export default function LandingPage() {
         <GuaranteeCard proof />
         <VideoProof />
         <CompleteCourse />
+        <OneToOneCoaching />
         <LecturePreview />
         <Testimonials />
         <PricingTable />

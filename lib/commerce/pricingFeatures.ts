@@ -60,21 +60,21 @@ export const FEATURE_ROWS: readonly FeatureRow[] = [
     cells: [
       { text: '', cross: true },
       { text: '', cross: true },
-      { text: '8 hours', sub: '£599 value' },
-      { text: '8 hours' },
+      { text: '8.5 hours', sub: '£599 value' },
+      { text: '8.5 hours' },
     ],
   },
   {
-    label: 'Small-Group Coaching',
+    label: '1:1 Coaching Session',
     cells: [
       { text: '', cross: true },
       { text: '', cross: true },
-      { text: 'One full day, 9am to 5pm', sub: 'Max class of 6 · £599 value' },
-      { text: 'One full day, 9am to 5pm' },
+      { text: '3 hours, 6 stations', sub: 'Just you and your coach · £749 value' },
+      { text: '3 hours, 6 stations' },
     ],
   },
   {
-    label: '1:1 weekly coaching',
+    label: 'Ongoing 1:1 coaching',
     cells: [
       { text: '', cross: true },
       { text: '', cross: true },

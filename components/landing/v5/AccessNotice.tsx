@@ -28,9 +28,9 @@ export default function AccessNotice() {
         className="mx-auto max-w-3xl rounded-2xl bg-[#FDF0DC] px-5 py-4 text-center text-xs leading-relaxed text-[#854F0B] sm:text-sm"
       >
         {renew
-          ? 'Your access has ended. Pick a plan to continue — your history and feedback stay where they are.'
+          ? 'Your access has ended. Pick a plan to continue. Your history and feedback stay where they are.'
           : wantsLectures
-            ? 'The lecture course and the coaching day are part of Complete. Your consultations and history carry over.'
+            ? 'The lecture course and the one to one coaching session are part of Complete. Your consultations and history carry over.'
             : 'You need a plan to start consultations.'}
       </motion.p>
     </section>
