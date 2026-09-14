@@ -4,6 +4,7 @@ import { pushTrialLeadToBrevo } from '@/lib/marketing/trialLead';
 import { signInWithMagicLink } from '@/lib/auth/accountSignUp';
 import { MIN_PASSWORD_LENGTH } from '@/lib/auth/passwordPolicy';
 import { ensureTrialAccount } from '@/lib/auth/trialAccount';
+import { scheduleGateLeadAlert } from '@/lib/trial/gateLeadAlert';
 import { toE164 } from '@/lib/trial/phone';
 import { GUEST_COOKIE, cookieOwnsSession, readGuestCookie } from '@/lib/trial/guestSession';
 import type { TrialSource, TrialState } from '@/lib/commerce/trialAccess';
@@ -331,7 +332,10 @@ export async function POST(req: NextRequest) {
     // already keeps its leads in.
     const storedPhone = normalizedPhone || null;
 
-    const { error: updateError } = await supabase
+    // Conditional on the column still being null, so exactly one request moves
+    // this lead to verified. That request, and only that one, sends the
+    // founders' alert below: a double submit or a second tab changes no row.
+    const { data: verifiedRows, error: updateError } = await supabase
       .from('trial_leads')
       .update({
         email_verified_at: new Date().toISOString(),
@@ -341,11 +345,27 @@ export async function POST(req: NextRequest) {
         // the founder the call they were going to make.
         ...(storedPhone ? { phone: storedPhone } : {}),
       })
-      .eq('id', lead.id);
+      .eq('id', lead.id)
+      .is('email_verified_at', null)
+      .select('id');
 
     if (updateError) {
       console.error('[verify-code] verified update failed', updateError);
       return NextResponse.json({ error: 'Something went wrong. Please try again' }, { status: 500 });
+    }
+    const becameVerified = (verifiedRows?.length ?? 0) > 0;
+
+    // The founders' lead alert (lib/trial/gateLeadAlert): a guest finishing the
+    // sign-up, or a visitor verifying through the gate on an old report link.
+    // Never on the account-first door, which has no consultation behind it.
+    // Runs after the response and never throws.
+    if (sessionId && becameVerified) {
+      scheduleGateLeadAlert(
+        supabase,
+        sessionId,
+        { ...lead, phone: storedPhone ?? lead.phone },
+        guestProven ? 'guest_signup' : 'report_link',
+      );
     }
 
     // Only verified leads reach the marketing list.

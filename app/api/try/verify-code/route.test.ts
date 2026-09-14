@@ -41,13 +41,27 @@ const mocks = vi.hoisted(() => ({
   /** Its status. The route must not care what it is. */
   sessionStatus: 'completed' as string,
   updates: [] as Record<string, unknown>[],
+  /** Conditions each update was made under, e.g. `email_verified_at is null`. */
+  updateConditions: [] as string[],
+  /**
+   * The rows the verifying UPDATE changed. Empty means another request moved
+   * the lead to verified first.
+   */
+  verifiedRows: [{ id: 'lead-1' }] as { id: string }[],
   filters: [] as { column: string; value: unknown }[],
   ensure: vi.fn(),
   signIn: vi.fn(),
   brevo: vi.fn(),
+  leadAlert: vi.fn(),
 }))
 
 vi.mock('server-only', () => ({}))
+
+// The founders' alert. Mocked at the scheduler, so nothing is ever sent: the
+// sending itself is covered in lib/trial/gateLeadAlert.test.ts.
+vi.mock('@/lib/trial/gateLeadAlert', () => ({
+  scheduleGateLeadAlert: (...args: unknown[]) => mocks.leadAlert(...args),
+}))
 
 vi.mock('@/lib/marketing/trialLead', () => ({
   pushTrialLeadToBrevo: (...args: unknown[]) => mocks.brevo(...args),
@@ -101,7 +115,20 @@ vi.mock('@/lib/supabase/admin', () => ({
       },
       update: (values: Record<string, unknown>) => {
         mocks.updates.push(values)
-        return { eq: async () => ({ error: null }) }
+        // Awaitable at any point in the chain, the way PostgREST's builder is.
+        const chain = {
+          eq: () => chain,
+          is: (column: string, value: unknown) => {
+            mocks.updateConditions.push(`${column} is ${value}`)
+            return chain
+          },
+          select: () => chain,
+          then: (
+            resolve: (value: { data: { id: string }[]; error: null }) => unknown,
+            reject?: (reason: unknown) => unknown,
+          ) => Promise.resolve({ data: mocks.verifiedRows, error: null }).then(resolve, reject),
+        }
+        return chain
       },
     }),
   }),
@@ -169,6 +196,8 @@ beforeEach(() => {
   mocks.sessionStartedAt = null
   mocks.sessionStatus = 'completed'
   mocks.updates = []
+  mocks.updateConditions = []
+  mocks.verifiedRows = [{ id: 'lead-1' }]
   mocks.filters = []
   mocks.brevo.mockResolvedValue(undefined)
   mocks.signIn.mockResolvedValue(true)
@@ -811,5 +840,76 @@ describe('a returning trainee whose lead is on an older consultation', () => {
       expect.anything(),
       expect.objectContaining({ email: 'sarah@nhs.net' }),
     )
+  })
+})
+
+describe('the founders’ lead alert', () => {
+  it('goes out when a guest finishes the sign-up in the browser that ran it', async () => {
+    mocks.lead = { ...VERIFIABLE_LEAD, station_id: 'station-9' }
+
+    const { status } = await post(
+      { sessionId: GUEST_SESSION, code: '123456', password: 'longenough1', phone: '07700 900123' },
+      guestCookie(GUEST_SESSION),
+    )
+
+    expect(status).toBe(200)
+    expect(mocks.leadAlert).toHaveBeenCalledOnce()
+    const [, sessionId, lead, door] = mocks.leadAlert.mock.calls[0]
+    expect(sessionId).toBe(GUEST_SESSION)
+    expect(door).toBe('guest_signup')
+    // The lead's details, with the mobile they have just typed.
+    expect(lead).toMatchObject({
+      email: 'sarah@nhs.net',
+      first_name: 'Sarah',
+      training_stage: 'st3',
+      station_id: 'station-9',
+      phone: '+447700900123',
+    })
+  })
+
+  it('goes out when somebody verifies through the gate on an old report link', async () => {
+    await post({ sessionId: GUEST_SESSION, code: '123456' })
+
+    expect(mocks.leadAlert).toHaveBeenCalledOnce()
+    expect(mocks.leadAlert.mock.calls[0][3]).toBe('report_link')
+  })
+
+  it('rides on an UPDATE conditional on the lead not being verified yet', async () => {
+    // That condition is what makes it once per lead, across instances.
+    await post({ sessionId: GUEST_SESSION, code: '123456' }, guestCookie(GUEST_SESSION))
+    expect(mocks.updateConditions).toContain('email_verified_at is null')
+  })
+
+  it('is not sent twice when another request verified the lead first', async () => {
+    // A double submit racing itself: this request's UPDATE matched no row.
+    mocks.verifiedRows = []
+
+    const { status } = await post(
+      { sessionId: GUEST_SESSION, code: '123456' },
+      guestCookie(GUEST_SESSION),
+    )
+
+    expect(status).toBe(200)
+    expect(mocks.leadAlert).not.toHaveBeenCalled()
+  })
+
+  it('is not sent again for a lead that was already verified', async () => {
+    // A reload, a second tab, or a returning trainee verified long ago.
+    mocks.lead = { ...VERIFIABLE_LEAD, email_verified_at: new Date().toISOString() }
+
+    await post({ sessionId: GUEST_SESSION, code: '123456' }, guestCookie(GUEST_SESSION))
+    await post({ sessionId: GUEST_SESSION, code: '123456' })
+
+    expect(mocks.leadAlert).not.toHaveBeenCalled()
+  })
+
+  it('is not sent for a wrong code', async () => {
+    await post({ sessionId: GUEST_SESSION, code: '999999' }, guestCookie(GUEST_SESSION))
+    expect(mocks.leadAlert).not.toHaveBeenCalled()
+  })
+
+  it('is not sent from the account-first door, which has no consultation behind it', async () => {
+    await post({ email: 'sarah@nhs.net', code: '123456' })
+    expect(mocks.leadAlert).not.toHaveBeenCalled()
   })
 })
