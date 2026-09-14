@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { getTrainerCohort } from '@/lib/trainer/guard';
+import { parseAdminEmails } from '@/lib/admin/guard';
 import { candidateRun } from '@/lib/clinical-master/candidateRun';
 import { triggerMarking } from '@/lib/clinical-master/triggerMarking';
 import type { ConsultationFeedback } from '@/lib/clinical-master/types';
@@ -100,8 +101,12 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'sessionId required' }, { status: 400 });
         }
 
-        // Verify the caller owns this session (or it's a guest session, or is
-        // the trainer whose cohort the sitter belongs to).
+        // Verify the caller may read this session: its owner, anyone for a guest
+        // session nobody owns yet, an ADMIN_EMAILS admin (read-only, so the
+        // founders' lead alert links open), or the trainer whose cohort the
+        // sitter belongs to (read-only). A signed-out caller may read a guest
+        // session only: an owned session's report and transcript are the
+        // owner's, and this route runs on the service role.
         const authSupabase = await createServerClient();
         const {
             data: { user },
@@ -137,7 +142,14 @@ export async function POST(request: NextRequest) {
                     .eq('id', sessionId)
                     .is('user_id', null)
                     .maybeSingle();
-                if (!guest) {
+                const isAdmin =
+                    Boolean(user.email) &&
+                    parseAdminEmails(process.env.ADMIN_EMAILS).has(user.email!.toLowerCase());
+                if (!guest && isAdmin) {
+                    // Read-only, exactly like a trainer's read: an admin opening a
+                    // report from a lead alert must not spend a marking run.
+                    viaTrainer = true;
+                } else if (!guest) {
                     // Not theirs and not a guest session — the last thing it can
                     // be is a student of theirs. The Students tab links straight
                     // to the normal feedback page, so the trainer's read arrives
@@ -160,6 +172,16 @@ export async function POST(request: NextRequest) {
                     }
                     viaTrainer = true;
                 }
+            }
+        } else {
+            const { data: unowned } = await supabase
+                .from('clinical_sessions')
+                .select('id')
+                .eq('id', sessionId)
+                .is('user_id', null)
+                .maybeSingle();
+            if (!unowned) {
+                return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
             }
         }
 
