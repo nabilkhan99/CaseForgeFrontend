@@ -56,14 +56,6 @@ describe('what the free column offers', () => {
     expect(cell.cross).toBeFalsy()
   })
 
-  it('keeps the dashboard, the board and the development page — in every column', () => {
-    const row = rowFor('Dashboard, board, development page')
-    for (const cell of row.cells) {
-      expect(cell.text).toBe('Included')
-      expect(cell.cross).toBeFalsy()
-    }
-  })
-
   it.each(['On-demand Lectures', '1:1 Coaching Session', 'Ongoing 1:1 coaching'])(
     'crosses %s',
     (label) => {
@@ -107,16 +99,14 @@ describe('FREE_TIER is display copy, not a plan', () => {
     expect(PLANS.map((plan) => plan.key)).not.toContain('free')
   })
 
-  it('sends people to the account form rather than to checkout', () => {
-    // The one surface that still asks for the account FIRST, and deliberately:
-    // a reader comparing plans is not looking for a patient. Everywhere else
-    // the consultation comes first and the account follows it.
-    expect(FREE_TIER.ctaHref).toBe('/free/start')
+  it('sends people to the picker rather than to checkout', () => {
+    // One door: the same destination as every other free call to action.
+    expect(FREE_TIER.ctaHref).toBe('/free')
     expect(FREE_TIER.displayPrice).toBe('£0')
   })
 
   it('says on the button what pressing it does', () => {
-    expect(FREE_TIER.ctaLabel).toBe('Create free account')
+    expect(FREE_TIER.ctaLabel).toBe('Try 5 free cases')
     expect(FREE_TIER.tagline).toBe('Five cases · unlimited attempts · five days')
   })
 

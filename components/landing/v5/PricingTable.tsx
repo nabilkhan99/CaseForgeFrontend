@@ -313,10 +313,8 @@ function OwnedCta() {
  * Where the free column's button goes.
  *
  * Read off `FREE_TIER` — label and href both — so the pricing table has no
- * opinion of its own about the free offer. The column is the deliberate,
- * account-first door ("Create free account" → /free/start): somebody reading a
- * price table is comparing plans, not looking for a patient, and the guest lane
- * at /free is one link away on every other surface.
+ * opinion of its own about the free offer. It is the same door as every other
+ * free call to action on the site: "Try 5 free cases", to /free.
  */
 
 function PlanCta({ selfStudy, variant, selfStudyPlan, owned, canUpgrade }: CtaButtonsProps) {
@@ -408,10 +406,12 @@ interface MobileCardsProps {
   billing: BillingChoice;
   owned: OwnedColumn;
   canUpgrade: boolean;
+  /** False for a visitor who already holds a plan: see `showFree` on the table. */
+  showFree: boolean;
 }
 
 /** Mobile: one full-width card per plan, same content as its desktop column. */
-function MobileCards({ selfStudy, billing, owned, canUpgrade }: MobileCardsProps) {
+function MobileCards({ selfStudy, billing, owned, canUpgrade, showFree }: MobileCardsProps) {
   const selfStudyPlan = selfStudyPlanFor(billing);
   const selfStudyPrice = SELF_STUDY_PRICING[billing];
   const cards = [
@@ -468,9 +468,11 @@ function MobileCards({ selfStudy, billing, owned, canUpgrade }: MobileCardsProps
     },
   ];
 
+  const visibleCards = showFree ? cards : cards.filter((card) => card.key !== 'free');
+
   return (
     <div className="flex flex-col gap-4 sm:hidden">
-      {cards.map((card) => (
+      {visibleCards.map((card) => (
         <div
           key={card.key}
           className={`overflow-hidden rounded-3xl border shadow-elevation-2 backdrop-blur ${
@@ -577,6 +579,10 @@ export default function PricingTable({ ownedPlan, accountEmail, canUpgrade = fal
   const [billing, setBilling] = useState<BillingChoice>('three_month');
   const selfStudyPlan = selfStudyPlanFor(billing);
   const selfStudyPrice = SELF_STUDY_PRICING[billing];
+  // The free column is for somebody deciding whether to buy. A visitor who
+  // already holds a plan (current or lapsed) is not offered it, on either
+  // layout, and the table goes back to its three paid columns.
+  const showFree = !ownedPlan;
 
   return (
     <section id="pricing" className="scroll-mt-24 px-5 py-6 sm:px-8 sm:py-10">
@@ -594,22 +600,37 @@ export default function PricingTable({ ownedPlan, accountEmail, canUpgrade = fal
 
           <BillingToggle billing={billing} onChange={setBilling} />
 
-          <MobileCards selfStudy={selfStudy} billing={billing} owned={owned} canUpgrade={canUpgrade} />
+          <MobileCards
+            selfStudy={selfStudy}
+            billing={billing}
+            owned={owned}
+            canUpgrade={canUpgrade}
+            showFree={showFree}
+          />
 
           <div className="hidden overflow-hidden rounded-3xl border border-heading/[0.06] bg-white/80 shadow-elevation-2 backdrop-blur sm:block">
-            <div className="grid grid-cols-[minmax(78px,150px)_repeat(4,minmax(0,1fr))]">
+            {/* Both templates are written out in full so Tailwind can see them. */}
+            <div
+              className={
+                showFree
+                  ? 'grid grid-cols-[minmax(78px,150px)_repeat(4,minmax(0,1fr))]'
+                  : 'grid grid-cols-[minmax(84px,170px)_repeat(3,minmax(0,1fr))]'
+              }
+            >
               {/* Plan headers */}
               <div />
               {/* Free first: it is the cheapest way to find out whether
                   any of the other three are worth it, and burying it
                   behind them would be pretending otherwise. */}
-              <div className="relative px-3 pb-5 pt-9 text-center">
-                <PlanName>{FREE_TIER.name}</PlanName>
-                <p className="mt-2.5 text-lg font-medium tracking-tight text-heading sm:text-3xl">
-                  {FREE_TIER.displayPrice}
-                </p>
-                <p className="mt-1 text-[10px] text-muted sm:text-xs">{FREE_TIER.tagline}</p>
-              </div>
+              {showFree && (
+                <div className="relative px-3 pb-5 pt-9 text-center">
+                  <PlanName>{FREE_TIER.name}</PlanName>
+                  <p className="mt-2.5 text-lg font-medium tracking-tight text-heading sm:text-3xl">
+                    {FREE_TIER.displayPrice}
+                  </p>
+                  <p className="mt-1 text-[10px] text-muted sm:text-xs">{FREE_TIER.tagline}</p>
+                </div>
+              )}
               <div className="relative px-3 pb-5 pt-9 text-center">
                 {owned === 'self_study' && (
                   <OwnedBadge className="absolute left-1/2 top-3 -translate-x-1/2" />
@@ -678,7 +699,8 @@ export default function PricingTable({ ownedPlan, accountEmail, canUpgrade = fal
                       <p className="mt-0.5 text-[9px] text-muted sm:text-xs">{row.labelSub}</p>
                     )}
                   </div>
-                  {row.cells.map((cell, i) => (
+                  {/* Cell 0 is the free column, dropped with its header. */}
+                  {row.cells.map((cell, i) => (showFree || i > 0) && (
                     <div
                       key={i}
                       className={`flex flex-col items-center justify-center border-t border-heading/[0.06] px-2 py-4 text-center ${
@@ -706,9 +728,11 @@ export default function PricingTable({ ownedPlan, accountEmail, canUpgrade = fal
 
               {/* CTA row */}
               <div className="border-t border-heading/[0.06]" />
-              <div className="border-t border-heading/[0.06] px-4 py-4">
-                <PlanCta selfStudy={selfStudy} variant="free" selfStudyPlan={selfStudyPlan} owned={owned} canUpgrade={canUpgrade} />
-              </div>
+              {showFree && (
+                <div className="border-t border-heading/[0.06] px-4 py-4">
+                  <PlanCta selfStudy={selfStudy} variant="free" selfStudyPlan={selfStudyPlan} owned={owned} canUpgrade={canUpgrade} />
+                </div>
+              )}
               <div className="border-t border-heading/[0.06] px-4 py-4">
                 <PlanCta selfStudy={selfStudy} variant="self_study" selfStudyPlan={selfStudyPlan} owned={owned} canUpgrade={canUpgrade} />
               </div>
@@ -720,7 +744,7 @@ export default function PricingTable({ ownedPlan, accountEmail, canUpgrade = fal
               </div>
 
               {/* One guarantee strip for the whole table */}
-              <div className="col-span-5 bg-[#EAF3DE] px-6 py-3.5">
+              <div className={`${showFree ? 'col-span-5' : 'col-span-4'} bg-[#EAF3DE] px-6 py-3.5`}>
                 <GuaranteeInfo align="center">
                   <p className="text-[11px] text-[#27500A] sm:text-xs">
                     Every plan: don&rsquo;t pass, and we pay you £500.

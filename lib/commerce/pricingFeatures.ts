@@ -44,18 +44,6 @@ export const FEATURE_ROWS: readonly FeatureRow[] = [
     ],
   },
   {
-    // The row that makes the free column an offer rather than a sample: what
-    // you did is kept, whatever you decide afterwards. Included everywhere, so
-    // it reads as a property of the product rather than a plan feature.
-    label: 'Dashboard, board, development page',
-    cells: [
-      { text: 'Included' },
-      { text: 'Included' },
-      { text: 'Included' },
-      { text: 'Included' },
-    ],
-  },
-  {
     label: 'On-demand Lectures',
     cells: [
       { text: '', cross: true },

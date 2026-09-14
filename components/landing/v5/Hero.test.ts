@@ -10,9 +10,7 @@ import { FREE_TIER } from '@/lib/commerce/plans'
  * and the consultation comes first. Every free call to action on the landing
  * page therefore goes to /free, the picker, where Start opens a consultation
  * on that case; the account is made afterwards, while it is being marked. The
- * account-first form at /free/start still exists and is still deliberate — it
- * is the pricing table's free column, where somebody is comparing plans rather
- * than looking for a patient.
+ * pricing table's free column is the same door, with the same label.
  *
  * The noun is "cases" on every one of these surfaces. "Station" is the word
  * the product uses inside itself (the brief, the report, the library, "200 AI
@@ -88,13 +86,12 @@ describe('the other doors into the offer', () => {
     expect(NAVBAR).toContain("href: '/free'")
   })
 
-  it('sends the pricing table’s free column to the account form', () => {
-    // The free column is the DELIBERATE door: a reader comparing plans is not
-    // looking for a patient. Its destination and its label both live on
-    // FREE_TIER and PricingTable reads them from there, so there is one source
-    // of truth and no local override.
-    expect(FREE_TIER.ctaHref).toBe('/free/start')
-    expect(FREE_TIER.ctaLabel).toBe('Create free account')
+  it('sends the pricing table’s free column to the picker, in the same words', () => {
+    // One door. Its destination and its label both live on FREE_TIER and
+    // PricingTable reads them from there, so there is one source of truth and
+    // no local override.
+    expect(FREE_TIER.ctaHref).toBe('/free')
+    expect(FREE_TIER.ctaLabel).toBe('Try 5 free cases')
     expect(PRICING).toContain('href={FREE_TIER.ctaHref}')
     expect(PRICING).toContain('{FREE_TIER.ctaLabel}')
   })

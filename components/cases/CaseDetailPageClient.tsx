@@ -331,21 +331,29 @@ export default function CaseDetailPageClient({ caseData }: CaseDetailPageClientP
 
                             A plain <a>, not a <Link>, for the free case: the
                             guest door opens a consultation as a side effect of
-                            a GET and a prefetch must not reach it. */}
-                        {isFreeCase ? (
-                            <a href={cta.href} className="cta-button mt-4 w-full px-5 py-3.5 text-[15px]">
-                                {cta.label}
-                            </a>
-                        ) : (
-                            <Link href={cta.href} className="cta-button mt-4 w-full px-5 py-3.5 text-[15px]">
-                                {cta.label}
-                            </Link>
+                            a GET and a prefetch must not reach it. nofollow for
+                            the same reason: a crawler must not open one either.
+
+                            Signed-in readers get neither: the free offer is the
+                            guest way in, and an account already has its own. */}
+                        {!user && (
+                            <>
+                                {isFreeCase ? (
+                                    <a href={cta.href} rel="nofollow" className="cta-button mt-4 w-full px-5 py-3.5 text-[15px]">
+                                        {cta.label}
+                                    </a>
+                                ) : (
+                                    <Link href={cta.href} className="cta-button mt-4 w-full px-5 py-3.5 text-[15px]">
+                                        {cta.label}
+                                    </Link>
+                                )}
+                                <p className="mt-2 text-xs leading-relaxed text-muted">
+                                    {isFreeCase
+                                        ? 'A live 12-minute consultation with an AI patient, marked. You see your verdict before we ask for anything.'
+                                        : 'Five cases are free: a live 12-minute consultation with an AI patient each, marked, and no card.'}
+                                </p>
+                            </>
                         )}
-                        <p className="mt-2 text-xs leading-relaxed text-muted">
-                            {isFreeCase
-                                ? 'A live 12-minute consultation with an AI patient, marked. You see your verdict before we ask for anything.'
-                                : 'Five cases are free: a live 12-minute consultation with an AI patient each, marked, and no card.'}
-                        </p>
                     </div>
 
                     {/* Main content */}

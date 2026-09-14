@@ -107,29 +107,24 @@ export default function Hero() {
             transition={{ duration: 0.5, delay: 0.18 }}
           >
             {/*
-              THE CASES ARE THE CALL TO ACTION (11 September 2026).
-              One button, naming what is on the other side of it: five free
-              cases, at /free, where the five titles are the argument and Start
-              opens a consultation. The account is made afterwards, while the
-              consultation is being marked — so there is nothing to offer
-              underneath this button and the secondary text link is gone. Two
-              doors into the same offer only made the reader choose between
-              them.
+              "2d" treatment — quiet outline: ink keyline on cream, amber arrow disc.
 
-              Filled, not the old "2d" outline. The outline treatment was drawn
-              for a CTA competing with the receipt panel beside it, and this is
-              the page's most valuable button, not its quietest.
+              THE CASES ARE THE CALL TO ACTION (11 September 2026). One button,
+              naming what is on the other side of it: five free cases, at /free,
+              where the five titles are the argument and Start opens a
+              consultation. The account is made afterwards, while the
+              consultation is being marked, so there is nothing to offer
+              underneath this button and the secondary text link is gone.
             */}
             <motion.a
               href="/free"
               whileHover={{ y: -2 }}
               whileTap={{ scale: 0.98 }}
-              className="inline-flex items-center gap-3.5 rounded-full border-[3px] border-transparent py-2.5 pl-7 pr-2.5 text-lg font-bold tracking-[-0.01em] text-[#FFF8EF] shadow-[0_10px_28px_-14px_rgba(180,83,9,0.75)] sm:gap-4 sm:py-3 sm:pl-9 sm:pr-3 sm:text-xl"
-              style={{ background: 'linear-gradient(135deg, #B45309 0%, #D97706 100%)' }}
+              className="inline-flex items-center gap-3.5 rounded-full border-[3px] border-[#1C1917] bg-[#FFFDFA] py-2.5 pl-7 pr-2.5 text-lg font-bold tracking-[-0.01em] text-[#1C1917] sm:gap-4 sm:py-3 sm:pl-9 sm:pr-3 sm:text-xl"
             >
               Try 5 free cases
               <span
-                className="flex h-11 w-11 items-center justify-center rounded-full bg-[#FFF8EF] text-[#B45309] sm:h-[52px] sm:w-[52px]"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-[#B45309] text-[#FFF8EF] sm:h-[52px] sm:w-[52px]"
                 aria-hidden="true"
               >
                 <ArrowRight className="h-5 w-5 sm:h-6 sm:w-6" />

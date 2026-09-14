@@ -297,18 +297,15 @@ export const ACCESS_OPENS = '2026-09-01'
  * to check out. And the label never says "trial" — the word reads as a
  * countdown to being sold something, and it never appears on a button.
  *
- * THIS COLUMN IS THE DELIBERATE, ACCOUNT-FIRST DOOR, and the only one left.
- * Every other free call to action on the site now opens a consultation first
- * (/free, the picker) and asks for the account afterwards, while the
- * consultation is being marked. A reader of a price table is comparing plans,
- * not looking for a patient, so this one says what it will do — "Create free
- * account" — and goes to the form at /free/start.
+ * ONE DOOR. The column says what every other free call to action on the site
+ * says, "Try 5 free cases", and goes where they go: /free, the picker, where
+ * Start opens a consultation and the account is made afterwards.
  */
 export const FREE_TIER = {
   name: 'Free',
   displayPrice: '£0',
   priceSuffix: '',
   tagline: 'Five cases · unlimited attempts · five days',
-  ctaLabel: 'Create free account',
-  ctaHref: '/free/start',
+  ctaLabel: 'Try 5 free cases',
+  ctaHref: '/free',
 } as const
