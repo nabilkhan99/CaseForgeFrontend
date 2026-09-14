@@ -36,7 +36,7 @@ import ExampleReport from './ExampleReport';
 const INCLUDED: readonly string[] = [
   'Unlimited attempts on all five cases',
   'Your own dashboard and analytics',
-  'Your Development page: a detailed, whole picture of how you are progressing',
+  'A detailed, holistic analysis of how you are progressing',
 ];
 
 /** The five rows are the page. Everything else is supporting detail. */
