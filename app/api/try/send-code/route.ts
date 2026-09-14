@@ -79,6 +79,21 @@ const GUEST_IP_LIMIT = 12;
 const GUEST_IP_WINDOW_MS = 60 * 60 * 1000;
 const guestIpHits = createHitLog();
 
+/**
+ * The answer to a browser that cannot prove it ran this consultation and is
+ * trying to change whose verified lead it is. Nothing is written or mailed.
+ */
+function refuseUnproven(reason: string): NextResponse {
+  console.warn(`[send-code] ${reason}`);
+  return NextResponse.json(
+    {
+      error: 'Start your consultation from the link. This one has lost its place.',
+      code: 'guest_session_unrecognised',
+    },
+    { status: 403 },
+  );
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as Record<string, unknown> & { sessionId?: string };
@@ -142,7 +157,7 @@ export async function POST(req: NextRequest) {
     const [{ data: leadBySession }, { data: leadByEmail }] = await Promise.all([
       supabase
         .from('trial_leads')
-        .select('id, verification_last_sent_at, email_verified_at')
+        .select('id, email, verification_last_sent_at, email_verified_at')
         .eq('session_id', sessionId)
         .maybeSingle(),
       supabase
@@ -168,22 +183,35 @@ export async function POST(req: NextRequest) {
     // `ff_guest` cookie is what tells the two apart — it is the same proof the
     // Azure mint and contract C3's password rest on, and a bare session id is
     // not evidence of anything.
+    const proven = cookieOwnsSession(
+      readGuestCookie(req.cookies?.get(GUEST_COOKIE)?.value),
+      sessionId,
+    );
     const verifiedLead = Boolean(leadByEmail?.email_verified_at);
-    if (verifiedLead && leadByEmail!.session_id !== sessionId) {
-      const owns = cookieOwnsSession(
-        readGuestCookie(req.cookies.get(GUEST_COOKIE)?.value),
-        sessionId,
-      );
-      if (!owns) {
-        console.warn('[send-code] refused to move a verified lead onto an unproven session');
-        return NextResponse.json(
-          {
-            error: 'Start your consultation from the link. This one has lost its place.',
-            code: 'guest_session_unrecognised',
-          },
-          { status: 403 },
-        );
-      }
+    if (verifiedLead && leadByEmail!.session_id !== sessionId && !proven) {
+      return refuseUnproven('refused to move a verified lead onto an unproven session');
+    }
+
+    // The same rule from the other side: the lead already ON this session is
+    // verified, and a different address is being typed next to it. Without
+    // this, the upsert below rewrote that row with the caller's address and
+    // nulled its verification, so anyone holding a report link (and nothing
+    // else) could verify their own address against somebody else's
+    // consultation and have the claim move it into their account. Every lead
+    // verified on main sits on a session nobody owns yet, so this was open for
+    // all of them.
+    //
+    // Allowed with the cookie (the browser that ran it may change its mind), or
+    // when the address typed IS the session's verified one: the code goes to
+    // that inbox, so only its owner can use it. An UNVERIFIED lead is not
+    // protected, exactly as on main: it proves nothing about anybody, and the
+    // report gate's "Edit email" re-posts here with a corrected address.
+    if (
+      !proven &&
+      leadBySession?.email_verified_at &&
+      (leadBySession.email ?? '').trim().toLowerCase() !== normalizedEmail
+    ) {
+      return refuseUnproven('refused to re-address a verified lead from an unproven browser');
     }
 
     // A repeat email is NOT refused here. By this point the consultation has

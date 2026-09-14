@@ -261,6 +261,7 @@ describe('a lead that is already verified', () => {
   /** Sarah verified months ago, against a different consultation. */
   const VERIFIED_ELSEWHERE = {
     id: 'lead-1',
+    email: 'sarah@nhs.net',
     session_id: OLD_SESSION_ID,
     station_id: 'a-station-from-back-then',
     verification_last_sent_at: null,
@@ -353,6 +354,116 @@ describe('a lead that is already verified', () => {
 
     expect(status).toBe(200)
     expect(mocks.writes[0]).not.toHaveProperty('email_verified_at')
+  })
+})
+
+describe('taking over somebody else’s consultation from its link', () => {
+  /**
+   * Sarah sat this consultation and verified her address against it, but the
+   * session is still unowned: every lead verified on main is like this, and so
+   * is a develop sign-up whose account step failed. Her report link is all an
+   * attacker holds. No cookie.
+   */
+  const SARAHS_LEAD = {
+    id: 'lead-sarah',
+    email: 'sarah@nhs.net',
+    session_id: SESSION_ID,
+    station_id: STATION_ID,
+    verification_last_sent_at: null,
+    email_verified_at: '2026-07-01T10:00:00.000Z',
+  }
+
+  it('refuses to put a different address on a verified lead without the cookie', async () => {
+    // Before this guard the upsert on session_id rewrote Sarah's row with the
+    // attacker's address and nulled email_verified_at. verify-code then
+    // verified the attacker's address against Sarah's session and the claim
+    // moved her consultation, report and transcript into the attacker's account.
+    mocks.leadBySession = { ...SARAHS_LEAD }
+
+    const { status, body } = await post({
+      sessionId: SESSION_ID,
+      mode: 'guest_signup',
+      email: 'attacker@example.com',
+    })
+
+    expect(status).toBe(403)
+    expect(body.code).toBe('guest_session_unrecognised')
+    expect(mocks.writes).toHaveLength(0)
+    expect(mocks.deletes).toHaveLength(0)
+    expect(mocks.sendEmail).not.toHaveBeenCalled()
+  })
+
+  it('refuses it on the legacy gate shape too', async () => {
+    mocks.leadBySession = { ...SARAHS_LEAD }
+
+    const { status } = await post({ ...FULL_ANSWERS, email: 'attacker@example.com' })
+
+    expect(status).toBe(403)
+    expect(mocks.writes).toHaveLength(0)
+    expect(mocks.sendEmail).not.toHaveBeenCalled()
+  })
+
+  it('refuses it when the attacker’s own address already has an unverified lead elsewhere', async () => {
+    // The other write path: move the attacker's abandoned row onto this session
+    // and delete whatever was here. Sarah's verified row must survive that too.
+    mocks.leadBySession = { ...SARAHS_LEAD }
+    mocks.leadByEmail = {
+      id: 'lead-attacker',
+      session_id: OLD_SESSION_ID,
+      station_id: null,
+      verification_last_sent_at: null,
+      email_verified_at: null,
+    }
+
+    const { status } = await post({
+      sessionId: SESSION_ID,
+      mode: 'guest_signup',
+      email: 'attacker@example.com',
+    })
+
+    expect(status).toBe(403)
+    expect(mocks.writes).toHaveLength(0)
+    expect(mocks.deletes).toHaveLength(0)
+  })
+
+  it('lets Sarah herself ask for a new code on another device, without un-verifying her', async () => {
+    // The session's own verified address: the code goes to Sarah's inbox, so
+    // only Sarah can use it.
+    mocks.leadBySession = { ...SARAHS_LEAD }
+    mocks.leadByEmail = { ...SARAHS_LEAD }
+
+    const { status } = await post({ ...FULL_ANSWERS, email: 'Sarah@NHS.net' })
+
+    expect(status).toBe(200)
+    expect(mocks.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ toEmail: 'sarah@nhs.net' }),
+    )
+    expect(mocks.writes[0]).not.toHaveProperty('email_verified_at')
+    expect(mocks.writes[0]).toMatchObject({ email: 'sarah@nhs.net', session_id: SESSION_ID })
+  })
+
+  it('lets the browser that ran the consultation change the address', async () => {
+    mocks.leadBySession = { ...SARAHS_LEAD }
+
+    const { status } = await post(
+      { sessionId: SESSION_ID, mode: 'guest_signup', email: 'sarah.new@nhs.net' },
+      { cookie: heldCookie() },
+    )
+
+    expect(status).toBe(200)
+    expect(mocks.sendEmail).toHaveBeenCalledOnce()
+  })
+
+  it('still lets an unverified lead be corrected, as the gate on main did', async () => {
+    // An unverified row proves nothing about anybody, and "Edit email" on the
+    // report gate re-posts here with the corrected address. What makes a lead
+    // worth protecting is the verification.
+    mocks.leadBySession = { ...SARAHS_LEAD, email: 'sarah@nhs.nt', email_verified_at: null }
+
+    const { status } = await post({ ...FULL_ANSWERS, email: 'sarah@nhs.net' })
+
+    expect(status).toBe(200)
+    expect(mocks.writes[0]).toMatchObject({ email: 'sarah@nhs.net', email_verified_at: null })
   })
 })
 
