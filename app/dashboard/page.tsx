@@ -12,8 +12,6 @@ import PrimaryButton from '@/components/ui/PrimaryButton';
 import TrainingHeatmap from '@/components/dashboard/TrainingHeatmap';
 import TrialPanel from '@/components/dashboard/TrialPanel';
 import TrialWall from '@/components/dashboard/TrialWall';
-import TrialQuestionnaireCard from '@/components/dashboard/TrialQuestionnaireCard';
-import StudyBudgetChecker from '@/components/landing/v5/StudyBudgetChecker';
 import { getUserStats, getDailyActivityTimestamps } from '@/lib/supabase/queries/dashboard';
 import { getRandomStation, getStationIndex } from '@/lib/supabase/queries/station-library';
 import type { Station } from '@/lib/supabase/queries/station-library';
@@ -234,7 +232,9 @@ function DashboardContent() {
     fetchDashboardData();
   }, [user]);
 
-  const firstName = user?.user_metadata?.full_name?.split(' ')[0] || 'there';
+  // No name on file (a free account made from an email alone) reads as a plain
+  // greeting, never "Good evening, there".
+  const firstName = user?.user_metadata?.full_name?.split(' ')[0]?.trim() || null;
 
   /**
    * Whether the trainee may start a consultation right now.
@@ -339,14 +339,14 @@ function DashboardContent() {
         <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
           <div className="min-w-0">
             <h1 className="text-[24px] font-bold text-heading tracking-[-0.02em]">
-              {greeting}, {firstName}
+              {firstName ? `${greeting}, ${firstName}` : greeting}
             </h1>
             {/* The tally and the pass mark have gone. The count is a headline
                 figure on the board below and the pass mark is printed on every
                 report, so on a page opened daily this line only restated two
                 numbers the reader already had. The first-run instruction stays:
                 it is the one case with nothing else on screen to say it. */}
-            {stats.completedStations === 0 && (
+            {stats.completedStations === 0 && !trial && (
               <p className="text-[13px] text-muted mt-1">
                 Start your first consultation to begin tracking progress
               </p>
@@ -431,28 +431,6 @@ function DashboardContent() {
         <TrialPanel trial={trial} stations={trialStations} examDate={stats.examDate} />
       )}
       {trialEnded && trial && <TrialWall trial={trial} examDate={stats.examDate} />}
-
-      {/* The two questions the sign-up door skipped, asked once they have
-          actually sat one of the five. `trial.casesTried` counts cases begun,
-          not marks, so this now appears when they come back to the dashboard
-          after their first consultation rather than ninety seconds later; and
-          it disappears the moment there is an exam date, from here or from the
-          countdown field below. */}
-      {trial && trial.casesTried >= 1 && !stats.examDate && user?.id && (
-        <TrialQuestionnaireCard
-          userId={user.id}
-          onSaved={(examDate) => {
-            const days = examDate ? daysUntilExamDate(examDate) : null;
-            // A sitting we could not map to a real date (a 2027 period, "not
-            // sure") saves the answer but sets no countdown — the card is still
-            // dismissed, so nobody is asked twice.
-            if (!examDate || days === null) return;
-            // Same in-place update the countdown's own save does, rather than
-            // reloading a whole dashboard around two answers.
-            setStats((previous) => ({ ...previous, examDate, examCountdownDays: days }));
-          }}
-        />
-      )}
 
       {/* Both plan banners below stand down while a live trial is granting
           access. They are written for somebody who cannot practise, and saying
@@ -587,8 +565,10 @@ function DashboardContent() {
         );
       })()}
 
-      {/* Getting started onboarding for new users */}
-      {stats.completedStations === 0 && (
+      {/* Getting started onboarding for new paying users. A trial account's
+          panel already lists its five cases with a Start on each, so the three
+          generic steps would only repeat it. */}
+      {stats.completedStations === 0 && !trial && (
         /* De-carded. Three numbered steps between two rules is the house style
            for exactly this ("features as numbered rows"), and the raised card
            was giving a one-off explainer more visual weight than the primary
@@ -798,34 +778,6 @@ function DashboardContent() {
               How it works
             </Link>
           </p>
-        </Reveal>
-      )}
-
-      {/* The deanery checker, for trial accounts only.
-          It is the single most useful thing to put in front of somebody
-          deciding whether to pay for this: most of them can claim it against a
-          study budget and do not know it, and the answer is regional. Nobody
-          who has already bought needs it here — it would be advice about a
-          decision they have made — so it is gated on the grant, exactly as the
-          strip and the wall are.
-          Rendered with `surface="trial-dashboard"`, which is not 'landing', so
-          the checker lays itself out in one column instead of the homepage
-          band's two: 900px is not the width its split was drawn for. The
-          surface also tags its own `study_budget_deanery_selected` events, so
-          dashboard use is separable from landing use in PostHog. */}
-      {trial && (
-        <Reveal delay={REVEAL.guarantee} className="mb-4">
-          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.13em] text-primary">
-            Before you pay for it yourself
-          </p>
-          <p className="text-[13px] leading-relaxed text-muted">
-            Most deaneries reimburse SCA preparation out of the study budget. Check yours:
-            the email asking for pre-approval is drafted for you.
-          </p>
-          {/* Its own section padding supplies the gap below this line. */}
-          <div className="-mx-5 sm:-mx-8">
-            <StudyBudgetChecker surface="trial-dashboard" />
-          </div>
         </Reveal>
       )}
 

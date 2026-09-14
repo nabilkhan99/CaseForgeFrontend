@@ -71,13 +71,9 @@ export default function TrialPanel({
       initial={{ opacity: 0, y: -4 }}
       animate={{ opacity: 1, y: 0 }}
     >
-      <div className="text-[10px] font-semibold uppercase tracking-[0.13em] text-primary">
-        Your free week
-      </div>
-
       <h2
         id="trial-panel-heading"
-        className="mt-2 text-[24px] font-bold leading-[1.2] tracking-[-0.025em] text-heading"
+        className="text-[24px] font-bold leading-[1.2] tracking-[-0.025em] text-heading"
       >
         {trialTitleLine(caseCount)}
       </h2>
@@ -130,8 +126,7 @@ export default function TrialPanel({
                     </span>
                   </div>
                   <div className="mt-0.5 pl-[26px] text-[12px] text-muted">
-                    {station.domain_name} &middot;{' '}
-                    {Math.round(station.consultation_duration_seconds / 60)} min
+                    {station.domain_name}
                     {attempts > 0 && (
                       <>
                         {' '}
@@ -164,13 +159,9 @@ export default function TrialPanel({
           five cases above rather than a second headline competing with them. */}
       <div className="mt-8">
         <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-primary">
-          When you want the other 195
+          Unlock all 200 cases
         </p>
-        <p className="mt-1.5 max-w-xl text-[13px] leading-relaxed text-muted">
-          These five stay yours for the week. The full bank is 200 cases, every one marked the same
-          way.
-        </p>
-        <div className="mt-3">
+        <div className="mt-2">
           <TrialPlanOffer examDate={examDate} examHint={trial.examHint} />
         </div>
       </div>
