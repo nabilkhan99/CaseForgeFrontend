@@ -101,87 +101,21 @@ const LECTURE_ROWS: FeatureRow[] = [
   },
 ];
 
-/**
- * The one to one coaching session, in the order the course sells it: the
- * circuit, whose stations they are, the feedback, then the dashboard review.
- * Four rows, deliberately: the other tiles carry four too, and this one is not
- * padded to look bigger than it is.
- */
-const COACHING_ROWS: FeatureRow[] = [
-  {
-    lead: 'Half a full SCA circuit',
-    tail: '6 timed 12 minute stations, run back to back under exam conditions',
-    icon: (
-      <>
-        <circle cx="12" cy="13.5" r="7" />
-        <path d="M9.5 3h5M12 3v3.5" />
-        <path d="M12 13.5V9.8M12 13.5l2.7 1.6" />
-      </>
-    ),
-  },
-  {
-    lead: 'Every station is yours',
-    tail: 'you consult all six yourself',
-    icon: (
-      <>
-        <circle cx="12" cy="8.5" r="3" />
-        <path d="M6.5 19.5a5.5 5.5 0 0 1 11 0" />
-      </>
-    ),
-  },
-  {
-    lead: 'Detailed feedback on each station',
-    tail: 'the marking, the fixes, and written feedback to take away',
-    icon: (
-      <>
-        <path d="M4 5.5h9M4 9.5h5.5M4 13.5h4" />
-        <circle cx="14.5" cy="13" r="4.5" />
-        <path d="M17.8 16.3 21 19.5" />
-        <path d="M12.8 13l1.3 1.3 2.2-2.3" />
-      </>
-    ),
-  },
-  {
-    lead: 'Your AI dashboard, reviewed with you',
-    tail: 'the mistakes that recur across your practice, and the systemic fix',
-    icon: (
-      <>
-        <path d="M12 3.5 20 7.5 12 11.5 4 7.5Z" />
-        <path d="M4 12l8 4 8-4" />
-        <path d="M4 16.5l8 4 8-4" />
-      </>
-    ),
-  },
-];
-
 const TEAL = '#0F6E56';
-const AMBER = '#854F0B';
 
 interface FeatureRowsProps {
   rows: FeatureRow[];
   color: string;
   tint: string;
-  /**
-   * Two columns from sm up, one on phones. For a full-width tile, where a
-   * single column of rows would leave most of the tile empty on desktop.
-   */
-  twoColumn?: boolean;
 }
 
-/** Hairline above a row: never the first, and in two columns not the top pair. */
-function rowDivider(index: number, twoColumn: boolean): string {
-  if (index === 0) return '';
-  if (twoColumn && index === 1) return 'border-t border-heading/[0.06] sm:border-t-0';
-  return 'border-t border-heading/[0.06]';
-}
-
-function FeatureRows({ rows, color, tint, twoColumn = false }: FeatureRowsProps) {
+function FeatureRows({ rows, color, tint }: FeatureRowsProps) {
   return (
-    <div className={twoColumn ? 'sm:grid sm:grid-cols-2 sm:gap-x-10' : undefined}>
+    <div>
       {rows.map((row, index) => (
         <div
           key={row.lead}
-          className={`flex items-start gap-3.5 py-3 ${rowDivider(index, twoColumn)}`}
+          className={`flex items-start gap-3.5 py-3 ${index > 0 ? 'border-t border-heading/[0.06]' : ''}`}
         >
           <span
             className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[10px]"
@@ -226,10 +160,10 @@ const fadeUp = {
 };
 
 /**
- * "The Complete Course" section: what the course includes. Two self-paced
- * tiles (AI practice and lectures), then the 3 hour one to one coaching
- * session as a full-width tile. There is no timetable for the session, here
- * or anywhere: its own homepage section says how the three hours run.
+ * "The Complete Course" section: what the course includes. The two self-paced
+ * tiles (AI practice and lectures) only. The 3 hour one to one coaching session
+ * is not repeated here as a tile: `OneToOneCoaching` sits directly below this
+ * section and covers it in full.
  */
 export default function CompleteCourse() {
   return (
@@ -290,25 +224,6 @@ export default function CompleteCourse() {
           </div>
         </motion.div>
 
-        {/* Zone 2: the one to one coaching session */}
-        <motion.div {...fadeUp} className="mt-12 sm:mt-14">
-          <ZoneLabel>3 hours, one to one</ZoneLabel>
-          <div className={`${TILE} px-6 py-6 sm:px-7`}>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xl font-semibold text-heading">One to One Coaching</p>
-              <span className="self-start rounded-full bg-[#FAEEDA] px-3 py-1 text-[12px] font-medium text-[#854F0B]">
-                3 hours · Just you and your coach · Remote
-              </span>
-            </div>
-
-            <div className="mt-3">
-              <FeatureRows rows={COACHING_ROWS} color={AMBER} tint="rgba(133,79,11,0.10)" twoColumn />
-            </div>
-            <p className="mt-2 border-t border-heading/[0.06] pt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-muted">
-              3 hours 1:1 · £749 value
-            </p>
-          </div>
-        </motion.div>
       </div>
     </section>
   );
