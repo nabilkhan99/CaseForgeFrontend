@@ -3,19 +3,15 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 /**
- * A refused microphone must not end the guest funnel. Two halves, both pinned
- * against source because vitest runs in `node` here and neither a React hook
- * nor a call screen can be rendered.
+ * A refused microphone must not end the guest funnel. Pinned against source
+ * because vitest runs in `node` here and neither a React hook nor a call
+ * screen can be rendered.
  *
- * HALF ONE — the ORDER inside `connect()`. The ephemeral-key mint is the one
- * request in this product that spends money without an account, and on the
- * guest lane it also moves the row to `live` and stamps a 2-minute cooldown on
- * the `ff_guest` cookie. Minting BEFORE asking for the microphone meant a
- * fumbled permission prompt spent the mint on a consultation that could never
- * start, and then the door refused "try again" for two minutes. The permission
- * is free to ask for and free to be refused, so it goes first.
+ * The ORDER inside `connect()` (ask for the microphone before or after minting
+ * the key) is deliberately left as it is on main: the voice hook is shared with
+ * every paid consultation, and it is not changed from the trial branch.
  *
- * HALF TWO — what the guest screen SAYS when it is refused. The signed-in
+ * What IS pinned: what the guest screen SAYS when it is refused. The signed-in
  * session screen has read `errorKind` since the mic errors were classified; the
  * guest screen ignored it and offered "Try again", which is precisely the one
  * action that cannot work — the browser remembers the refusal (iOS Safari until
@@ -26,45 +22,8 @@ function source(relativePath: string): string {
   return readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), 'utf8')
 }
 
-const HOOK = source('../../../hooks/useRealtimeSession.ts')
 const GUEST = source('./[sessionId]/GuestCallScreen.tsx')
 const SIGNED_IN = source('../../clinical-master/session/[sessionId]/page.tsx')
-
-describe('connect() asks for the microphone before it spends anything', () => {
-  it('calls getUserMedia ahead of the token fetch', () => {
-    const mic = HOOK.indexOf('navigator.mediaDevices.getUserMedia(')
-    const mint = HOOK.indexOf('await fetch(tokenEndpoint')
-    expect(mic).toBeGreaterThan(-1)
-    expect(mint).toBeGreaterThan(-1)
-    expect(mic).toBeLessThan(mint)
-  })
-
-  it('still classifies the failure rather than reporting a connection error', () => {
-    // The throw is what `setErrorKind` reads to tell a mic problem from a
-    // transport one, and it has to survive the reordering.
-    expect(HOOK).toContain('throw micErr instanceof MicError ? micErr : classifyMicError(micErr)')
-    expect(HOOK).toContain("setErrorKind(err instanceof MicError ? err.kind : 'connection')")
-  })
-
-  it('leaves the rest of the handshake in its original order', () => {
-    // Only the permission prompt moved. The recorder still starts on the
-    // stream, the peer connection is still built after the key, and the mic
-    // track is still added to it before the offer.
-    const order = [
-      'await fetch(tokenEndpoint',
-      'startSessionRecorder(micStream)',
-      'new RTCPeerConnection()',
-      "pc.createDataChannel('oai-events')",
-      'pc.addTrack(micTrackRef.current, micStream)',
-      'await pc.createOffer()',
-    ].map((needle) => {
-      const at = HOOK.indexOf(needle)
-      expect(at, needle).toBeGreaterThan(-1)
-      return at
-    })
-    expect(order).toEqual([...order].sort((a, b) => a - b))
-  })
-})
 
 describe('the brief arrives before the patient does', () => {
   const CONNECTING = source('../../../components/clinical-master/ConnectingScreen.tsx')
