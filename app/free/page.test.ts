@@ -57,17 +57,19 @@ describe('/free lists the five cases', () => {
     // refuses prefetches itself, but five <Link>s in one viewport would fire
     // five refused requests on every visit to no purpose.
     const row = PICKER.slice(PICKER.indexOf('function StationRow'), PICKER.indexOf('function NoStations'))
-    expect(row).toContain('<a\n          href={station.href}')
+    expect(row).toMatch(/<a\s+href=\{station\.href\}/)
     expect(row).not.toContain('<Link')
   })
 
   it('emphasises the first row without hiding the rest', () => {
-    expect(PICKER).toContain('Most people start here')
+    expect(PICKER).toContain('Start here')
     expect(withoutComments(PICKER)).toContain('const first = index === 0')
   })
 
   it('says what pressing Start actually does', () => {
-    expect(PICKER).toContain('Start opens a consultation now')
+    // Each row is one link, named for what it does to a screen reader too.
+    expect(PICKER).toContain('aria-label={`Start: ${station.title}`}')
+    expect(PICKER).toContain('A 12 minute consultation, marked on the three SCA domains.')
   })
 
   it('promises the verdict before anything is asked for, because it is', () => {
@@ -164,7 +166,7 @@ describe('/free counts cases, not stations', () => {
   })
 
   it('says what the example is an example OF', () => {
-    expect(EXAMPLE).toContain('What you get after a case, example')
+    expect(EXAMPLE).toContain('Example report')
   })
 })
 

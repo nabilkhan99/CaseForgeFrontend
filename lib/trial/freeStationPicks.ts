@@ -45,6 +45,12 @@ export interface PickerStation {
   /** "<domain> · 12 min", plus " · telephone" when it is a phone call. */
   meta: string
   href: string
+  /** The clinical area on its own, for layouts that set it apart. Null when unknown. */
+  area: string | null
+  /** Consultation length in whole minutes. */
+  minutes: number
+  /** A telephone consultation rather than face to face. */
+  telephone: boolean
 }
 
 /**
@@ -148,7 +154,15 @@ export function toPickerStations(rows: unknown): PickerStation[] {
     const id = typeof record.id === 'string' ? record.id : null
     const title = typeof record.title === 'string' ? record.title.trim() : ''
     if (!id || title === '') continue
-    stations.push({ id, title, meta: stationMeta(record), href: startHref(id) })
+    stations.push({
+      id,
+      title,
+      meta: stationMeta(record),
+      href: startHref(id),
+      area: domainName(record.domains),
+      minutes: stationMinutes(record.consultation_duration_seconds),
+      telephone: String(record.consultation_type ?? '').toLowerCase() === TELEPHONE,
+    })
   }
   return stations
 }

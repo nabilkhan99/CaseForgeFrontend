@@ -161,6 +161,17 @@ describe('what /free lists', () => {
     expect(stations[1].meta).toContain('telephone')
   })
 
+  it('carries the area, length and telephone flag as their own fields', async () => {
+    const { admin } = fakeAdmin({ rows: ROWS })
+    const [first, second] = await listFreeStations(admin)
+
+    expect(first.area).toBe('Metabolic Problems and Endocrinology')
+    expect(first.minutes).toBe(12)
+    expect(first.telephone).toBe(false)
+    expect(second.area).toBe('Patient < 19 years old')
+    expect(second.telephone).toBe(true)
+  })
+
   it('still lists the five when free_trial_order does not exist yet', async () => {
     // Between a deploy and its migration, PostgREST answers a select ordering
     // on the missing column with 42703. The page must show five cases in the
