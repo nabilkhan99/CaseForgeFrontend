@@ -2,6 +2,7 @@ import { after, NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { getTrainerCohort } from '@/lib/trainer/guard';
+import { candidateRun } from '@/lib/clinical-master/candidateRun';
 import type { ConsultationFeedback } from '@/lib/clinical-master/types';
 
 /**
@@ -248,7 +249,30 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        // 3. Trigger the Azure marking endpoint once; later polls pass trigger=false.
+        // 3. The Azure guard refused this one: too few candidate turns, or under
+        //    90 seconds between the first and last. It writes no session_results
+        //    row and releases its claim, recording only the status, so the
+        //    duration the page quotes back is re-derived from the transcript
+        //    here. Checked after the empty-transcript branch above: a mic that
+        //    captured nothing is "wasn't recorded", not "too short".
+        //
+        //    Returned before the trigger below on purpose. Re-firing marking for
+        //    a session the guard has already judged would spend money to be told
+        //    the same thing, and would leave the page polling in the meantime.
+        if (session.status === 'unmarkable') {
+            const run = candidateRun(session.transcript);
+            return NextResponse.json({
+                status: 'unmarkable',
+                triggerQueued: false,
+                candidateSeconds: run.seconds,
+                candidateTurns: run.turns,
+                ageMinutes,
+                stationId,
+                stationTitle,
+            });
+        }
+
+        // 4. Trigger the Azure marking endpoint once; later polls pass trigger=false.
         //    A trainer's read never triggers, whatever the client asked for —
         //    see `viaTrainer`. Enforced here rather than by having the Students
         //    tab send `trigger: false`, because a client-supplied flag is a

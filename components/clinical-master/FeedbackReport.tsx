@@ -1164,8 +1164,18 @@ function DomainCard({ domain, index }: { domain: DomainFeedback; index: number }
  * way out; they all used to render "Please try again later" with no button,
  * which was wrong for every one of them (none of the first three ever resolve
  * on their own, and the last two need a retry, not patience).
+ *
+ * 'unmarkable' is the Azure guard's verdict on a consultation too short to
+ * grade: the one case here that is not a fault at all, and the only one whose
+ * way out is simply to do it properly.
  */
-type ReportProblem = 'forbidden' | 'no_transcript' | 'stalled' | 'server' | 'timeout';
+type ReportProblem =
+  | 'forbidden'
+  | 'no_transcript'
+  | 'unmarkable'
+  | 'stalled'
+  | 'server'
+  | 'timeout';
 
 function ProblemScreen({
   title,
@@ -1186,6 +1196,81 @@ function ProblemScreen({
         <div className="flex flex-col items-center gap-3">{children}</div>
       </div>
     </div>
+  );
+}
+
+/**
+ * The Azure guard's floor on the span between the first and last candidate
+ * turn (MIN_CANDIDATE_SECONDS in CaseForgeAzure's marking_service). A run can
+ * also be refused for too few turns while lasting longer than this, and "that
+ * was 240 seconds, not enough" would read as the guard contradicting itself, so
+ * the number is only quoted when it is below the floor.
+ */
+const GUARD_MIN_CANDIDATE_SECONDS = 90;
+
+export function unmarkableTitle(candidateSeconds: number | null): string {
+  if (
+    candidateSeconds === null ||
+    candidateSeconds <= 0 ||
+    candidateSeconds >= GUARD_MIN_CANDIDATE_SECONDS
+  ) {
+    return 'That was too short to mark fairly.';
+  }
+  return `That was ${candidateSeconds} second${candidateSeconds === 1 ? '' : 's'}, not enough to mark fairly.`;
+}
+
+/**
+ * A consultation the marking guard refused as too short to grade. No result
+ * row is ever coming, so this replaces the spinner rather than following it.
+ *
+ * The two variants part company on the way out. A signed-in trainee goes back
+ * to the case brief and runs it again. A free-mock visitor cannot: their email
+ * has already been through the gate, so /api/try/create-session refuses a
+ * second run and sends them straight back to this report. The honest way
+ * forward for them is the plans on the page below, not a button that loops.
+ */
+export function UnmarkableScreen({
+  isTrial,
+  candidateSeconds,
+  retryHref,
+  children,
+}: {
+  isTrial: boolean;
+  candidateSeconds: number | null;
+  retryHref: string | null;
+  children?: React.ReactNode;
+}) {
+  const buttonClass =
+    'inline-flex min-h-[44px] items-center justify-center rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40';
+
+  if (isTrial) {
+    return (
+      <ProblemScreen
+        isTrial
+        title={unmarkableTitle(candidateSeconds)}
+        body="A real station runs to about twelve minutes. Nothing has been marked, so there is no report for this one. Run a station properly on any plan and you'll get the full report."
+      >
+        <a href="#pricing" className={buttonClass}>
+          See the plans
+        </a>
+        {children}
+      </ProblemScreen>
+    );
+  }
+
+  return (
+    <ProblemScreen
+      isTrial={false}
+      title={unmarkableTitle(candidateSeconds)}
+      body="A real station runs to about twelve minutes. Nothing has been marked. Run it properly and you'll get the full report."
+    >
+      {retryHref && (
+        <Link href={retryHref} className={buttonClass}>
+          Run it properly
+        </Link>
+      )}
+      {children}
+    </ProblemScreen>
   );
 }
 
@@ -1353,6 +1438,12 @@ export default function FeedbackReport({
   /** Station behind a session we never got a report for, so retries have a target. */
   const [failedStationId, setFailedStationId] = useState<string | null>(null);
   /**
+   * How long the candidate actually spoke for, on a run the guard refused. Told
+   * back to them because "too short" on its own invites an argument, and the
+   * number ends it.
+   */
+  const [candidateSeconds, setCandidateSeconds] = useState<number | null>(null);
+  /**
    * Null until the reader picks one. The tab that is actually open falls back
    * to the weakest domain (see `activeDomain` below), which cannot be decided
    * here because the marks have not arrived yet.
@@ -1433,6 +1524,18 @@ export default function FeedbackReport({
         // route computes this precisely so the page can stop polling and say so.
         if (data.status === 'no_transcript') {
           setProblem('no_transcript');
+          setLoading(false);
+          return;
+        }
+
+        // The Azure guard refused this run as too short to grade fairly. No
+        // result row is ever coming, so stop polling, and say how short, since
+        // the number is the argument.
+        if (data.status === 'unmarkable') {
+          if (typeof data.candidateSeconds === 'number') {
+            setCandidateSeconds(data.candidateSeconds);
+          }
+          setProblem('unmarkable');
           setLoading(false);
           return;
         }
@@ -1594,6 +1697,18 @@ export default function FeedbackReport({
           )}
           {historyLink}
         </ProblemScreen>
+      );
+    }
+
+    if (problem === 'unmarkable') {
+      return (
+        <UnmarkableScreen
+          isTrial={isTrial}
+          candidateSeconds={candidateSeconds}
+          retryHref={retryHref}
+        >
+          {historyLink}
+        </UnmarkableScreen>
       );
     }
 
