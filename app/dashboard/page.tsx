@@ -77,7 +77,6 @@ function daysUntilExamDate(value: string): number | null {
 const REVEAL = {
   welcome: 0,
   coachingSession: 0.06,
-  onboarding: 0.06,
   quickStart: 0.12,
   intensity: 0.18,
   guarantee: 0.24,
@@ -565,43 +564,6 @@ function DashboardContent() {
         );
       })()}
 
-      {/* Getting started onboarding for new paying users. A trial account's
-          panel already lists its five cases with a Start on each, so the three
-          generic steps would only repeat it. */}
-      {stats.completedStations === 0 && !trial && (
-        /* De-carded. Three numbered steps between two rules is the house style
-           for exactly this ("features as numbered rows"), and the raised card
-           was giving a one-off explainer more visual weight than the primary
-           action directly beneath it. */
-        <Reveal
-          delay={REVEAL.onboarding}
-          className="mb-10 tall:mb-14 border-y border-hairline py-6 tall:py-8"
-        >
-          <div className="text-[11px] font-semibold text-primary uppercase tracking-[0.1em] mb-4">
-            How it works
-          </div>
-          <div className="flex flex-col sm:flex-row gap-6 sm:gap-10">
-            <div className="flex-1">
-              <div className="text-[24px] font-semibold text-primary/20 font-mono mb-1">01</div>
-              <div className="text-[15px] font-medium text-heading mb-1">Pick a case</div>
-              <div className="text-[13px] text-muted">
-                Choose from {stats.totalStations > 0 ? `${stats.totalStations} stations` : 'stations'} across every SCA domain
-              </div>
-            </div>
-            <div className="flex-1">
-              <div className="text-[24px] font-semibold text-primary/20 font-mono mb-1">02</div>
-              <div className="text-[15px] font-medium text-heading mb-1">Talk to your patient</div>
-              <div className="text-[13px] text-muted">Voice consultation with an AI patient that responds naturally</div>
-            </div>
-            <div className="flex-1">
-              <div className="text-[24px] font-semibold text-primary/20 font-mono mb-1">03</div>
-              <div className="text-[15px] font-medium text-heading mb-1">Get scored</div>
-              <div className="text-[13px] text-muted">Scored feedback on all three SCA domains, a couple of minutes after you finish</div>
-            </div>
-          </div>
-        </Reveal>
-      )}
-
       {/* Quick start. A buyer whose window hasn't opened (or has closed) can
           browse the library but not start — say so here rather than letting
           the button bounce them back to this page with no explanation.
@@ -730,8 +692,7 @@ function DashboardContent() {
           controls. Consultations per day can only go up, and it goes up the same
           evening.
 
-          Hidden until the first session: an all-grey board greets nobody, and
-          the "How it works" rows above are the right first screen. Gated on
+          Hidden until the first session: an all-grey board greets nobody. Gated on
           `canStart` with the hero, so a page that cannot offer practice does not
           lead with a record of it. */}
       {stats.completedStations > 0 && calendar && canStart && (
