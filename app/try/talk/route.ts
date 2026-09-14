@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
+import { isKnownBotUserAgent } from '@/lib/trial/botUserAgent'
 import { rejectIfSignedIn } from '@/lib/trial/guestOnly'
 import { withinGuestOpenLimit } from '@/lib/trial/guestRateLimit'
 import { pickGuestStationId } from '@/lib/trial/guestStation'
@@ -58,8 +59,11 @@ export const dynamic = 'force-dynamic'
  * one for the unfurler.
  *
  * A denylist of the signals machines actually send, not an allowlist of
- * `Sec-Fetch-Mode: navigate` — that header is absent on older browsers, and
- * requiring it would refuse real people to catch bots.
+ * `Sec-Fetch-Mode: navigate`: that header is absent on older browsers, and
+ * requiring it would refuse real people to catch bots. Crawlers and unfurlers
+ * that follow the link on purpose are refused by their User-Agent
+ * (lib/trial/botUserAgent), on top of robots.txt disallowing /try/ and every
+ * link to this route carrying rel="nofollow".
  */
 function isMachineFetch(req: NextRequest): boolean {
   // HEAD is answered by this handler too (Next derives it from GET), and
@@ -67,6 +71,7 @@ function isMachineFetch(req: NextRequest): boolean {
   if ((req.method ?? 'GET').toUpperCase() === 'HEAD') return true
 
   const headers = req.headers
+  if (isKnownBotUserAgent(headers.get('user-agent'))) return true
   if (headers.get('next-router-prefetch')) return true
   if ((headers.get('sec-purpose') ?? '').includes('prefetch')) return true
   const purpose = (
@@ -123,6 +128,17 @@ export async function GET(req: NextRequest) {
   }
 
   const sessionId = randomUUID()
+
+  // Signed BEFORE the row is written. No `TRIAL_GUEST_COOKIE_SECRET` means the
+  // mint would refuse this session anyway, and a row written first would be a
+  // consultation nobody can ever start. Fail here, before the trainee has
+  // granted their microphone and before anything is left behind.
+  const signed = signGuestCookie(withGuestSession(cookie, sessionId, nowSeconds))
+  if (!signed) {
+    console.error('[try/talk] TRIAL_GUEST_COOKIE_SECRET is not set, refusing to open a consultation')
+    return leave(req, UNAVAILABLE)
+  }
+
   const { error } = await admin.from('clinical_sessions').insert({
     id: sessionId,
     user_id: null,
@@ -132,14 +148,6 @@ export async function GET(req: NextRequest) {
   })
   if (error) {
     console.error('[try/talk] could not open a consultation', error)
-    return leave(req, UNAVAILABLE)
-  }
-
-  const signed = signGuestCookie(withGuestSession(cookie, sessionId, nowSeconds))
-  if (!signed) {
-    // No signing secret means the mint would refuse this session anyway, so
-    // fail here rather than after the trainee has granted their microphone.
-    console.error('[try/talk] no signing secret — refusing to open a consultation')
     return leave(req, UNAVAILABLE)
   }
 

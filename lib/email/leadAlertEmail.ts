@@ -1,35 +1,73 @@
 import 'server-only'
 import { BrevoClient, BrevoError } from '@getbrevo/brevo'
 
-interface SendLeadAlertEmailArgs {
+/** Which moment in the funnel produced the lead. */
+export type LeadAlertDoor = 'guest_signup' | 'report_link'
+
+export interface SendLeadAlertEmailArgs {
   sessionId: string
   email: string
   firstName?: string | null
   phone?: string | null
-  /** Whether the number confirmed a texted code. False = fail-open pass. */
-  phoneVerified?: boolean
   trainingStage?: string | null
   scaSitting?: string | null
   stationTitle?: string | null
+  door: LeadAlertDoor
+}
+
+const DOOR_LABELS: Record<LeadAlertDoor, string> = {
+  guest_signup: 'Signed up after a free case',
+  report_link: 'Verified on a report link',
+}
+
+/** What a field reads as when the lead did not give it. */
+const NOT_GIVEN = 'Not given'
+
+export interface LeadAlertCopy {
+  subject: string
+  rows: Array<[string, string]>
+  feedbackUrl: string
 }
 
 /**
- * Internal alert to the founders the moment a trial lead verifies their email
- * — the highest-intent point in the funnel, so the follow-up call can happen
- * while the mock is still fresh. Recipients come from LEAD_ALERT_RECIPIENTS
- * (comma-separated), defaulting to hello@fourteenfisherman.com. Best-effort:
- * never throws, and a failure must not block the feedback reveal.
+ * The rows, subject and link, pure so they can be pinned without Brevo.
+ *
+ * The same payload the alert carried on main (name, email, phone, training
+ * stage, SCA sitting, station, report link), plus how the lead arrived. There
+ * is no SMS step any more, so the phone is shown as given, unmarked.
  */
-export async function sendLeadAlertEmail({
-  sessionId,
-  email,
-  firstName,
-  phone,
-  phoneVerified,
-  trainingStage,
-  scaSitting,
-  stationTitle,
-}: SendLeadAlertEmailArgs): Promise<void> {
+export function buildLeadAlertCopy(args: SendLeadAlertEmailArgs): LeadAlertCopy {
+  const name = args.firstName?.trim() || 'Unknown'
+  const phone = args.phone?.trim() || ''
+  return {
+    subject: `Mock lead: ${name} (${phone || args.email})`,
+    feedbackUrl: `https://www.fourteenfisherman.com/try/feedback/${args.sessionId}`,
+    rows: [
+      ['Name', name],
+      ['Email', args.email],
+      ['Phone', phone || NOT_GIVEN],
+      ['Training stage', args.trainingStage?.trim() || NOT_GIVEN],
+      ['SCA sitting', args.scaSitting?.trim() || NOT_GIVEN],
+      ['Station', args.stationTitle?.trim() || NOT_GIVEN],
+      ['How', DOOR_LABELS[args.door]],
+    ],
+  }
+}
+
+/** Lead-typed text goes into HTML, so it is escaped first. */
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+/**
+ * Internal alert to the founders the moment a trial lead verifies their email,
+ * the highest-intent point in the funnel, so the follow-up call can happen
+ * while the consultation is still fresh. Recipients come from
+ * LEAD_ALERT_RECIPIENTS (comma-separated), defaulting to
+ * hello@fourteenfisherman.com. Best-effort: never throws, and a failure must
+ * never reach the person who just verified.
+ */
+export async function sendLeadAlertEmail(args: SendLeadAlertEmailArgs): Promise<void> {
   const brevoKey = process.env.BREVO_API_KEY
   if (!brevoKey) {
     console.warn('[lead-alert] skipped: BREVO_API_KEY not set in env')
@@ -42,26 +80,7 @@ export async function sendLeadAlertEmail({
     .filter(Boolean)
   if (recipients.length === 0) return
 
-  const name = firstName?.trim() || 'Unknown'
-  const feedbackUrl = `https://www.fourteenfisherman.com/try/feedback/${sessionId}`
-
-  const rows: Array<[string, string]> = [
-    ['Name', name],
-    ['Email', email],
-    [
-      'Phone',
-      phone?.trim()
-        ? `${phone.trim()}${phoneVerified === false ? ' (UNVERIFIED — SMS could not be sent)' : phoneVerified ? ' ✓ verified' : ''}`
-        : '—',
-    ],
-    ['Training stage', trainingStage?.trim() || '—'],
-    ['SCA sitting', scaSitting?.trim() || '—'],
-    ['Station', stationTitle?.trim() || '—'],
-  ]
-
-  // Name and free-ish fields are lead-typed text — escape them before HTML.
-  const escapeHtml = (value: string) =>
-    value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  const { subject, rows, feedbackUrl } = buildLeadAlertCopy(args)
 
   const htmlRows = rows
     .map(
@@ -75,14 +94,14 @@ export async function sendLeadAlertEmail({
   <body style="margin:0;padding:24px;background:#F5F0EB;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1C1917;">
     <div style="max-width:520px;margin:0 auto;background:#FFFCF8;border:1px solid rgba(28,25,23,0.06);border-radius:14px;padding:28px 32px;">
       <h1 style="margin:0 0 4px 0;font-size:19px;">New verified mock lead</h1>
-      <p style="margin:0 0 16px 0;font-size:13px;color:#78716C;">Just finished the free mock and verified their email — call while it's hot.</p>
+      <p style="margin:0 0 16px 0;font-size:13px;color:#78716C;">Just finished a free case and verified their email. Call while it's hot.</p>
       <table role="presentation" cellpadding="0" cellspacing="0" border="0">${htmlRows}</table>
       <p style="margin:18px 0 0 0;font-size:13px;"><a href="${feedbackUrl}" style="color:#B45309;">View their feedback report</a></p>
     </div>
   </body>
 </html>`
 
-  const textBody = `New verified mock lead — call while it's hot.
+  const textBody = `New verified mock lead. Call while it's hot.
 
 ${rows.map(([label, value]) => `${label}: ${value}`).join('\n')}
 
@@ -93,7 +112,7 @@ Feedback report: ${feedbackUrl}`
     await brevo.transactionalEmails.sendTransacEmail({
       sender: { name: 'Fourteen Fisherman', email: 'hello@fourteenfisherman.com' },
       to: recipients.map((address) => ({ email: address })),
-      subject: `Mock lead: ${name} (${phone?.trim() || email})`,
+      subject,
       htmlContent: htmlBody,
       textContent: textBody,
       tags: ['lead-alert'],

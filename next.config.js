@@ -66,6 +66,16 @@ const nextConfig = {
         destination: '/free',
         permanent: true,
       },
+      // One door: the account-first form at /free/start was retired, and /free
+      // (the five cases) is where every free call to action goes now. Old
+      // links, the pricing table's free tier and cached pages still carry it.
+      // The query rides along, so a `?email=` still reaches /free/open through
+      // /free's own hand-off.
+      {
+        source: '/free/start',
+        destination: '/free',
+        permanent: true,
+      },
       // Coaching moved from a coaching day to a one to one coaching session.
       // The old URLs are in sent emails, receipts and Stripe cancel links.
       // statusCode 301, not `permanent: true`: that emits a 308, and the spec

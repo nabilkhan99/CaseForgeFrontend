@@ -8,29 +8,25 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  *
  * Two doors verify through this one route and the difference between them is a
  * single string on a database row that decides which funnel every later chart
- * is drawn from: `sessionId` present = the GUEST reveal (legacy report links),
- * absent = the ACCOUNT-FIRST form at /free/start. Getting that backwards is
- * invisible in the product and wrong everywhere else, so it is pinned here.
+ * is drawn from: `sessionId` present = the GUEST reveal, absent = the dashboard
+ * door at /free/open. Getting that backwards is invisible in the product and
+ * wrong everywhere else, so it is pinned here.
  *
  * The other properties under test:
  *
- *  - the sign-up branch sets the password, stores the mobile and sends NO SMS;
+ *  - the guest sign-up sets the password, stores the mobile and sends NO SMS;
  *  - the response carries session cookies, so nothing is emailed after the code;
  *  - `redirectTo` is rebuilt from a matched uuid, never interpolated;
  *  - provisioning failure is NOT fatal. The code WAS right; refusing the guest
  *    their report over an account problem would take away the thing they spent
  *    twelve minutes earning.
  *
- * And, since 11 September, contract C3: the guest branch honours a `password`
- * and a `phone` — and dates the five-day window from the consultation — ONLY
+ * And contract C3: the guest branch makes an account, honours a `password` and
+ * a `phone`, claims the consultation and dates the five-day window from it ONLY
  * when the signed `ff_guest` cookie carries that session id. Every way of not
- * having that proof (no cookie, a forged one, one for a different session) has
- * to land on the old behaviour, so all three are pinned below.
- *
- * The proof governs what is COLLECTED, not where they land. Both guest paths
- * claim the consultation and both end at its report; a legacy link used to be
- * sent to a bare /dashboard from a page whose every line was about the report
- * being marked.
+ * having that proof (no cookie, a forged one, one for a different session) is
+ * main's report gate on an old link: the lead is verified and the report opens,
+ * and nothing else happens. All three are pinned below.
  */
 
 process.env.TRIAL_GUEST_COOKIE_SECRET = 'test-secret'
@@ -45,13 +41,27 @@ const mocks = vi.hoisted(() => ({
   /** Its status. The route must not care what it is. */
   sessionStatus: 'completed' as string,
   updates: [] as Record<string, unknown>[],
+  /** Conditions each update was made under, e.g. `email_verified_at is null`. */
+  updateConditions: [] as string[],
+  /**
+   * The rows the verifying UPDATE changed. Empty means another request moved
+   * the lead to verified first.
+   */
+  verifiedRows: [{ id: 'lead-1' }] as { id: string }[],
   filters: [] as { column: string; value: unknown }[],
   ensure: vi.fn(),
   signIn: vi.fn(),
   brevo: vi.fn(),
+  leadAlert: vi.fn(),
 }))
 
 vi.mock('server-only', () => ({}))
+
+// The founders' alert. Mocked at the scheduler, so nothing is ever sent: the
+// sending itself is covered in lib/trial/gateLeadAlert.test.ts.
+vi.mock('@/lib/trial/gateLeadAlert', () => ({
+  scheduleGateLeadAlert: (...args: unknown[]) => mocks.leadAlert(...args),
+}))
 
 vi.mock('@/lib/marketing/trialLead', () => ({
   pushTrialLeadToBrevo: (...args: unknown[]) => mocks.brevo(...args),
@@ -105,7 +115,20 @@ vi.mock('@/lib/supabase/admin', () => ({
       },
       update: (values: Record<string, unknown>) => {
         mocks.updates.push(values)
-        return { eq: async () => ({ error: null }) }
+        // Awaitable at any point in the chain, the way PostgREST's builder is.
+        const chain = {
+          eq: () => chain,
+          is: (column: string, value: unknown) => {
+            mocks.updateConditions.push(`${column} is ${value}`)
+            return chain
+          },
+          select: () => chain,
+          then: (
+            resolve: (value: { data: { id: string }[]; error: null }) => unknown,
+            reject?: (reason: unknown) => unknown,
+          ) => Promise.resolve({ data: mocks.verifiedRows, error: null }).then(resolve, reject),
+        }
+        return chain
       },
     }),
   }),
@@ -173,6 +196,8 @@ beforeEach(() => {
   mocks.sessionStartedAt = null
   mocks.sessionStatus = 'completed'
   mocks.updates = []
+  mocks.updateConditions = []
+  mocks.verifiedRows = [{ id: 'lead-1' }]
   mocks.filters = []
   mocks.brevo.mockResolvedValue(undefined)
   mocks.signIn.mockResolvedValue(true)
@@ -190,7 +215,10 @@ beforeEach(() => {
 
 describe('which door the grant is recorded against', () => {
   it('a sessionId is the guest reveal', async () => {
-    const { status, body } = await post({ sessionId: 'session-1', code: '123456' })
+    const { status, body } = await post(
+      { sessionId: GUEST_SESSION, code: '123456' },
+      guestCookie(GUEST_SESSION),
+    )
 
     expect(status).toBe(200)
     expect(body.ok).toBe(true)
@@ -200,7 +228,7 @@ describe('which door the grant is recorded against', () => {
     )
     // Found by session, which is what makes a guessed address unable to
     // re-point somebody else's consultation.
-    expect(mocks.filters).toContainEqual({ column: 'session_id', value: 'session-1' })
+    expect(mocks.filters).toContainEqual({ column: 'session_id', value: GUEST_SESSION })
   })
 
   it('an email alone is the sign-up box on /free', async () => {
@@ -214,26 +242,32 @@ describe('which door the grant is recorded against', () => {
   })
 
   it('a sessionId wins when both are sent, so a stray field cannot redirect a reveal', async () => {
-    await post({ sessionId: 'session-1', email: 'attacker@example.com', code: '123456' })
+    await post(
+      { sessionId: GUEST_SESSION, email: 'attacker@example.com', code: '123456' },
+      guestCookie(GUEST_SESSION),
+    )
 
     expect(mocks.ensure).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ source: 'guest_reveal', email: 'sarah@nhs.net' }),
     )
-    expect(mocks.filters).toContainEqual({ column: 'session_id', value: 'session-1' })
+    expect(mocks.filters).toContainEqual({ column: 'session_id', value: GUEST_SESSION })
   })
 })
 
 describe('the response the caller reads', () => {
   it('carries the account, the grant, the session and where to go', async () => {
-    const { body } = await post({ sessionId: 'session-1', code: '123456' })
+    const { body } = await post(
+      { sessionId: GUEST_SESSION, code: '123456' },
+      guestCookie(GUEST_SESSION),
+    )
 
     expect(body).toEqual({
       ok: true,
       account: { userId: 'user-1', created: true, alreadyExisted: false, passwordKept: false },
       trial: { state: 'trial', granted: true },
       signedIn: true,
-      redirectTo: '/dashboard',
+      redirectTo: `/clinical-master/feedback/${GUEST_SESSION}`,
     })
   })
 
@@ -252,11 +286,10 @@ describe('the response the caller reads', () => {
       claimed: 0,
     })
 
-    const { body } = await post({
-      sessionId: GUEST_SESSION,
-      code: '123456',
-      password: 'longenough1',
-    })
+    const { body } = await post(
+      { sessionId: GUEST_SESSION, code: '123456', password: 'longenough1' },
+      guestCookie(GUEST_SESSION),
+    )
 
     expect(body.account).toEqual({
       userId: 'user-7',
@@ -267,7 +300,10 @@ describe('the response the caller reads', () => {
   })
 
   it('claims nothing was kept when the account was made on this call', async () => {
-    const { body } = await post({ sessionId: 'session-1', code: '123456' })
+    const { body } = await post(
+      { sessionId: GUEST_SESSION, code: '123456' },
+      guestCookie(GUEST_SESSION),
+    )
 
     expect(body.account.alreadyExisted).toBe(false)
     expect(body.account.passwordKept).toBe(false)
@@ -275,7 +311,10 @@ describe('the response the caller reads', () => {
 
   it('carries no sign-in credential — the cookies do that job', async () => {
     // A one-time link in a JSON body is a bearer credential for the account.
-    const { body } = await post({ sessionId: 'session-1', code: '123456' })
+    const { body } = await post(
+      { sessionId: GUEST_SESSION, code: '123456' },
+      guestCookie(GUEST_SESSION),
+    )
     expect(JSON.stringify(body)).not.toContain('token')
     expect(body.account.signInUrl).toBeUndefined()
   })
@@ -305,29 +344,18 @@ describe('the response the caller reads', () => {
   })
 })
 
-describe('the account-first sign-up', () => {
-  it('passes the password through so the account is born with one', async () => {
+describe('the dashboard door at /free/open', () => {
+  it('takes no password: the one-door retirement removed the form that sent one', async () => {
     await post({ email: 'sarah@nhs.net', code: '123456', password: 'longenough1' })
 
     expect(mocks.ensure).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ source: 'signup', password: 'longenough1' }),
+      expect.objectContaining({ source: 'signup', password: null }),
     )
   })
 
-  it('stores the mobile on the lead row, in E.164', async () => {
-    await post({
-      email: 'sarah@nhs.net',
-      code: '123456',
-      password: 'longenough1',
-      phone: '07700 900123',
-    })
-
-    expect(mocks.updates[0]).toMatchObject({ phone: '+447700900123' })
-  })
-
-  it('leaves a number we already hold alone when none was typed', async () => {
-    await post({ email: 'sarah@nhs.net', code: '123456', password: 'longenough1' })
+  it('stores no mobile it did not ask for, and leaves one we hold alone', async () => {
+    await post({ email: 'sarah@nhs.net', code: '123456', phone: '07700 900123' })
     expect(mocks.updates[0]).not.toHaveProperty('phone')
   })
 
@@ -343,7 +371,7 @@ describe('the account-first sign-up', () => {
   })
 
   it('signs the browser in on this response', async () => {
-    const { body } = await post({ email: 'sarah@nhs.net', code: '123456', password: 'longenough1' })
+    const { body } = await post({ email: 'sarah@nhs.net', code: '123456' })
 
     expect(mocks.signIn).toHaveBeenCalledWith('sarah@nhs.net')
     expect(body.signedIn).toBe(true)
@@ -360,21 +388,23 @@ describe('the account-first sign-up', () => {
     expect(body.account).toMatchObject({ userId: 'user-1' })
   })
 
-  it('refuses a password shorter than the form allows', async () => {
-    const { status } = await post({ email: 'sarah@nhs.net', code: '123456', password: 'short' })
+  it('refuses a password shorter than the sign-up form allows', async () => {
+    const { status } = await post(
+      { sessionId: GUEST_SESSION, code: '123456', password: 'short' },
+      guestCookie(GUEST_SESSION),
+    )
     expect(status).toBe(400)
     expect(mocks.ensure).not.toHaveBeenCalled()
   })
 
   it('ignores a password sent with an unproven session id', async () => {
-    // A guest reveal is reachable by anyone holding the session id. Without the
-    // cookie, a password arriving on that path is not a field anybody typed.
+    // A report link is reachable by anyone holding the session id. Without the
+    // cookie, a password arriving on that path is not a field anybody typed,
+    // and no account is made for it to go on.
     await post({ sessionId: 'session-1', code: '123456', password: 'longenough1' })
 
-    expect(mocks.ensure).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ source: 'guest_reveal', password: null }),
-    )
+    expect(mocks.ensure).not.toHaveBeenCalled()
+    expect(mocks.signIn).not.toHaveBeenCalled()
   })
 })
 
@@ -435,23 +465,37 @@ describe('C3: the guest who proves the consultation was theirs', () => {
   })
 })
 
-describe('C3: every way of not having the proof', () => {
+describe('C3: every way of not having the proof is main’s report gate', () => {
   const claimed = () => mocks.ensure.mock.calls[0][1] as Record<string, unknown>
 
-  it('no cookie at all: no password, no mobile, no clock', async () => {
-    const { body } = await post({
+  /** Verified, the report opens on /try/feedback, and nothing else happened. */
+  function expectReportGateOnly(body: Record<string, unknown>) {
+    expect(body).toEqual({
+      ok: true,
+      account: null,
+      trial: { state: 'none', granted: false },
+      signedIn: false,
+      redirectTo: `/try/feedback/${GUEST_SESSION}`,
+    })
+    // No account, no claim, no password, no session cookies.
+    expect(mocks.ensure).not.toHaveBeenCalled()
+    expect(mocks.signIn).not.toHaveBeenCalled()
+  }
+
+  it('no cookie at all: the lead is verified and the report opens, nothing more', async () => {
+    const { status, body } = await post({
       sessionId: GUEST_SESSION,
       code: '123456',
       password: 'longenough1',
       phone: '07700 900123',
     })
 
-    expect(claimed()).toMatchObject({ password: null, phone: null, windowStartsAt: null })
+    expect(status).toBe(200)
+    expectReportGateOnly(body)
+    expect(mocks.updates[0].email_verified_at).toEqual(expect.any(String))
     expect(mocks.updates[0]).not.toHaveProperty('phone')
-    // The REPORT is still where they land. The lead names this session, so the
-    // claim still attaches it, and that page checks ownership for itself —
-    // sending them to a bare dashboard was the page contradicting its own copy.
-    expect(body.redirectTo).toBe(`/clinical-master/feedback/${GUEST_SESSION}`)
+    // A verified lead reaches the marketing list, as it did on main.
+    expect(mocks.brevo).toHaveBeenCalledOnce()
   })
 
   it('a forged cookie is no cookie', async () => {
@@ -465,8 +509,7 @@ describe('C3: every way of not having the proof', () => {
       forged,
     )
 
-    expect(claimed()).toMatchObject({ password: null, windowStartsAt: null })
-    expect(body.redirectTo).toBe(`/clinical-master/feedback/${GUEST_SESSION}`)
+    expectReportGateOnly(body)
   })
 
   it('a valid cookie for somebody else’s session is no cookie', async () => {
@@ -477,16 +520,23 @@ describe('C3: every way of not having the proof', () => {
       guestCookie(other),
     )
 
-    expect(claimed()).toMatchObject({ password: null, windowStartsAt: null })
-    expect(body.redirectTo).toBe(`/clinical-master/feedback/${GUEST_SESSION}`)
+    expectReportGateOnly(body)
   })
 
-  it('the account-first door needs no cookie and is untouched by any of this', async () => {
-    await post({ email: 'sarah@nhs.net', code: '123456', password: 'longenough1' })
+  it('an already-verified lead on an old link just opens again', async () => {
+    mocks.lead = { ...VERIFIABLE_LEAD, email_verified_at: new Date().toISOString() }
+
+    const { body } = await post({ sessionId: GUEST_SESSION, code: '123456' })
+
+    expectReportGateOnly(body)
+    expect(mocks.updates).toHaveLength(0)
+  })
+
+  it('the dashboard door needs no cookie and is untouched by any of this', async () => {
+    await post({ email: 'sarah@nhs.net', code: '123456' })
 
     expect(claimed()).toMatchObject({
       source: 'signup',
-      password: 'longenough1',
       // No consultation behind it, so no clock to start.
       windowStartsAt: null,
     })
@@ -494,27 +544,28 @@ describe('C3: every way of not having the proof', () => {
 })
 
 describe('where they land next', () => {
-  it('opens the station they picked', async () => {
-    const station = '2b0d9a5e-0000-4000-8000-000000000000'
-    const { body } = await post({ email: 'sarah@nhs.net', code: '123456', station })
-
-    expect(body.redirectTo).toBe(`/clinical-master/station/${station}`)
-  })
-
-  it('falls back to the dashboard when no station travelled', async () => {
+  it('the dashboard door lands on the dashboard', async () => {
     const { body } = await post({ email: 'sarah@nhs.net', code: '123456' })
     expect(body.redirectTo).toBe('/dashboard')
   })
 
   it.each([
+    '2b0d9a5e-0000-4000-8000-000000000000',
     'https://evil.example.com',
     '//evil.example.com',
+  ])('ignores a station of %s: nothing carries one through any more', async (station) => {
+    // The account-first form that sent one was retired, and a client-supplied
+    // value is never turned into a URL the browser follows.
+    const { body } = await post({ email: 'sarah@nhs.net', code: '123456', station })
+    expect(body.redirectTo).toBe('/dashboard')
+  })
+
+  it.each([
+    'https://evil.example.com',
     '../../dashboard',
     'not-a-uuid',
-    '2b0d9a5e-0000-4000-8000-000000000000/../../evil',
-  ])('refuses to build a redirect out of %s', async (station) => {
-    // The value is client-supplied and ends up in a URL the browser follows.
-    const { body } = await post({ email: 'sarah@nhs.net', code: '123456', station })
+  ])('builds no report redirect out of a session id of %s', async (sessionId) => {
+    const { body } = await post({ sessionId, code: '123456' }, guestCookie(sessionId))
     expect(body.redirectTo).toBe('/dashboard')
   })
 })
@@ -530,10 +581,14 @@ describe('when the account cannot be made', () => {
       claimed: 0,
     })
 
-    const { status, body } = await post({ sessionId: 'session-1', code: '123456' })
+    const { status, body } = await post(
+      { sessionId: GUEST_SESSION, code: '123456' },
+      guestCookie(GUEST_SESSION),
+    )
 
     expect(status).toBe(200)
     expect(body.ok).toBe(true)
+    expect(mocks.ensure).toHaveBeenCalledOnce()
     expect(body.account).toBeNull()
     expect(body.trial).toEqual({ state: 'none', granted: false })
     // Nothing to sign in to, so nothing was asked of GoTrue.
@@ -544,7 +599,10 @@ describe('when the account cannot be made', () => {
   it('survives ensureTrialAccount throwing outright', async () => {
     mocks.ensure.mockRejectedValue(new Error('network'))
 
-    const { status, body } = await post({ sessionId: 'session-1', code: '123456' })
+    const { status, body } = await post(
+      { sessionId: GUEST_SESSION, code: '123456' },
+      guestCookie(GUEST_SESSION),
+    )
 
     expect(status).toBe(200)
     expect(body.ok).toBe(true)
@@ -556,11 +614,14 @@ describe('an already-verified lead', () => {
   const VERIFIED = { ...VERIFIABLE_LEAD, email_verified_at: new Date().toISOString() }
 
   it('is granted anyway, so a reload does not strand a trialist without a grant', async () => {
-    // Legacy leads verified before this shipped land here too, which is the
-    // reason it is not a bare `return { ok: true }`.
+    // A reload or a second tab in the browser that ran it, which is the reason
+    // it is not a bare `return { ok: true }`.
     mocks.lead = { ...VERIFIED }
 
-    const { body } = await post({ sessionId: 'session-1', code: '123456' })
+    const { body } = await post(
+      { sessionId: GUEST_SESSION, code: '123456' },
+      guestCookie(GUEST_SESSION),
+    )
 
     expect(body.ok).toBe(true)
     expect(mocks.ensure).toHaveBeenCalledOnce()
@@ -589,7 +650,7 @@ describe('an already-verified lead', () => {
     expect(mocks.updates[0]).toEqual({ verification_attempts: 1 })
   })
 
-  it('and on the account-first door too', async () => {
+  it('and on the dashboard door too', async () => {
     mocks.lead = { ...VERIFIED }
 
     const { status } = await post({
@@ -700,16 +761,15 @@ describe('C3: attaching the consultation that was just sat', () => {
     )
   })
 
-  it('names nothing without the proof', async () => {
+  it('claims nothing at all without the proof, because no account is made', async () => {
+    // A link on its own must never be able to turn a consultation into anybody's
+    // account. The claim runs inside ensureTrialAccount, which is not reached.
     await post({ sessionId: GUEST_SESSION, code: '123456' })
 
-    expect(mocks.ensure).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ claimSessionId: null }),
-    )
+    expect(mocks.ensure).not.toHaveBeenCalled()
   })
 
-  it('and never on the account-first door, which has no consultation', async () => {
+  it('and never on the dashboard door, which has no consultation', async () => {
     await post({ email: 'sarah@nhs.net', code: '123456' })
 
     expect(mocks.ensure).toHaveBeenCalledWith(
@@ -772,5 +832,76 @@ describe('a returning trainee whose lead is on an older consultation', () => {
       expect.anything(),
       expect.objectContaining({ email: 'sarah@nhs.net' }),
     )
+  })
+})
+
+describe('the founders’ lead alert', () => {
+  it('goes out when a guest finishes the sign-up in the browser that ran it', async () => {
+    mocks.lead = { ...VERIFIABLE_LEAD, station_id: 'station-9' }
+
+    const { status } = await post(
+      { sessionId: GUEST_SESSION, code: '123456', password: 'longenough1', phone: '07700 900123' },
+      guestCookie(GUEST_SESSION),
+    )
+
+    expect(status).toBe(200)
+    expect(mocks.leadAlert).toHaveBeenCalledOnce()
+    const [, sessionId, lead, door] = mocks.leadAlert.mock.calls[0]
+    expect(sessionId).toBe(GUEST_SESSION)
+    expect(door).toBe('guest_signup')
+    // The lead's details, with the mobile they have just typed.
+    expect(lead).toMatchObject({
+      email: 'sarah@nhs.net',
+      first_name: 'Sarah',
+      training_stage: 'st3',
+      station_id: 'station-9',
+      phone: '+447700900123',
+    })
+  })
+
+  it('goes out when somebody verifies through the gate on an old report link', async () => {
+    await post({ sessionId: GUEST_SESSION, code: '123456' })
+
+    expect(mocks.leadAlert).toHaveBeenCalledOnce()
+    expect(mocks.leadAlert.mock.calls[0][3]).toBe('report_link')
+  })
+
+  it('rides on an UPDATE conditional on the lead not being verified yet', async () => {
+    // That condition is what makes it once per lead, across instances.
+    await post({ sessionId: GUEST_SESSION, code: '123456' }, guestCookie(GUEST_SESSION))
+    expect(mocks.updateConditions).toContain('email_verified_at is null')
+  })
+
+  it('is not sent twice when another request verified the lead first', async () => {
+    // A double submit racing itself: this request's UPDATE matched no row.
+    mocks.verifiedRows = []
+
+    const { status } = await post(
+      { sessionId: GUEST_SESSION, code: '123456' },
+      guestCookie(GUEST_SESSION),
+    )
+
+    expect(status).toBe(200)
+    expect(mocks.leadAlert).not.toHaveBeenCalled()
+  })
+
+  it('is not sent again for a lead that was already verified', async () => {
+    // A reload, a second tab, or a returning trainee verified long ago.
+    mocks.lead = { ...VERIFIABLE_LEAD, email_verified_at: new Date().toISOString() }
+
+    await post({ sessionId: GUEST_SESSION, code: '123456' }, guestCookie(GUEST_SESSION))
+    await post({ sessionId: GUEST_SESSION, code: '123456' })
+
+    expect(mocks.leadAlert).not.toHaveBeenCalled()
+  })
+
+  it('is not sent for a wrong code', async () => {
+    await post({ sessionId: GUEST_SESSION, code: '999999' }, guestCookie(GUEST_SESSION))
+    expect(mocks.leadAlert).not.toHaveBeenCalled()
+  })
+
+  it('is not sent from the dashboard door, which has no consultation behind it', async () => {
+    await post({ email: 'sarah@nhs.net', code: '123456' })
+    expect(mocks.leadAlert).not.toHaveBeenCalled()
   })
 })

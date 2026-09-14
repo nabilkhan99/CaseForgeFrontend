@@ -79,6 +79,21 @@ describe('/try', () => {
   })
 })
 
+describe('/free/start', () => {
+  it('is retired into /free, keeping the caller’s query', async () => {
+    const redirects = await config.redirects()
+    const rule = redirects.find((item) => item.source === '/free/start')
+    expect(rule).toEqual({ source: '/free/start', destination: '/free', permanent: true })
+    // No query of its own, so Next forwards ?email= and every utm tag.
+    expect(rule?.destination).not.toContain('?')
+  })
+
+  it.each(['/free', '/free/open'])('leaves %s alone', async (path) => {
+    const redirects = await config.redirects()
+    expect(redirects.find((rule) => matches(rule.source, path))).toBeUndefined()
+  })
+})
+
 describe('the rest of the redirect table still stands', () => {
   it.each([
     ['/dashboard/history', '/dashboard/development'],

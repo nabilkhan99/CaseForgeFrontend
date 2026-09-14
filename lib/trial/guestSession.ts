@@ -111,20 +111,30 @@ export interface GuestCookie {
   s: GuestSessionEntry[]
 }
 
+/** Said once per process, so a missing variable is loud without flooding the logs. */
+let reportedMissingSecret = false
+
 /**
- * The signing key.
+ * The signing key: `TRIAL_GUEST_COOKIE_SECRET`, and nothing else.
  *
- * `TRIAL_GUEST_COOKIE_SECRET` if a deployment sets one, otherwise the service
- * role key — the same fallback `lib/trial/verification.ts` makes, and for the
- * same reason: it is always present server-side, so the funnel does not need a
- * new Vercel variable to ship. Null means no signing is possible, and every
- * caller treats that as "no guest consultations", never as "let them in".
+ * It used to fall back to the service role key. That key is the master key to
+ * the database, and a cookie handed to every anonymous browser is the last
+ * thing it should be keying: one secret doing two jobs means rotating either
+ * job rotates both. So there is no fallback. Unset means no signing is
+ * possible, and every caller treats that as "no guest consultations", never as
+ * "let them in". The variable has to be set in Vercel (Production and Preview)
+ * for the guest lane to open at all.
  */
 function secret(): string | null {
-  const raw =
-    process.env.TRIAL_GUEST_COOKIE_SECRET?.trim() ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
-  return raw && raw.length > 0 ? raw : null
+  const raw = process.env.TRIAL_GUEST_COOKIE_SECRET?.trim()
+  if (raw) return raw
+  if (!reportedMissingSecret) {
+    reportedMissingSecret = true
+    console.error(
+      '[guest-session] TRIAL_GUEST_COOKIE_SECRET is not set: guest consultations are closed until it is',
+    )
+  }
+  return null
 }
 
 function encode(payload: GuestCookie): string {

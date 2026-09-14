@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import ArcGauge from '@/components/ui/ArcGauge';
 import {
@@ -162,7 +161,7 @@ export function useVerdictPoll(sessionId: string | null): RevealState {
 
 export default function VerdictReveal({
   sessionId,
-  retryHref = '/free/start',
+  retryHref = '/free',
   state: controlled,
   showWaiting = true,
 }: VerdictRevealProps) {
@@ -207,13 +206,16 @@ export default function VerdictReveal({
               A real station runs to about twelve minutes. Nothing has been marked, and
               this hasn&apos;t used up your free go.
             </p>
+            {/* A plain anchor with nofollow, not a prefetching Link: the retry
+                goes to /try/talk, which opens a consultation on a GET. */}
             {retryHref && (
-              <Link
+              <a
                 href={retryHref}
+                rel="nofollow"
                 className="mt-4 inline-flex min-h-[44px] items-center justify-center rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
               >
                 Run it properly
-              </Link>
+              </a>
             )}
           </motion.div>
         )}

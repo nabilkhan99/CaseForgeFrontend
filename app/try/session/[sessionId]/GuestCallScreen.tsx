@@ -21,19 +21,17 @@ export interface GuestCallScreenProps {
 }
 
 /**
- * The one-click consultation.
+ * The guest consultation.
  *
  * The row and the station are resolved on the server before this paints, so
- * there is nothing to fetch and `connect()` — which asks for the microphone —
+ * there is nothing to fetch and `connect()` (which asks for the microphone)
  * runs on arrival rather than after two round trips.
  *
- * What this screen owns that the authed session does not:
- *
- * - **The clock starts at the first word, not at connect.** A guest arriving
- *   cold spends the first seconds finding out that the thing is live at all,
- *   and burning their twelve minutes on the WebRTC handshake would be a
- *   consultation they never had. `isConnected` is what ConsultationStage uses
- *   to start the clock, so it is handed the later moment deliberately.
+ * Once the call is placed this is the signed-in session screen
+ * (app/clinical-master/session/[sessionId]/page.tsx) and nothing else: the
+ * clock starts on connect, the error screen says the same things in the same
+ * order, and the top bar carries the same live marker and error line. The only
+ * difference is where a guest goes back to, which is the five free cases.
  */
 export default function GuestCallScreen({
   sessionId,
@@ -49,7 +47,6 @@ export default function GuestCallScreen({
   const [showEndModal, setShowEndModal] = useState(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
-  const [clockRunning, setClockRunning] = useState(false);
   const isEndingRef = useRef(false);
 
   // Graceful end (button, timer, or the model's end_consultation tool): the hook
@@ -70,23 +67,15 @@ export default function GuestCallScreen({
     });
 
   useEffect(() => {
-    // Never auto-reconnect after a connection failure — the error screen owns retry.
+    // Never auto-reconnect after a connection failure; the error screen owns retry.
     if (!isProcessing && !isEndingRef.current && status === 'disconnected' && !error) connect();
   }, [isProcessing, status, error, connect]);
 
   // Where this consultation's report will live, so the landing navbar can
-  // deep-link a returning visitor at it. The one-click door has no "Begin"
-  // button to hang this off, so it happens on arrival.
+  // deep-link a returning visitor at it.
   useEffect(() => {
     markTrialSessionStarted(sessionId);
   }, [sessionId]);
-
-  // The first word spoken by anyone starts the clock, and nothing stops it.
-  useEffect(() => {
-    if (!clockRunning && isConnected && (isSpeaking || transcript.length > 0)) {
-      setClockRunning(true);
-    }
-  }, [clockRunning, isConnected, isSpeaking, transcript.length]);
 
   const handleEndConsultation = useCallback(() => {
     isEndingRef.current = true;
@@ -99,10 +88,11 @@ export default function GuestCallScreen({
     setMicMuted(newMuted);
   };
 
-  // Abandon: tear down without saving or generating feedback.
+  // Abandon: tear down without saving or generating feedback, and go back to
+  // the five free cases this guest picked from.
   const handleLeaveWithoutFinishing = useCallback(() => {
     disconnect();
-    router.push('/');
+    router.push('/free');
   }, [disconnect, router]);
 
   if (isProcessing) {
@@ -121,20 +111,12 @@ export default function GuestCallScreen({
     );
   }
 
-  // A refused microphone is not a connection problem, and "Try again" is the
-  // one thing that cannot fix it: the browser remembers the refusal (iOS Safari
-  // until the site's settings are reset), so connect() would re-throw the same
-  // error forever — and on this lane each attempt that got as far as the mint
-  // also spent the guest cooldown, leaving a visitor stuck behind their own
-  // 2-minute refusal. The mint now happens after the microphone, and this
-  // screen says which permission to change and where, exactly as the signed-in
-  // session screen has done since the mic errors were classified.
+  // Worded and laid out exactly as the signed-in session screen. A refused
+  // microphone is not a connection problem, and "Try again" cannot fix it: the
+  // browser remembers the refusal, so connect() would re-throw the same error.
   if (error && !isConnected) {
     const micProblem = errorKind !== null && errorKind !== 'connection';
-    const hint = micRecoveryHint(
-      errorKind ?? 'connection',
-      typeof navigator !== 'undefined' ? navigator.userAgent : '',
-    );
+    const hint = micRecoveryHint(errorKind ?? 'connection', typeof navigator !== 'undefined' ? navigator.userAgent : '');
     const title =
       errorKind === 'mic_denied' ? 'Microphone blocked'
       : errorKind === 'mic_missing' ? 'No microphone found'
@@ -158,17 +140,20 @@ export default function GuestCallScreen({
           <p className="text-[14px] leading-[1.65] text-muted mb-2">
             {micProblem ? 'The consultation needs your microphone to hear you.' : error}
           </p>
-          {micProblem && <p className="text-[13px] leading-[1.65] text-muted mb-6">{hint}</p>}
-          <div className={`flex flex-col items-center gap-3 ${micProblem ? '' : 'mt-4'}`}>
+          <p className="text-[13px] leading-[1.65] text-muted mb-6">{hint}</p>
+          <div className="flex flex-col items-center gap-3">
+            {/* A denied mic stays denied until the site setting changes, so
+                re-running connect() would loop forever. Reload re-prompts
+                once the permission has been reset. */}
             <button
               onClick={() => (micProblem ? window.location.reload() : connect())}
               className="min-h-[44px] rounded-xl px-6 py-3 text-[14px] font-semibold text-white cursor-pointer"
               style={{ background: 'linear-gradient(135deg, #B45309, #D97706)', boxShadow: '0 4px 12px rgba(180,83,9,0.2)' }}
             >
-              {micProblem ? 'Reload this page' : 'Try again'}
+              {micProblem ? "I've fixed it, reload" : 'Try again'}
             </button>
-            <Link href="/" className="text-[13px] font-semibold text-primary hover:underline">
-              Back to Fourteen Fisherman
+            <Link href="/free" className="text-[13px] font-semibold text-primary hover:underline">
+              Back to cases
             </Link>
           </div>
         </motion.div>
@@ -176,10 +161,10 @@ export default function GuestCallScreen({
     );
   }
 
-  // Guests used to sit in front of an idle orb and a static full clock for the
-  // whole handshake, with nothing saying a call was being placed. The gate stays
-  // on "not connected", which also covers `disconnected`; only the pulse inside
-  // it distinguishes a handshake actually in progress.
+  // Don't paint the live consultation (orb, "Listening…", running clock) while
+  // the token, microphone and WebRTC handshake are still in flight. The gate
+  // stays on "not connected", which also covers `disconnected`; only the pulse
+  // inside it distinguishes a handshake actually in progress.
   if (status !== 'connected') {
     return (
       <ConnectingScreen
@@ -204,22 +189,24 @@ export default function GuestCallScreen({
         </button>
         <span className="truncate px-2 text-[13px] font-semibold text-heading">{patientName}</span>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5">
-            <motion.div
-              className="w-1.5 h-1.5 rounded-full bg-success"
-              animate={{ opacity: [1, 0.3, 1] }}
-              transition={{ duration: 1.8, repeat: Infinity }}
-            />
-            <span className="text-[10px] font-semibold text-success uppercase">Live</span>
-          </div>
+          {isConnected && (
+            <div className="flex items-center gap-1.5">
+              <motion.div
+                className="w-1.5 h-1.5 rounded-full bg-success"
+                animate={{ opacity: [1, 0.3, 1] }}
+                transition={{ duration: 1.8, repeat: Infinity }}
+              />
+              <span className="text-[10px] font-semibold text-success uppercase">Live</span>
+            </div>
+          )}
+          {error && <span className="text-[11px] text-danger">{error}</span>}
         </div>
       </div>
 
       <ConsultationStage
         patientInitials={patientInitials}
         isSpeaking={isSpeaking}
-        // Deliberately the clock's start, not the connection's: see the header.
-        isConnected={clockRunning}
+        isConnected={isConnected}
         getPatientLevel={getPatientLevel}
         durationSeconds={durationSeconds}
         onTimeUp={handleEndConsultation}

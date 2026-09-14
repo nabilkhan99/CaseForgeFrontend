@@ -16,7 +16,10 @@ import Link from 'next/link';
  * point in the guest funnel, and the page already carries the two that are
  * worth having ("Sign in", and the case itself when the run was too short).
  * The mark goes to /free because that is where this visitor came from and the
- * only place a link from here should take them — the five cases.
+ * only place a link from here should take them: the five cases.
+ *
+ * The title below is the default. The page names the tab itself, because an
+ * old report link opens the report behind main's email gate, not the sign-up.
  */
 export const metadata: Metadata = {
   // Absolute: the site template ("%s | Fourteen Fisherman") would make the tab

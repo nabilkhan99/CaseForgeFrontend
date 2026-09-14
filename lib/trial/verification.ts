@@ -21,6 +21,11 @@ export function generateVerificationCode(): string {
  * address can never verify another. Salted with the service-role key (always
  * present server-side) purely to make offline guessing of the 6-digit space
  * from a leaked row harder.
+ *
+ * A salt, not a signature: the hash is written to `trial_leads` and compared
+ * there, and nothing derived from the key is ever handed to a browser. That is
+ * why this keeps the service-role key while the guest cookie
+ * (lib/trial/guestSession) no longer may.
  */
 export function hashVerificationCode(code: string, email: string): string {
   const salt = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''

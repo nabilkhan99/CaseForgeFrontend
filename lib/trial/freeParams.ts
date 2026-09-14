@@ -1,14 +1,16 @@
 /**
  * The query states /free and /free/open have to answer for.
  *
- * Three different surfaces send people to /free with something in the query,
- * and none of them knows the page has become a picker:
+ * Several surfaces send people to /free with something in the query, and not
+ * all of them know the page has become a picker:
  *
  *   - `/try/talk` bounces here with `?guest=limit` (three consultations is a
  *     browser's lot for the day) or `?guest=unavailable` (no station, or no
  *     signing secret, so nothing can be opened);
- *   - the portfolio tool's banner posts an address itself and arrives with
- *     `?email=…&code=sent`, expecting the code step to be waiting.
+ *   - older emails, and cached copies of the portfolio tool's old banner, arrive
+ *     with `?email=…` (sometimes `&code=sent`), expecting a form. So does the
+ *     retired account-first form's old address, which next.config.js redirects
+ *     here with its query intact.
  *
  * The picker has no form on it any more, so the second case is a handoff to
  * /free/open rather than a prefill. Pure functions in a module of their own
@@ -60,32 +62,6 @@ export interface OpenPrefill {
    * the address a second time would waste that send and read as a bug.
    */
   codeAlreadySent: boolean
-}
-
-/**
- * A station id in the query, or undefined.
- *
- * Matched against the uuid shape rather than passed on trust: the value ends up
- * in a `redirectTo` the browser follows after sign-in, and /api/try/verify-code
- * checks it again for the same reason. Two checks because they guard different
- * things — this one keeps a junk id out of the form's hidden field, that one
- * keeps it out of a redirect.
- */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-export function stationParam(params: SearchParams): string | undefined {
-  const value = firstParam(params.station)
-  return value && UUID_RE.test(value) ? value.toLowerCase() : undefined
-}
-
-/** What /free/start opens with: a prefilled address, and the case they clicked. */
-export interface StartPrefill {
-  email?: string
-  station?: string
-}
-
-export function startPrefill(params: SearchParams): StartPrefill {
-  return { email: firstParam(params.email), station: stationParam(params) }
 }
 
 export function openPrefill(params: SearchParams): OpenPrefill {

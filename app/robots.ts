@@ -6,7 +6,10 @@ export default function robots(): MetadataRoute.Robots {
         rules: {
             userAgent: '*',
             allow: ['/', '/sca-cases/', '/gp-portfolio-tool'],
-            disallow: ['/admin/', '/dashboard/'],
+            // /try/ is the guest consultation lane: /try/talk opens a real,
+            // paid-for consultation on a GET, and the report links under it
+            // belong to the people who sat them.
+            disallow: ['/admin/', '/dashboard/', '/try/'],
         },
         sitemap: absoluteUrl('/sitemap.xml'),
     };

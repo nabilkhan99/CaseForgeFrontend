@@ -62,21 +62,14 @@ import {
  * only at the end would have been a step backwards. Fire-and-forget: it must
  * never delay the code or show an error.
  *
- * ## The password, and when it actually takes
+ * ## Only for the browser that ran the consultation
  *
- * `verify-code` sets it only when the signed `ff_guest` cookie proves this
- * browser ran the consultation (contract C3). A legacy report link opened in a
- * browser with no such cookie still makes the account, still claims the
- * consultation and still signs them in — the password simply does not take, and
- * the middleware sends them to /auth/set-password.
- *
- * So on those the field is not shown at all. `proven` comes from the page,
- * which can read the httpOnly cookie this component cannot: asking for a
- * password the server has already decided to discard is a field whose only
- * function is to be ignored, and the line under it promised a report "in your
- * dashboard" to somebody the middleware is about to send to a password form.
- * Unproven, the form asks for an address and a mobile, and says what will
- * actually happen — a code, then their report.
+ * `verify-code` makes the account, sets the password and claims the
+ * consultation only when the signed `ff_guest` cookie proves this browser ran
+ * it (contract C3). The page reads that httpOnly cookie before rendering this,
+ * and a link opened anywhere else gets main's report gate instead
+ * (components/try/GatedTrialReport), so every visitor who sees this form is
+ * one whose password will be honoured.
  */
 
 interface VerifyBody {
@@ -103,23 +96,9 @@ export interface SignUpWhileMarkingProps {
    * run THAT one properly. Null when the row carries no station.
    */
   stationId?: string | null;
-  /**
-   * The signed `ff_guest` cookie says this browser ran this consultation, so a
-   * password typed here will be honoured (contract C3).
-   *
-   * False on a legacy report link — forwarded, opened on another device, or
-   * from before the cookie existed. Defaults to true so the ordinary path is
-   * the one a caller gets by saying nothing; it is the page that knows, because
-   * the cookie is httpOnly and this component cannot see it.
-   */
-  proven?: boolean;
 }
 
-export default function SignUpWhileMarking({
-  sessionId,
-  stationId,
-  proven = true,
-}: SignUpWhileMarkingProps) {
+export default function SignUpWhileMarking({ sessionId, stationId }: SignUpWhileMarkingProps) {
   const [step, setStep] = useState<Step>('details');
 
   const [email, setEmail] = useState('');
@@ -141,11 +120,7 @@ export default function SignUpWhileMarking({
   const marking = useVerdictPoll(sessionId);
 
   const cleanEmail = email.trim().toLowerCase();
-  // No password asked for means none to check. The account is still made, still
-  // claims the consultation and still signs them in; they choose a password on
-  // /auth/set-password, which is where the middleware takes them.
-  const detailsReady =
-    EMAIL_RE.test(cleanEmail) && (!proven || passwordLongEnough(password));
+  const detailsReady = EMAIL_RE.test(cleanEmail) && passwordLongEnough(password);
   /** One click back into the same case, for a run that was too short to mark. */
   const retryHref = stationId
     ? `/try/talk?station=${encodeURIComponent(stationId)}`
@@ -370,9 +345,7 @@ export default function SignUpWhileMarking({
                   onBlur={saveLead}
                 />
                 <MobileField id="marking-phone" value={phone} onChange={setPhone} />
-                {proven && (
-                  <PasswordField id="marking-password" value={password} onChange={setPassword} />
-                )}
+                <PasswordField id="marking-password" value={password} onChange={setPassword} />
 
                 <button
                   type="submit"
@@ -391,15 +364,9 @@ export default function SignUpWhileMarking({
               )}
 
               <p className="mt-3.5 text-[13px] leading-relaxed text-muted">
-                {proven ? (
-                  <>
-                    We&apos;ll email you a 6-digit code to confirm the address. Your report
-                    opens in your dashboard, with four more cases and five days on the clock.
-                    No card.
-                  </>
-                ) : (
-                  <>We&apos;ll email you a code, then open your report.</>
-                )}
+                We&apos;ll email you a 6-digit code to confirm the address. Your report
+                opens in your dashboard, with four more cases and five days on the clock.
+                No card.
               </p>
             </>
           )}

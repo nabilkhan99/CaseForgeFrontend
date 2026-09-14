@@ -3,8 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 /**
  * The one-click door, reopened.
  *
- * Between 7 and 11 September this route was a redirect to /free/start: the
- * offer had become account-first, and nothing anonymous ran at all. It opens a
+ * Between 7 and 11 September this route was a redirect to the account-first
+ * form: the offer had become account-first, and nothing anonymous ran at all.
+ * That form is retired now (one door: /free). This route opens a
  * real consultation again, so what it has to get right is what it always had to
  * get right — which case it opens, and what it leaves behind: a
  * `clinical_sessions` row nobody owns, and a signed cookie binding this browser
@@ -89,6 +90,10 @@ const { GET } = await import('./route')
 /** Every call gets its own client address, so the per-IP brake never crosses tests. */
 let addresses = 0
 
+/** A real browser. Requests without a User-Agent are refused as machines. */
+const CHROME =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
+
 function request(search = '', cookie?: string, headers: Record<string, string> = {}, method = 'GET') {
   addresses += 1
   const url = `https://fourteenfisherman.com/try/talk${search}`
@@ -96,7 +101,11 @@ function request(search = '', cookie?: string, headers: Record<string, string> =
     url,
     method,
     nextUrl: new URL(url),
-    headers: new Headers({ 'x-forwarded-for': `203.0.113.${addresses}`, ...headers }),
+    headers: new Headers({
+      'x-forwarded-for': `203.0.113.${addresses}`,
+      'user-agent': CHROME,
+      ...headers,
+    }),
     cookies: { get: (name: string) => (cookie && name === 'ff_guest' ? { value: cookie } : undefined) },
   } as never
 }
@@ -173,6 +182,26 @@ describe('what one click opens', () => {
     const { location } = await talk()
     expect(location).toContain('/free?guest=unavailable')
   })
+
+  it('opens nothing, and writes no row, without TRIAL_GUEST_COOKIE_SECRET', async () => {
+    // The service role key is always present server-side and used to stand in
+    // for the cookie secret. It no longer does, and a row written before the
+    // signing failed would be a consultation nobody could ever start.
+    const secret = process.env.TRIAL_GUEST_COOKIE_SECRET
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    delete process.env.TRIAL_GUEST_COOKIE_SECRET
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key'
+    try {
+      const { location, setCookie } = await talk()
+      expect(location).toContain('/free?guest=unavailable')
+      expect(setCookie).toBe('')
+      expect(mocks.inserted).toHaveLength(0)
+    } finally {
+      process.env.TRIAL_GUEST_COOKIE_SECRET = secret
+      if (serviceKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY
+      else process.env.SUPABASE_SERVICE_ROLE_KEY = serviceKey
+    }
+  })
 })
 
 describe('what it leaves behind', () => {
@@ -215,6 +244,19 @@ describe('what it leaves behind', () => {
     // everybody who scrolled past it.
     const { status } = await talk('', undefined, headers)
     expect(status).toBe(204)
+    expect(mocks.inserted).toHaveLength(0)
+  })
+
+  it.each([
+    ['Googlebot', 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'],
+    ['the Slack unfurler', 'Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)'],
+    ['the WhatsApp preview', 'WhatsApp/2.23.20.0 A'],
+    ['a script', 'curl/8.4.0'],
+    ['a request with no User-Agent at all', ''],
+  ])('opens nothing for %s, and sets no cookie', async (_name, ua) => {
+    const { status, setCookie } = await talk('', undefined, { 'user-agent': ua })
+    expect(status).toBe(204)
+    expect(setCookie).toBe('')
     expect(mocks.inserted).toHaveLength(0)
   })
 

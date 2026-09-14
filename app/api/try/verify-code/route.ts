@@ -4,6 +4,7 @@ import { pushTrialLeadToBrevo } from '@/lib/marketing/trialLead';
 import { signInWithMagicLink } from '@/lib/auth/accountSignUp';
 import { MIN_PASSWORD_LENGTH } from '@/lib/auth/passwordPolicy';
 import { ensureTrialAccount } from '@/lib/auth/trialAccount';
+import { scheduleGateLeadAlert } from '@/lib/trial/gateLeadAlert';
 import { toE164 } from '@/lib/trial/phone';
 import { GUEST_COOKIE, cookieOwnsSession, readGuestCookie } from '@/lib/trial/guestSession';
 import type { TrialSource, TrialState } from '@/lib/commerce/trialAccess';
@@ -31,26 +32,26 @@ import {
  *
  * `sessionId` = the GUEST reveal: a consultation was sat before there was an
  * account, and this turns it into one. Recorded as `guest_reveal`.
- * `email` (+ a `password` from /free/start) = the ACCOUNT-FIRST door, where
- * there is no consultation yet. Recorded as `signup`.
+ * `email` alone = the DASHBOARD door at /free/open, where there is no
+ * consultation. Recorded as `signup`. It takes no password: somebody new
+ * chooses one on /auth/set-password, and somebody returning already has one.
  *
- * ## Why a guest may set a password, and only sometimes (contract C3)
+ * ## A guest gets an account only with the cookie (contract C3)
  *
- * A bare session id proves nothing — it is a UUID in a URL, and the guest
- * report has always been readable by whoever holds it. A `password` arriving
- * with one could therefore be a field nobody typed, on somebody else's
- * consultation. What DOES prove this browser ran the consultation is the signed
- * httpOnly `ff_guest` cookie the server wrote when it opened the session
- * (lib/trial/guestSession), so `password` and `phone` are honoured on the guest
- * branch exactly when {@link cookieOwnsSession} says that cookie carries this
- * session id, and ignored otherwise. With the proof, the account is born with
- * the password (no `password_pending`, no trip to /auth/set-password), the
- * mobile is stored, and the five-day window starts FROM THE CONSULTATION rather
- * than from whenever they next open a station. Without it, the branch does
- * exactly what it did before — except for where it lands, which is the report
- * either way: the session is claimed on both paths and that page checks
- * ownership itself, so the dashboard was never the honest destination for a
- * page that spends its whole copy on the report being marked.
+ * A bare session id proves nothing: it is a UUID in a URL. What DOES prove this
+ * browser ran the consultation is the signed httpOnly `ff_guest` cookie the
+ * server wrote when it opened the session (lib/trial/guestSession).
+ *
+ * With that proof this is the sign-up while marking: the account is made (born
+ * with the password, the mobile stored), the consultation is claimed, the
+ * five-day window starts FROM THE CONSULTATION, the browser is signed in and
+ * sent to the report inside the dashboard.
+ *
+ * Without it this is main's report gate, on an old report link (owner decision,
+ * Sept 2026): the lead is verified, the report opens on /try/feedback, and
+ * NOTHING ELSE happens. No account, no claim, no sign-in, no password. A link
+ * is not proof of whose consultation it was, so it must not be able to turn
+ * one into anybody's account.
  *
  * ## Why the account is created HERE
  *
@@ -79,39 +80,46 @@ import {
  * role, so that gate stays exactly as closed as it was.
  */
 
-/** Where a trainee lands when no station was carried through the flow. */
+/** Where the dashboard door lands. */
 const DASHBOARD = '/dashboard';
 
 /**
- * A station id, or nothing.
- *
- * `redirectTo` is composed from a client-supplied value, so it is rebuilt from a
- * matched uuid rather than interpolated — anything else and "carry the station
- * through the sign-up" would be an open redirect with a friendly name.
+ * A redirect is composed from a client-supplied session id, so it is rebuilt
+ * from a matched uuid rather than interpolated. Anything else would be an open
+ * redirect with a friendly name.
  */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function redirectFor(station: unknown): string {
-  const value = typeof station === 'string' ? station.trim() : '';
-  return UUID_RE.test(value) ? `/clinical-master/station/${value.toLowerCase()}` : DASHBOARD;
-}
 
 /**
  * The report of the consultation they have just sat, inside the dashboard.
  *
- * For EVERY guest, proven or not. The claim has just made the session theirs
- * (by `claimSessionId` with the proof, through the lead's own `session_id`
- * without it) and the cookies on this response sign them in, so the report page
- * can answer the ownership question itself — which it does, and which is why
- * pointing an unproven guest at it is safe. It used to send them to a bare
- * /dashboard instead, on a page whose whole copy was about the report they had
- * just earned. Rebuilt from a matched uuid for the same reason
- * {@link redirectFor} is — the id came off the request.
+ * For the proven guest: the claim has just made the session theirs and the
+ * cookies on this response sign them in, so the report page can answer the
+ * ownership question itself.
  */
 function reportFor(sessionId: string): string {
   return UUID_RE.test(sessionId)
     ? `/clinical-master/feedback/${sessionId.toLowerCase()}`
     : DASHBOARD;
+}
+
+/** Where main's report gate leaves the visitor: the report behind the link. */
+function gateReportFor(sessionId: string): string {
+  return UUID_RE.test(sessionId) ? `/try/feedback/${sessionId.toLowerCase()}` : '/free';
+}
+
+/**
+ * The answer to a verified code on an old report link: ok, and nothing made.
+ * The gate opens the report in place; `redirectTo` is only for completeness.
+ */
+function reportGateResponse(sessionId: string): VerifyResponse {
+  return {
+    ok: true,
+    account: null,
+    trial: NO_TRIAL_RESPONSE,
+    signedIn: false,
+    redirectTo: gateReportFor(sessionId),
+  };
 }
 
 /** What the caller needs to know about the account. Null when provisioning failed. */
@@ -145,7 +153,7 @@ interface VerifyResponse {
   trial: TrialVerifyTrial;
   /** This response carries session cookies. False leaves the caller a sign-in path. */
   signedIn: boolean;
-  /** Where to go next: the station they picked, or the dashboard. */
+  /** Where to go next: the report, or the dashboard. */
   redirectTo: string;
 }
 
@@ -163,7 +171,6 @@ export async function POST(req: NextRequest) {
       code?: string;
       password?: string;
       phone?: string;
-      station?: string;
     };
     const { sessionId, email, code } = body;
 
@@ -179,26 +186,25 @@ export async function POST(req: NextRequest) {
 
     // Contract C3's proof: the signed cookie this server wrote when it opened
     // the consultation carries this session id, so this browser is the one that
-    // sat it. Forged, absent, or holding a different session — all the same
-    // answer, and all of them fall back to the branch as it was.
+    // sat it. Forged, absent, or holding a different session: all the same
+    // answer, and all of them are main's report gate.
     const guestProven =
       Boolean(sessionId) &&
       cookieOwnsSession(readGuestCookie(req.cookies?.get(GUEST_COOKIE)?.value), sessionId ?? '');
+    const reportGate = Boolean(sessionId) && !guestProven;
 
-    // The account-first door always may; the guest door only with the proof
-    // above. Everything else gets neither field, whatever it sends.
-    const mayCollect = source === 'signup' || guestProven;
-    const password = mayCollect && typeof body.password === 'string' ? body.password : '';
-    const phone = mayCollect && typeof body.phone === 'string' ? body.phone.trim() : '';
+    // Only the sign-up while marking asks for these, and only its browser holds
+    // the proof above. Every other caller gets neither field, whatever it sends.
+    const password = guestProven && typeof body.password === 'string' ? body.password : '';
+    const phone = guestProven && typeof body.phone === 'string' ? body.phone.trim() : '';
     // E.164 where we can parse one, so the founder's call works straight off
     // the row and the auth user's metadata carries the same string the lead
-    // does. NOTHING TEXTS IT — there is no SMS step on either door.
+    // does. NOTHING TEXTS IT: there is no SMS step on any door.
     const normalizedPhone = phone ? (toE164(phone) ?? phone) : '';
 
-    // A guest goes to the report of the consultation they just sat; the
-    // account-first door, which has no consultation, to the station it carried
-    // or the dashboard.
-    const redirectTo = sessionId ? reportFor(sessionId) : redirectFor(body.station);
+    // A proven guest goes to the report of the consultation they just sat; the
+    // dashboard door, which has no consultation, to the dashboard.
+    const redirectTo = sessionId ? reportFor(sessionId) : DASHBOARD;
     if (password && password.length < MIN_PASSWORD_LENGTH) {
       return NextResponse.json(
         { error: `Use ${MIN_PASSWORD_LENGTH} characters or more` },
@@ -222,8 +228,8 @@ export async function POST(req: NextRequest) {
     //
     // Only behind the cookie proof, and only when the session lookup found
     // nothing. With the proof this request comes from the browser that ran the
-    // consultation, which is the same standing the account-first door has when
-    // it verifies an address and a code together; without it, a bare session id
+    // consultation, which is the same standing the dashboard door has when it
+    // verifies an address and a code together; without it, a bare session id
     // still cannot reach any lead but its own.
     if (!leadError && !lead && sessionId && guestProven && normalizedEmail) {
       const byEmail = await supabase
@@ -294,7 +300,10 @@ export async function POST(req: NextRequest) {
     // without a grant or a session. The pending code is deliberately left in
     // place: it is what makes a double-submit of the SAME still-valid code work,
     // and clearing it would answer the second one with a 410.
+    //
+    // On an old report link there is no account work to settle: the gate opens.
     if (lead.email_verified_at) {
+      if (reportGate) return NextResponse.json(reportGateResponse(sessionId ?? ''));
       return NextResponse.json(
         await settleTrialAccount({
           email: lead.email,
@@ -313,7 +322,10 @@ export async function POST(req: NextRequest) {
     // already keeps its leads in.
     const storedPhone = normalizedPhone || null;
 
-    const { error: updateError } = await supabase
+    // Conditional on the column still being null, so exactly one request moves
+    // this lead to verified. That request, and only that one, sends the
+    // founders' alert below: a double submit or a second tab changes no row.
+    const { data: verifiedRows, error: updateError } = await supabase
       .from('trial_leads')
       .update({
         email_verified_at: new Date().toISOString(),
@@ -323,11 +335,27 @@ export async function POST(req: NextRequest) {
         // the founder the call they were going to make.
         ...(storedPhone ? { phone: storedPhone } : {}),
       })
-      .eq('id', lead.id);
+      .eq('id', lead.id)
+      .is('email_verified_at', null)
+      .select('id');
 
     if (updateError) {
       console.error('[verify-code] verified update failed', updateError);
       return NextResponse.json({ error: 'Something went wrong. Please try again' }, { status: 500 });
+    }
+    const becameVerified = (verifiedRows?.length ?? 0) > 0;
+
+    // The founders' lead alert (lib/trial/gateLeadAlert): a guest finishing the
+    // sign-up, or a visitor verifying through the gate on an old report link.
+    // Never on the dashboard door, which has no consultation behind it.
+    // Runs after the response and never throws.
+    if (sessionId && becameVerified) {
+      scheduleGateLeadAlert(
+        supabase,
+        sessionId,
+        { ...lead, phone: storedPhone ?? lead.phone },
+        guestProven ? 'guest_signup' : 'report_link',
+      );
     }
 
     // Only verified leads reach the marketing list.
@@ -368,6 +396,10 @@ export async function POST(req: NextRequest) {
         findOption(NOT_IN_TRAINING_ROLES, lead.not_in_training_role)?.label ?? null,
     });
 
+    // Main's report gate ends here: verified, and the report opens. No account
+    // and no claim from a link on its own; see the header.
+    if (reportGate) return NextResponse.json(reportGateResponse(sessionId ?? ''));
+
     return NextResponse.json(
       await settleTrialAccount({
         email: lead.email,
@@ -390,7 +422,7 @@ interface SettleInput {
   email: string;
   firstName: string | null;
   source: TrialSource;
-  /** Empty on every door but the account-first form. */
+  /** Empty on every door but the proven guest's sign-up. */
   password: string;
   /** E.164 where we could parse it, else what they typed. Empty when none. */
   phone: string;
@@ -400,7 +432,7 @@ interface SettleInput {
    * to leave the clock for the first station they open.
    *
    * Only ever set for a guest whose cookie proved the session is theirs — see
-   * the C3 note at the top. Null on the account-first door, which has no
+   * the C3 note at the top. Null on the dashboard door, which has no
    * consultation to date the window from.
    */
   windowSessionId: string | null;

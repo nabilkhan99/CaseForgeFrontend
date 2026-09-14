@@ -4,7 +4,7 @@ import { loadFreeStation } from '@/lib/trial/guestStation';
 import GuestReadingScreen from './GuestReadingScreen';
 
 /**
- * The optional exam-style reading page for a guest.
+ * The exam-style reading page every guest consultation starts on.
  *
  * A server component: reading the row here means the brief is on the page when
  * it paints, rather than two client round trips later (`/api/try/free-cases`,
@@ -32,20 +32,14 @@ export default async function TryReadingPhasePage({ params, searchParams }: Page
   const { session } = await searchParams;
   const station = await loadFreeStation(getSupabaseAdmin(), stationId);
 
+  // The signed-in reading page's plain missing state, pointed at the cases.
   if (!station) {
     return (
-      <div className="min-h-[100dvh] bg-surface flex items-center justify-center px-6">
-        <div className="max-w-sm text-center">
-          <h1 className="mb-2 text-[20px] font-semibold text-heading">Case not found</h1>
-          <p className="mb-6 text-[14px] leading-relaxed text-muted">
-            This case is not one of the five free ones. Any of those takes one click.
-          </p>
-          <Link
-            href="/free"
-            className="inline-flex min-h-[44px] items-center rounded-xl px-6 py-3 text-[14px] font-semibold text-white"
-            style={{ background: 'linear-gradient(135deg, #B45309, #D97706)' }}
-          >
-            Try 5 free cases
+      <div className="min-h-[100dvh] bg-surface flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted mb-4">Station not found</p>
+          <Link href="/free" className="text-primary hover:underline text-sm">
+            Back to cases
           </Link>
         </div>
       </div>

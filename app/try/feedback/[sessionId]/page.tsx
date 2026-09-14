@@ -1,41 +1,37 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import SignUpWhileMarking from '@/components/try/SignUpWhileMarking';
+import GatedTrialReport from '@/components/try/GatedTrialReport';
 import { GUEST_COOKIE, cookieOwnsSession, readGuestCookie } from '@/lib/trial/guestSession';
 
 /**
- * The minute after a guest consultation ends. Contract C4.
+ * What a /try/feedback link opens depends on whose consultation it is.
  *
- * It used to be the reveal gate: a nine-step questionnaire and an SMS step
- * standing between a finished consultation and the report it had earned, with
- * the whole report, the pricing table and the guarantee rendered underneath
- * once it opened. About a quarter of finishers left at that gate.
+ * ## The browser that ran it: sign up while it is marked (contract C4)
  *
- * It is now the sign-up, and the report has moved. Marking takes about a
- * minute; the account takes about a minute; so they run at the same time, and
- * the report is read where it belongs — inside the dashboard, on an account
- * that owns it, next to the other four cases. Nothing marked is rendered on
- * this page any more; only the trainee's own verdict summary, which
- * `/api/try/gate-status` has always been allowed to show.
+ * The signed `ff_guest` cookie carries this session id, so this is the guest
+ * who has just finished. Marking takes about a minute and so does the account,
+ * so they run at the same time and the report is read inside the dashboard,
+ * on an account that owns it. Once the session has an owner the dashboard's
+ * report is the real one and the browser is sent there.
  *
- * ## A server component for three questions
+ * ## Anybody else: the report link as main had it
  *
- * Whether the session already has an owner, which case it was on, and whether
- * this browser is the one that ran it. If it is owned, the report belongs in
- * the dashboard and there is no account to make, so the browser is sent there
- * before anything paints rather than after two client fetches. Everything else
- * on the page is client work — the poll, the form, the code.
+ * No cookie for this session means a link from before the cookie existed, one
+ * forwarded or opened on another device, or the one in a founder's lead alert.
+ * Those behave exactly as they did on main (owner decision, Sept 2026): a lead
+ * that has verified its address sees the full report straight away, and
+ * anybody else gets the email gate and then the report. No account is made on
+ * that path (see /api/try/verify-code), because a link is not proof of whose
+ * consultation it was.
  *
- * ## Why the cookie is read HERE
- *
- * The signed `ff_guest` cookie is contract C3's proof, and `verify-code` will
- * only honour a password behind it. The form could not see that — it is
- * httpOnly — so a legacy report link (no cookie, opened on a phone, forwarded
- * from an email) showed a password field whose value the server was always
- * going to discard, over a line promising a report in a dashboard those people
- * do not get sent to. The page knows, so it tells the form.
+ * One exception: a consultation that already belongs to an account but has no
+ * verified lead of its own (a returning trainee's second case, claimed by id)
+ * has no gate that could open it, so it goes to the dashboard's report, which
+ * checks ownership itself.
  */
 export const dynamic = 'force-dynamic';
 
@@ -43,25 +39,32 @@ interface PageProps {
   params: Promise<{ sessionId: string }>;
 }
 
+async function browserRanIt(sessionId: string): Promise<boolean> {
+  const jar = await cookies();
+  return cookieOwnsSession(readGuestCookie(jar.get(GUEST_COOKIE)?.value), sessionId);
+}
+
+// Absolute: the site template ("%s | Fourteen Fisherman") would make the tab
+// longer than the instruction it is giving.
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { sessionId } = await params;
+  return {
+    title: {
+      absolute: (await browserRanIt(sessionId)) ? 'Set up your free account' : 'Your feedback report',
+    },
+  };
+}
+
 export default async function TryFeedbackPage({ params }: PageProps) {
   const { sessionId } = await params;
+  const proven = await browserRanIt(sessionId);
+  const admin = getSupabaseAdmin();
 
-  // Contract C3's proof, asked exactly as /api/try/verify-code asks it: this
-  // browser opened this consultation, so the password it types will be honoured.
-  const jar = await cookies();
-  const proven = cookieOwnsSession(readGuestCookie(jar.get(GUEST_COOKIE)?.value), sessionId);
-
-  const { data: session } = await getSupabaseAdmin()
+  const { data: session } = await admin
     .from('clinical_sessions')
     .select('id, user_id, station_id')
     .eq('id', sessionId)
     .maybeSingle();
-
-  // Already claimed — by this person's own sign-up in another tab, or by an
-  // account they made later. The dashboard's report is the real one, and it
-  // checks ownership itself, so this hands the question over rather than
-  // answering it here.
-  if (session?.user_id) redirect(`/clinical-master/feedback/${sessionId}`);
 
   if (!session) {
     return (
@@ -86,13 +89,23 @@ export default async function TryFeedbackPage({ params }: PageProps) {
     );
   }
 
-  // The station travels with it so "run it properly" can point back at THIS
-  // case rather than at the five in general.
-  return (
-    <SignUpWhileMarking
-      sessionId={sessionId}
-      stationId={session.station_id ?? null}
-      proven={proven}
-    />
-  );
+  if (proven) {
+    // Already claimed, by this person's own sign-up in another tab. The
+    // dashboard's report checks ownership itself.
+    if (session.user_id) redirect(`/clinical-master/feedback/${sessionId}`);
+    // The station travels with it so "run it properly" can point back at THIS
+    // case rather than at the five in general.
+    return <SignUpWhileMarking sessionId={sessionId} stationId={session.station_id ?? null} />;
+  }
+
+  const { data: lead } = await admin
+    .from('trial_leads')
+    .select('email_verified_at')
+    .eq('session_id', sessionId)
+    .maybeSingle();
+  const verified = Boolean(lead?.email_verified_at);
+
+  if (session.user_id && !verified) redirect(`/clinical-master/feedback/${sessionId}`);
+
+  return <GatedTrialReport sessionId={sessionId} verified={verified} />;
 }

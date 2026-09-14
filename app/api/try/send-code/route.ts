@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { findAccountByEmail } from '@/lib/auth/accountSignUp';
 import { sendVerificationEmail } from '@/lib/email/verificationEmail';
 import {
   validateAnswers,
@@ -31,8 +30,10 @@ import {
  * `clinical_sessions` row, and the lead is written against that session. It
  * comes in two shapes now:
  *
- *   * the LEGACY GATE (no `mode`) still validates the whole questionnaire,
- *     because that form asks every question and a gap there is a bug;
+ *   * the REPORT GATE (no `mode`), main's gate on an old report link
+ *     (components/try/EmailVerificationGate), validates the whole
+ *     questionnaire, because that form asks every question and a gap there is
+ *     a bug;
  *   * `mode: 'guest_signup'` — the post-consultation page at
  *     /try/feedback/[sessionId], which asks for an address, a mobile and a
  *     password and nothing else — validates what it was given and keeps it,
@@ -44,9 +45,9 @@ import {
  * unowned `clinical_sessions` row — is what bounds this door's abuse surface,
  * and it applies to both shapes identically.
  *
- * The SIGN-UP door (`mode: 'signup'`, from /free) has no consultation yet, so
- * there is no session to look up and nothing but an email and a first name to
- * validate. It is a genuinely weaker request, so it gets its own guards rather
+ * The SIGN-UP door (`mode: 'signup'`, from /free/open) has no consultation
+ * yet, so there is no session to look up and nothing but an email and a first
+ * name to validate. It is a genuinely weaker request, so it gets its own guards rather
  * than a hole in the existing ones — see {@link sendSignupCode}.
  */
 
@@ -78,6 +79,21 @@ const signupIpHits = createHitLog();
 const GUEST_IP_LIMIT = 12;
 const GUEST_IP_WINDOW_MS = 60 * 60 * 1000;
 const guestIpHits = createHitLog();
+
+/**
+ * The answer to a browser that cannot prove it ran this consultation and is
+ * trying to change whose verified lead it is. Nothing is written or mailed.
+ */
+function refuseUnproven(reason: string): NextResponse {
+  console.warn(`[send-code] ${reason}`);
+  return NextResponse.json(
+    {
+      error: 'Start your consultation from the link. This one has lost its place.',
+      code: 'guest_session_unrecognised',
+    },
+    { status: 403 },
+  );
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -142,7 +158,7 @@ export async function POST(req: NextRequest) {
     const [{ data: leadBySession }, { data: leadByEmail }] = await Promise.all([
       supabase
         .from('trial_leads')
-        .select('id, verification_last_sent_at, email_verified_at')
+        .select('id, email, verification_last_sent_at, email_verified_at')
         .eq('session_id', sessionId)
         .maybeSingle(),
       supabase
@@ -168,22 +184,35 @@ export async function POST(req: NextRequest) {
     // `ff_guest` cookie is what tells the two apart — it is the same proof the
     // Azure mint and contract C3's password rest on, and a bare session id is
     // not evidence of anything.
+    const proven = cookieOwnsSession(
+      readGuestCookie(req.cookies?.get(GUEST_COOKIE)?.value),
+      sessionId,
+    );
     const verifiedLead = Boolean(leadByEmail?.email_verified_at);
-    if (verifiedLead && leadByEmail!.session_id !== sessionId) {
-      const owns = cookieOwnsSession(
-        readGuestCookie(req.cookies.get(GUEST_COOKIE)?.value),
-        sessionId,
-      );
-      if (!owns) {
-        console.warn('[send-code] refused to move a verified lead onto an unproven session');
-        return NextResponse.json(
-          {
-            error: 'Start your consultation from the link. This one has lost its place.',
-            code: 'guest_session_unrecognised',
-          },
-          { status: 403 },
-        );
-      }
+    if (verifiedLead && leadByEmail!.session_id !== sessionId && !proven) {
+      return refuseUnproven('refused to move a verified lead onto an unproven session');
+    }
+
+    // The same rule from the other side: the lead already ON this session is
+    // verified, and a different address is being typed next to it. Without
+    // this, the upsert below rewrote that row with the caller's address and
+    // nulled its verification, so anyone holding a report link (and nothing
+    // else) could verify their own address against somebody else's
+    // consultation and have the claim move it into their account. Every lead
+    // verified on main sits on a session nobody owns yet, so this was open for
+    // all of them.
+    //
+    // Allowed with the cookie (the browser that ran it may change its mind), or
+    // when the address typed IS the session's verified one: the code goes to
+    // that inbox, so only its owner can use it. An UNVERIFIED lead is not
+    // protected, exactly as on main: it proves nothing about anybody, and the
+    // report gate's "Edit email" re-posts here with a corrected address.
+    if (
+      !proven &&
+      leadBySession?.email_verified_at &&
+      (leadBySession.email ?? '').trim().toLowerCase() !== normalizedEmail
+    ) {
+      return refuseUnproven('refused to re-address a verified lead from an unproven browser');
     }
 
     // A repeat email is NOT refused here. By this point the consultation has
@@ -321,13 +350,11 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * The account-first door: an address, a code, nothing else on this call.
+ * The dashboard door: an address, a code, nothing else on this call.
  *
- * Two surfaces post here. /free/start sends `intent: 'signup'` and is told
- * plainly when the address already has a finished account — it is a sign-up
- * form, and mailing a code to somebody who should be signing in wastes their
- * time and ours. /free/open and the portfolio banner send no intent and keep
- * the old behaviour: a code, whoever they are.
+ * /free/open posts here, for people coming back to an account: a code,
+ * whoever they are. (The account-first sign-up form, which could also be told
+ * "you already have an account", was retired: one door, /free.)
  *
  * ## Why it can reuse this route at all
  *
@@ -375,22 +402,6 @@ async function sendSignupCode(
     return NextResponse.json({ error: parsed.error }, { status: 400 });
   }
   const { email, firstName } = parsed.value;
-
-  // Only the account-first form asks. /free/open and the portfolio banner are
-  // for people coming BACK — telling them to sign in instead of mailing the
-  // code they asked for would close the door they were using.
-  if (body.intent === 'signup') {
-    const existing = await findAccountByEmail(email);
-    // `passwordPending` is a lead we provisioned who never chose a password:
-    // finishing that on the form is the point, so they carry on. A finished
-    // account cannot be finished twice, and its owner has a password already.
-    if (existing && !existing.passwordPending) {
-      return NextResponse.json(
-        { error: 'You already have an account. Sign in instead.', accountExists: true },
-        { status: 409 },
-      );
-    }
-  }
 
   const supabase = getSupabaseAdmin();
 
