@@ -61,6 +61,11 @@ describe('/free lists the five cases', () => {
     expect(row).not.toContain('<Link')
   })
 
+  it('tells crawlers not to follow it', () => {
+    const row = PICKER.slice(PICKER.indexOf('function StationRow'), PICKER.indexOf('function NoStations'))
+    expect(row).toMatch(/<a\s+href=\{station\.href\}\s+rel="nofollow"/)
+  })
+
   it('emphasises the first row without hiding the rest', () => {
     expect(PICKER).toContain('Start here')
     expect(withoutComments(PICKER)).toContain('const first = index === 0')

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
+import { isKnownBotUserAgent } from '@/lib/trial/botUserAgent'
 import { rejectIfSignedIn } from '@/lib/trial/guestOnly'
 import { withinGuestOpenLimit } from '@/lib/trial/guestRateLimit'
 import { pickGuestStationId } from '@/lib/trial/guestStation'
@@ -58,8 +59,11 @@ export const dynamic = 'force-dynamic'
  * one for the unfurler.
  *
  * A denylist of the signals machines actually send, not an allowlist of
- * `Sec-Fetch-Mode: navigate` — that header is absent on older browsers, and
- * requiring it would refuse real people to catch bots.
+ * `Sec-Fetch-Mode: navigate`: that header is absent on older browsers, and
+ * requiring it would refuse real people to catch bots. Crawlers and unfurlers
+ * that follow the link on purpose are refused by their User-Agent
+ * (lib/trial/botUserAgent), on top of robots.txt disallowing /try/ and every
+ * link to this route carrying rel="nofollow".
  */
 function isMachineFetch(req: NextRequest): boolean {
   // HEAD is answered by this handler too (Next derives it from GET), and
@@ -67,6 +71,7 @@ function isMachineFetch(req: NextRequest): boolean {
   if ((req.method ?? 'GET').toUpperCase() === 'HEAD') return true
 
   const headers = req.headers
+  if (isKnownBotUserAgent(headers.get('user-agent'))) return true
   if (headers.get('next-router-prefetch')) return true
   if ((headers.get('sec-purpose') ?? '').includes('prefetch')) return true
   const purpose = (

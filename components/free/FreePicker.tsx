@@ -100,7 +100,7 @@ function Notice({ notice }: { notice: GuestNotice }) {
  * effect of a GET, and Next prefetches a `<Link>` the moment it enters the
  * viewport. The route already refuses prefetches (see its `isMachineFetch`),
  * but five links in one viewport would fire five refused requests on every
- * visit to no purpose.
+ * visit to no purpose. `rel="nofollow"` so a crawler does not follow it either.
  */
 function StationRow({
   station,
@@ -123,6 +123,7 @@ function StationRow({
     >
       <a
         href={station.href}
+        rel="nofollow"
         aria-label={`Start: ${station.title}`}
         className="group flex min-h-[72px] items-center gap-4 px-5 py-4 transition-colors hover:bg-surface-warm/70 focus-visible:bg-surface-warm/70 focus-visible:outline-none sm:gap-5 sm:px-6"
       >

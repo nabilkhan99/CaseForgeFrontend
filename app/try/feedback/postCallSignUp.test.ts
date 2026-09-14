@@ -168,6 +168,15 @@ describe('a run too short to mark', () => {
     expect(FORM).toContain(": '/try/talk'")
   })
 
+  it('links the retry with a plain nofollow anchor, never a prefetching Link', () => {
+    // /try/talk opens a consultation on a GET, so neither a prefetch nor a
+    // crawler should be handed it.
+    const REVEAL = source('../../../components/try/VerdictReveal.tsx')
+    expect(REVEAL).toMatch(/<a\s+href=\{retryHref\}\s+rel="nofollow"/)
+    expect(REVEAL).not.toContain("from 'next/link'")
+    expect(REVEAL).not.toContain('/free/start')
+  })
+
   it('still offers the account, because the account is still worth having', () => {
     expect(FORM).toContain('You can still set up your free account and run it again.')
   })
