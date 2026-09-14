@@ -37,7 +37,7 @@ export const FEATURE_ROWS: readonly FeatureRow[] = [
       // Not "5 free" — the number that matters is how many get MARKED, and the
       // second line is the answer to the question the column raises ("and then
       // what?"), which is the same answer the wall gives.
-      { text: 'Five, marked', sub: 'then your board stays, read-only' },
+      { text: 'Five cases', sub: 'unlimited attempts' },
       { text: 'Unlimited' },
       { text: 'Unlimited', sub: '£299 value' },
       { text: 'Unlimited' },

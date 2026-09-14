@@ -319,7 +319,7 @@ function OwnedCta() {
 
 function PlanCta({ selfStudy, variant, selfStudyPlan, owned, canUpgrade }: CtaButtonsProps) {
   if (variant === 'free') {
-    // No Stripe call: there is nothing to buy. A plain link to the sign-up, in
+    // No Stripe call: there is nothing to buy. A plain link to /free, in
     // the quiet treatment, because the column exists to remove a reason not to
     // start rather than to compete with Complete.
     return (

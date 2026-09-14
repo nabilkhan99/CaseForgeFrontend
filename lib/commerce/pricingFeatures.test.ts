@@ -49,10 +49,10 @@ describe('the shape the table renders against', () => {
 })
 
 describe('what the free column offers', () => {
-  it('is five MARKED consultations, and says what happens after them', () => {
+  it('is five cases with unlimited attempts', () => {
     const cell = rowFor('AI consultations').cells[FREE]
-    expect(cell.text).toBe('Five, marked')
-    expect(cell.sub).toBe('then your board stays, read-only')
+    expect(cell.text).toBe('Five cases')
+    expect(cell.sub).toBe('unlimited attempts')
     expect(cell.cross).toBeFalsy()
   })
 
