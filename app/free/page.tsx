@@ -9,7 +9,7 @@ import { pageMetadata } from '@/lib/seo/site';
 export const metadata: Metadata = pageMetadata({
   title: 'Five free SCA cases, marked | Fourteen Fisherman',
   description:
-    'Pick a case and talk to an AI patient for 12 minutes, then read your report against the three SCA domains. Five free cases, and your first verdict before we ask for anything.',
+    'Five free SCA cases with unlimited attempts, plus your own dashboard, analytics and Development page. Talk to an AI patient and see your first verdict before we ask for anything.',
   path: '/free',
 });
 

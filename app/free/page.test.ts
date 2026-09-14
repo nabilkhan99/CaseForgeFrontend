@@ -69,7 +69,10 @@ describe('/free lists the five cases', () => {
   it('says what pressing Start actually does', () => {
     // Each row is one link, named for what it does to a screen reader too.
     expect(PICKER).toContain('aria-label={`Start: ${station.title}`}')
-    expect(PICKER).toContain('A 12 minute consultation, marked on the three SCA domains.')
+    // And says what the free account holds, not how long a case takes.
+    expect(PICKER).toContain('Unlimited attempts on all five cases')
+    expect(PICKER).toContain('Your own dashboard and analytics')
+    expect(PICKER).toContain('Your Development page')
   })
 
   it('promises the verdict before anything is asked for, because it is', () => {

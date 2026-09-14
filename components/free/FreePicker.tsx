@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion, useReducedMotion } from 'framer-motion';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Check } from 'lucide-react';
 import LandingNavbar from '@/components/landing/LandingNavbar';
 import LandingFooter from '@/components/landing/LandingFooter';
 import { Accent, Pill, WASH } from '@/components/landing/v5/editorial';
@@ -32,7 +32,14 @@ import ExampleReport from './ExampleReport';
  * pill, which is the single place "no card" is allowed to appear.
  */
 
-/** The five rows are the page. Everything else is one sentence of support. */
+/** What a free account holds, in the order a trainee meets it. */
+const INCLUDED: readonly string[] = [
+  'Unlimited attempts on all five cases',
+  'Your own dashboard and analytics',
+  'Your Development page: a detailed, whole picture of how you are progressing',
+];
+
+/** The five rows are the page. Everything else is supporting detail. */
 interface FreePickerProps {
   stations: readonly PickerStation[];
   /** Why /try/talk turned this visitor away, when it did. */
@@ -238,15 +245,28 @@ export default function FreePicker({ stations, notice }: FreePickerProps) {
               <Accent>Get marked.</Accent>
             </motion.h1>
 
-            <motion.p
-              initial={reduceMotion ? false : { opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.12 }}
-              className="mt-5 max-w-[31em] text-base leading-relaxed text-body [text-wrap:pretty] sm:text-lg"
-            >
-              A 12 minute consultation, marked on the three SCA domains. You see your verdict
-              before we ask for anything.
-            </motion.p>
+            {/* What the free account holds, as three lines rather than a
+                paragraph. No days, locks or plans here: the clock is the
+                dashboard's to explain, after the first case. */}
+            <ul className="mt-7 space-y-3">
+              {INCLUDED.map((item, index) => (
+                <motion.li
+                  key={item}
+                  initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.45, delay: 0.12 + index * 0.05 }}
+                  className="flex items-start gap-3 text-base leading-snug text-body [text-wrap:pretty] sm:text-[17px]"
+                >
+                  <span
+                    className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"
+                    aria-hidden="true"
+                  >
+                    <Check className="h-3 w-3" strokeWidth={3} />
+                  </span>
+                  {item}
+                </motion.li>
+              ))}
+            </ul>
           </div>
 
           {/* The five. */}
