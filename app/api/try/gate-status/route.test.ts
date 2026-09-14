@@ -1,20 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
- * What the unverified trialist is allowed to know.
+ * What a session id alone may learn, and what only the consultation's owner may.
  *
- * This route answers two questions for someone who has proved nothing yet, so
- * both of its limits are pinned: the summary is all that crosses (the report is
- * what the email buys), and only a *trial* session answers at all — otherwise
- * this would be "read any user's verdict by guessing a session id", which is
- * emphatically not what the guest-session boundary was meant to allow.
+ * Holding a session id (a UUID in a link that gets forwarded, and that sits in
+ * the founders' lead alert) earns main's minimal answer: `{ verified }`. The
+ * verdict, the score, the summary and the marking status are for a request that
+ * proves the consultation is its own: the signed guest cookie for this session,
+ * or the signed-in user who owns it. Within that, only the four-field summary
+ * ever crosses, and only for trial sessions.
  */
+
+process.env.TRIAL_GUEST_COOKIE_SECRET = 'test-secret'
 
 const mocks = vi.hoisted(() => ({
   lead: null as Record<string, unknown> | null,
   leadError: null as unknown,
   session: null as Record<string, unknown> | null,
   result: null as Record<string, unknown> | null,
+  /** The signed-in user, or null for a signed-out request. */
+  user: null as { id: string } | null,
+  authThrows: false,
 }))
 
 vi.mock('server-only', () => ({}))
@@ -39,11 +45,31 @@ vi.mock('@/lib/supabase/admin', () => ({
   }),
 }))
 
-const { GET } = await import('./route')
+vi.mock('@/lib/supabase/server', () => ({
+  createClient: async () => {
+    if (mocks.authThrows) throw new Error('no cookies')
+    return { auth: { getUser: async () => ({ data: { user: mocks.user } }) } }
+  },
+}))
 
-async function get(sessionId = 'session-1') {
+const { GET } = await import('./route')
+const { signGuestCookie, withGuestSession } = await import('@/lib/trial/guestSession')
+
+const SESSION_ID = '11111111-1111-4111-8111-111111111111'
+
+/** The cookie the server writes when it opens `sessionId` for this browser. */
+function ownCookie(sessionId = SESSION_ID): string {
+  return signGuestCookie(withGuestSession(null, sessionId, Math.floor(Date.now() / 1000)))!
+}
+
+async function get(options: { sessionId?: string; cookie?: string } = {}) {
+  const sessionId = options.sessionId ?? SESSION_ID
   const response = await GET({
     nextUrl: { searchParams: new URLSearchParams({ sessionId }) },
+    cookies: {
+      get: (name: string) =>
+        options.cookie && name === 'ff_guest' ? { value: options.cookie } : undefined,
+    },
   } as never)
   return { status: response.status, body: await response.json() }
 }
@@ -75,14 +101,71 @@ beforeEach(() => {
   mocks.leadError = null
   mocks.session = null
   mocks.result = null
+  mocks.user = null
+  mocks.authThrows = false
 })
 
-describe('GET /api/try/gate-status', () => {
-  it('reveals the summary to an unverified trialist', async () => {
+describe('a request holding only the session id', () => {
+  it('gets main’s minimal answer and nothing about the consultation', async () => {
     mocks.session = GUEST_SESSION
     mocks.result = MARKED
 
     const { body } = await get()
+
+    expect(body).toEqual({ verified: false })
+  })
+
+  it('learns whether the lead is verified, which is what the gate needs', async () => {
+    mocks.session = GUEST_SESSION
+    mocks.lead = { email_verified_at: '2026-09-06T12:00:00Z' }
+    mocks.result = MARKED
+
+    expect((await get()).body).toEqual({ verified: true })
+  })
+
+  it('is refused the details with a valid cookie for a different session', async () => {
+    mocks.session = GUEST_SESSION
+    mocks.result = MARKED
+
+    const { body } = await get({ cookie: ownCookie('22222222-2222-4222-8222-222222222222') })
+
+    expect(body).toEqual({ verified: false })
+  })
+
+  it('is refused them with a forged cookie', async () => {
+    mocks.session = GUEST_SESSION
+    mocks.result = MARKED
+    const real = ownCookie()
+    const forged = `${real.slice(0, -1)}${real.endsWith('A') ? 'B' : 'A'}`
+
+    expect((await get({ cookie: forged })).body).toEqual({ verified: false })
+  })
+
+  it('is refused them while signed in as somebody else', async () => {
+    mocks.session = { user_id: 'user-9', status: 'completed', transcript: [] }
+    mocks.lead = { email_verified_at: '2026-09-06T12:00:00Z' }
+    mocks.result = MARKED
+    mocks.user = { id: 'user-2' }
+
+    expect((await get()).body).toEqual({ verified: true })
+  })
+
+  it('fails closed when the signed-in user cannot be read', async () => {
+    mocks.session = { user_id: 'user-9', status: 'completed', transcript: [] }
+    mocks.lead = { email_verified_at: '2026-09-06T12:00:00Z' }
+    mocks.result = MARKED
+    mocks.authThrows = true
+
+    expect((await get()).body).toEqual({ verified: true })
+  })
+})
+
+describe('the browser that ran it', () => {
+  it('sees its own verdict summary', async () => {
+    mocks.session = GUEST_SESSION
+    mocks.result = MARKED
+
+    const { body } = await get({ cookie: ownCookie() })
 
     expect(body.verified).toBe(false)
     expect(body.status).toBe('ready')
@@ -94,41 +177,16 @@ describe('GET /api/try/gate-status', () => {
     })
   })
 
-  it('sends no part of the report, verified or not', async () => {
+  it('is sent no part of the report', async () => {
     mocks.session = GUEST_SESSION
     mocks.result = MARKED
 
-    const serialised = JSON.stringify((await get()).body)
+    const serialised = JSON.stringify((await get({ cookie: ownCookie() })).body)
 
     expect(serialised).not.toContain('domains')
     expect(serialised).not.toContain('focus_areas')
     expect(serialised).not.toContain('Take paracetamol')
     expect(serialised).not.toContain('Medication overuse')
-  })
-
-  it('says nothing about a session that is not a free mock', async () => {
-    // A paying user's consultation. Without this rule the route would hand out
-    // any user's verdict to anyone who could guess a session id.
-    mocks.session = { user_id: 'user-9', status: 'completed', transcript: [] }
-    mocks.result = MARKED
-
-    const { body } = await get()
-
-    expect(body).toEqual({ verified: false })
-    expect(body.summary).toBeUndefined()
-  })
-
-  it('still answers for a trial session that has since been claimed', async () => {
-    // Signing up attaches the guest session to the new account, so user_id is
-    // no longer null — but the lead row still marks it as a free mock.
-    mocks.session = { user_id: 'user-9', status: 'completed', transcript: [] }
-    mocks.lead = { email_verified_at: '2026-09-06T12:00:00Z', phone: null }
-    mocks.result = MARKED
-
-    const { body } = await get()
-
-    expect(body.verified).toBe(true)
-    expect(body.summary).toMatchObject({ verdict: 'Bare Fail' })
   })
 
   it('reports a run the guard refused, with its length', async () => {
@@ -141,7 +199,7 @@ describe('GET /api/try/gate-status', () => {
       ],
     }
 
-    const { body } = await get()
+    const { body } = await get({ cookie: ownCookie() })
 
     expect(body.status).toBe('unmarkable')
     expect(body.candidateSeconds).toBe(38)
@@ -151,16 +209,13 @@ describe('GET /api/try/gate-status', () => {
   it('keeps the page waiting while the mark is still running', async () => {
     mocks.session = { user_id: null, status: 'processing', transcript: [] }
 
-    const { body } = await get()
+    const { body } = await get({ cookie: ownCookie() })
 
     expect(body.status).toBe('processing')
     expect(body.summary).toBeNull()
   })
 
-  it('says so when nobody ever ended the consultation', async () => {
-    // A closed tab: the row never left `live`, so no transcript was saved and
-    // no mark was ever requested. The page used to promise one for five
-    // minutes and then go quiet.
+  it('is told when nobody ever ended the consultation', async () => {
     mocks.session = {
       user_id: null,
       status: 'live',
@@ -169,7 +224,7 @@ describe('GET /api/try/gate-status', () => {
       stations: STATION,
     }
 
-    const { body } = await get()
+    const { body } = await get({ cookie: ownCookie() })
 
     expect(body.status).toBe('unfinished')
     expect(body.summary).toBeNull()
@@ -184,12 +239,10 @@ describe('GET /api/try/gate-status', () => {
       stations: STATION,
     }
 
-    expect((await get()).body.status).toBe('live')
+    expect((await get({ cookie: ownCookie() })).body.status).toBe('live')
   })
 
   it('never hides a mark behind the abandonment inference', async () => {
-    // An unfinished row has no result in practice. If one exists, the mark is
-    // what the page is here for and the inference must not shadow it.
     mocks.session = {
       user_id: null,
       status: 'live',
@@ -199,29 +252,46 @@ describe('GET /api/try/gate-status', () => {
     }
     mocks.result = MARKED
 
-    const { body } = await get()
+    const { body } = await get({ cookie: ownCookie() })
 
     expect(body.status).toBe('ready')
     expect(body.summary).toMatchObject({ verdict: 'Bare Fail' })
   })
+})
 
-  it('still reports verification when the email is confirmed', async () => {
-    mocks.session = GUEST_SESSION
-    mocks.lead = { email_verified_at: '2026-09-06T12:00:00Z', phone: null }
+describe('the signed-in owner', () => {
+  it('sees the summary of a trial session that has since been claimed', async () => {
+    // Signing up attaches the guest session to the new account, so user_id is
+    // no longer null, but the lead row still marks it as a free mock.
+    mocks.session = { user_id: 'user-9', status: 'completed', transcript: [] }
+    mocks.lead = { email_verified_at: '2026-09-06T12:00:00Z' }
+    mocks.result = MARKED
+    mocks.user = { id: 'user-9' }
 
-    expect((await get()).body.verified).toBe(true)
+    const { body } = await get()
+
+    expect(body.verified).toBe(true)
+    expect(body.summary).toMatchObject({ verdict: 'Bare Fail' })
+  })
+})
+
+describe('boundaries that hold for everybody', () => {
+  it('says nothing about a session that is not a free mock, even to its owner', async () => {
+    // A paying user's consultation.
+    mocks.session = { user_id: 'user-9', status: 'completed', transcript: [] }
+    mocks.result = MARKED
+    mocks.user = { id: 'user-9' }
+
+    const { body } = await get()
+
+    expect(body).toEqual({ verified: false })
   })
 
-  it('holds the gate shut while a phone step is unsettled', async () => {
+  it('treats a verified email as verified, with no SMS step left to wait for', async () => {
     mocks.session = GUEST_SESSION
-    mocks.lead = {
-      email_verified_at: '2026-09-06T12:00:00Z',
-      phone: '07700900000',
-      phone_verified_at: null,
-      phone_verification_skipped_at: null,
-    }
+    mocks.lead = { email_verified_at: '2026-09-06T12:00:00Z' }
 
-    expect((await get()).body.verified).toBe(false)
+    expect((await get()).body.verified).toBe(true)
   })
 
   it('fails closed on a lookup error', async () => {
@@ -229,14 +299,13 @@ describe('GET /api/try/gate-status', () => {
     mocks.session = GUEST_SESSION
     mocks.result = MARKED
 
-    const { body } = await get()
-
-    expect(body).toEqual({ verified: false })
+    expect((await get({ cookie: ownCookie() })).body).toEqual({ verified: false })
   })
 
   it('rejects a request with no session id', async () => {
     const response = await GET({
       nextUrl: { searchParams: new URLSearchParams() },
+      cookies: { get: () => undefined },
     } as never)
 
     expect(response.status).toBe(400)

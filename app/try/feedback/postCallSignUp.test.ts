@@ -28,11 +28,12 @@ const FORM = source('../../../components/try/SignUpWhileMarking.tsx')
 const FORM_COPY = withoutComments(FORM)
 
 describe('which page a visitor gets', () => {
-  it('hands an owned session to the dashboard report', () => {
-    // The claim has happened — in another tab, or on an account made later.
-    // The dashboard's report checks ownership itself; this only points at it.
+  it('hands an owned session to the dashboard report, for the browser that ran it', () => {
+    // The claim has happened, in another tab. The dashboard's report checks
+    // ownership itself; this only points at it.
     expect(PAGE).toContain("select('id, user_id, station_id')")
-    expect(PAGE).toContain('if (session?.user_id) redirect(`/clinical-master/feedback/${sessionId}`)')
+    const proven = PAGE.slice(PAGE.indexOf('if (proven) {'), PAGE.indexOf("from('trial_leads')"))
+    expect(proven).toContain('if (session.user_id) redirect(`/clinical-master/feedback/${sessionId}`)')
   })
 
   it('offers the five free cases when the session does not exist', () => {
@@ -197,30 +198,23 @@ describe('the poll ends when no mark is coming', () => {
   })
 })
 
-describe('a legacy report link, with no cookie behind it', () => {
+describe('only the browser that ran it gets the sign-up', () => {
   it('asks the page, which can read the httpOnly proof the form cannot', () => {
     expect(PAGE).toContain("from '@/lib/trial/guestSession'")
     expect(PAGE).toContain('cookieOwnsSession(readGuestCookie(jar.get(GUEST_COOKIE)?.value), sessionId)')
-    expect(PAGE).toContain('proven={proven}')
+    const proven = PAGE.slice(PAGE.indexOf('if (proven) {'), PAGE.indexOf("from('trial_leads')"))
+    expect(proven).toContain('<SignUpWhileMarking')
   })
 
-  it('shows no password field it cannot honour', () => {
-    // verify-code discards a password without the cookie proof (contract C3),
-    // so an unproven form was asking for a field whose only function was to be
-    // ignored — and then refusing to submit until it was filled in.
-    expect(FORM).toContain('{proven && (')
+  it('always asks for the password, because every visitor who sees it will have it honoured', () => {
     expect(FORM).toContain('<PasswordField id="marking-password"')
-    expect(FORM).toContain('(!proven || passwordLongEnough(password))')
+    expect(FORM).toContain('EMAIL_RE.test(cleanEmail) && passwordLongEnough(password)')
+    expect(FORM_COPY).not.toContain('proven')
   })
 
-  it('promises a report rather than a dashboard it will not open', () => {
-    expect(FORM).toContain("We&apos;ll email you a code, then open your report.")
-    // And the dashboard promise stays for the path that can keep it.
+  it('promises the dashboard it opens', () => {
     expect(FORM).toContain('opens in your dashboard, with four more cases and five days on the clock')
-  })
-
-  it('defaults to the proven path, so only the page can take the field away', () => {
-    expect(FORM).toContain('proven = true,')
+    expect(FORM).not.toContain("We&apos;ll email you a code, then open your report.")
   })
 })
 
@@ -277,16 +271,11 @@ describe('the header it has now', () => {
   })
 })
 
-describe('what no longer renders here', () => {
+describe('what the sign-up does not render', () => {
   it('shows no report, no pricing table and no guarantee', () => {
-    // The report moved into the dashboard, on an account that owns it. This
-    // page shows only the verdict summary gate-status has always allowed.
-    expect(PAGE).not.toMatch(/FeedbackReport|PricingTable|GuaranteeCard|StationsPassedBar/)
-    expect(FORM).not.toMatch(/FeedbackReport|PricingTable|GuaranteeCard/)
-  })
-
-  it('has no email gate left to unlock', () => {
-    expect(PAGE).not.toContain('EmailVerificationGate')
+    // For the browser that ran it, the report lives in the dashboard, on an
+    // account that owns it. This form shows only the verdict summary.
+    expect(FORM).not.toMatch(/FeedbackReport|PricingTable|GuaranteeCard|EmailVerificationGate/)
     expect(PAGE).not.toContain('OpenDashboardButton')
   })
 })

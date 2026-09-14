@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { createClient } from '@/lib/supabase/server';
 import { candidateRun } from '@/lib/clinical-master/candidateRun';
 import { toVerdictSummary } from '@/lib/trial/verdictSummary';
 import { isUnfinishedRun } from '@/lib/trial/unfinishedRun';
+import { GUEST_COOKIE, cookieOwnsSession, readGuestCookie } from '@/lib/trial/guestSession';
 
 /** PostgREST returns an embedded one-to-one as an object or a one-element array. */
 function stationDuration(embedded: unknown): unknown {
@@ -12,37 +14,35 @@ function stationDuration(embedded: unknown): unknown {
 }
 
 /**
- * Has this trial session already had its email verified — and, if it has been
- * marked, what does the verdict say?
+ * Has this trial session's lead verified its email, and, for the person whose
+ * consultation it is, where has the mark got to?
  *
- * The feedback page used to answer the first question from localStorage alone,
- * which made "verified" mean "this browser did it" rather than "this person did
- * it": switch device, clear storage, or open the link on a phone and the whole
- * questionnaire was demanded again for a session that was already verified. The
- * server holds the real answer, so the page asks here instead.
+ * ## The minimal answer: `{ verified }`
  *
- * The second question is new. Roughly a quarter of people who finish the free
- * consultation abandon at the gate having seen nothing of their own result, so
- * the verdict, the score and the one-line summary are now shown above it.
+ * Main's shape, and all that anybody holding only a session id gets. Whether a
+ * lead has verified is what decides between the report and the email gate on
+ * an old report link, and it says nothing about the consultation itself.
  *
- * It also answers a third thing the caller cannot work out for itself: whether
- * a mark is coming at all. `status: 'unfinished'` is a consultation nobody
- * ended — no transcript was saved, no mark was ever requested — and it exists
- * so the page stops promising one. See lib/trial/unfinishedRun.
+ * ## The detailed answer: status, verdict, score, summary
  *
- * ## The boundary
+ * Only for a request that proves the consultation is its own:
  *
- * Two rules keep that from widening into "any session's report by id":
+ * 1. the signed `ff_guest` cookie carries this session id (the browser that ran
+ *    it, which is the only caller of the sign-up while marking page), or
+ * 2. the signed-in user owns the session.
  *
- * 1. **Only the summary.** `toVerdictSummary` is an allowlist of four fields.
- *    Domains, evidence, focus areas and the "one change" never leave this
- *    route, verified or not — they are what the email is being asked for.
- * 2. **Only trial sessions.** A guest session (`user_id is null`) or one that
- *    carries a `trial_leads` row. This is exactly the boundary generate-feedback
- *    already applies, and it is what stops a paying user's verdict being
- *    readable by anyone who can guess a session id. Guest sessions themselves
- *    remain open to whoever holds the id — unchanged, and the reason the reveal
- *    can work before there is an account to authenticate against.
+ * A session id is a UUID in a URL. Links get forwarded, sit in founders' alert
+ * emails and are opened on shared machines, so a verdict and a score must not
+ * be readable by whoever happens to hold one. This used to answer anyone.
+ *
+ * Within the detailed answer the old two rules still hold: `toVerdictSummary`
+ * is an allowlist of four fields (domains, evidence and focus areas never leave
+ * this route), and only trial sessions answer at all (a guest session, or one
+ * with a `trial_leads` row).
+ *
+ * Verified means the email is verified. Main also waited for an SMS step to
+ * settle; nothing texts anybody any more, so a stored but unconfirmed mobile no
+ * longer holds a verified lead at the gate.
  */
 export async function GET(req: NextRequest) {
   const sessionId = req.nextUrl.searchParams.get('sessionId')?.trim();
@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
     const [{ data: lead, error }, { data: session }] = await Promise.all([
       supabase
         .from('trial_leads')
-        .select('email_verified_at, phone, phone_verified_at, phone_verification_skipped_at')
+        .select('email_verified_at')
         .eq('session_id', sessionId)
         .maybeSingle(),
       supabase
@@ -72,17 +72,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ verified: false }, { status: 200 });
     }
 
-    // Verified = email confirmed AND the phone step is settled: verified,
-    // skipped (SMS couldn't be sent — fail open), or absent entirely
-    // (legacy leads captured before the phone field existed).
-    const phoneSettled =
-      !lead?.phone || Boolean(lead?.phone_verified_at) || Boolean(lead?.phone_verification_skipped_at);
-    const verified = Boolean(lead?.email_verified_at) && phoneSettled;
+    const verified = Boolean(lead?.email_verified_at);
 
-    // Rule 2. A session that is neither a guest run nor attached to a lead is
+    // A session that is neither a guest run nor attached to a lead is
     // somebody's private consultation, and this route says nothing about it.
     const isTrialSession = Boolean(session) && (session?.user_id === null || Boolean(lead));
     if (!isTrialSession) {
+      return NextResponse.json({ verified });
+    }
+
+    if (!(await requestOwnsSession(req, sessionId, session?.user_id ?? null))) {
       return NextResponse.json({ verified });
     }
 
@@ -109,11 +108,8 @@ export async function GET(req: NextRequest) {
     const summary = toVerdictSummary(result);
 
     // Nobody ended this consultation, so nothing ever saved a transcript and
-    // nothing ever asked for a mark — a closed tab, a dead connection, a
-    // browser killed mid-call. The row still says `live`, which the poll read
-    // as "being marked" and waited five minutes on. Asked AFTER the result,
-    // so a mark that did somehow land is still the answer; see
-    // lib/trial/unfinishedRun for where the line is drawn.
+    // nothing ever asked for a mark. Asked AFTER the result, so a mark that did
+    // somehow land is still the answer; see lib/trial/unfinishedRun.
     const unfinished =
       !summary &&
       isUnfinishedRun({
@@ -132,5 +128,31 @@ export async function GET(req: NextRequest) {
   } catch (error: unknown) {
     console.error('[gate-status] unexpected error', error);
     return NextResponse.json({ verified: false }, { status: 200 });
+  }
+}
+
+/**
+ * Does this request prove the consultation is its own? The signed guest cookie
+ * for this session, or a signed-in user who owns it. Fails closed.
+ */
+async function requestOwnsSession(
+  req: NextRequest,
+  sessionId: string,
+  ownerId: string | null,
+): Promise<boolean> {
+  if (cookieOwnsSession(readGuestCookie(req.cookies?.get(GUEST_COOKIE)?.value), sessionId)) {
+    return true;
+  }
+  // An unowned session has no user to match, so there is no auth call to make.
+  if (!ownerId) return false;
+  try {
+    const auth = await createClient();
+    const {
+      data: { user },
+    } = await auth.auth.getUser();
+    return user?.id === ownerId;
+  } catch (error: unknown) {
+    console.error('[gate-status] could not read the signed-in user', error);
+    return false;
   }
 }
