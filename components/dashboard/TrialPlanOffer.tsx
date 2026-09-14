@@ -133,7 +133,7 @@ export default function TrialPlanOffer({
   const why: Record<'primary' | 'secondary', string> =
     wall.proximity === 'imminent'
       ? {
-          primary: 'Month by month, cancel any time — the right shape when the exam is weeks away.',
+          primary: 'Month by month, cancel any time: the right shape when the exam is weeks away.',
           secondary: 'Adds the lectures and a 3 hour one to one coaching session.',
         }
       : {

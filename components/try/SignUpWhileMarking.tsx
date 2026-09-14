@@ -213,7 +213,7 @@ export default function SignUpWhileMarking({
           setStep('code');
           return;
         }
-        setError(data.error ?? 'Something went wrong — please try again');
+        setError(data.error ?? 'Something went wrong. Please try again');
         return;
       }
       setCooldown(data.resendCooldown ?? 0);
@@ -221,7 +221,7 @@ export default function SignUpWhileMarking({
       setStep('code');
       void trackEvent('trial_gate_code_requested', { door: 'signup_while_marking' });
     } catch {
-      setError('Something went wrong — please try again');
+      setError('Something went wrong. Please try again');
     } finally {
       setSubmitting(false);
     }
@@ -254,7 +254,7 @@ export default function SignUpWhileMarking({
       if (!res.ok || !data.ok) {
         setCode('');
         codeInputRef.current?.focus();
-        setError(data.error ?? "That code isn't right — check the email and try again");
+        setError(data.error ?? "That code isn't right. Check the email and try again");
         return;
       }
 
@@ -279,7 +279,7 @@ export default function SignUpWhileMarking({
       // Account made, grant made, no session. Rare and recoverable.
       setStep('stranded');
     } catch {
-      setError('Something went wrong — please try again');
+      setError('Something went wrong. Please try again');
     } finally {
       setSubmitting(false);
     }
@@ -387,8 +387,8 @@ export default function SignUpWhileMarking({
                 {proven ? (
                   <>
                     We&apos;ll email you a 6-digit code to confirm the address. Your report
-                    opens in your dashboard, with four more cases and five days on the clock —
-                    no card.
+                    opens in your dashboard, with four more cases and five days on the clock.
+                    No card.
                   </>
                 ) : (
                   <>We&apos;ll email you a code, then open your report.</>

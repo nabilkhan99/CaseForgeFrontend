@@ -38,8 +38,8 @@ function heading(trial: TrialSubscription): { title: string; body: string } {
     title: `Your ${numberWord(trial.windowDays)} days are up`,
     body:
       untried > 0
-        ? `You tried ${trial.casesTried} of the ${numberWord(trial.allowance)}. Everything you did is still here — your reports, your board and your development picture.`
-        : 'You ran all of them. Everything you did is still here — your reports, your board and your development picture. There are 200 cases in the bank.',
+        ? `You tried ${trial.casesTried} of the ${numberWord(trial.allowance)}. Everything you did is still here: your reports, your board and your development picture.`
+        : 'You ran all of them. Everything you did is still here: your reports, your board and your development picture. There are 200 cases in the bank.',
   };
 }
 

@@ -119,14 +119,14 @@ export default function FreeSignUpBox({ initialEmail, codeAlreadySent }: FreeSig
           setStep('code');
           return;
         }
-        setError(data.error ?? 'Something went wrong — please try again');
+        setError(data.error ?? 'Something went wrong. Please try again');
         return;
       }
       setCooldown(data.resendCooldown ?? 0);
       setStep('code');
       void trackEvent('trial_gate_code_requested', { door: 'free' });
     } catch {
-      setError('Something went wrong — please try again');
+      setError('Something went wrong. Please try again');
     } finally {
       setSubmitting(false);
     }
@@ -146,7 +146,7 @@ export default function FreeSignUpBox({ initialEmail, codeAlreadySent }: FreeSig
       if (!res.ok) {
         setCode('');
         codeInputRef.current?.focus();
-        setError(data.error ?? "That code isn't right — check the email and try again");
+        setError(data.error ?? "That code isn't right. Check the email and try again");
         return;
       }
 
@@ -163,7 +163,7 @@ export default function FreeSignUpBox({ initialEmail, codeAlreadySent }: FreeSig
       // recoverable on the ordinary sign-in. Never a dead end.
       setStep('stranded');
     } catch {
-      setError('Something went wrong — please try again');
+      setError('Something went wrong. Please try again');
     } finally {
       setSubmitting(false);
     }
@@ -334,8 +334,8 @@ export default function FreeSignUpBox({ initialEmail, codeAlreadySent }: FreeSig
             You&apos;re in
           </p>
           <p className="mx-auto mt-3 mb-5 max-w-sm text-[14px] leading-relaxed text-muted">
-            Your five cases are ready. We could not open your dashboard automatically —
-            sign in with your password and it is there.
+            Your five cases are ready. We could not open your dashboard automatically.
+            Sign in with your password and it is there.
           </p>
           <Link
             href={`/auth/sign-in?email=${encodeURIComponent(cleanEmail)}`}

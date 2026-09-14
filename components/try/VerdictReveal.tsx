@@ -187,7 +187,7 @@ export default function VerdictReveal({
             exit={shouldReduceMotion ? undefined : { opacity: 0 }}
             className="text-center text-[13px] leading-[1.6] text-muted"
           >
-            Marking your consultation — your result appears here in a minute or two.
+            Marking your consultation. Your result appears here in a minute or two.
           </motion.p>
         )}
 

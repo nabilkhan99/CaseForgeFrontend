@@ -1650,7 +1650,7 @@ export default function FeedbackReport({
           }
           body="A real station runs to about twelve minutes, and a mark off a few opening
                 lines would say more about the transcript than about you. Nothing has been
-                marked and this hasn't used one of your stations — run it properly and
+                marked and this hasn't used one of your stations. Run it properly and
                 you'll get the full report."
         >
           {retryHref && (

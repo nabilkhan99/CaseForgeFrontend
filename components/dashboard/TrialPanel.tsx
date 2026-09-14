@@ -155,7 +155,7 @@ export default function TrialPanel({
         </ul>
       ) : (
         <p className="mt-4 text-[13px] text-muted">
-          Your cases are being set up. Nothing is lost &mdash; your five days do not start until
+          Your cases are being set up. Nothing is lost: your five days do not start until
           your first consultation.
         </p>
       )}

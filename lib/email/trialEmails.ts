@@ -389,12 +389,12 @@ export function buildTrialDay3Email(input: TrialDay3Input): RenderedEmail {
   const cta = 'Open your dashboard'
 
   const lines = [
-    `You have ${days} left — your ${numberWord(casesTotal)} cases stay open until ${endsOn}.`,
+    `You have ${days} left. Your ${numberWord(casesTotal)} cases stay open until ${endsOn}.`,
     trialPatternLine(marks),
     // The sentence the whole rewrite exists to make true. A trainee rationing
     // five goes across five cases is doing the opposite of what helps them.
     casesTried > 0
-      ? `You have tried ${numberWord(casesTried)} of the ${numberWord(casesTotal)}. Run any of them again — there is no limit on attempts.`
+      ? `You have tried ${numberWord(casesTried)} of the ${numberWord(casesTotal)}. Run any of them again. There is no limit on attempts.`
       : `All ${numberWord(casesTotal)} are waiting on your dashboard, and you can run each of them as many times as you like.`,
   ].filter((line): line is string => Boolean(line))
 
@@ -467,7 +467,7 @@ export function buildTrialDay5Email(input: TrialDay5Input): RenderedEmail {
 
   const lines = [
     trialResultsParagraph(marks, casesTried, casesTotal),
-    'Everything you did is still there — your reports, your board and your development picture. It is the cases that stop, not the account.',
+    'Everything you did is still there: your reports, your board and your development picture. It is the cases that stop, not the account.',
     'If you want to keep going, the two plans that fit your exam date are on your dashboard.',
   ]
 

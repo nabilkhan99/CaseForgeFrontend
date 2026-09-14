@@ -237,7 +237,7 @@ export async function POST(req: NextRequest) {
 
     if (leadError) {
       console.error('[verify-code] lead lookup failed', leadError);
-      return NextResponse.json({ error: 'Something went wrong — please try again' }, { status: 500 });
+      return NextResponse.json({ error: 'Something went wrong. Please try again' }, { status: 500 });
     }
     if (!lead) {
       return NextResponse.json({ error: 'Request a code first' }, { status: 404 });
@@ -259,13 +259,13 @@ export async function POST(req: NextRequest) {
     }
     if (new Date(lead.verification_expires_at).getTime() < Date.now()) {
       return NextResponse.json(
-        { error: 'That code has expired — resend a new one' },
+        { error: 'That code has expired. Resend a new one' },
         { status: 410 },
       );
     }
     if (lead.verification_attempts >= MAX_VERIFY_ATTEMPTS) {
       return NextResponse.json(
-        { error: 'Too many attempts — resend a new code' },
+        { error: 'Too many attempts. Resend a new code' },
         { status: 429 },
       );
     }
@@ -280,8 +280,8 @@ export async function POST(req: NextRequest) {
         {
           error:
             remaining > 0
-              ? "That code isn't right — check the email and try again"
-              : 'Too many attempts — resend a new code',
+              ? "That code isn't right. Check the email and try again"
+              : 'Too many attempts. Resend a new code',
         },
         { status: 401 },
       );
@@ -327,7 +327,7 @@ export async function POST(req: NextRequest) {
 
     if (updateError) {
       console.error('[verify-code] verified update failed', updateError);
-      return NextResponse.json({ error: 'Something went wrong — please try again' }, { status: 500 });
+      return NextResponse.json({ error: 'Something went wrong. Please try again' }, { status: 500 });
     }
 
     // Only verified leads reach the marketing list.
@@ -382,7 +382,7 @@ export async function POST(req: NextRequest) {
     );
   } catch (error: unknown) {
     console.error('[verify-code] unexpected error', error);
-    return NextResponse.json({ error: 'Something went wrong — please try again' }, { status: 500 });
+    return NextResponse.json({ error: 'Something went wrong. Please try again' }, { status: 500 });
   }
 }
 

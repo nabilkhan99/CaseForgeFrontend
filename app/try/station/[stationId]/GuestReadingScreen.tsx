@@ -118,7 +118,7 @@ export default function GuestReadingScreen({
         {/* The clock is already running when this page paints, and nothing on
             screen said what happens when it hits zero. Say it once, plainly. */}
         <p className="mb-5 text-[13px] leading-[1.65] text-muted">
-          {Math.round(readingDurationSeconds / 60)} minutes&rsquo; reading, as in the exam &mdash; nothing happens at zero, begin when you&rsquo;re ready.
+          {Math.round(readingDurationSeconds / 60)} minutes&rsquo; reading, as in the exam. Nothing happens at zero, so begin when you&rsquo;re ready.
         </p>
         <motion.div
           initial={{ opacity: 0, y: 12 }}

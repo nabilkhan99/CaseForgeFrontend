@@ -200,7 +200,7 @@ describe('buildTrialDay3Email', () => {
     expect(email.greeting).toBe('Hi Jane,')
     expect(email.text).toContain('Hi Jane,')
     expect(email.text).toContain(
-      'You have two days left — your five cases stay open until Friday 11 September.',
+      'You have two days left. Your five cases stay open until Friday 11 September.',
     )
     expect(email.text).not.toContain('so far')
     expect(email.html).toContain('Open your dashboard')
@@ -218,7 +218,7 @@ describe('buildTrialDay3Email', () => {
       dashboardUrl: DASHBOARD,
     })
     expect(email.text).toContain(
-      'You have tried two of the five. Run any of them again — there is no limit on attempts.',
+      'You have tried two of the five. Run any of them again. There is no limit on attempts.',
     )
   })
 

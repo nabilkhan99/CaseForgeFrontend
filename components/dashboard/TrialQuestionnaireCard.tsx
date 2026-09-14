@@ -67,7 +67,7 @@ export default function TrialQuestionnaireCard({ userId, onSaved }: TrialQuestio
       });
       const data = (await res.json()) as { ok?: true; examDate?: string | null; error?: string };
       if (!res.ok) {
-        setError(data.error ?? 'Could not save that — please try again');
+        setError(data.error ?? 'Could not save that. Please try again');
         return;
       }
 
@@ -83,7 +83,7 @@ export default function TrialQuestionnaireCard({ userId, onSaved }: TrialQuestio
       setSaved(true);
       onSaved?.(data.examDate ?? null);
     } catch {
-      setError('Could not save that — please try again');
+      setError('Could not save that. Please try again');
     } finally {
       setSaving(false);
     }

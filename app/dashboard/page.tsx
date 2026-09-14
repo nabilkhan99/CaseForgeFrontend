@@ -639,7 +639,7 @@ function DashboardContent() {
              pointing at a fourth place, and the library link is the one thing
              here they can still act on. */
           <p className="border-y border-hairline py-5 text-center text-[13px] text-muted">
-            Stations are locked, but everything you did stays open &mdash;{' '}
+            Stations are locked, but everything you did stays open:{' '}
             <Link href="/dashboard/library" className="text-primary font-medium hover:underline">
               your board
             </Link>{' '}
@@ -819,7 +819,7 @@ function DashboardContent() {
             Before you pay for it yourself
           </p>
           <p className="text-[13px] leading-relaxed text-muted">
-            Most deaneries reimburse SCA preparation out of the study budget. Check yours &mdash;
+            Most deaneries reimburse SCA preparation out of the study budget. Check yours:
             the email asking for pre-approval is drafted for you.
           </p>
           {/* Its own section padding supplies the gap below this line. */}

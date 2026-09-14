@@ -295,12 +295,12 @@ export interface MintRefusalInput {
 const refusals = {
   cookieMissing: (): MintRefusal => ({
     code: 'guest_cookie_missing',
-    error: 'Start your consultation from the link — this one has lost its place.',
+    error: 'Start your consultation from the link. This one has lost its place.',
     status: 403,
   }),
   unrecognised: (): MintRefusal => ({
     code: 'guest_session_unrecognised',
-    error: 'Start your consultation from the link — this one has lost its place.',
+    error: 'Start your consultation from the link. This one has lost its place.',
     status: 403,
   }),
   notStartable: (): MintRefusal => ({

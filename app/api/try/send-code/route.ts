@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
 
     if (!withinLimit(guestIpHits, clientIp(req), GUEST_IP_LIMIT, GUEST_IP_WINDOW_MS)) {
       return NextResponse.json(
-        { error: 'Too many requests — please try again later', code: 'guest_ip_limit' },
+        { error: 'Too many requests. Please try again later', code: 'guest_ip_limit' },
         { status: 429 },
       );
     }
@@ -127,7 +127,7 @@ export async function POST(req: NextRequest) {
 
     if (sessionError) {
       console.error('[send-code] session lookup failed', sessionError);
-      return NextResponse.json({ error: 'Something went wrong — please try again' }, { status: 500 });
+      return NextResponse.json({ error: 'Something went wrong. Please try again' }, { status: 500 });
     }
     if (!session || session.user_id !== null) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
@@ -178,7 +178,7 @@ export async function POST(req: NextRequest) {
         console.warn('[send-code] refused to move a verified lead onto an unproven session');
         return NextResponse.json(
           {
-            error: 'Start your consultation from the link — this one has lost its place.',
+            error: 'Start your consultation from the link. This one has lost its place.',
             code: 'guest_session_unrecognised',
           },
           { status: 403 },
@@ -288,7 +288,7 @@ export async function POST(req: NextRequest) {
 
     if (upsertError) {
       console.error('[send-code] lead upsert failed', upsertError);
-      return NextResponse.json({ error: 'Something went wrong — please try again' }, { status: 500 });
+      return NextResponse.json({ error: 'Something went wrong. Please try again' }, { status: 500 });
     }
 
     const emailResult = await sendVerificationEmail({
@@ -308,7 +308,7 @@ export async function POST(req: NextRequest) {
         .update({ verification_last_sent_at: null, verification_code_hash: null })
         .eq('email', normalizedEmail);
       return NextResponse.json(
-        { error: "We couldn't send the code — check the address and try again" },
+        { error: "We couldn't send the code. Check the address and try again" },
         { status: 502 },
       );
     }
@@ -316,7 +316,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, resendCooldown: RESEND_COOLDOWN_SECONDS });
   } catch (error: unknown) {
     console.error('[send-code] unexpected error', error);
-    return NextResponse.json({ error: 'Something went wrong — please try again' }, { status: 500 });
+    return NextResponse.json({ error: 'Something went wrong. Please try again' }, { status: 500 });
   }
 }
 
@@ -365,7 +365,7 @@ async function sendSignupCode(
 ): Promise<NextResponse> {
   if (!withinLimit(signupIpHits, clientIp(req), SIGNUP_IP_LIMIT, SIGNUP_IP_WINDOW_MS)) {
     return NextResponse.json(
-      { error: 'Too many requests — please try again later' },
+      { error: 'Too many requests. Please try again later' },
       { status: 429 },
     );
   }
@@ -402,7 +402,7 @@ async function sendSignupCode(
 
   if (lookupError) {
     console.error('[send-code] signup lead lookup failed', lookupError);
-    return NextResponse.json({ error: 'Something went wrong — please try again' }, { status: 500 });
+    return NextResponse.json({ error: 'Something went wrong. Please try again' }, { status: 500 });
   }
 
   if (existing?.verification_last_sent_at) {
@@ -444,7 +444,7 @@ async function sendSignupCode(
 
   if (writeError) {
     console.error('[send-code] signup lead write failed', writeError);
-    return NextResponse.json({ error: 'Something went wrong — please try again' }, { status: 500 });
+    return NextResponse.json({ error: 'Something went wrong. Please try again' }, { status: 500 });
   }
 
   const emailResult = await sendVerificationEmail({ toEmail: email, firstName: firstName || null, code });
@@ -456,7 +456,7 @@ async function sendSignupCode(
       .update({ verification_last_sent_at: null, verification_code_hash: null })
       .eq('email', email);
     return NextResponse.json(
-      { error: "We couldn't send the code — check the address and try again" },
+      { error: "We couldn't send the code. Check the address and try again" },
       { status: 502 },
     );
   }

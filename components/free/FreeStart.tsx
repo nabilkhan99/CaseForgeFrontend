@@ -132,14 +132,14 @@ export default function FreeStart({ initialEmail, station, stationTitle }: FreeS
           setStep('code');
           return;
         }
-        setError(data.error ?? 'Something went wrong — please try again');
+        setError(data.error ?? 'Something went wrong. Please try again');
         return;
       }
       setCooldown(data.resendCooldown ?? 0);
       setStep('code');
       void trackEvent('trial_gate_code_requested', { door: 'free_start' });
     } catch {
-      setError('Something went wrong — please try again');
+      setError('Something went wrong. Please try again');
     } finally {
       setSubmitting(false);
     }
@@ -166,7 +166,7 @@ export default function FreeStart({ initialEmail, station, stationTitle }: FreeS
       if (!res.ok) {
         setCode('');
         codeInputRef.current?.focus();
-        setError(data.error ?? "That code isn't right — check the email and try again");
+        setError(data.error ?? "That code isn't right. Check the email and try again");
         return;
       }
 
@@ -192,7 +192,7 @@ export default function FreeStart({ initialEmail, station, stationTitle }: FreeS
       // password they just chose works on the ordinary sign-in.
       setStep('stranded');
     } catch {
-      setError('Something went wrong — please try again');
+      setError('Something went wrong. Please try again');
     } finally {
       setSubmitting(false);
     }
