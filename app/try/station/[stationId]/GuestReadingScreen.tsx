@@ -24,8 +24,8 @@ export interface GuestReadingScreenProps {
   readingDurationSeconds: number;
   consultationDurationSeconds: number;
   /**
-   * The consultation this page belongs to, when it was opened from a call
-   * already in progress. Null when the visitor came here first — a session is
+   * The consultation `/try/talk` opened for this visit, carried as `?session=`.
+   * Null when the visitor arrived without one, in which case a session is
    * created on "Begin".
    */
   sessionId: string | null;
@@ -34,11 +34,9 @@ export interface GuestReadingScreenProps {
 /**
  * The exam-style reading page: the full brief and a three-minute clock.
  *
- * No longer the default path — `/try/talk` goes straight to the patient — but
- * deliberately kept, because sitting the station properly is what the exam
- * actually asks of people and the two-line brief on the call screen is not that.
- * The call screen links here, handing over its own session id, so reading the
- * brief mid-flow returns to the same consultation rather than spending another.
+ * Every guest consultation starts here. `/try/talk` opens the session and lands
+ * on this page with its id, and Begin starts that same consultation on the
+ * call screen, which carries no brief of its own.
  */
 export default function GuestReadingScreen({
   stationId,

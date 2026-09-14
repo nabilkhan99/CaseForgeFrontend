@@ -23,23 +23,14 @@ export default async function GuestLiveConsultationPage({ params }: PageProps) {
   const { sessionId } = await params;
   const station = await loadGuestConsultation(getSupabaseAdmin(), sessionId);
 
+  // The signed-in session screen's plain missing state, pointed at the cases.
   if (!station) {
     return (
-      <div className="min-h-[100dvh] bg-surface flex items-center justify-center px-6">
-        <div className="max-w-sm text-center">
-          <h1 className="mb-2 text-[20px] font-semibold text-heading">
-            That consultation has gone
-          </h1>
-          <p className="mb-6 text-[14px] leading-relaxed text-muted">
-            It may have finished, or been left too long. Any of the five free cases
-            takes one click.
-          </p>
-          <Link
-            href="/free"
-            className="inline-flex min-h-[44px] items-center rounded-xl px-6 py-3 text-[14px] font-semibold text-white"
-            style={{ background: 'linear-gradient(135deg, #B45309, #D97706)' }}
-          >
-            Try 5 free cases
+      <div className="min-h-[100dvh] bg-surface flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted mb-4">Consultation not found</p>
+          <Link href="/free" className="text-primary hover:underline text-sm">
+            Back to cases
           </Link>
         </div>
       </div>
