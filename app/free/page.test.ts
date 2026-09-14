@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { accountFirstHref, toPickerStations } from '@/lib/trial/freeStationPicks'
+import { toPickerStations } from '@/lib/trial/freeStationPicks'
 
 /**
  * The two pages the free door is now made of, checked against their source.
@@ -97,26 +97,23 @@ describe('/free lists the five cases', () => {
 })
 
 describe('neither guest bounce is a loop', () => {
-  it('offers the account, not a dashboard the visitor has never had', () => {
-    // "Open your dashboard to carry on now", said to somebody who has never
-    // made an account, is an instruction they cannot follow.
+  it('says come back tomorrow, and offers the dashboard only to those who have one', () => {
+    // One door: the account-first form is retired. "Carry on now by making an
+    // account" is gone with it; somebody with an account signs in with a code.
     expect(PICKER).toContain("That's three consultations today.")
     expect(PICKER).toContain('Come back tomorrow, or')
-    expect(PICKER).toContain('create your free account')
-    expect(PICKER).toContain('to carry on now.')
-    expect(PICKER).toContain('href="/free/start"')
-    expect(withoutComments(PICKER)).not.toContain('open your dashboard to carry on now')
+    expect(PICKER).toContain('open your dashboard')
+    expect(PICKER).toContain('if you already have an account.')
+    expect(PICKER).toContain("const OPEN_DASHBOARD = '/free/open'")
+    expect(PICKER).toContain('href={OPEN_DASHBOARD}')
   })
 
-  it('points the five Start buttons at the account once the door is shut', () => {
+  it('points the five Start buttons at the dashboard once the door is shut', () => {
     // /try/talk refuses a fourth consultation and bounces back to this page,
     // so five buttons that still pointed at it had one possible outcome: the
     // page they were already on.
-    expect(accountFirstHref('aaaaaaaa-0000-0000-0000-000000000001')).toBe(
-      '/free/start?station=aaaaaaaa-0000-0000-0000-000000000001',
-    )
     expect(PICKER).toContain("notice === 'limit'")
-    expect(PICKER).toContain('accountFirstHref(station.id)')
+    expect(PICKER).toContain('({ ...station, href: OPEN_DASHBOARD })')
     // And the row still renders whatever href it was handed.
     expect(PICKER).toContain('href={station.href}')
   })

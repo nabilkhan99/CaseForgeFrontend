@@ -38,10 +38,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}))
 
-vi.mock('@/lib/auth/accountSignUp', () => ({
-  findAccountByEmail: async () => null,
-}))
-
 vi.mock('@/lib/email/verificationEmail', () => ({
   sendVerificationEmail: (...args: unknown[]) => mocks.sendEmail(...args),
 }))

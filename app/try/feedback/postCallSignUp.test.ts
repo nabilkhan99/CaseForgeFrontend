@@ -6,12 +6,12 @@ import { describe, expect, it } from 'vitest'
  * /try/feedback/[sessionId] — the minute after a guest consultation. Contract C4.
  *
  * There is no DOM runner in this project (vitest runs in `node`), so what is
- * pinned here is the wiring and the copy, the same way app/free/start does it.
- * Both matter more than usual on this page: it is the single conversion point
- * of the whole guest funnel, and every failure it can have is silent —
- * a questionnaire creeping back in, the report rendering here instead of in the
- * dashboard, a second poll against gate-status, or a promise about the password
- * that a legacy session cannot keep.
+ * pinned here is the wiring and the copy, the same way app/free/page.test.ts
+ * does it. Both matter more than usual on this page: it is the single
+ * conversion point of the whole guest funnel, and every failure it can have is
+ * silent: a questionnaire creeping back into the sign-up, the report rendering
+ * in it instead of in the dashboard, or a second poll against gate-status.
+ * (Old report links, which get main's gate instead, are in reportLink.test.ts.)
  */
 
 function source(relativePath: string): string {
@@ -175,7 +175,8 @@ describe('a run too short to mark', () => {
     const REVEAL = source('../../../components/try/VerdictReveal.tsx')
     expect(REVEAL).toMatch(/<a\s+href=\{retryHref\}\s+rel="nofollow"/)
     expect(REVEAL).not.toContain("from 'next/link'")
-    expect(REVEAL).not.toContain('/free/start')
+    // Its default, for callers that name no case, is the five on /free.
+    expect(REVEAL).toContain("retryHref = '/free',")
   })
 
   it('still offers the account, because the account is still worth having', () => {
@@ -219,7 +220,6 @@ describe('only the browser that ran it gets the sign-up', () => {
 })
 
 describe('an address that already has an account', () => {
-  const FREE_START = source('../../../components/free/FreeStart.tsx')
   const FIELDS = source('../../../components/account/AccountFormFields.tsx')
 
   it('says the typed password was not the one that counts', () => {
@@ -232,23 +232,19 @@ describe('an address that already has an account', () => {
     )
   })
 
-  it('shows it on BOTH doors, from one string', () => {
-    for (const form of [FORM, FREE_START]) {
-      expect(form).toContain('EXISTING_ACCOUNT_NOTICE')
-      expect(form).toContain('data.account?.alreadyExisted && data.account?.passwordKept')
-      expect(form).toContain('setNotice(EXISTING_ACCOUNT_NOTICE)')
-    }
+  it('shows it on the sign-up, from the shared string', () => {
+    expect(FORM).toContain('EXISTING_ACCOUNT_NOTICE')
+    expect(FORM).toContain('data.account?.alreadyExisted && data.account?.passwordKept')
+    expect(FORM).toContain('setNotice(EXISTING_ACCOUNT_NOTICE)')
   })
 
   it('waits for it to be read, then goes where the server said', () => {
     // Still a redirect, and still the server's: they ARE signed in, and the
     // report is what they are owed. The pause is long enough for one sentence.
-    for (const form of [FORM, FREE_START]) {
-      expect(form).toContain(
-        'await new Promise((resolve) => setTimeout(resolve, EXISTING_ACCOUNT_NOTICE_MS));',
-      )
-      expect(form).toContain('window.location.assign(data.redirectTo)')
-    }
+    expect(FORM).toContain(
+      'await new Promise((resolve) => setTimeout(resolve, EXISTING_ACCOUNT_NOTICE_MS));',
+    )
+    expect(FORM).toContain('window.location.assign(data.redirectTo)')
     expect(FIELDS).toContain('export const EXISTING_ACCOUNT_NOTICE_MS = 3000;')
   })
 })

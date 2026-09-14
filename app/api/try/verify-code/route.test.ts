@@ -8,13 +8,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  *
  * Two doors verify through this one route and the difference between them is a
  * single string on a database row that decides which funnel every later chart
- * is drawn from: `sessionId` present = the GUEST reveal (legacy report links),
- * absent = the ACCOUNT-FIRST form at /free/start. Getting that backwards is
- * invisible in the product and wrong everywhere else, so it is pinned here.
+ * is drawn from: `sessionId` present = the GUEST reveal, absent = the dashboard
+ * door at /free/open. Getting that backwards is invisible in the product and
+ * wrong everywhere else, so it is pinned here.
  *
  * The other properties under test:
  *
- *  - the sign-up branch sets the password, stores the mobile and sends NO SMS;
+ *  - the guest sign-up sets the password, stores the mobile and sends NO SMS;
  *  - the response carries session cookies, so nothing is emailed after the code;
  *  - `redirectTo` is rebuilt from a matched uuid, never interpolated;
  *  - provisioning failure is NOT fatal. The code WAS right; refusing the guest
@@ -344,29 +344,18 @@ describe('the response the caller reads', () => {
   })
 })
 
-describe('the account-first sign-up', () => {
-  it('passes the password through so the account is born with one', async () => {
+describe('the dashboard door at /free/open', () => {
+  it('takes no password: the one-door retirement removed the form that sent one', async () => {
     await post({ email: 'sarah@nhs.net', code: '123456', password: 'longenough1' })
 
     expect(mocks.ensure).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ source: 'signup', password: 'longenough1' }),
+      expect.objectContaining({ source: 'signup', password: null }),
     )
   })
 
-  it('stores the mobile on the lead row, in E.164', async () => {
-    await post({
-      email: 'sarah@nhs.net',
-      code: '123456',
-      password: 'longenough1',
-      phone: '07700 900123',
-    })
-
-    expect(mocks.updates[0]).toMatchObject({ phone: '+447700900123' })
-  })
-
-  it('leaves a number we already hold alone when none was typed', async () => {
-    await post({ email: 'sarah@nhs.net', code: '123456', password: 'longenough1' })
+  it('stores no mobile it did not ask for, and leaves one we hold alone', async () => {
+    await post({ email: 'sarah@nhs.net', code: '123456', phone: '07700 900123' })
     expect(mocks.updates[0]).not.toHaveProperty('phone')
   })
 
@@ -382,7 +371,7 @@ describe('the account-first sign-up', () => {
   })
 
   it('signs the browser in on this response', async () => {
-    const { body } = await post({ email: 'sarah@nhs.net', code: '123456', password: 'longenough1' })
+    const { body } = await post({ email: 'sarah@nhs.net', code: '123456' })
 
     expect(mocks.signIn).toHaveBeenCalledWith('sarah@nhs.net')
     expect(body.signedIn).toBe(true)
@@ -399,8 +388,11 @@ describe('the account-first sign-up', () => {
     expect(body.account).toMatchObject({ userId: 'user-1' })
   })
 
-  it('refuses a password shorter than the form allows', async () => {
-    const { status } = await post({ email: 'sarah@nhs.net', code: '123456', password: 'short' })
+  it('refuses a password shorter than the sign-up form allows', async () => {
+    const { status } = await post(
+      { sessionId: GUEST_SESSION, code: '123456', password: 'short' },
+      guestCookie(GUEST_SESSION),
+    )
     expect(status).toBe(400)
     expect(mocks.ensure).not.toHaveBeenCalled()
   })
@@ -540,12 +532,11 @@ describe('C3: every way of not having the proof is main’s report gate', () => 
     expect(mocks.updates).toHaveLength(0)
   })
 
-  it('the account-first door needs no cookie and is untouched by any of this', async () => {
-    await post({ email: 'sarah@nhs.net', code: '123456', password: 'longenough1' })
+  it('the dashboard door needs no cookie and is untouched by any of this', async () => {
+    await post({ email: 'sarah@nhs.net', code: '123456' })
 
     expect(claimed()).toMatchObject({
       source: 'signup',
-      password: 'longenough1',
       // No consultation behind it, so no clock to start.
       windowStartsAt: null,
     })
@@ -553,27 +544,28 @@ describe('C3: every way of not having the proof is main’s report gate', () => 
 })
 
 describe('where they land next', () => {
-  it('opens the station they picked', async () => {
-    const station = '2b0d9a5e-0000-4000-8000-000000000000'
-    const { body } = await post({ email: 'sarah@nhs.net', code: '123456', station })
-
-    expect(body.redirectTo).toBe(`/clinical-master/station/${station}`)
-  })
-
-  it('falls back to the dashboard when no station travelled', async () => {
+  it('the dashboard door lands on the dashboard', async () => {
     const { body } = await post({ email: 'sarah@nhs.net', code: '123456' })
     expect(body.redirectTo).toBe('/dashboard')
   })
 
   it.each([
+    '2b0d9a5e-0000-4000-8000-000000000000',
     'https://evil.example.com',
     '//evil.example.com',
+  ])('ignores a station of %s: nothing carries one through any more', async (station) => {
+    // The account-first form that sent one was retired, and a client-supplied
+    // value is never turned into a URL the browser follows.
+    const { body } = await post({ email: 'sarah@nhs.net', code: '123456', station })
+    expect(body.redirectTo).toBe('/dashboard')
+  })
+
+  it.each([
+    'https://evil.example.com',
     '../../dashboard',
     'not-a-uuid',
-    '2b0d9a5e-0000-4000-8000-000000000000/../../evil',
-  ])('refuses to build a redirect out of %s', async (station) => {
-    // The value is client-supplied and ends up in a URL the browser follows.
-    const { body } = await post({ email: 'sarah@nhs.net', code: '123456', station })
+  ])('builds no report redirect out of a session id of %s', async (sessionId) => {
+    const { body } = await post({ sessionId, code: '123456' }, guestCookie(sessionId))
     expect(body.redirectTo).toBe('/dashboard')
   })
 })
@@ -658,7 +650,7 @@ describe('an already-verified lead', () => {
     expect(mocks.updates[0]).toEqual({ verification_attempts: 1 })
   })
 
-  it('and on the account-first door too', async () => {
+  it('and on the dashboard door too', async () => {
     mocks.lead = { ...VERIFIED }
 
     const { status } = await post({
@@ -777,7 +769,7 @@ describe('C3: attaching the consultation that was just sat', () => {
     expect(mocks.ensure).not.toHaveBeenCalled()
   })
 
-  it('and never on the account-first door, which has no consultation', async () => {
+  it('and never on the dashboard door, which has no consultation', async () => {
     await post({ email: 'sarah@nhs.net', code: '123456' })
 
     expect(mocks.ensure).toHaveBeenCalledWith(
@@ -908,7 +900,7 @@ describe('the founders’ lead alert', () => {
     expect(mocks.leadAlert).not.toHaveBeenCalled()
   })
 
-  it('is not sent from the account-first door, which has no consultation behind it', async () => {
+  it('is not sent from the dashboard door, which has no consultation behind it', async () => {
     await post({ email: 'sarah@nhs.net', code: '123456' })
     expect(mocks.leadAlert).not.toHaveBeenCalled()
   })

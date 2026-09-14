@@ -9,24 +9,21 @@ import { suggestEmailFix } from '@/lib/trial/emailTypo';
  * The three fields and the code step that make a free account, wherever the
  * account is being made.
  *
- * Lifted verbatim out of components/free/FreeStart.tsx when a SECOND surface
- * needed the same form: components/try/SignUpWhileMarking, which asks for the
+ * First written for the account-first sign-up form, since retired (one door:
+ * /free), and used now by components/try/SignUpWhileMarking, which asks for the
  * same three things on the post-consultation page while the mark is running.
- * Two copies of a password field is two places for the reveal toggle, the
- * autocomplete hints and the minimum length to drift apart — and the one that
- * drifts is always the one nobody is looking at.
+ * Kept as a module of its own so the password field, its reveal toggle, the
+ * autocomplete hints and the minimum length live in one place.
  *
- * DELIBERATELY NOT A WHOLE FORM. What differs between the two doors is
- * everything around the fields: the headings, the submit copy, which endpoint
- * the code is requested from, and what happens after it verifies. Those stay
- * with their pages, and this file stays the part that is genuinely identical.
+ * DELIBERATELY NOT A WHOLE FORM. The headings, the submit copy, which endpoint
+ * the code is requested from and what happens after it verifies stay with the
+ * page; this file is only the fields.
  *
  * ## The code boxes
  *
  * One real input driving six display boxes, so paste and iOS one-time-code
  * autofill behave as people expect. components/free/FreeSignUpBox keeps its own
- * copy of this markup for the reason it gives in its own header; this module is
- * shared by the two doors that ask for a password as well.
+ * copy of this markup for the reason it gives in its own header.
  */
 
 /** Six, matching `CODE_LENGTH` in the server-only lib/trial/verification. */
@@ -42,7 +39,7 @@ export const LABEL = 'mb-1.5 block text-[13px] font-medium text-heading';
 /**
  * What to say when the password they just typed was not the one that counts.
  *
- * Both doors ask for a password, and both can be given an address that already
+ * The sign-up asks for a password, and can be given an address that already
  * has an account with one. That password is deliberately kept — rotating it
  * because somebody typed the address into a free form would be a takeover with
  * a friendly name (lib/auth/accountSignUp) — but the form had said "Create my

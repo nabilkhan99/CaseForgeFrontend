@@ -9,8 +9,15 @@ import LandingFooter from '@/components/landing/LandingFooter';
 import { Accent, Pill, WASH } from '@/components/landing/v5/editorial';
 import { createClient } from '@/lib/supabase/client';
 import type { GuestNotice } from '@/lib/trial/freeParams';
-import { accountFirstHref, type PickerStation } from '@/lib/trial/freeStationPicks';
+import type { PickerStation } from '@/lib/trial/freeStationPicks';
 import ExampleReport from './ExampleReport';
+
+/**
+ * The way back in for somebody with an account: email, a code, the dashboard.
+ * It also makes an account for an address it has not seen, so it is never a
+ * wall for somebody who has not.
+ */
+const OPEN_DASHBOARD = '/free/open';
 
 /**
  * /free — the case picker.
@@ -48,12 +55,10 @@ interface FreePickerProps {
 /**
  * The two bounces, and what each one leaves a visitor able to do.
  *
- * Both used to end in a dead end. `limit` offered "open your dashboard", which
- * is the one thing a guest who has never made an account does not have; and
- * `unavailable` said "pick another below" when the five buttons below it would
- * bounce straight back here. So the limit notice offers the account — the way
- * to carry on now, and the only one — and the unavailable notice says the
- * honest thing, which is to wait.
+ * `limit`: the guest door is shut for this browser until tomorrow, so the
+ * notice says so, and offers the dashboard to somebody who already has an
+ * account. `unavailable` says the honest thing, which is to wait: the five
+ * buttons below would bounce straight back here.
  */
 const NOTICES: Record<GuestNotice, { heading: string; body: React.ReactNode }> = {
   limit: {
@@ -62,12 +67,12 @@ const NOTICES: Record<GuestNotice, { heading: string; body: React.ReactNode }> =
       <>
         Come back tomorrow, or{' '}
         <Link
-          href="/free/start"
+          href={OPEN_DASHBOARD}
           className="font-medium text-heading underline decoration-muted/40 underline-offset-4 transition-colors hover:decoration-heading"
         >
-          create your free account
+          open your dashboard
         </Link>{' '}
-        to carry on now.
+        if you already have an account.
       </>
     ),
   },
@@ -160,21 +165,21 @@ function StationRow({
 /**
  * When the bank has nothing flagged.
  *
- * Never a dead page: the account is worth making whether or not this list
- * resolved, and the dashboard they land on carries the whole library — so an
- * empty list still gets somebody to a patient, one screen later.
+ * Never a dead page: an account still opens the whole library, so somebody who
+ * has one is offered the way in, and everybody is told the list is coming back.
  */
 function NoStations() {
   return (
     <div className="pt-5">
       <p className="text-[15px] leading-relaxed text-body">
-        The list is being refreshed. Your account still opens the whole library.
+        The list is being refreshed. Try again in a few minutes, or open your dashboard if
+        you already have an account.
       </p>
       <Link
-        href="/free/start"
+        href={OPEN_DASHBOARD}
         className="mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white transition-colors hover:opacity-90"
       >
-        Start free
+        Open your dashboard
         <ArrowRight className="h-4 w-4" aria-hidden="true" />
       </Link>
     </div>
@@ -186,13 +191,12 @@ export default function FreePicker({ stations, notice }: FreePickerProps) {
   const reduceMotion = Boolean(useReducedMotion());
 
   // The guest door is shut for today, so the five buttons stop pointing at it.
-  // /try/talk would refuse and bounce the visitor back to this same page — five
-  // buttons whose only outcome is the page they are on. Through /free/start the
-  // case still gets run, on an account, which is exactly what the notice above
-  // the list now offers.
+  // /try/talk would refuse and bounce the visitor back to this same page: five
+  // buttons whose only outcome is the page they are on. They go to the
+  // dashboard's way in instead, which is what the notice above them offers.
   const rows =
     notice === 'limit'
-      ? stations.map((station) => ({ ...station, href: accountFirstHref(station.id) }))
+      ? stations.map((station) => ({ ...station, href: OPEN_DASHBOARD }))
       : stations;
 
   useEffect(() => {
@@ -290,7 +294,7 @@ export default function FreePicker({ stations, notice }: FreePickerProps) {
 
             {notice === 'limit' && rows.length > 0 && (
               <p className="mt-3 px-1 text-[13px] leading-relaxed text-muted">
-                Start opens your free account, and the case is the first one waiting on it.
+                Each case opens your dashboard, where all five are waiting.
               </p>
             )}
 

@@ -32,8 +32,9 @@ import {
  *
  * `sessionId` = the GUEST reveal: a consultation was sat before there was an
  * account, and this turns it into one. Recorded as `guest_reveal`.
- * `email` (+ a `password` from /free/start) = the ACCOUNT-FIRST door, where
- * there is no consultation yet. Recorded as `signup`.
+ * `email` alone = the DASHBOARD door at /free/open, where there is no
+ * consultation. Recorded as `signup`. It takes no password: somebody new
+ * chooses one on /auth/set-password, and somebody returning already has one.
  *
  * ## A guest gets an account only with the cookie (contract C3)
  *
@@ -79,30 +80,22 @@ import {
  * role, so that gate stays exactly as closed as it was.
  */
 
-/** Where a trainee lands when no station was carried through the flow. */
+/** Where the dashboard door lands. */
 const DASHBOARD = '/dashboard';
 
 /**
- * A station id, or nothing.
- *
- * `redirectTo` is composed from a client-supplied value, so it is rebuilt from a
- * matched uuid rather than interpolated — anything else and "carry the station
- * through the sign-up" would be an open redirect with a friendly name.
+ * A redirect is composed from a client-supplied session id, so it is rebuilt
+ * from a matched uuid rather than interpolated. Anything else would be an open
+ * redirect with a friendly name.
  */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function redirectFor(station: unknown): string {
-  const value = typeof station === 'string' ? station.trim() : '';
-  return UUID_RE.test(value) ? `/clinical-master/station/${value.toLowerCase()}` : DASHBOARD;
-}
 
 /**
  * The report of the consultation they have just sat, inside the dashboard.
  *
  * For the proven guest: the claim has just made the session theirs and the
  * cookies on this response sign them in, so the report page can answer the
- * ownership question itself. Rebuilt from a matched uuid for the same reason
- * {@link redirectFor} is: the id came off the request.
+ * ownership question itself.
  */
 function reportFor(sessionId: string): string {
   return UUID_RE.test(sessionId)
@@ -160,7 +153,7 @@ interface VerifyResponse {
   trial: TrialVerifyTrial;
   /** This response carries session cookies. False leaves the caller a sign-in path. */
   signedIn: boolean;
-  /** Where to go next: the station they picked, or the dashboard. */
+  /** Where to go next: the report, or the dashboard. */
   redirectTo: string;
 }
 
@@ -178,7 +171,6 @@ export async function POST(req: NextRequest) {
       code?: string;
       password?: string;
       phone?: string;
-      station?: string;
     };
     const { sessionId, email, code } = body;
 
@@ -201,20 +193,18 @@ export async function POST(req: NextRequest) {
       cookieOwnsSession(readGuestCookie(req.cookies?.get(GUEST_COOKIE)?.value), sessionId ?? '');
     const reportGate = Boolean(sessionId) && !guestProven;
 
-    // The account-first door always may; the guest door only with the proof
-    // above. Everything else gets neither field, whatever it sends.
-    const mayCollect = source === 'signup' || guestProven;
-    const password = mayCollect && typeof body.password === 'string' ? body.password : '';
-    const phone = mayCollect && typeof body.phone === 'string' ? body.phone.trim() : '';
+    // Only the sign-up while marking asks for these, and only its browser holds
+    // the proof above. Every other caller gets neither field, whatever it sends.
+    const password = guestProven && typeof body.password === 'string' ? body.password : '';
+    const phone = guestProven && typeof body.phone === 'string' ? body.phone.trim() : '';
     // E.164 where we can parse one, so the founder's call works straight off
     // the row and the auth user's metadata carries the same string the lead
-    // does. NOTHING TEXTS IT — there is no SMS step on either door.
+    // does. NOTHING TEXTS IT: there is no SMS step on any door.
     const normalizedPhone = phone ? (toE164(phone) ?? phone) : '';
 
-    // A guest goes to the report of the consultation they just sat; the
-    // account-first door, which has no consultation, to the station it carried
-    // or the dashboard.
-    const redirectTo = sessionId ? reportFor(sessionId) : redirectFor(body.station);
+    // A proven guest goes to the report of the consultation they just sat; the
+    // dashboard door, which has no consultation, to the dashboard.
+    const redirectTo = sessionId ? reportFor(sessionId) : DASHBOARD;
     if (password && password.length < MIN_PASSWORD_LENGTH) {
       return NextResponse.json(
         { error: `Use ${MIN_PASSWORD_LENGTH} characters or more` },
@@ -238,8 +228,8 @@ export async function POST(req: NextRequest) {
     //
     // Only behind the cookie proof, and only when the session lookup found
     // nothing. With the proof this request comes from the browser that ran the
-    // consultation, which is the same standing the account-first door has when
-    // it verifies an address and a code together; without it, a bare session id
+    // consultation, which is the same standing the dashboard door has when it
+    // verifies an address and a code together; without it, a bare session id
     // still cannot reach any lead but its own.
     if (!leadError && !lead && sessionId && guestProven && normalizedEmail) {
       const byEmail = await supabase
@@ -357,7 +347,7 @@ export async function POST(req: NextRequest) {
 
     // The founders' lead alert (lib/trial/gateLeadAlert): a guest finishing the
     // sign-up, or a visitor verifying through the gate on an old report link.
-    // Never on the account-first door, which has no consultation behind it.
+    // Never on the dashboard door, which has no consultation behind it.
     // Runs after the response and never throws.
     if (sessionId && becameVerified) {
       scheduleGateLeadAlert(
@@ -432,7 +422,7 @@ interface SettleInput {
   email: string;
   firstName: string | null;
   source: TrialSource;
-  /** Empty on every door but the account-first form. */
+  /** Empty on every door but the proven guest's sign-up. */
   password: string;
   /** E.164 where we could parse it, else what they typed. Empty when none. */
   phone: string;
@@ -442,7 +432,7 @@ interface SettleInput {
    * to leave the clock for the first station they open.
    *
    * Only ever set for a guest whose cookie proved the session is theirs — see
-   * the C3 note at the top. Null on the account-first door, which has no
+   * the C3 note at the top. Null on the dashboard door, which has no
    * consultation to date the window from.
    */
   windowSessionId: string | null;

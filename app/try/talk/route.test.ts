@@ -3,8 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 /**
  * The one-click door, reopened.
  *
- * Between 7 and 11 September this route was a redirect to /free/start: the
- * offer had become account-first, and nothing anonymous ran at all. It opens a
+ * Between 7 and 11 September this route was a redirect to the account-first
+ * form: the offer had become account-first, and nothing anonymous ran at all.
+ * That form is retired now (one door: /free). This route opens a
  * real consultation again, so what it has to get right is what it always had to
  * get right — which case it opens, and what it leaves behind: a
  * `clinical_sessions` row nobody owns, and a signed cookie binding this browser

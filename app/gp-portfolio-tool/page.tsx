@@ -48,9 +48,9 @@ export default function GpPortfolioToolPage() {
             />
             <PortfolioReviewStateProvider>
                 <ReferralModalProvider>
-                    {/* The other thing we make, one line above the tool. It
-                        gates nothing: the tool below is identical whether or
-                        not this is read or filled in. */}
+                    {/* The other thing we make, one line and a link above the
+                        tool. It gates nothing: the tool below is identical
+                        whether or not this is read or clicked. */}
                     <FreeStationsBanner />
                     <PortfolioToolClient />
                     <BelowFoldGate>
