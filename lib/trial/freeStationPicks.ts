@@ -47,8 +47,6 @@ export interface PickerStation {
   href: string
   /** The clinical area on its own, for layouts that set it apart. Null when unknown. */
   area: string | null
-  /** Consultation length in whole minutes. */
-  minutes: number
   /** A telephone consultation rather than face to face. */
   telephone: boolean
 }
@@ -160,7 +158,6 @@ export function toPickerStations(rows: unknown): PickerStation[] {
       meta: stationMeta(record),
       href: startHref(id),
       area: domainName(record.domains),
-      minutes: stationMinutes(record.consultation_duration_seconds),
       telephone: String(record.consultation_type ?? '').toLowerCase() === TELEPHONE,
     })
   }

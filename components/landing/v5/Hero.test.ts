@@ -51,7 +51,7 @@ describe('the hero’s call to action', () => {
   })
 
   it('says what the free offer is, underneath', () => {
-    expect(HERO_COPY).toContain('Live consultations with an AI patient · marked · no card')
+    expect(HERO_COPY).toContain('Unlimited attempts · marked · no card')
   })
 
   it('never counts stations at somebody who has not sat one', () => {

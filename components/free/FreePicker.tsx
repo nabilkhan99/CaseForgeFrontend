@@ -17,9 +17,8 @@ import ExampleReport from './ExampleReport';
  *
  * The offer page, not a form. Two short lines say what a case is, the five
  * cases are the one object on the page, and a small example report sits beside
- * them as proof. Everything else was cut: the length is stated once in the
- * list header rather than on every row, and each case is a single clickable
- * row rather than a title with its own button.
+ * them as proof. Each case is a single clickable row rather than a title with
+ * its own button, and case length is not shown: the offer is attempts, not minutes.
  *
  * VALUE BEFORE IDENTITY. Start goes to /try/talk and opens the consultation
  * there and then — no address, no password, no code in front of it. Identity
@@ -107,20 +106,13 @@ function StationRow({
   station,
   index,
   reduceMotion,
-  showMinutes,
 }: {
   station: PickerStation;
   index: number;
   reduceMotion: boolean;
-  /** Only when the five differ in length; otherwise the header says it once. */
-  showMinutes: boolean;
 }) {
   const first = index === 0;
-  const details = [
-    station.area,
-    showMinutes ? `${station.minutes} min` : null,
-    station.telephone ? 'Telephone' : null,
-  ].filter(Boolean);
+  const details = [station.area, station.telephone ? 'Telephone' : null].filter(Boolean);
 
   return (
     <motion.li
@@ -202,13 +194,6 @@ export default function FreePicker({ stations, notice }: FreePickerProps) {
       ? stations.map((station) => ({ ...station, href: accountFirstHref(station.id) }))
       : stations;
 
-  // Said once in the list header when all five run the same length, which is
-  // the normal case; a row only repeats it when they genuinely differ.
-  const commonMinutes =
-    rows.length > 0 && rows.every((station) => station.minutes === rows[0].minutes)
-      ? rows[0].minutes
-      : null;
-
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => setUser(data.user as { id: string } | null));
@@ -282,9 +267,6 @@ export default function FreePicker({ stations, notice }: FreePickerProps) {
                 <h2 id="free-cases-heading" className="text-[17px] font-semibold tracking-tight text-heading">
                   Pick a case
                 </h2>
-                {commonMinutes !== null && (
-                  <p className="font-mono text-[12px] text-muted">{commonMinutes} min each</p>
-                )}
               </div>
 
               {rows.length === 0 ? (
@@ -299,7 +281,6 @@ export default function FreePicker({ stations, notice }: FreePickerProps) {
                       station={station}
                       index={index}
                       reduceMotion={reduceMotion}
-                      showMinutes={commonMinutes === null}
                     />
                   ))}
                 </ul>

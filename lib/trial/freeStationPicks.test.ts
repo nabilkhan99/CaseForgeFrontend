@@ -161,12 +161,11 @@ describe('what /free lists', () => {
     expect(stations[1].meta).toContain('telephone')
   })
 
-  it('carries the area, length and telephone flag as their own fields', async () => {
+  it('carries the area and telephone flag as their own fields', async () => {
     const { admin } = fakeAdmin({ rows: ROWS })
     const [first, second] = await listFreeStations(admin)
 
     expect(first.area).toBe('Metabolic Problems and Endocrinology')
-    expect(first.minutes).toBe(12)
     expect(first.telephone).toBe(false)
     expect(second.area).toBe('Patient < 19 years old')
     expect(second.telephone).toBe(true)

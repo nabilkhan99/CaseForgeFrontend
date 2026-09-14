@@ -136,7 +136,7 @@ export default function Hero() {
               </span>
             </motion.a>
             <p className="mt-4 text-xs text-[#78716C] sm:text-sm">
-              Live consultations with an AI patient · marked · no card
+              Unlimited attempts · marked · no card
             </p>
           </motion.div>
         </div>
