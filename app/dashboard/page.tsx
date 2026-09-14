@@ -11,7 +11,6 @@ import { NumberTicker } from '@/components/magicui/number-ticker';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import TrainingHeatmap from '@/components/dashboard/TrainingHeatmap';
 import TrialPanel from '@/components/dashboard/TrialPanel';
-import TrialWall from '@/components/dashboard/TrialWall';
 import { getUserStats, getDailyActivityTimestamps } from '@/lib/supabase/queries/dashboard';
 import { getRandomStation, getStationIndex } from '@/lib/supabase/queries/station-library';
 import type { Station } from '@/lib/supabase/queries/station-library';
@@ -67,6 +66,23 @@ function daysUntilExamDate(value: string): number | null {
   if (!value) return null;
   const when = new Date(value);
   return Number.isNaN(when.getTime()) ? null : daysUntil(value);
+}
+
+/**
+ * "Up next" for an account on the five free cases.
+ *
+ * The first of the five, in their given order, that has never been attempted;
+ * once every one has been tried, the first of the five again. Never a pick from
+ * the whole bank: for a trial account the other cases are locked, so the page's
+ * primary action would lead to a brief with no Begin on it. Null when the five
+ * did not resolve, which renders the page's ordinary fallback.
+ */
+function pickTrialUpNext(
+  trialStations: readonly Station[],
+  attemptsByStation: Readonly<Record<string, number>>,
+): Station | null {
+  const untried = trialStations.find((station) => (attemptsByStation[station.id] ?? 0) === 0);
+  return untried ?? trialStations[0] ?? null;
 }
 
 /**
@@ -207,20 +223,22 @@ function DashboardContent() {
         // the board about it. Ordered by the ids, which arrive in
         // `free_trial_order` — the pairing is the point of that column.
         const freeIds = access?.trial?.freeStationIds ?? [];
-        if (freeIds.length > 0) {
-          const byId = new Map(stationIndex.map((station) => [station.id, station]));
-          setTrialStations(
-            freeIds
-              .map((id) => byId.get(id))
-              .filter((station): station is Station => station !== undefined),
-          );
-        }
+        const byId = new Map(stationIndex.map((station) => [station.id, station]));
+        const freeStations = freeIds
+          .map((id) => byId.get(id))
+          .filter((station): station is Station => station !== undefined);
+        setTrialStations(freeStations);
 
-        // The picker only ever offers a station the user has never attempted,
-        // so it runs out once the bank is exhausted; a random case is still a
-        // case to practise.
-        const recommended = pickNextForYou(stationIndex, dailySeed(today, user.id));
-        setUpNext(recommended ?? (await getRandomStation()));
+        if (access?.trial?.state === 'trial') {
+          // A live trial recommends from its own five only; see pickTrialUpNext.
+          setUpNext(pickTrialUpNext(freeStations, access.trial.attemptsByStation));
+        } else {
+          // The picker only ever offers a station the user has never attempted,
+          // so it runs out once the bank is exhausted; a random case is still a
+          // case to practise.
+          const recommended = pickNextForYou(stationIndex, dailySeed(today, user.id));
+          setUpNext(recommended ?? (await getRandomStation()));
+        }
       } catch (error) {
         console.error('[dashboard] failed to load dashboard data', error);
       } finally {
@@ -255,7 +273,6 @@ function DashboardContent() {
    */
   const trial = access?.trial ?? null;
   const trialLive = trial?.state === 'trial';
-  const trialEnded = trial?.state === 'trial_ended';
 
   const shouldReduceMotion = useReducedMotion();
 
@@ -345,7 +362,7 @@ function DashboardContent() {
                 report, so on a page opened daily this line only restated two
                 numbers the reader already had. The first-run instruction stays:
                 it is the one case with nothing else on screen to say it. */}
-            {stats.completedStations === 0 && !trial && (
+            {stats.completedStations === 0 && (
               <p className="text-[13px] text-muted mt-1">
                 Start your first consultation to begin tracking progress
               </p>
@@ -420,16 +437,13 @@ function DashboardContent() {
           agreed in writing, so the date is the entitlement's own, not a fixed
           launch day. They paid; the one message that must never appear is
           "upgrade". */}
-      {/* The free week. The panel is the whole of a trial account's dashboard
-          while it runs — the five cases, the deadline and the offer — and the
-          wall replaces it once the five days are up. Both sit above every other
-          banner because for a trial account they are the only plan message that
-          is true: `state` is 'none' for someone who has bought nothing, and the
-          prompts below are written for that. */}
-      {trialLive && trial && (
-        <TrialPanel trial={trial} stations={trialStations} examDate={stats.examDate} />
-      )}
-      {trialEnded && trial && <TrialWall trial={trial} examDate={stats.examDate} />}
+      {/* The free week. While it runs the panel carries the five cases, the
+          deadline and the offer; once it has ended the same slot holds a short
+          note, and the rest of the page is the ordinary no-plan dashboard. It
+          sits above every other banner because for a live trial it is the only
+          plan message that is true: `state` is 'none' for someone who has
+          bought nothing, and the prompts below are written for that. */}
+      {trial && <TrialPanel trial={trial} stations={trialStations} examDate={stats.examDate} />}
 
       {/* Both plan banners below stand down while a live trial is granting
           access. They are written for somebody who cannot practise, and saying
@@ -568,26 +582,11 @@ function DashboardContent() {
           browse the library but not start — say so here rather than letting
           the button bounce them back to this page with no explanation.
 
-          STOOD DOWN FOR A LIVE TRIAL. "Up next" recommends from the whole bank,
-          and for a trial account 195 of those cases are locked — so the page's
-          own primary action would have been an invitation to a brief with no
-          Begin on it. The panel above already names the five they can open, in
-          the order they should be taken. */}
-      {!trialLive && (
+          For a live trial `upNext` is one of the five free cases (see
+          pickTrialUpNext), never a pick from the whole bank, where every other
+          case is locked. */}
       <Reveal delay={REVEAL.quickStart} className="mb-10 tall:mb-14">
-        {trialEnded ? (
-          /* The wall above has already made the offer, with two plans and a
-             reason for each. "See plans" underneath it would be a third button
-             pointing at a fourth place, and the library link is the one thing
-             here they can still act on. */
-          <p className="border-y border-hairline py-5 text-center text-[13px] text-muted">
-            Stations are locked, but everything you did stays open:{' '}
-            <Link href="/dashboard/library" className="text-primary font-medium hover:underline">
-              your board
-            </Link>{' '}
-            and every report.
-          </p>
-        ) : access && !access.allowed && !access.plan && !access.bypass ? (
+        {access && !access.allowed && !access.plan && !access.bypass ? (
           /* S1: no plan at all is a different situation from a plan that hasn't
              opened yet, and it used to render as the latter — telling someone
              who has bought nothing that practice had not opened, while the
@@ -680,7 +679,6 @@ function DashboardContent() {
             second card competing with the page's primary action bought nothing.
             Its query (getLastStation) went with it. */}
       </Reveal>
-      )}
 
       {/* Training intensity — the page's centrepiece.
 
@@ -692,10 +690,11 @@ function DashboardContent() {
           controls. Consultations per day can only go up, and it goes up the same
           evening.
 
-          Hidden until the first session: an all-grey board greets nobody. Gated on
-          `canStart` with the hero, so a page that cannot offer practice does not
-          lead with a record of it. */}
-      {stats.completedStations > 0 && calendar && canStart && (
+          Shown from the start, before the first session: an empty board is the
+          record the first consultation begins to fill. Gated on `canStart` with
+          the hero, so a page that cannot offer practice does not lead with a
+          record of it. */}
+      {calendar && canStart && (
         <Reveal delay={REVEAL.intensity} className="mb-10 tall:mb-14">
           <TrainingHeatmap calendar={calendar} />
         </Reveal>

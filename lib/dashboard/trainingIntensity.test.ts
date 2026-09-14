@@ -258,6 +258,6 @@ describe('buildIntensityCalendar — no data at all', () => {
       longest: 0,
       current: 0,
     });
-    expect(calendar.headline).toBe('0 consultations this week — you’re underway');
+    expect(calendar.headline).toBe('0 consultations this week');
   });
 });

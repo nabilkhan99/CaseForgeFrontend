@@ -6,15 +6,14 @@ import { getPlan, type PlanKey } from '@/lib/commerce/plans';
 import { wallPlansFor } from '@/lib/commerce/trialWallPlans';
 
 /**
- * The two plans, chosen by exam date — shared by the trial panel and the wall.
+ * The two plans, chosen by exam date, on the live trial panel.
  *
- * Extracted from TrialWall when the offer moved forward in the trial. It used
- * to appear once, at the end; the 7 September decision put it on the dashboard
- * from day one, because a trainee who is running the same case for the third
- * time has already made up their mind about the product and should not have to
- * wait five days to be shown a price. Two copies of a checkout POST is exactly
- * the kind of duplication that ends with one of them quietly using a retired
- * plan key, so there is one.
+ * Extracted from the old end-of-trial wall when the offer moved forward in the
+ * trial. The 7 September decision put it on the dashboard from day one, because
+ * a trainee who is running the same case for the third time has already made up
+ * their mind about the product and should not have to wait five days to be shown
+ * a price. The wall itself has gone: an ended trial now reads like an expired
+ * plan, and the ordinary no-plan dashboard makes the offer.
  *
  * TWO PLANS, NOT FOUR — see lib/commerce/trialWallPlans.ts for the axis. A quiet
  * "see all plans" link sits beside them; the point is to make a choice easy,

@@ -1,11 +1,54 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import TrialPlanOffer from '@/components/dashboard/TrialPlanOffer';
-import { trialCountdown, trialProgressLine, trialTitleLine } from '@/lib/trial/trialPanelCopy';
+import { trackTrialWallHit } from '@/lib/trial/trialEvents';
+import {
+  numberWord,
+  trialCountdown,
+  trialProgressLine,
+  trialTitleLine,
+} from '@/lib/trial/trialPanelCopy';
 import type { Station } from '@/lib/supabase/queries/station-library';
 import type { TrialSubscription } from '@/app/api/subscription/route';
+
+/**
+ * The panel's slot once the free days are over: what happened, that nothing
+ * was lost, and the one link. Same rules and type as the live panel, at a
+ * fraction of its height, because the page beneath it is now the ordinary
+ * no-plan dashboard and makes its own offer.
+ */
+function TrialEndedNote({ trial }: { trial: TrialSubscription }) {
+  // Fired once per mount, not per render: this is the moment the free funnel
+  // is measured against, and a re-render must not count it twice.
+  useEffect(() => {
+    trackTrialWallHit('expiry');
+  }, []);
+
+  const days = numberWord(trial.windowDays);
+
+  return (
+    <motion.section
+      aria-label="Your free cases"
+      className="mb-10 tall:mb-14 border-y border-hairline py-5"
+      initial={{ opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+    >
+      <p className="text-[13.5px] leading-relaxed text-heading">
+        Your {days} free {trial.windowDays === 1 ? 'day has' : 'days have'} ended. Everything you
+        did stays on your board.
+      </p>
+      <Link
+        href="/pricing"
+        className="mt-1 inline-flex text-[13px] font-semibold text-primary hover:underline focus-visible-ring"
+      >
+        Unlock all 200 cases &rarr;
+      </Link>
+    </motion.section>
+  );
+}
 
 /**
  * The whole of a trial account's dashboard, at the top of it.
@@ -33,18 +76,20 @@ import type { TrialSubscription } from '@/app/api/subscription/route';
  *   4. the five cases      — with Start, in `free_trial_order` (chosen as
  *      pairs: a near miss, then a case where the same "one change" applies).
  *
- * THE UPGRADE OFFER IS HERE, NOT ONLY AT THE WALL. Two plans chosen by exam
- * date, from day one. Deliberately last and deliberately quiet — a person who
- * has just been handed five cases is not ready to buy, but a person on their
- * third run at case two has already decided and should not have to wait for a
- * wall to find a price. The wall (TrialWall) still exists for `trial_ended`;
- * this is the same offer, made earlier and with less weight.
+ * THE UPGRADE OFFER IS HERE. Two plans chosen by exam date, from day one.
+ * Deliberately last and deliberately quiet — a person who has just been handed
+ * five cases is not ready to buy, but a person on their third run at case two
+ * has already decided and should not have to wait to find a price.
+ *
+ * ONCE THE DAYS ARE UP (`trial_ended`) the panel shrinks to a two-line note
+ * (see TrialEndedNote). An ended trial is treated exactly like an expired plan:
+ * the rest of the dashboard is the ordinary no-plan page, which already carries
+ * "See plans", so the note only says what happened and where the work is.
  *
  * The word "trial" does not appear, deliberately. It is what the thing is
  * called internally and reads to a reader as a countdown to being sold
  * something.
  */
-
 export default function TrialPanel({
   trial,
   /**
@@ -61,6 +106,8 @@ export default function TrialPanel({
   stations: Station[];
   examDate?: string | null;
 }) {
+  if (trial.state === 'trial_ended') return <TrialEndedNote trial={trial} />;
+
   const countdown = trialCountdown(trial.daysLeft, trial.expiresAt, trial.windowDays);
   const caseCount = trial.allowance;
 

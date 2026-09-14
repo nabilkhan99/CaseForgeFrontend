@@ -45,16 +45,6 @@ interface StationRowProps {
      * it: the brief page behind it is where the upsell lives.
      */
     locked?: boolean;
-    /**
-     * What the lock says, for the two situations that produce one.
-     *
-     * A cohort student's locked case is not theirs to sit and never will be
-     * without their trainer; a trial account's locked case is one they can buy
-     * their way into this afternoon. Same glyph, different sentence — "Locked"
-     * at somebody mid-purchase-decision is a dead end where "Unlock" is an
-     * offer. Defaults to the cohort wording, which is the older caller.
-     */
-    lockLabel?: string;
     /** Screen-reader name for the glyph. Defaults to the cohort wording. */
     lockTitle?: string;
 }
@@ -91,7 +81,6 @@ export default function StationRow({
     showDifficulty = false,
     showDomain = false,
     locked = false,
-    lockLabel = 'Locked',
     lockTitle = 'Not in your assigned cases',
 }: StationRowProps) {
     const [expanded, setExpanded] = useState(true);
@@ -173,10 +162,9 @@ export default function StationRow({
                         <span className="hidden text-[12px] text-muted sm:inline">Not started</span>
                     )}
 
-                    {/* Muted rather than a primary-coloured "Start" that goes to a
-                        page with no Start on it. Still the same link: what is
-                        behind it is the upsell, not a refusal — which is why a
-                        trial account's version of this reads "Unlock". */}
+                    {/* Muted and reading "Locked" rather than a primary-coloured
+                        "Start" that goes to a page with no Start on it. Still the
+                        same link: what is behind it is the upsell, not a refusal. */}
                     <Link
                         href={stationHref}
                         tabIndex={-1}
@@ -185,7 +173,7 @@ export default function StationRow({
                             locked ? 'text-muted' : 'text-primary'
                         }`}
                     >
-                        {locked ? lockLabel : hasAttempts ? 'Try again' : 'Start'}
+                        {locked ? 'Locked' : hasAttempts ? 'Try again' : 'Start'}
                     </Link>
 
                     {/* Phones get a chevron instead of the "Start" label: the whole row

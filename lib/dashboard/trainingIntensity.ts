@@ -204,14 +204,19 @@ export function buildIntensityCalendar(
   const lastWeek = weeks > 1 ? weekTotals[weeks - 2] : 0;
   const bestPriorWeek = Math.max(0, ...weekTotals.slice(0, weeks - 1));
 
+  // Nothing on the board yet reads as the bare count. The board now shows from
+  // the first visit, and "you're underway" over an empty board would be the
+  // one sentence on it that is not true.
   const suffix =
-    activeDays <= UNDERWAY_ACTIVE_DAYS
-      ? ' — you’re underway'
-      : thisWeek >= bestPriorWeek
-        ? ' — your most yet'
-        : thisWeek > lastWeek
-          ? ` — up from ${lastWeek} last week`
-          : '';
+    activeDays === 0
+      ? ''
+      : activeDays <= UNDERWAY_ACTIVE_DAYS
+        ? ' — you’re underway'
+        : thisWeek >= bestPriorWeek
+          ? ' — your most yet'
+          : thisWeek > lastWeek
+            ? ` — up from ${lastWeek} last week`
+            : '';
 
   return {
     weeks: calendarWeeks,

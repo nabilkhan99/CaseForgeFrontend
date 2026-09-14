@@ -210,9 +210,8 @@ function DomainDetailContent({ domainId }: { domainId: string }) {
                 >
                   {/* Two limits, never both: a live trial outranks a cohort
                       seat in decideAccess, so at most one of these is in force.
-                      They say different things because they mean different
-                      things — a cohort case needs a trainer, a trial case needs
-                      a plan and can be had this afternoon. */}
+                      The row reads "Locked" either way; only the glyph's
+                      screen-reader name says which limit it is. */}
                   {(() => {
                     const trialLocked = isStationLockedForTrial(freeStationIds, station.id);
                     const cohortLocked = isStationLocked(allowlist, station.id);
@@ -221,7 +220,6 @@ function DomainDetailContent({ domainId }: { domainId: string }) {
                         station={station}
                         showDifficulty={showDifficulty}
                         locked={trialLocked || cohortLocked}
-                        lockLabel={trialLocked ? 'Unlock' : 'Locked'}
                         lockTitle={
                           trialLocked
                             ? 'Not one of your five free cases'
