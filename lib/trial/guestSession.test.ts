@@ -82,6 +82,28 @@ describe('the signed cookie', () => {
     expect(readGuestCookie(undefined)).toBeNull()
   })
 
+  it('is keyed by TRIAL_GUEST_COOKIE_SECRET alone, with no service role fallback', () => {
+    const secret = process.env.TRIAL_GUEST_COOKIE_SECRET
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const signedWithSecret = signGuestCookie(cookieWith())!
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    delete process.env.TRIAL_GUEST_COOKIE_SECRET
+    // The master database key is present, as it always is server-side. It must
+    // not quietly become the cookie key.
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key'
+    try {
+      // Fail closed both ways: nothing is signed, and nothing signed earlier reads.
+      expect(signGuestCookie(cookieWith())).toBeNull()
+      expect(readGuestCookie(signedWithSecret)).toBeNull()
+      expect(errors).toHaveBeenCalledWith(expect.stringContaining('TRIAL_GUEST_COOKIE_SECRET'))
+    } finally {
+      process.env.TRIAL_GUEST_COOKIE_SECRET = secret
+      if (serviceKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY
+      else process.env.SUPABASE_SERVICE_ROLE_KEY = serviceKey
+      errors.mockRestore()
+    }
+  })
+
   it('drops entries older than the rolling day when it records a new one', () => {
     const stale: GuestCookie = { g: 'guest-1', s: [{ i: 'yesterday', c: NOW_S - 25 * 60 * 60 }] }
     expect(withGuestSession(stale, SESSION, NOW_S).s.map((e) => e.i)).toEqual([SESSION])

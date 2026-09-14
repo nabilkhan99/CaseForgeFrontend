@@ -173,6 +173,26 @@ describe('what one click opens', () => {
     const { location } = await talk()
     expect(location).toContain('/free?guest=unavailable')
   })
+
+  it('opens nothing, and writes no row, without TRIAL_GUEST_COOKIE_SECRET', async () => {
+    // The service role key is always present server-side and used to stand in
+    // for the cookie secret. It no longer does, and a row written before the
+    // signing failed would be a consultation nobody could ever start.
+    const secret = process.env.TRIAL_GUEST_COOKIE_SECRET
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    delete process.env.TRIAL_GUEST_COOKIE_SECRET
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key'
+    try {
+      const { location, setCookie } = await talk()
+      expect(location).toContain('/free?guest=unavailable')
+      expect(setCookie).toBe('')
+      expect(mocks.inserted).toHaveLength(0)
+    } finally {
+      process.env.TRIAL_GUEST_COOKIE_SECRET = secret
+      if (serviceKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY
+      else process.env.SUPABASE_SERVICE_ROLE_KEY = serviceKey
+    }
+  })
 })
 
 describe('what it leaves behind', () => {

@@ -156,9 +156,11 @@ function withCookie(response: NextResponse, signed: string): NextResponse {
   return response;
 }
 
-/** No `TRIAL_GUEST_COOKIE_SECRET` and no service-role key: nothing can be opened. */
+/** No `TRIAL_GUEST_COOKIE_SECRET`: nothing can be opened. */
 function unsignable(): NextResponse {
-  console.error('[try/create-session] no signing secret — refusing to open a consultation');
+  console.error(
+    '[try/create-session] TRIAL_GUEST_COOKIE_SECRET is not set, refusing to open a consultation',
+  );
   return NextResponse.json(
     {
       error: 'Free consultations are unavailable right now. Please try again shortly.',

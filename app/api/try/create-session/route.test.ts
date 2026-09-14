@@ -168,7 +168,8 @@ describe('create-session', () => {
     const secret = process.env.TRIAL_GUEST_COOKIE_SECRET
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
     delete process.env.TRIAL_GUEST_COOKIE_SECRET
-    delete process.env.SUPABASE_SERVICE_ROLE_KEY
+    // The service role key being present changes nothing: it is not a fallback.
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key'
     try {
       const { status, body, setCookie } = await post()
       expect(status).toBe(503)
@@ -177,7 +178,8 @@ describe('create-session', () => {
       expect(setCookie).toBe('')
     } finally {
       process.env.TRIAL_GUEST_COOKIE_SECRET = secret
-      if (serviceKey !== undefined) process.env.SUPABASE_SERVICE_ROLE_KEY = serviceKey
+      if (serviceKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY
+      else process.env.SUPABASE_SERVICE_ROLE_KEY = serviceKey
     }
   })
 })
