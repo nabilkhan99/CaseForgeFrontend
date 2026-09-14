@@ -34,9 +34,8 @@ export const FEATURE_ROWS: readonly FeatureRow[] = [
     label: 'AI consultations',
     labelSub: '200 stations',
     cells: [
-      // Not "5 free" — the number that matters is how many get MARKED, and the
-      // second line is the answer to the question the column raises ("and then
-      // what?"), which is the same answer the wall gives.
+      // The offer as it is stated everywhere else: five fixed cases, each one
+      // as many times as the trainee likes.
       { text: 'Five cases', sub: 'unlimited attempts' },
       { text: 'Unlimited' },
       { text: 'Unlimited', sub: '£299 value' },
