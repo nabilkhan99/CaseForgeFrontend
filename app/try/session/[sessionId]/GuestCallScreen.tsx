@@ -57,7 +57,7 @@ export default function GuestCallScreen({
     router.push(`/try/feedback/${sessionId}`);
   }, [router, sessionId]);
 
-  const { isConnected, isSpeaking, transcript, connect, endConsultation, disconnect, setMicMuted, getPatientLevel, error, errorKind, status } =
+  const { isConnected, isSpeaking, transcript, connect, endConsultation, disconnect, setMicMuted, getPatientLevel, error, errorKind, status, logEvent } =
     useRealtimeSession({
       sessionId,
       stationId,
@@ -220,7 +220,7 @@ export default function GuestCallScreen({
         onToggleMute={handleToggleMute}
         showTranscript={showTranscript}
         onToggleTranscript={() => setShowTranscript(prev => !prev)}
-        onEnd={() => setShowEndModal(true)}
+        onEnd={() => { logEvent('ui:end-clicked'); setShowEndModal(true); }}
       />
 
       <ConfirmModal
@@ -230,8 +230,8 @@ export default function GuestCallScreen({
         confirmLabel="End Now"
         cancelLabel="Continue"
         variant="danger"
-        onConfirm={() => { setShowEndModal(false); handleEndConsultation(); }}
-        onCancel={() => setShowEndModal(false)}
+        onConfirm={() => { logEvent('ui:end-confirmed'); setShowEndModal(false); handleEndConsultation(); }}
+        onCancel={() => { logEvent('ui:end-cancelled'); setShowEndModal(false); }}
       />
 
       <ConfirmModal

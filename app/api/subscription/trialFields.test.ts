@@ -69,23 +69,12 @@ function signedIn(opts: {
   })
 }
 
-/** `trial_leads`, for the exam hint the two-plan offer picks its pair from. */
-function stubLeads(sitting: string | null) {
-  const maybeSingle = vi.fn().mockResolvedValue({ data: sitting ? { sca_sitting: sitting } : null, error: null })
-  const limit = vi.fn(() => ({ maybeSingle }))
-  const order = vi.fn(() => ({ limit }))
-  const ilike = vi.fn(() => ({ order }))
-  const select = vi.fn(() => ({ ilike }))
-  return { from: vi.fn(() => ({ select })), select }
-}
-
 async function body() {
   return (await GET()).json()
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
-  getSupabaseAdmin.mockReturnValue(stubLeads(null))
 })
 
 describe('the trial block', () => {
@@ -148,26 +137,6 @@ describe('the trial block', () => {
     expect((await body()).trial.daysLeft).toBe(1)
   })
 
-  it('does not look up the exam hint once the trial has ended', async () => {
-    // The hint feeds the live panel's plan offer. An ended trial has no panel,
-    // so it pays no service-role round trip for one.
-    const startedAt = new Date(Date.now() - 6 * DAY)
-    getSupabaseAdmin.mockReturnValue(stubLeads('oct_2026'))
-    signedIn({
-      trial: computeTrialAccess(
-        grant({ startedAt, expiresAt: new Date(startedAt.getTime() + 5 * DAY) }),
-        NO_USAGE,
-        [],
-      ),
-      allowed: false,
-      trialOnly: false,
-    })
-    const trial = (await body()).trial
-    expect(trial.state).toBe('trial_ended')
-    expect(trial.examHint).toBeNull()
-    expect(getSupabaseAdmin).not.toHaveBeenCalled()
-  })
-
   it('floors daysLeft at zero once the window has closed', async () => {
     const startedAt = new Date(Date.now() - 6 * DAY)
     signedIn({
@@ -192,22 +161,11 @@ describe('the trial block', () => {
     expect((await body()).trial.freeStationIds).toEqual([])
   })
 
-  it('resolves the exam hint for a LIVE trial, not only at the wall', async () => {
-    // The two-plan offer moved forward onto the dashboard, so the date it turns
-    // on has to be known from day one.
-    getSupabaseAdmin.mockReturnValue(stubLeads('oct_2026'))
+  it('costs a live trial no extra database lookup', async () => {
+    // The navbar polls this route on every page, and nothing on the trial
+    // panel needs trial_leads any more, so a live trial adds no round trip.
     signedIn({ trial: computeTrialAccess(grant(), NO_USAGE, FIVE) })
-    expect((await body()).trial.examHint).toBe('2026-10-15')
-  })
-
-  it('never looks up the exam hint for a buyer', async () => {
-    signedIn({
-      trial: computeTrialAccess(grant(), NO_USAGE, FIVE),
-      entitlement: { state: 'active', plan: 'self_study', hasLectures: false },
-      allowed: true,
-      trialOnly: false,
-    })
-    await body()
+    expect((await body()).trial.state).toBe('trial')
     expect(getSupabaseAdmin).not.toHaveBeenCalled()
   })
 

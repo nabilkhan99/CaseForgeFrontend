@@ -52,6 +52,17 @@ export interface PricingTableProps {
   accountEmail?: string | null;
   /** Server-decided: this visitor may buy Complete at the difference. */
   canUpgrade?: boolean;
+  /**
+   * Drop the Free column. For somebody already on the five free cases, where
+   * "Try 5 free cases" would offer them what they are using.
+   */
+  hideFree?: boolean;
+  /**
+   * Inside another page's section (the trial panel) rather than a page of its
+   * own: no side padding or `#pricing` anchor, so it lines up with what is
+   * above it and the landing page keeps the only anchor.
+   */
+  embedded?: boolean;
 }
 
 /** The "Your plan" marker, in the same slot the "Most popular" badge uses. */
@@ -570,7 +581,13 @@ function MobileCards({ selfStudy, billing, owned, canUpgrade, showFree }: Mobile
 }
 
 /** The three-tier pricing table: matrix on desktop, stacked cards on mobile. */
-export default function PricingTable({ ownedPlan, accountEmail, canUpgrade = false }: PricingTableProps = {}) {
+export default function PricingTable({
+  ownedPlan,
+  accountEmail,
+  canUpgrade = false,
+  hideFree = false,
+  embedded = false,
+}: PricingTableProps = {}) {
   const selfStudy = useSelfStudyCheckout();
   const owned = ownedColumnFor(ownedPlan);
   // Three-month is the default: it is the better deal (£299 vs 3 × £129) and the
@@ -581,10 +598,13 @@ export default function PricingTable({ ownedPlan, accountEmail, canUpgrade = fal
   // The free column is for somebody deciding whether to buy. A visitor who
   // already holds a plan (current or lapsed) is not offered it, on either
   // layout, and the table goes back to its three paid columns.
-  const showFree = !ownedPlan;
+  const showFree = !ownedPlan && !hideFree;
 
   return (
-    <section id="pricing" className="scroll-mt-24 px-5 py-6 sm:px-8 sm:py-10">
+    <section
+      id={embedded ? undefined : 'pricing'}
+      className={embedded ? 'py-2' : 'scroll-mt-24 px-5 py-6 sm:px-8 sm:py-10'}
+    >
       <div className="mx-auto max-w-5xl">
         <motion.div
           initial={{ opacity: 0, y: 24 }}

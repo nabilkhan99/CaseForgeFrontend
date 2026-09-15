@@ -3,9 +3,7 @@ import { isMonthlyPlan, type EntitlementState } from '@/lib/commerce/entitlement
 import { getPlan } from '@/lib/commerce/plans';
 import { getServerEntitlement } from '@/lib/commerce/serverEntitlement';
 import type { CoachingSlotKey } from '@/lib/commerce/coachingSlots';
-import { examDateFromSitting } from '@/lib/commerce/trialWallPlans';
 import type { TrialEndReason, TrialState } from '@/lib/commerce/trialAccess';
-import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 /**
  * What a trial account needs to render its panel and, once the days are up, a
@@ -65,21 +63,6 @@ export interface TrialSubscription {
   expiresAt: string | null;
   /** Why it ended, for the wall's copy and its `trial_wall_hit` event. Null while live. */
   reason: TrialEndReason | null;
-  /**
-   * The exam date behind their questionnaire answer (`trial_leads.sca_sitting`),
-   * as `YYYY-MM-DD`, or null.
-   *
-   * A FALLBACK, not the authority: `profiles.exam_date` is, and the dashboard
-   * already loads that with its stats. This exists because most trialists have
-   * answered the questionnaire and never filled the dashboard's date field, and
-   * both the panel and the wall pick their two plans on that date. Resolved
-   * here rather than in the browser because `trial_leads` is RLS deny-all.
-   *
-   * Loaded for a LIVE trial only — the panel's upgrade offer turns on it. It
-   * costs one indexed lookup, and nobody else pays it: not a buyer, not an
-   * account whose trial has ended.
-   */
-  examHint: string | null;
 }
 
 export interface SubscriptionResponse {
@@ -184,38 +167,6 @@ function daysLeftUntil(expiresAt: Date | null, now: Date = new Date()): number |
 }
 
 /**
- * The exam date behind a trialist's questionnaire answer, or null.
- *
- * Service role because `trial_leads` is RLS deny-all; scoped to the signed-in
- * user's own address, and it reads one column. Only ever called for an account
- * on a LIVE trial, so nobody else pays a round trip for it — this route is
- * polled by the navbar on every page.
- *
- * Never throws: a missing hint costs the wall its plan choice (it falls back to
- * the £299 pair), which is not worth failing a subscription lookup over.
- */
-async function examHintFor(email: string | null | undefined): Promise<string | null> {
-  try {
-    const address = email?.trim();
-    if (!address) return null;
-    const { data, error } = await getSupabaseAdmin()
-      .from('trial_leads')
-      .select('sca_sitting')
-      .ilike('email', address)
-      // Newest answer wins: somebody who came back through a second door
-      // answered again, and the later answer is the current one.
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (error) throw error;
-    return examDateFromSitting((data as { sca_sitting: string | null } | null)?.sca_sitting);
-  } catch (error: unknown) {
-    console.error('[subscription] exam hint lookup failed', error);
-    return null;
-  }
-}
-
-/**
  * The signed-in user's plan and expiry, as the rest of the product sees it.
  *
  * Reads the same entitlement the gate reads (purchases in `preorders`), not
@@ -263,9 +214,6 @@ export async function GET() {
         startedAt: trial.startedAt?.toISOString() ?? null,
         expiresAt: trial.expiresAt?.toISOString() ?? null,
         reason: trial.reason ?? null,
-        // Live only: the panel's two-plan offer is what turns on it, and an
-        // ended trial has no panel.
-        examHint: trial.state === 'trial' ? await examHintFor(user.email) : null,
       }
     : null;
 

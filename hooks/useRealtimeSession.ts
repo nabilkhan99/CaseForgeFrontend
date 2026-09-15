@@ -2340,5 +2340,11 @@ export function useRealtimeSession({
         error,
         errorKind,
         status,
+        /**
+         * Put a UI moment in the call's flight recorder, for the things the
+         * voice events cannot show — above all whether End was pressed and
+         * whether "Are you sure?" was confirmed or dismissed.
+         */
+        logEvent: logDebug,
     };
 }

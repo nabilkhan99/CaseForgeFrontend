@@ -443,7 +443,7 @@ function DashboardContent() {
           sits above every other banner because for a live trial it is the only
           plan message that is true: `state` is 'none' for someone who has
           bought nothing, and the prompts below are written for that. */}
-      {trial && <TrialPanel trial={trial} stations={trialStations} examDate={stats.examDate} />}
+      {trial && <TrialPanel trial={trial} stations={trialStations} accountEmail={user?.email ?? null} />}
 
       {/* Both plan banners below stand down while a live trial is granting
           access. They are written for somebody who cannot practise, and saying

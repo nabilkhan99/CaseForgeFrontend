@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import TrialPlanOffer from '@/components/dashboard/TrialPlanOffer';
+import PricingTable from '@/components/landing/v5/PricingTable';
 import { trackTrialWallHit } from '@/lib/trial/trialEvents';
 import {
   numberWord,
@@ -76,10 +76,13 @@ function TrialEndedNote({ trial }: { trial: TrialSubscription }) {
  *   4. the five cases      — with Start, in `free_trial_order` (chosen as
  *      pairs: a near miss, then a case where the same "one change" applies).
  *
- * THE UPGRADE OFFER IS HERE. Two plans chosen by exam date, from day one.
- * Deliberately last and deliberately quiet — a person who has just been handed
- * five cases is not ready to buy, but a person on their third run at case two
- * has already decided and should not have to wait to find a price.
+ * THE UPGRADE OFFER IS HERE: the full pricing table, from day one, so monthly,
+ * three months, Complete and Intensive are all a click away (15 Sept decision,
+ * replacing a two-plan pick by exam date). Deliberately last — a person who has
+ * just been handed five cases is not ready to buy, but a person on their third
+ * run at case two has already decided and should not have to wait to find a
+ * price. The study budget line sits above it because, for a GP trainee, "who
+ * pays" comes before "which plan".
  *
  * ONCE THE DAYS ARE UP (`trial_ended`) the panel shrinks to a two-line note
  * (see TrialEndedNote). An ended trial is treated exactly like an expired plan:
@@ -99,12 +102,12 @@ export default function TrialPanel({
    * Empty while that index is loading, and empty if nothing is flagged.
    */
   stations,
-  /** `profiles.exam_date`, for the plan choice. The questionnaire hint is on `trial`. */
-  examDate,
+  /** The signed-in address, so the table can say which account a purchase joins. */
+  accountEmail,
 }: {
   trial: TrialSubscription;
   stations: Station[];
-  examDate?: string | null;
+  accountEmail?: string | null;
 }) {
   if (trial.state === 'trial_ended') return <TrialEndedNote trial={trial} />;
 
@@ -202,14 +205,24 @@ export default function TrialPanel({
         </p>
       )}
 
-      {/* The offer, from day one. Under a rule so it reads as a footnote to the
-          five cases above rather than a second headline competing with them. */}
+      {/* The offer, from day one, after the five cases rather than before them. */}
       <div className="mt-8">
         <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-primary">
           Unlock all 200 cases
         </p>
-        <div className="mt-2">
-          <TrialPlanOffer examDate={examDate} examHint={trial.examHint} />
+        {/* "May", not "will": funding differs by deanery and most need sign-off
+            first, so the line points at the answer rather than promising one. */}
+        <p className="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-xl bg-[#FDF6E7] px-4 py-3 text-[13.5px] leading-relaxed text-heading">
+          <span>Your study budget may cover this.</span>
+          <Link
+            href="/study-budget"
+            className="font-semibold text-primary hover:underline focus-visible-ring"
+          >
+            Check what your deanery funds &rarr;
+          </Link>
+        </p>
+        <div className="mt-4">
+          <PricingTable accountEmail={accountEmail} hideFree embedded />
         </div>
       </div>
     </motion.section>
