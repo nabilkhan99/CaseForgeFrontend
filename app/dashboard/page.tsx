@@ -69,23 +69,6 @@ function daysUntilExamDate(value: string): number | null {
 }
 
 /**
- * "Up next" for an account on the five free cases.
- *
- * The first of the five, in their given order, that has never been attempted;
- * once every one has been tried, the first of the five again. Never a pick from
- * the whole bank: for a trial account the other cases are locked, so the page's
- * primary action would lead to a brief with no Begin on it. Null when the five
- * did not resolve, which renders the page's ordinary fallback.
- */
-function pickTrialUpNext(
-  trialStations: readonly Station[],
-  attemptsByStation: Readonly<Record<string, number>>,
-): Station | null {
-  const untried = trialStations.find((station) => (attemptsByStation[station.id] ?? 0) === 0);
-  return untried ?? trialStations[0] ?? null;
-}
-
-/**
  * Page-load stagger for the dashboard's top-level sections. Small increments
  * on purpose — this is a tool someone opens dozens of times, so the whole
  * sequence has to be over before it registers as a reveal.
@@ -229,13 +212,11 @@ function DashboardContent() {
           .filter((station): station is Station => station !== undefined);
         setTrialStations(freeStations);
 
-        if (access?.trial?.state === 'trial') {
-          // A live trial recommends from its own five only; see pickTrialUpNext.
-          setUpNext(pickTrialUpNext(freeStations, access.trial.attemptsByStation));
-        } else {
-          // The picker only ever offers a station the user has never attempted,
-          // so it runs out once the bank is exhausted; a random case is still a
-          // case to practise.
+        // A live trial has no Up next: its panel already lists the five cases,
+        // each with Start. Everyone else gets the daily pick. The picker only
+        // ever offers a station the user has never attempted, so it runs out
+        // once the bank is exhausted; a random case is still a case to practise.
+        if (access?.trial?.state !== 'trial') {
           const recommended = pickNextForYou(stationIndex, dailySeed(today, user.id));
           setUpNext(recommended ?? (await getRandomStation()));
         }
@@ -582,9 +563,10 @@ function DashboardContent() {
           browse the library but not start — say so here rather than letting
           the button bounce them back to this page with no explanation.
 
-          For a live trial `upNext` is one of the five free cases (see
-          pickTrialUpNext), never a pick from the whole bank, where every other
-          case is locked. */}
+          Not shown during a live trial (16 Sept): the trial panel above lists
+          the five cases with Start beside each, so an Up next would repeat one
+          of them. An ended trial is an ordinary no-plan account and gets it. */}
+      {trial?.state !== 'trial' && (
       <Reveal delay={REVEAL.quickStart} className="mb-10 tall:mb-14">
         {access && !access.allowed && !access.plan && !access.bypass ? (
           /* S1: no plan at all is a different situation from a plan that hasn't
@@ -679,6 +661,7 @@ function DashboardContent() {
             second card competing with the page's primary action bought nothing.
             Its query (getLastStation) went with it. */}
       </Reveal>
+      )}
 
       {/* Training intensity — the page's centrepiece.
 
