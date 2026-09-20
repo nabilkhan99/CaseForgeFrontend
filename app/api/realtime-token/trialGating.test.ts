@@ -70,7 +70,7 @@ function grant(over: Partial<TrialGrant> = {}): TrialGrant {
  * touched by requests that get past the entitlement gate — which is the point
  * of most of these tests.
  */
-function stubAdmin() {
+function stubAdmin(session: { id: string; user_id: string | null; status: string } | null = null) {
   const station = {
     id: 'st-1',
     consultation_duration_seconds: 720,
@@ -82,18 +82,23 @@ function stubAdmin() {
     in: () => stationChain,
     maybeSingle: async () => ({ data: station, error: null }),
   }
-  const update = vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) }))
+  // `.update().eq().in()` — the status guard that stops a finished row being
+  // demoted back to 'live'.
+  const updateIn = vi.fn().mockResolvedValue({ error: null })
+  const update = vi.fn(() => ({ eq: vi.fn(() => ({ in: updateIn })) }))
   const insert = vi.fn().mockResolvedValue({ error: null })
   const sessionChain = {
     select: () => sessionChain,
     eq: () => sessionChain,
-    maybeSingle: async () => ({ data: null }),
+    maybeSingle: async () => ({ data: session }),
     update,
     insert,
   }
   return {
     from: vi.fn((table: string) => (table === 'stations' ? stationChain : sessionChain)),
     insert,
+    update,
+    updateIn,
   }
 }
 
@@ -282,5 +287,57 @@ describe('starting the five-day window', () => {
 
     expect((await POST(request())).status).toBe(500)
     expect(startTrialWindowFor).not.toHaveBeenCalled()
+  })
+})
+
+describe('a consultation that is over', () => {
+  /**
+   * The resurrection bug, 16-20 Sept 2026. Re-opening a finished consultation
+   * — Back from the report, a refresh, an old link — dialled the patient again
+   * and the unguarded `status: 'live'` write demoted a row the marking engine
+   * had already completed. Downstream, that row counted as in-progress and
+   * blocked the trainee's next consultation for fifteen minutes.
+   */
+  for (const status of ['processing', 'completed', 'unmarkable', 'abandoned', 'error']) {
+    it(`refuses to mint for a ${status} session, before spending`, async () => {
+      getSupabaseAdmin.mockReturnValue(stubAdmin({ id: 'sess-1', user_id: 'user-1', status }))
+      signedIn({ trial: liveTrial(), allowed: true })
+
+      const res = await POST(request())
+
+      expect(res.status).toBe(409)
+      expect(await res.json()).toMatchObject({ error: 'session_finished', sessionStatus: status })
+      // The refusal is worth nothing if the key has already been bought.
+      expect(mintEphemeralKey).not.toHaveBeenCalled()
+    })
+  }
+
+  for (const status of ['reading', 'live']) {
+    it(`still mints for a ${status} session, so a reconnect works`, async () => {
+      getSupabaseAdmin.mockReturnValue(stubAdmin({ id: 'sess-1', user_id: 'user-1', status }))
+      signedIn({ trial: liveTrial(), allowed: true })
+
+      expect((await POST(request())).status).toBe(200)
+      expect(mintEphemeralKey).toHaveBeenCalledTimes(1)
+    })
+  }
+
+  it('guards the live write as well, for a row that finished mid-request', async () => {
+    const admin = stubAdmin({ id: 'sess-1', user_id: 'user-1', status: 'live' })
+    getSupabaseAdmin.mockReturnValue(admin)
+    signedIn({ trial: liveTrial(), allowed: true })
+
+    await POST(request())
+
+    expect(admin.update).toHaveBeenCalledWith({ status: 'live' })
+    expect(admin.updateIn).toHaveBeenCalledWith('status', ['reading', 'live'])
+  })
+
+  it('is somebody else\'s session before it is a finished one', async () => {
+    getSupabaseAdmin.mockReturnValue(stubAdmin({ id: 'sess-1', user_id: 'someone-else', status: 'completed' }))
+    signedIn({ trial: liveTrial(), allowed: true })
+
+    expect((await POST(request())).status).toBe(403)
+    expect(mintEphemeralKey).not.toHaveBeenCalled()
   })
 })

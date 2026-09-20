@@ -1,5 +1,6 @@
 import 'server-only'
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
+import { STARTABLE_STATUSES as SHARED_STARTABLE_STATUSES } from '@/lib/clinical-master/sessionLifecycle'
 
 /**
  * Who is allowed to spend an Azure realtime minute without an account.
@@ -92,8 +93,13 @@ export const GUEST_SESSIONS_PER_DAY = 3
 /** The rolling window rule 3 counts over. */
 export const GUEST_DAY_SECONDS = 24 * 60 * 60
 
-/** Statuses a consultation may still be started from. */
-const STARTABLE_STATUSES = new Set(['reading', 'live'])
+/**
+ * Statuses a consultation may still be started from.
+ *
+ * Shared with the signed-in lane since the resurrection fix — one definition of
+ * "still startable", not two copies that can drift.
+ */
+const STARTABLE_STATUSES = SHARED_STARTABLE_STATUSES
 
 /** One consultation the server opened for this browser. */
 export interface GuestSessionEntry {

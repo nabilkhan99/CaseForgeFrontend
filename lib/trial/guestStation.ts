@@ -1,5 +1,6 @@
 import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { isStartableStatus } from '@/lib/clinical-master/sessionLifecycle'
 
 /**
  * Which case a guest consultation may open on.
@@ -159,6 +160,19 @@ function toStation(row: unknown): GuestConsultationStation | null {
 }
 
 /**
+ * What the call screen should do with a guest session id.
+ *
+ * `missing` — no such session, it belongs to an account (a signed-in
+ * consultation is not opened through the guest funnel), or its station has been
+ * retired. `finished` — the consultation is over, so the answer is its report.
+ * `ready` — a consultation that may still be connected to.
+ */
+export type GuestConsultationView =
+  | { kind: 'missing' }
+  | { kind: 'finished' }
+  | { kind: 'ready'; station: GuestConsultationStation }
+
+/**
  * The consultation behind a guest session id.
  *
  * The call screen resolves this on the SERVER, before it paints. It used to
@@ -168,22 +182,25 @@ function toStation(row: unknown): GuestConsultationStation | null {
  * the row also means the station comes from the database rather than from a
  * query string the visitor can edit.
  *
- * Null when there is no such session, when it belongs to an account (a signed-in
- * consultation is not opened through the guest funnel), or when its station has
- * been retired.
+ * The status is read here as well as at the mint. Rule 7 has always refused to
+ * mint for a finished consultation, but only after this page had painted and
+ * asked for the microphone — so a visitor reopening their own finished mock was
+ * prompted for mic access and then shown "Connection problem" instead of the
+ * report they were looking for.
  */
 export async function loadGuestConsultation(
   admin: Admin,
   sessionId: string,
-): Promise<GuestConsultationStation | null> {
+): Promise<GuestConsultationView> {
   const { data: session } = await admin
     .from('clinical_sessions')
-    .select('station_id, user_id')
+    .select('station_id, user_id, status')
     .eq('id', sessionId)
     .maybeSingle()
 
-  const row = session as { station_id: string | null; user_id: string | null } | null
-  if (!row || row.user_id || !row.station_id) return null
+  const row = session as { station_id: string | null; user_id: string | null; status: string | null } | null
+  if (!row || row.user_id || !row.station_id) return { kind: 'missing' }
+  if (!isStartableStatus(row.status)) return { kind: 'finished' }
 
   const { data: station } = await admin
     .from('stations')
@@ -192,7 +209,8 @@ export async function loadGuestConsultation(
     .eq('is_active', true)
     .maybeSingle()
 
-  return toStation(station)
+  const resolved = toStation(station)
+  return resolved ? { kind: 'ready', station: resolved } : { kind: 'missing' }
 }
 
 /**

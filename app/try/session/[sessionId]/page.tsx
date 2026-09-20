@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { loadGuestConsultation } from '@/lib/trial/guestStation';
 import { patientInitials } from '@/lib/trial/callBrief';
@@ -21,7 +22,15 @@ interface PageProps {
 
 export default async function GuestLiveConsultationPage({ params }: PageProps) {
   const { sessionId } = await params;
-  const station = await loadGuestConsultation(getSupabaseAdmin(), sessionId);
+  const view = await loadGuestConsultation(getSupabaseAdmin(), sessionId);
+
+  // A consultation that is over: the report is what this URL means now. The
+  // gate on that page decides what the visitor may see of it.
+  if (view.kind === 'finished') {
+    redirect(`/try/feedback/${sessionId}`);
+  }
+
+  const station = view.kind === 'ready' ? view.station : null;
 
   // The signed-in session screen's plain missing state, pointed at the cases.
   if (!station) {

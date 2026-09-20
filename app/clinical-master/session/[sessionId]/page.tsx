@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { micRecoveryHint } from '@/lib/clinical-master/micErrors';
+import { isStartableStatus } from '@/lib/clinical-master/sessionLifecycle';
 import { createClient } from '@/lib/supabase/client';
 import ConnectingScreen from '@/components/clinical-master/ConnectingScreen';
 import ConsultationStage from '@/components/clinical-master/ConsultationStage';
@@ -28,6 +29,12 @@ function LiveConsultationContent() {
   const from = searchParams.get('from');
 
   const [station, setStation] = useState<StationData | null>(null);
+  /**
+   * What the session row itself says, because the URL cannot be trusted to mean
+   * "start a consultation". 'unknown' until the row has been read — nothing
+   * dials while it is unknown.
+   */
+  const [sessionState, setSessionState] = useState<'unknown' | 'startable' | 'finished'>('unknown');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [showEndModal, setShowEndModal] = useState(false);
@@ -59,6 +66,39 @@ function LiveConsultationContent() {
     fetchStation();
   }, [stationId]);
 
+  // A consultation that is over opens its report, it does not start again.
+  //
+  // This page used to read the station and nothing else, so the URL of a
+  // finished consultation was indistinguishable from a fresh one: it dialled
+  // the patient a second time, spent another Azure key, and the token route
+  // demoted the finished row back to 'live' — which then blocked the trainee's
+  // next consultation under the one-at-a-time rule. The server refuses that
+  // mint now; this is the half that means nobody has to see a refusal.
+  useEffect(() => {
+    let cancelled = false;
+    async function readSessionState() {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from('clinical_sessions')
+        .select('status')
+        .eq('id', sessionId)
+        .maybeSingle();
+      if (cancelled) return;
+      // No row yet is normal: the token route opens one for a client that came
+      // straight here. Only a row that exists and has finished is a redirect.
+      if (data && !isStartableStatus(data.status)) {
+        setSessionState('finished');
+        router.replace(
+          from ? `/clinical-master/feedback/${sessionId}?from=${from}` : `/clinical-master/feedback/${sessionId}`,
+        );
+        return;
+      }
+      setSessionState('startable');
+    }
+    readSessionState();
+    return () => { cancelled = true; };
+  }, [sessionId, router, from]);
+
   // Graceful end (button, timer, or the model's end_consultation tool): the hook
   // persists the transcript + moves the session to 'processing', then this fires.
   const handleEnded = useCallback(() => {
@@ -81,8 +121,10 @@ function LiveConsultationContent() {
 
   useEffect(() => {
     // Never auto-reconnect after a connection failure — the error screen owns retry.
-    if (station && !isProcessing && !isEndingRef.current && status === 'disconnected' && !error) connect();
-  }, [station, isProcessing, status, error, connect]);
+    // `sessionState` gates it as well as the station: dialling before the row has
+    // been read is how a finished consultation got started a second time.
+    if (sessionState === 'startable' && station && !isProcessing && !isEndingRef.current && status === 'disconnected' && !error) connect();
+  }, [sessionState, station, isProcessing, status, error, connect]);
 
   const handleEndConsultation = useCallback(() => {
     isEndingRef.current = true;
@@ -119,6 +161,31 @@ function LiveConsultationContent() {
     window.addEventListener('pagehide', onHide);
     return () => window.removeEventListener('pagehide', onHide);
   }, [markAbandoned, isProcessing]);
+
+  // A CONSULTATION THAT NEVER GOT GOING MUST NOT HOLD THE TRAINEE'S SLOT.
+  //
+  // `teardown()` after a failed or dropped connection saves nothing and marks
+  // nothing, so the row stayed 'live' until the 15-minute one-at-a-time bound
+  // expired. A trial user whose first attempt died went back to the library,
+  // started another case, and was refused — silently — for the rest of that
+  // quarter of an hour. On 20 Sept that cost one of them 45 minutes and a
+  // change of computer before they gave up.
+  //
+  // Leaving this page while nothing is connected ends the attempt. Retrying is
+  // untouched: the component stays mounted across a retry, so this cannot fire
+  // between two presses of Try again.
+  const attemptedRef = useRef(false);
+  const connectedRef = useRef(false);
+  useEffect(() => {
+    // Armed only once a connection has actually been attempted, so React's
+    // development remount — whose cleanup runs before any of this has happened
+    // — cannot abandon a consultation before it starts.
+    if (status === 'connecting' || status === 'connected') attemptedRef.current = true;
+    connectedRef.current = status === 'connected';
+  }, [status]);
+  useEffect(() => () => {
+    if (!isEndingRef.current && attemptedRef.current && !connectedRef.current) markAbandoned();
+  }, [markAbandoned]);
 
   const patientInitials = station
     ? station.patient_name.split(' ').map(n => n[0]).join('').slice(0, 2)

@@ -8,6 +8,7 @@ import {
   trialStationRefusal,
 } from '@/lib/commerce/trialAccess';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { isStartableStatus } from '@/lib/clinical-master/sessionLifecycle';
 import { mintEphemeralKey, unreliableEchoCancellation } from '@/lib/clinical-master/realtimeToken';
 import { voiceForStation } from '@/lib/clinical-master/realtimeSession';
 import { visibleStationStates } from '@/lib/stations/visibility';
@@ -121,12 +122,36 @@ export async function POST(req: NextRequest) {
   // Ensure the session exists and belongs to this user, then mark it live
   const { data: existing } = await admin
     .from('clinical_sessions')
-    .select('id, user_id')
+    .select('id, user_id, status')
     .eq('id', sessionId)
     .maybeSingle();
 
   if (existing && existing.user_id && existing.user_id !== user.id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  // A CONSULTATION THAT IS OVER CANNOT BE STARTED AGAIN.
+  //
+  // The guest lane has always refused this (rule 7, lib/trial/guestSession.ts);
+  // this lane did not, and that is the whole of the resurrection bug. Opening a
+  // finished consultation's URL — Back from the report, a refresh, an old link,
+  // the retry button after a graceful end — looked exactly like opening a fresh
+  // one, because the page reads only the station and never the session row. The
+  // patient was dialled a second time and the `live` write below demoted a row
+  // the marking engine had already completed.
+  //
+  // It sits BEFORE the mint on purpose. Guarding only the write would still
+  // spend the Azure minutes, still start the call, and then lose it in silence:
+  // save-transcript writes only while the row is `live`, so the second
+  // conversation would be dropped with no error anywhere. Refusing here is the
+  // fix; the `.in()` on the update is defence in depth.
+  //
+  // `live` stays startable — a mid-call reconnect re-mints against its own row.
+  if (existing && !isStartableStatus(existing.status)) {
+    return NextResponse.json(
+      { error: 'session_finished', code: 'session_finished', sessionStatus: existing.status },
+      { status: 409 },
+    );
   }
 
   try {
@@ -135,7 +160,14 @@ export async function POST(req: NextRequest) {
     });
 
     if (existing) {
-      await admin.from('clinical_sessions').update({ status: 'live' }).eq('id', sessionId);
+      // Defence in depth behind the refusal above: a row that finished between
+      // that read and this write can never be demoted back to `live`. Same
+      // shape as abandon-session, which has always guarded this way.
+      await admin
+        .from('clinical_sessions')
+        .update({ status: 'live' })
+        .eq('id', sessionId)
+        .in('status', ['reading', 'live']);
     } else {
       await admin.from('clinical_sessions').insert({
         id: sessionId,
