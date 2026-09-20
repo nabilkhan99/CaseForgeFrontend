@@ -27,7 +27,7 @@ export default function NhsBanner() {
           {/* DEV-HANDOFF §9: keep the "check your deanery" reassurance on-site
               at the point of purchase instead of sending buyers to a PDF. */}
           <Link
-            href="/study-budget/"
+            href="/study-budget"
             className="font-semibold underline underline-offset-2 hover:text-[#1C1917]"
           >
             Check your deanery&rsquo;s policy

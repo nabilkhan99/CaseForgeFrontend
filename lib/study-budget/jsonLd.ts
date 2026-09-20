@@ -64,7 +64,7 @@ export function breadcrumbJsonLd(article: StudyBudgetArticle) {
   return { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: items };
 }
 
-/** "[GP0001 explained](/study-budget/gp0001-explained/)" -> "GP0001 explained". */
+/** "[GP0001 explained](/study-budget/gp0001-explained)" -> "GP0001 explained". */
 function stripMarkdown(text: string): string {
   return text
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')

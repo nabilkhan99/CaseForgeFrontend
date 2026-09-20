@@ -31,7 +31,7 @@ const FAQS: QA[] = [
         deaneries apply to exam preparation courses (code GP0001). Approval is decided locally and
         the rules differ by region, so get prospective approval before you book. Our{' '}
         <Link
-          href="/study-budget/"
+          href="/study-budget"
           className="font-medium text-primary underline underline-offset-2 hover:text-heading"
         >
           study budget guides

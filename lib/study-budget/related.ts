@@ -32,7 +32,7 @@ export interface RelatedLink {
 
 function labelFor(slug: string): string {
   const article = STUDY_BUDGET_ARTICLES.find(
-    (a) => a.slug === `/study-budget/${slug}/`,
+    (a) => a.slug === `/study-budget/${slug}`,
   );
   if (!article) return slug;
   // "London GP study budget: what it covers for the SCA" -> "London"
@@ -41,17 +41,17 @@ function labelFor(slug: string): string {
 
 export function neighbourLinks(slug: string): RelatedLink[] {
   return (NEIGHBOURS[slug] ?? []).map((n) => ({
-    href: `/study-budget/${n}/`,
+    href: `/study-budget/${n}`,
     label: labelFor(n),
   }));
 }
 
 /** Support pages every deanery spoke should point at. */
 export const SUPPORT_LINKS: readonly RelatedLink[] = [
-  { href: '/study-budget/how-to-claim/', label: 'How to claim your study budget' },
+  { href: '/study-budget/how-to-claim', label: 'How to claim your study budget' },
   {
-    href: '/study-budget/sca-exam-fee-reimbursement/',
+    href: '/study-budget/sca-exam-fee-reimbursement',
     label: 'Is the SCA exam fee reimbursed?',
   },
-  { href: '/study-budget/gp0001-explained/', label: 'GP0001 explained' },
+  { href: '/study-budget/gp0001-explained', label: 'GP0001 explained' },
 ];

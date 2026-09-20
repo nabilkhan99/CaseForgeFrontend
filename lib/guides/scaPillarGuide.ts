@@ -59,7 +59,7 @@ export const pillarSections: PillarSection[] = [
             // study-budget hub rather than carrying its own funding detail.
             {
                 label: 'GP trainee study budget',
-                href: '/study-budget/',
+                href: '/study-budget',
                 subtitle: 'What your deanery funds, and how to claim it',
             },
         ],

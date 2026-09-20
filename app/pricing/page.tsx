@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import type { Metadata } from 'next';
 import AppNavbar from '@/components/ui/AppNavbar';
 import LandingNavbar from '@/components/landing/LandingNavbar';
 import LandingFooter from '@/components/landing/LandingFooter';
@@ -7,8 +8,22 @@ import PricingTable from '@/components/landing/v5/PricingTable';
 import { getPlan } from '@/lib/commerce/plans';
 import { getServerEntitlement } from '@/lib/commerce/serverEntitlement';
 import { canSwitchPlan } from '@/lib/commerce/upgrade';
+import { pageMetadata } from '@/lib/seo/site';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * Without this the page inherits the root layout's canonical, which names the
+ * homepage — so /pricing told Google it was a duplicate of / and never ranked
+ * on its own. `pageMetadata` writes a self-referencing canonical along with the
+ * Open Graph and Twitter tags.
+ */
+export const metadata: Metadata = pageMetadata({
+  title: 'Pricing',
+  description:
+    'AI practice on 200 stations, 8.5 hours of on-demand lectures and a 3 hour one to one coaching session. Fail your SCA after passing all 200 stations, and we pay you £500.',
+  path: '/pricing',
+});
 
 /**
  * The plans page, for strangers and for customers.

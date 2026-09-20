@@ -102,7 +102,7 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
           </Link>
           {/* Hub in the main nav for crawl/authority weight (build package §7). */}
           <Link
-            href="/study-budget/"
+            href="/study-budget"
             className="text-[13px] text-body hover:text-heading transition-colors duration-150"
           >
             Study Budget
@@ -220,7 +220,7 @@ export default function LandingNavbar({ user, hideAuth }: LandingNavbarProps) {
               SCA Guide
             </Link>
             <Link
-              href="/study-budget/"
+              href="/study-budget"
               onClick={() => setMobileOpen(false)}
               className="min-h-[44px] flex items-center px-3 py-2.5 rounded-xl text-[14px] text-body hover:text-heading hover:bg-black/[0.03] transition-all duration-150"
             >
