@@ -59,9 +59,19 @@ function SetPasswordInner() {
         const arrive = async () => {
             // Only ever a session check. See decideSetPasswordArrival for why a
             // token arriving here is answered with a button rather than a verify.
-            const { data: { session } } = await supabase.auth.getSession();
+            //
+            // A session read that throws (the auth lock can time out with several
+            // tabs open) reads as "not signed in" rather than leaving the spinner
+            // up for good: with a token that still offers Continue, which works.
+            let hasSession = false;
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                hasSession = Boolean(session);
+            } catch {
+                hasSession = false;
+            }
             if (cancelled) return;
-            const arrival = decideSetPasswordArrival({ hasSession: Boolean(session), tokenHash });
+            const arrival = decideSetPasswordArrival({ hasSession, tokenHash });
             setState(arrival === 'form' ? 'ok' : arrival);
         };
         arrive();

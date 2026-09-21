@@ -41,6 +41,25 @@ describe('/auth/set-password never spends the link on arrival', () => {
     expect(CODE.slice(effectStart, handlerStart)).not.toContain('verifyOtp')
   })
 
+  it('lets the mount effect call nothing but the session check and the rule', () => {
+    // The substring check above cannot see inside a helper: an effect that
+    // called `autoVerify(supabase, tokenHash)` would pass it while doing exactly
+    // what this page must never do. So the effect's calls are an allow-list,
+    // and anything new in there has to be added here on purpose.
+    const effectStart = CODE.indexOf('useEffect(')
+    const effectClose = '}, [tokenHash]);'
+    const effectEnd = CODE.indexOf(effectClose, effectStart)
+    expect(effectEnd).toBeGreaterThan(effectStart)
+    const effect = CODE.slice(effectStart, effectEnd + effectClose.length)
+
+    const calls = [...effect.matchAll(/(\w+)\(/g)].map((match) => match[1])
+    const allowed = new Set(['useEffect', 'arrive', 'getSession', 'Boolean', 'decideSetPasswordArrival', 'setState'])
+    expect(calls.filter((call) => !allowed.has(call))).toEqual([])
+    // And the session check is really in there, so an emptied effect fails too.
+    expect(calls).toContain('getSession')
+    expect(calls).toContain('decideSetPasswordArrival')
+  })
+
   it('verifies from the continue handler, as a recovery token', () => {
     const handler = CODE.slice(CODE.indexOf('const continueSetup = '), CODE.indexOf('const resend = '))
     expect(handler).toContain("verifyOtp({ type: 'recovery', token_hash: tokenHash })")
