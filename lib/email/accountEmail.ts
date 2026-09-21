@@ -1,5 +1,5 @@
 import { BrevoClient } from '@getbrevo/brevo'
-import { BRAND, button, emailShell, paragraph, row } from './chrome'
+import { BRAND, button, emailShell, fallbackLink, paragraph, row } from './chrome'
 
 /**
  * "Your account is ready — set your password".
@@ -82,7 +82,8 @@ export async function sendSetPasswordEmail({
       ),
       row(
         `${button(setPasswordUrl, copy.cta)}
-                <p style="margin:14px 0 0 0;font-size:13px;line-height:1.5;color:#78716C;">${copy.expiryNote}</p>`,
+                <p style="margin:14px 0 14px 0;font-size:13px;line-height:1.5;color:#78716C;">${copy.expiryNote}</p>
+                ${fallbackLink(setPasswordUrl)}`,
         '0 40px 36px 40px',
       ),
     ],

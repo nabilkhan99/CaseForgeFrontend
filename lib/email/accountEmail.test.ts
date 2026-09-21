@@ -73,6 +73,20 @@ describe('sendSetPasswordEmail', () => {
     expect(payload.to).toEqual([{ email: 'buyer@x.com', name: 'Jane' }])
   })
 
+  it('repeats the URL as copyable text under the button', async () => {
+    // The button is an <a> with a background, and the mail systems most likely
+    // to strip or rewrite it are the NHS ones this product's buyers sit behind.
+    // The receipt, dashboard-link and trial emails already carry the fallback;
+    // this one is the recovery path for a link that failed, so it needs it most.
+    await sendSetPasswordEmail({ toEmail: 'buyer@x.com', setPasswordUrl: SET_PASSWORD_URL })
+
+    const html: string = mocks.sendTransacEmail.mock.calls[0][0].htmlContent
+    expect(html).toContain('Or paste this into your browser:')
+    // Once on the button, once on the fallback, and the visible text once more.
+    expect(html.split(`href="${SET_PASSWORD_URL}"`).length - 1).toBe(2)
+    expect(html).toContain(`>${SET_PASSWORD_URL}</a>`)
+  })
+
   it('reports a Brevo failure rather than throwing', async () => {
     mocks.sendTransacEmail.mockRejectedValue(new Error('boom'))
     vi.spyOn(console, 'error').mockImplementation(() => {})
