@@ -28,6 +28,7 @@ import {
 } from '@/lib/clinical-master/types';
 import PassCelebration from '@/components/clinical-master/PassCelebration';
 import { LearningPointsDisplay } from '@/components/cases/LearningPoints';
+import PccsFurtherReading from '@/components/cases/PccsFurtherReading';
 import { MarkSchemeDomains } from '@/components/cases/MarkScheme';
 import {
   TONE_BAR_CLASS,
@@ -715,6 +716,7 @@ function CaseNotes({ feedback }: { feedback: ConsultationFeedback }) {
           className="mt-5 rounded-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
         >
           <LearningPointsDisplay content={learning} />
+          <PccsFurtherReading stationId={feedback.station_id} surface="feedback_report" />
         </div>
       )}
       {hasScheme && scheme && (

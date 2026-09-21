@@ -8,6 +8,7 @@ import type { SeoCase } from '@/lib/seo/cases';
 import CaseTimer from '@/components/cases/CaseTimer';
 import CaseDetailTabs from '@/components/cases/CaseDetailTabs';
 import { MarkdownContent, LearningPointsDisplay } from '@/components/cases/LearningPoints';
+import PccsFurtherReading from '@/components/cases/PccsFurtherReading';
 import { MarkSchemeDomains } from '@/components/cases/MarkScheme';
 import LandingNavbar from '@/components/landing/LandingNavbar';
 import Container from '@/components/ui/Container';
@@ -276,6 +277,7 @@ export default function CaseDetailPageClient({ caseData }: CaseDetailPageClientP
                 <h3 className="text-xs font-black uppercase tracking-widest text-muted">Clinical Learning Points</h3>
             </div>
             <LearningPointsDisplay content={caseData.clinical_learning_points ?? null} />
+            <PccsFurtherReading stationId={caseData.id} surface="case_page" />
         </div>
     );
 
