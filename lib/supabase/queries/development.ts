@@ -8,45 +8,23 @@
 
 import { createClient } from '@/lib/supabase/client';
 import type { DomainCasePoints } from '@/lib/development/domainAverages';
-import { pointsFromResult } from '@/lib/development/domainPoints';
+import {
+  DOMAIN_FETCH_MULTIPLE,
+  DOMAIN_WINDOW,
+  MARKED_SESSION_COLUMNS,
+  domainCaseSeriesFromRows,
+  type MarkedSessionRow,
+} from '@/lib/development/domainCaseSeries';
 
-/**
- * How many marked cases the averages row describes, at most. Matches the report
- * window (MAX_TREND_CASES on the engine side): the window IS the candidate's
- * whole marked history until they outgrow this cap, so the picture starts
- * holistic and stays bounded.
- */
-export const DOMAIN_WINDOW = 20;
-
-/**
- * How many completed sessions to ask for to fill that window.
- *
- * Completed does not mean marked — a session whose marking failed, or one from
- * before the engine existed, is completed with nothing to average. Fetching
- * double the window and filtering here beats filtering on the embedded resource
- * server-side, which ties the query to PostgREST's embedded-filter behaviour
- * for the sake of a dozen rows.
- */
-const FETCH_MULTIPLE = 2;
-
-interface MarkedSessionRow {
-  id: string;
-  started_at: string | null;
-  completed_at: string | null;
-  session_results: { domains: unknown; weighted_score: number | string | null } | null;
-}
+export { DOMAIN_WINDOW };
 
 /**
  * The user's most recent marked cases, oldest → newest.
  *
- * A result whose weighted score is zero is dropped, matching the rule the
- * dashboard's domain dials already apply: those rows are the engine having
- * marked an empty pre-engine transcript, and counting their CF grades would
- * drag every average down for consultations that never really happened.
- *
- * Ordered by `started_at` rather than `completed_at` — `completed_at` is
- * stamped when the *result* is written, so a slow marking run can reorder two
- * consultations relative to when they were actually sat.
+ * The window, the columns and the row → points mapping live in
+ * lib/development/domainCaseSeries.ts, shared with the trainer route that shows
+ * a coach this same series for one of their students — see there for why
+ * zero-score results are dropped and why the order is `started_at`.
  */
 export async function getDomainCaseSeries(
   userId: string,
@@ -56,34 +34,16 @@ export async function getDomainCaseSeries(
 
   const response = await supabase
     .from('clinical_sessions')
-    .select(
-      `
-            id,
-            started_at,
-            completed_at,
-            session_results (
-                domains,
-                weighted_score
-            )
-        `,
-    )
+    .select(MARKED_SESSION_COLUMNS)
     .eq('user_id', userId)
     .eq('status', 'completed')
     .order('started_at', { ascending: false })
-    .limit(window * FETCH_MULTIPLE);
+    .limit(window * DOMAIN_FETCH_MULTIPLE);
 
   const rows = response.data as unknown as MarkedSessionRow[] | null;
   if (!rows) return [];
 
-  return rows
-    .filter((row) => Number(row.session_results?.weighted_score ?? 0) > 0)
-    .slice(0, window)
-    .map((row) => ({
-      sessionId: row.id,
-      points: pointsFromResult(row.session_results?.domains),
-    }))
-    .filter((entry) => Object.keys(entry.points).length > 0)
-    .reverse();
+  return domainCaseSeriesFromRows(rows, window);
 }
 
 interface CaseTitleRow {

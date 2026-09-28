@@ -11,6 +11,9 @@ import CohortStatBand from '@/components/trainer/CohortStatBand';
 import CohortSessionList, {
   type AttributedSession,
 } from '@/components/trainer/CohortSessionList';
+import StudentDevelopment, {
+  useStudentDevelopment,
+} from '@/components/trainer/StudentDevelopment';
 import {
   markedCount,
   studentColour,
@@ -58,7 +61,7 @@ function Reveal({
   return <BlurFade delay={delay}>{children}</BlurFade>;
 }
 
-const REVEAL = { tabs: 0, chart: 0.06, stats: 0.12, list: 0.18 } as const;
+const REVEAL = { tabs: 0, chart: 0.06, stats: 0.12, development: 0.15, list: 0.18 } as const;
 
 /** What the page knows about the cohort right now. */
 type LoadState =
@@ -73,7 +76,9 @@ type LoadState =
  * ONE FILTER, THREE CONSEQUENCES. The tabs at the top drive the chart, the stat
  * band and the list together. That is the whole interaction model: everything
  * below the tabs is an answer to "who are we talking about", and a page where
- * the chart and the list could disagree about that would be unreadable.
+ * the chart and the list could disagree about that would be unreadable. Picking
+ * one student adds a fourth: their Development page, as they see it, between
+ * the stat band and the list — what a one to one coach reads before a session.
  *
  * NOTHING HERE IS THE TRAINER'S OWN WORK. They are a member of their own cohort
  * so they can sit the same cases; the API strips their user id out of the
@@ -84,13 +89,18 @@ type LoadState =
  * way to reassign cases, message a student or leave a note; and following a row
  * into an unmarked case does not start the marking run, because that is a paid
  * Azure call against somebody else's session (/api/generate-feedback suppresses
- * the trigger for a trainer-authorised read). This is a pilot: the trainer's
+ * the trigger for a trainer-authorised read). The same goes for a student's
+ * development picture: the trainer route only reads the last one built, and
+ * never starts a build. This is a pilot: the trainer's
  * feedback loop is a conversation they are already having, and the product's
  * job is to give them something true to have it about.
  */
 export default function StudentsPage() {
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [selected, setSelected] = useState<string | null>(null);
+  // One student picked means their Development page too. Fetched per student,
+  // on demand, and cached for the life of the page — see the hook.
+  const development = useStudentDevelopment(selected);
 
   useEffect(() => {
     let cancelled = false;
@@ -188,6 +198,9 @@ export default function StudentsPage() {
     );
   }
 
+  const selectedStudent =
+    selected === null ? null : (students.find((s) => s.student.userId === selected) ?? null);
+
   const tabs = [
     { userId: null, label: 'All students', colour: null },
     ...students.map(({ student, name, colour }) => ({
@@ -201,7 +214,13 @@ export default function StudentsPage() {
     <div>
       <PageHeader
         title="Students"
-        subtitle={`How your cohort is progressing across their ${overview.assignedCount} assigned cases.`}
+        subtitle={
+          // A one to one coaching cohort is assigned no cases (station_ids is
+          // empty), and "their 0 assigned cases" reads as a broken page.
+          overview.assignedCount === 0
+            ? 'How your students are progressing.'
+            : `How your cohort is progressing across their ${overview.assignedCount} assigned cases.`
+        }
       />
 
       {students.length === 0 ? (
@@ -232,6 +251,18 @@ export default function StudentsPage() {
           <Reveal delay={REVEAL.stats}>
             <CohortStatBand stats={stats} marked={marked} />
           </Reveal>
+
+          {/* Only for one student: a cohort has no single Development page, and
+              averaging three people's patterns would describe nobody. */}
+          {selectedStudent && development && (
+            <Reveal delay={REVEAL.development}>
+              <StudentDevelopment
+                userId={selectedStudent.student.userId}
+                name={selectedStudent.name}
+                state={development}
+              />
+            </Reveal>
+          )}
 
           <Reveal delay={REVEAL.list}>
             <CohortSessionList

@@ -17,6 +17,8 @@ interface PatternBlockProps {
   position: number;
   casesIncluded: number;
   titles: Map<string, string>;
+  /** Set when a trainer is reading; replaces "your" with the student's name. */
+  studentName?: string;
 }
 
 /**
@@ -39,6 +41,7 @@ export default function PatternBlock({
   position,
   casesIncluded,
   titles,
+  studentName,
 }: PatternBlockProps) {
   const shouldReduceMotion = useReducedMotion();
   const [open, setOpen] = useState(true);
@@ -73,7 +76,15 @@ export default function PatternBlock({
               {TREND_DOMAIN_LABELS[pattern.domain]}
             </span>
             <span className="text-[12px] text-muted">
-              in {pattern.frequency} of your last {casesIncluded} cases
+              {studentName ? (
+                <>
+                  in {pattern.frequency} of {studentName}&rsquo;s last {casesIncluded} cases
+                </>
+              ) : (
+                <>
+                  in {pattern.frequency} of your last {casesIncluded} cases
+                </>
+              )}
             </span>
           </span>
         </span>
@@ -111,7 +122,11 @@ export default function PatternBlock({
               <div className="flex flex-col gap-5 sm:flex-row sm:gap-7">
                 <div className="min-w-0 flex-1 border-l-2 border-primary/30 pl-3.5">
                   <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-primary">
-                    In your consultation
+                    {studentName ? (
+                      <>In {studentName}&rsquo;s consultation</>
+                    ) : (
+                      <>In your consultation</>
+                    )}
                   </div>
                   <p className="mt-1.5 text-[13.5px] italic leading-[1.6] text-stone-600">
                     &ldquo;{pattern.your_quote}&rdquo;
