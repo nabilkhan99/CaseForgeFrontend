@@ -46,6 +46,17 @@ describe('isExcludedAddress', () => {
     expect(isExcludedAddress('gp@mail.yopmail.com')).toBe(true)
   })
 
+  it('excludes the throwaway inboxes this product is tested with', () => {
+    // The four the first dry run would have mailed on 28 Sept.
+    expect(isExcludedAddress('yawevi4414@blobapps.com')).toBe(true)
+    expect(isExcludedAddress('sited77486@findize.com')).toBe(true)
+    expect(isExcludedAddress('veweto6741@duidir.com')).toBe(true)
+    expect(isExcludedAddress('midef41688@airychen.com')).toBe(true)
+    // And the rest of the family seen in the accounts table.
+    expect(isExcludedAddress('gate-check-01@fidhost.com')).toBe(true)
+    expect(isExcludedAddress('vafisim280@daugr.com')).toBe(true)
+  })
+
   it('excludes anything that is not an address at all', () => {
     expect(isExcludedAddress('')).toBe(true)
     expect(isExcludedAddress('   ')).toBe(true)

@@ -78,6 +78,22 @@ export const DISPOSABLE_DOMAINS: readonly string[] = [
   'throwawaymail.com',
   'trashmail.com',
   'yopmail.com',
+  // The throwaway inboxes this product is actually tested with. The generic
+  // list above caught none of them, so the first dry run (28 Sept) had four
+  // test accounts queued for "Your five days are up" next to the real
+  // trainees. Mailing disposable domains costs sender reputation for nothing.
+  'aganseo.com',
+  'airychen.com',
+  'apdtax.com',
+  'blobapps.com',
+  'daugr.com',
+  'duidir.com',
+  'fidhost.com',
+  'findize.com',
+  'koboywin.com',
+  'neowd.com',
+  'neplis.com',
+  'prorises.com',
 ]
 
 /** True for an address that must never receive one of these emails. */
