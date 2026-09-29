@@ -13,7 +13,10 @@ export const config = {
          * - _next/image (image optimization files)
          * - favicon.ico (favicon file)
          * - public files (images, etc.)
+         * - coaching-session/mock-* (static coaching station runners in
+         *   public/coaching-session/: no auth needed, and the password_pending
+         *   gate would otherwise redirect a signed-in tutor off the runner)
          */
-        '/((?!_next/static|_next/image|favicon.ico|sca-cases|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+        '/((?!_next/static|_next/image|favicon.ico|sca-cases|coaching-session/mock-|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
     ],
 };
