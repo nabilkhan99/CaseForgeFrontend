@@ -124,6 +124,15 @@ const nextConfig = {
         source: '/course-spec',
         destination: '/course-spec.html',
       },
+      // Coaching station runners. A tutor screen-shares these in Google Meet
+      // coaching sessions. Each batch is a static file,
+      // public/coaching-session/mock-<N>.html, and must carry its own robots
+      // noindex meta. Add a batch by dropping the file in; no config change.
+      // Deliberately not in the sitemap and not linked from anywhere.
+      {
+        source: '/coaching-session/:mock(mock-\\d+)',
+        destination: '/coaching-session/:mock.html',
+      },
       ...azureRoutes.map(route => ({
         source: `/api/${route}`,
         destination: `${backendUrl}/api/${route}`,
