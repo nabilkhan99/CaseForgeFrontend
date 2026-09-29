@@ -132,7 +132,11 @@ export async function getServerEntitlement(): Promise<ServerEntitlement> {
       // being used. Which is also why the five are not loaded here.
       trial: grantState,
       trialOnly: false,
-      cohortOnly: grantState?.state === 'trial' ? false : cohort !== null,
+      // Same rule as decideAccess: a cohort with no assigned cases limits
+      // nobody, or a coaching student whose purchase read broke would be told
+      // they have no cases at all.
+      cohortOnly:
+        grantState?.state === 'trial' ? false : cohort !== null && cohort.stationIds.length > 0,
       failedOpen: true,
       allowed: true,
     }

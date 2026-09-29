@@ -522,7 +522,15 @@ export function decideAccess(rows: EntitlementRow[], ctx: AccessContext): Access
   // cohort assigns, which is the right ladder. For the existing pilot (cohort
   // members with no grant) nothing changes at all: `trialOnly` is false for
   // them, so this reduces to exactly the expression it replaced.
-  const cohortOnly = !purchased && !bypass && !trialOnly && cohort !== null
+  //
+  // A cohort with NO assigned cases grants nothing on its own. That shape is a
+  // coaching cohort (the coach sees their students; every student already has
+  // a purchase) or one still being set up. Without this, a coaching student
+  // whose purchase lapsed would read as allowed with nothing to open: every
+  // case locked and "0 of your 0 assigned cases", instead of the ordinary
+  // lapsed experience with a way to renew.
+  const cohortOnly =
+    !purchased && !bypass && !trialOnly && cohort !== null && cohort.stationIds.length > 0
 
   return {
     entitlement,
