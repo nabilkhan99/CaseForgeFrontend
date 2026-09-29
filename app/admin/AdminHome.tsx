@@ -17,6 +17,11 @@ const DESTINATIONS: readonly AdminDestination[] = [
     blurb: 'Every purchase: revenue, refunds, plan split and coaching session bookings.',
   },
   {
+    href: '/admin/coaching',
+    title: 'Coaching',
+    blurb: 'Booked one to one sessions: set the coach and meeting link, then send the confirmation.',
+  },
+  {
     href: '/admin/referrals',
     title: 'Referrals',
     blurb: 'Advocates and their links, conversions, what you owe, and marking payouts.',
