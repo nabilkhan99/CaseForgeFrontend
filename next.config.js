@@ -128,10 +128,12 @@ const nextConfig = {
       // coaching sessions. Each batch is a static file,
       // public/coaching-session/mock-<N>.html, and must carry its own robots
       // noindex meta. Add a batch by dropping the file in; no config change.
-      // Deliberately not in the sitemap and not linked from anywhere.
+      // Deliberately not in the sitemap and not linked from anywhere. The
+      // destination spells the path out rather than echoing the request, so
+      // a mixed-case link still lands on the lowercase file.
       {
-        source: '/coaching-session/:mock(mock-\\d+)',
-        destination: '/coaching-session/:mock.html',
+        source: '/coaching-session/mock-:n(\\d+)',
+        destination: '/coaching-session/mock-:n.html',
       },
       ...azureRoutes.map(route => ({
         source: `/api/${route}`,

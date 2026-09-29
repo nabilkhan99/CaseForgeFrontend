@@ -40,14 +40,15 @@ describe('the /coaching-session/mock-<N> rewrite', () => {
   it('maps every batch to its static file', async () => {
     const rewrites = await config.rewrites()
     expect(rewrites).toContainEqual({
-      source: '/coaching-session/:mock(mock-\\d+)',
-      destination: '/coaching-session/:mock.html',
+      source: '/coaching-session/mock-:n(\\d+)',
+      destination: '/coaching-session/mock-:n.html',
     })
   })
 })
 
 describe('the runner files in public/coaching-session', () => {
-  const files = readdirSync(RUNNER_DIR)
+  // Dotfiles (a Finder .DS_Store) are gitignored and never deploy.
+  const files = readdirSync(RUNNER_DIR).filter((file) => !file.startsWith('.'))
 
   it('include batch 1', () => {
     expect(files).toContain('mock-1.html')
@@ -58,6 +59,18 @@ describe('the runner files in public/coaching-session', () => {
     // no rewrite to name it, and no guarantee it is kept out of search.
     expect(file).toMatch(/^mock-\d+\.html$/)
     expect(readFileSync(join(RUNNER_DIR, file), 'utf8')).toContain(ROBOTS_META)
+  })
+
+  it('each keep their resume state under their own storage key', () => {
+    // Every batch shares the www origin's localStorage. A mock-2 copied from
+    // mock-1 with the key unchanged would offer mock-1's saved position as
+    // "Resume where you left off", and index past the end of a shorter batch.
+    const keys = files.map((file) => {
+      const match = readFileSync(join(RUNNER_DIR, file), 'utf8').match(/var STORE_KEY = "([^"]+)"/)
+      expect(match, `${file} declares var STORE_KEY`).not.toBeNull()
+      return match![1]
+    })
+    expect(new Set(keys).size).toBe(keys.length)
   })
 })
 
