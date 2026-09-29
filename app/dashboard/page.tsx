@@ -30,6 +30,8 @@ import {
   type CoachingSlotKey,
 } from '@/lib/commerce/coachingSlots';
 import { claimTrialSessionsOnce } from '@/lib/trial/claimOnce';
+import JoinSessionLink from '@/components/dashboard/JoinSessionLink';
+import { NO_JOIN_DETAILS, type CoachingJoinDetails } from '@/lib/commerce/coachingJoin';
 
 const defaultStats: UserStats = {
   currentStreak: 0,
@@ -148,6 +150,10 @@ function DashboardContent() {
   const [examDraft, setExamDraft] = useState('');
   const [examSaving, setExamSaving] = useState(false);
   const [examError, setExamError] = useState<string | null>(null);
+  // The coaching session's joining link and coach, set by an admin on
+  // /admin/coaching. Fetched only for someone with a booked session; a failed
+  // lookup reads as "not set yet", which the card already explains.
+  const [joinDetails, setJoinDetails] = useState<CoachingJoinDetails>(NO_JOIN_DETAILS);
   // Set by the middleware / station page when a pending buyer tried to start
   // a case before their window opened.
   const bouncedPending = useSearchParams()?.get('access') === 'pending';
@@ -229,6 +235,23 @@ function DashboardContent() {
 
     fetchDashboardData();
   }, [user]);
+
+  const coachingBooked = access?.plan === 'complete' && Boolean(access.coachingDay);
+  useEffect(() => {
+    if (!coachingBooked) return;
+    let cancelled = false;
+    fetch('/api/coaching-session/details', { cache: 'no-store' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: CoachingJoinDetails | null) => {
+        if (!cancelled && body) setJoinDetails(body);
+      })
+      .catch(() => {
+        /* no link yet is the honest reading of a failed lookup */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [coachingBooked]);
 
   // No name on file (a free account made from an email alone) reads as a plain
   // greeting, never "Good evening, there".
@@ -509,9 +532,9 @@ function DashboardContent() {
 
       {/* Coaching session.
           The purchase receipt tells every Complete buyer their joining link
-          will appear on their dashboard, and there was no such place: a booked
-          session existed only in Stripe metadata and the confirmation email.
-          This is that place. It is a deadline rather than status, so it sits
+          will appear on their dashboard, and this is that place: once an admin
+          saves the coach and link on /admin/coaching, the Join button appears
+          here. It is a deadline rather than status, so it sits
           with the expiry prompts above rather than in Settings, and it stays
           for the whole run-up: one line of type, and the single most time-bound
           thing a Complete customer owns.
@@ -552,9 +575,22 @@ function DashboardContent() {
               <div className="text-[22px] font-semibold text-heading tracking-[-0.01em]">{when}</div>
               <div className="text-[15px] text-primary font-medium">{countdown}</div>
             </div>
-            <p className="mt-2 text-[13px] leading-relaxed text-muted">
-              3 hours, one to one, remote. We&apos;ll email your joining link a few days beforehand.
-            </p>
+            {joinDetails.meetingUrl ? (
+              <>
+                <p className="mt-2 text-[13px] leading-relaxed text-muted">
+                  3 hours, one to one{joinDetails.coachName ? ` with ${joinDetails.coachName}` : ''}, on a
+                  video call.
+                </p>
+                <div className="mt-4">
+                  <JoinSessionLink href={joinDetails.meetingUrl} />
+                </div>
+              </>
+            ) : (
+              <p className="mt-2 text-[13px] leading-relaxed text-muted">
+                3 hours, one to one, on a video call. Your joining link will appear here, and in your
+                email, a few days beforehand.
+              </p>
+            )}
           </Reveal>
         );
       })()}

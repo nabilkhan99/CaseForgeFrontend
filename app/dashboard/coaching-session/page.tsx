@@ -3,6 +3,9 @@ import { redirect } from 'next/navigation';
 import PageHeader from '@/components/ui/PageHeader';
 import Container from '@/components/ui/Container';
 import CoachingSessionSelect from '@/components/commerce/CoachingSessionSelect';
+import JoinSessionLink from '@/components/dashboard/JoinSessionLink';
+import { loadCoachingJoinDetails } from '@/lib/commerce/coachingJoinServer';
+import { NO_JOIN_DETAILS } from '@/lib/commerce/coachingJoin';
 import { getServerEntitlement } from '@/lib/commerce/serverEntitlement';
 import {
   coachingSessionLabel,
@@ -70,16 +73,28 @@ export default async function CoachingSessionPage() {
       : isCoachingSlotKey(rawSlot)
         ? coachingSessionLabel(day, rawSlot)
         : formatCoachingDate(day);
+    // The joining link and coach, once an admin has saved them on
+    // /admin/coaching. Its own read, so a failure is "not set yet".
+    const join = isIsoDate(day) ? await loadCoachingJoinDetails(user.email, day) : NO_JOIN_DETAILS;
 
     return (
       <div>
         <PageHeader title="Coaching session" subtitle="Your session is booked" />
         <Container>
           <p className="text-[15px] leading-[1.7] text-body">
-            Your one to one coaching session is booked for{' '}
-            <span className="font-semibold text-heading">{when}</span>. 3 hours, remote, just you and
-            your coach. We&rsquo;ll email your joining details nearer the time.
+            Your one to one coaching session
+            {join.coachName ? <> with {join.coachName}</> : null} is booked for{' '}
+            <span className="font-semibold text-heading">{when}</span>. 3 hours on a video call, just
+            you and your coach.{' '}
+            {join.meetingUrl
+              ? 'The same link is in your confirmation email.'
+              : 'Your joining link will appear here, and in your email, a few days beforehand.'}
           </p>
+          {join.meetingUrl && (
+            <div className="mt-5">
+              <JoinSessionLink href={join.meetingUrl} />
+            </div>
+          )}
           <p className="mt-4 text-[13px] text-muted">
             Need a different date? Email{' '}
             <a href="mailto:hello@fourteenfisherman.com" className="text-primary hover:underline">
