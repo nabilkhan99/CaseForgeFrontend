@@ -109,6 +109,11 @@ function DomainColumn({ average, animate }: { average: DomainAverage; animate: b
 interface DomainAveragesProps {
   /** Marked cases in the window, oldest → newest. */
   cases: DomainCasePoints[];
+  /**
+   * Whose averages these are, when the reader is not the trainee — a trainer
+   * on the Students tab. Absent, the copy addresses the reader as "you".
+   */
+  studentName?: string;
 }
 
 /**
@@ -122,7 +127,7 @@ interface DomainAveragesProps {
  * Renders nothing at all when no case in the window carries a grade. An empty
  * three-column row of dashes says less than the space it takes.
  */
-export default function DomainAverages({ cases }: DomainAveragesProps) {
+export default function DomainAverages({ cases, studentName }: DomainAveragesProps) {
   const shouldReduceMotion = useReducedMotion();
   const averages = summariseDomains(cases);
 
@@ -130,7 +135,11 @@ export default function DomainAverages({ cases }: DomainAveragesProps) {
 
   return (
     <section
-      aria-label="Your average grade in each domain"
+      aria-label={
+        studentName
+          ? `${studentName}’s average grade in each domain`
+          : 'Your average grade in each domain'
+      }
       className="mb-10 grid grid-cols-1 gap-6 border-y border-hairline py-6 sm:grid-cols-3 sm:gap-5"
     >
       {averages.map((average) => (

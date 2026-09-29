@@ -7,8 +7,13 @@ interface PatternListProps {
   /** One to three, already in the engine's priority order. */
   patterns: TrendPattern[];
   casesIncluded: number;
-  /** sessionId → station title, for the evidence rows. */
+  /** station id → station title, for the evidence rows. */
   titles: Map<string, string>;
+  /**
+   * Whose consultations these are, when the reader is not the trainee — a
+   * trainer on the Students tab. Absent, the copy addresses the reader as "you".
+   */
+  studentName?: string;
 }
 
 /**
@@ -23,7 +28,12 @@ interface PatternListProps {
  * page into a dashboard of equal-weight tiles, when the whole point is that
  * these are ordered and the first one matters most.
  */
-export default function PatternList({ patterns, casesIncluded, titles }: PatternListProps) {
+export default function PatternList({
+  patterns,
+  casesIncluded,
+  titles,
+  studentName,
+}: PatternListProps) {
   if (patterns.length === 0) return null;
 
   return (
@@ -32,10 +42,18 @@ export default function PatternList({ patterns, casesIncluded, titles }: Pattern
           the caption hanging off the first, which reads as a broken heading. */}
       <div className="mb-1 flex flex-col gap-0.5 border-b border-hairline pb-2 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">
-          What&rsquo;s costing you marks
+          {studentName ? (
+            <>What&rsquo;s costing {studentName} marks</>
+          ) : (
+            <>What&rsquo;s costing you marks</>
+          )}
         </h2>
         <span className="flex-shrink-0 text-[11px] text-stone-400">
-          from your own consultations
+          {studentName ? (
+            <>from {studentName}&rsquo;s own consultations</>
+          ) : (
+            <>from your own consultations</>
+          )}
         </span>
       </div>
 
@@ -47,6 +65,7 @@ export default function PatternList({ patterns, casesIncluded, titles }: Pattern
             position={index + 1}
             casesIncluded={casesIncluded}
             titles={titles}
+            studentName={studentName}
           />
         ))}
       </div>
