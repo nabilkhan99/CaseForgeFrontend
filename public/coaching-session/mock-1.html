@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Station runner: Batch 1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --paper: #EEF2F3;
+  --sheet: #FFFFFF;
+  --ink: #16242C;
+  --muted: #5A6A73;
+  --rule: #D5DDE0;
+  --read: #1D5E78;
+  --read-soft: #DCEBF1;
+  --consult: #8A4B0F;
+  --consult-soft: #F6E7D6;
+  --done: #2F6B45;
+  --alert: #B42318;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0F181D;
+    --sheet: #172229;
+    --ink: #E6EDF0;
+    --muted: #9AABB4;
+    --rule: #2A3943;
+    --read: #7CC0DB;
+    --read-soft: #173744;
+    --consult: #F0B47A;
+    --consult-soft: #3E2A17;
+    --done: #86C79C;
+    --alert: #FF8A7A;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0F181D;
+  --sheet: #172229;
+  --ink: #E6EDF0;
+  --muted: #9AABB4;
+  --rule: #2A3943;
+  --read: #7CC0DB;
+  --read-soft: #173744;
+  --consult: #F0B47A;
+  --consult-soft: #3E2A17;
+  --done: #86C79C;
+  --alert: #FF8A7A;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: inherit; }
+html { height: 100%; scroll-padding-top: env(safe-area-inset-top, 0px); }
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Atkinson Hyperlegible", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 18px;
+  line-height: 1.5;
+}
+button {
+  font: inherit;
+  cursor: pointer;
+  border-radius: 6px;
+}
+button:focus-visible, select:focus-visible { outline: 3px solid var(--read); outline-offset: 2px; }
+
+/* Layout */
+.wrap {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .wrap { grid-template-columns: 1fr; padding: 16px; }
+  .clock { order: -1; position: static !important; }
+}
+
+/* Brief */
+.brief {
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 32px 40px 40px;
+  max-width: 78ch;
+}
+.brief h1 {
+  font-size: 1.75rem;
+  line-height: 1.2;
+  margin: 0 0 20px;
+}
+.brief h2 {
+  font-size: 1.05rem;
+  margin: 28px 0 8px;
+  padding-top: 20px;
+  border-top: 1px solid var(--rule);
+}
+.brief dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; }
+.brief dt { font-weight: 700; }
+.brief dd { margin: 0; }
+.brief ul { margin: 0; padding-left: 1.2em; }
+.brief li { margin: 0 0 10px; }
+.brief li strong:first-child { display: inline; }
+
+/* Clock panel: the one bold element */
+.clock {
+  position: sticky;
+  top: calc(24px + env(safe-area-inset-top, 0px));
+  border-radius: 10px;
+  padding: 24px;
+  background: var(--read-soft);
+  border: 2px solid var(--read);
+  transition: background-color .4s ease, border-color .4s ease;
+}
+.clock[data-phase="consult"] { background: var(--consult-soft); border-color: var(--consult); }
+.clock[data-phase="done"], .clock[data-phase="idle"] { background: var(--sheet); border-color: var(--rule); }
+.station-line { font-size: 1rem; color: var(--muted); margin: 0; }
+.phase {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 4px 0 8px;
+  color: var(--read);
+}
+.clock[data-phase="consult"] .phase { color: var(--consult); }
+.clock[data-phase="done"] .phase { color: var(--done); }
+.time {
+  font-size: clamp(4rem, 9vw, 6.5rem);
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .01em;
+  margin: 0 0 16px;
+}
+.bar { height: 8px; border-radius: 4px; background: var(--rule); overflow: hidden; }
+.bar > span { display: block; height: 100%; width: 0; background: var(--read); }
+.clock[data-phase="consult"] .bar > span { background: var(--consult); }
+.next { font-size: .95rem; color: var(--muted); margin: 12px 0 0; }
+.paused-flag { font-weight: 700; color: var(--ink); margin: 12px 0 0; }
+
+/* Station dots */
+.track { display: flex; gap: 6px; margin: 16px 0 0; padding: 0; list-style: none; }
+.track li { flex: 1; height: 6px; border-radius: 3px; background: var(--rule); }
+.track li.done { background: var(--muted); }
+.track li.now { background: var(--ink); }
+
+/* Tutor controls: small and quiet, so they don't dominate the shared screen */
+.controls {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+}
+.controls button, .controls select {
+  font-size: .85rem;
+  padding: 6px 12px;
+  border: 1px solid var(--rule);
+  background: var(--sheet);
+  color: var(--ink);
+  border-radius: 6px;
+}
+.controls label { font-size: .85rem; color: var(--muted); }
+.adjust { flex-basis: 100%; display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; margin-top: 4px; }
+.adjust input[type="range"] { width: 100%; accent-color: var(--ink); }
+.adjust output { font-size: .85rem; font-variant-numeric: tabular-nums; min-width: 3.2em; text-align: right; }
+
+/* One minute warning: the timer turns red, and flashes for the first few seconds */
+.clock.warn .time { color: var(--alert); }
+.clock.warn .bar > span { background: var(--alert); }
+.clock.flash .time { animation: flash .5s steps(1, end) 6; }
+@keyframes flash { 50% { color: transparent; } }
+@media (prefers-reduced-motion: reduce) {
+  .clock.flash .time { animation: none; }
+}
+
+/* Start and end screens */
+.splash {
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 40px;
+  max-width: 62ch;
+}
+.splash h1 { font-size: 2rem; margin: 0 0 12px; }
+.splash p { margin: 0 0 16px; }
+.splash ol { margin: 0 0 24px; padding-left: 1.3em; }
+.splash li { margin-bottom: 6px; }
+.primary {
+  font-size: 1.1rem;
+  font-weight: 700;
+  padding: 12px 28px;
+  border: 0;
+  background: var(--read);
+  color: var(--sheet);
+}
+.secondary {
+  font-size: 1rem;
+  padding: 11px 20px;
+  border: 1px solid var(--rule);
+  background: transparent;
+  color: var(--ink);
+  margin-left: 8px;
+}
+[hidden] { display: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .clock { transition: none; }
+}
+</style>
+</head>
+<body>
+
+<main class="wrap" id="app">
+  <section id="startScreen" class="splash" aria-labelledby="startTitle">
+    <h1 id="startTitle">Station runner</h1>
+    <p>Six stations, back to back. Each one gives 3 minutes of reading time, then a 12 minute consultation. The brief stays on screen throughout, and the next station starts automatically.</p>
+    <ol>
+      <li>In Google Meet, click Present now, choose A tab, and select this tab.</li>
+      <li>Ask the student to switch their Meet layout to Tiled.</li>
+      <li>Press Start when you're both ready.</li>
+    </ol>
+    <button class="primary" id="startBtn" type="button">Start</button>
+    <button class="secondary" id="resumeBtn" type="button" hidden>Resume where you left off</button>
+  </section>
+
+  <section id="doneScreen" class="splash" hidden aria-live="polite">
+    <h1>Mock complete</h1>
+    <p>All six stations are finished. Take a 5 minute break, then move on to feedback.</p>
+    <button class="secondary" id="restartBtn" type="button" style="margin-left:0">Back to start</button>
+  </section>
+
+  <article id="brief" class="brief" hidden aria-live="polite"></article>
+
+  <aside id="clock" class="clock" data-phase="idle" hidden aria-label="Station timer">
+    <p class="station-line" id="stationLine">Station 1 of 6</p>
+    <p class="phase" id="phaseLabel">Reading time</p>
+    <p class="time" id="timeLeft" role="timer" aria-live="off">3:00</p>
+    <div class="bar" aria-hidden="true"><span id="barFill"></span></div>
+    <p class="next" id="nextLine"></p>
+    <p class="paused-flag" id="pausedFlag" hidden>Paused</p>
+    <ul class="track" id="track" aria-hidden="true"></ul>
+
+    <div class="controls">
+      <button type="button" id="pauseBtn">Pause</button>
+      <select id="jump" aria-label="Station"></select>
+      <select id="phaseSel" aria-label="Phase">
+        <option value="read">Reading</option>
+        <option value="consult">Consultation</option>
+      </select>
+      <div class="adjust">
+        <label for="scrub">Time left</label>
+        <input type="range" id="scrub" min="0" max="180" step="5" value="180">
+        <output id="scrubOut" for="scrub">3:00</output>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var READ_MS = 3 * 60 * 1000;
+  var CONSULT_MS = 12 * 60 * 1000;
+  var STORE_KEY = "ff-runner-batch1-v1";
+
+  // Candidate briefs. Titles are deliberately hidden: the student only sees the station number.
+  var STATIONS = [
+    {
+      patient: "Aisha Rahman, 34 (DOB 03/05/1992)",
+      consultation: "Video",
+      booking: "\u201CTrouble sleeping. Exhausted all the time.\u201D",
+      records: [
+        ["Past medical history", "Nil chronic"],
+        ["Medication", "None regular"],
+        ["Allergies", "No known drug allergies"],
+        ["Attendance", "8 GP contacts in the past 12 months for tension headache, dizziness, low energy and intermittent abdominal pain. Examination and investigations normal each time."],
+        ["A&E letter, 14 months ago", "Fall at home. Right wrist sprain. Discharged with analgesia."],
+        ["A&E letter, 5 months ago", "Bruising to the left cheek. Patient reported walking into a door. No fracture on imaging. Discharged."],
+        ["Family", "Two children registered at the practice, Yusuf (6) and Maryam (3). Immunisations up to date. No safeguarding history on file."]
+      ]
+    },
+    {
+      patient: "Susan Cartwright, 62 (DOB 19/09/1963)",
+      consultation: "Video",
+      booking: "\u201CHusband rang. Says she\u2019s had a tummy bug and isn\u2019t right. She says she\u2019s fine. He asked us to call anyway.\u201D",
+      records: [
+        ["Past medical history", "Bipolar affective disorder, diagnosed 2009. Stable for 9 years, no admissions since 2017. Hypertension. Osteoarthritis of the right knee."],
+        ["Medication", "Lithium carbonate 800 mg at night. Bendroflumethiazide 2.5 mg daily, <strong>started 8 days ago</strong> (locum entry: \u201CBP 158/94, added thiazide, recheck 4/52\u201D). Amlodipine 5 mg daily. Naproxen 500 mg twice daily, <strong>issued by A&amp;E 2 weeks ago</strong>. Omeprazole 20 mg daily."],
+        ["Allergies", "No known drug allergies"],
+        ["Monitoring", "Lithium level 3 months ago 0.72 mmol/L. Renal and thyroid function 5 months ago normal. Next lithium level due in 3 weeks."],
+        ["A&E letter, 2 weeks ago", "Inversion injury, right ankle. No fracture. Discharged with naproxen."],
+        ["Mental health team", "Discharged to primary care in 2019, with an open route back."]
+      ]
+    },
+    {
+      patient: "Sandra Olderman, 14",
+      consultation: "Video, with her mother, Katie Olderman. Sandra is not present.",
+      booking: "\u201CMum wants to discuss medication for Sandra.\u201D",
+      records: [
+        ["Past medical history", "None recorded"],
+        ["Medication", "None regular"],
+        ["Allergies", "No known drug allergies"],
+        ["Consultation 2 months ago (Dr Aisha Abdul)", "Seen with mum. Anxious, withdrawn, low mood for one month. No known triggers. Attending school and managing. No thoughts of suicide. Examination: good eye contact, no pressure of speech, no psychotic features. Impression: depression. Plan: referred to CAMHS, safety netting advice given."]
+      ]
+    },
+    {
+      patient: "Amanda Walsh, 26",
+      consultation: "Video",
+      booking: "\u201CWants to discuss some concerns.\u201D",
+      records: [
+        ["Past medical history", "Migraine"],
+        ["BMI", "22.5 kg/m\u00B2 (2 years ago)"],
+        ["Medication", "Microgynon (ethinylestradiol and levonorgestrel), repeat"],
+        ["Allergies", "No known drug allergies"],
+        ["Letter from sexual health clinic, 2 years ago", "Full STI screen negative. Pregnancy test negative. Background of migraine without aura. After counselling, started on Microgynon. Advised to obtain repeat prescriptions from GP. Counselled on missed pill and sick day rules."]
+      ]
+    },
+    {
+      patient: "Peter Collins, 65",
+      consultation: "Video",
+      booking: "\u201CWants to discuss some concerns.\u201D",
+      records: [
+        ["Past medical history", "COPD. Osteoarthritis. Benign prostatic hyperplasia."],
+        ["Medication", "Trelegy Ellipta 92/55/22 one puff daily. Salbutamol inhaler as needed. Paracetamol 500 mg up to four times daily as needed. Tamsulosin 400 micrograms daily."],
+        ["Allergies", "No known drug allergies"],
+        ["Hospital discharge letter, 4 weeks ago (Consultant Respiratory Physician)", "Admitted with pneumonia complicated by sepsis. Deteriorated despite initial treatment and needed three weeks in ICU with mechanical ventilation and vasopressor support. Stepped down to the respiratory ward for four weeks with physiotherapy and pulmonary rehabilitation. Now clinically stable, oxygen saturations 95% on air, no significant breathlessness at rest. Medication unchanged. Please monitor COPD and general recovery. Respiratory outpatient review in six weeks."]
+      ]
+    },
+    {
+      patient: "Juliana Alban, 59",
+      consultation: "Video, booked urgently",
+      booking: "\u201CWants to discuss some concerns.\u201D",
+      records: [
+        ["Past medical history", "Bilateral knee osteoarthritis. Hypertension. Epistaxis."],
+        ["Medication", "Amlodipine 5 mg daily. Co-codamol 30/500 one to two tablets every 4 to 6 hours as needed. Ibuprofen gel as needed."],
+        ["Allergies", "No known drug allergies"],
+        ["A&E discharge letter, 1 week ago", "Attended with a nosebleed. Anterior epistaxis, cauterised with good haemostasis. Observations stable: BP 130/78, pulse 89, respiratory rate 18, oxygen saturation 97% on air, temperature 36.3. Prescribed Naseptin cream to both nostrils twice daily. Advised to avoid nasal trauma and strenuous activity for a few days, and to seek urgent help if bleeding recurs or is heavy. GP review advised if symptoms persist or recur."]
+      ]
+    }
+  ];
+
+  var TOTAL = STATIONS.length;
+
+  // State: which station, which phase, when the phase ends (or how much was left when paused)
+  var state = null;
+  var ticker = null;
+
+  var el = function (id) { return document.getElementById(id); };
+  var startScreen = el("startScreen"), doneScreen = el("doneScreen");
+  var briefEl = el("brief"), clockEl = el("clock");
+
+  function escapeText(s) {
+    return String(s).replace(/&(?!amp;)/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  // Record values may contain <strong> for emphasis; everything else is escaped
+  function safeRich(s) {
+    return escapeText(s).replace(/&lt;strong&gt;/g, "<strong>").replace(/&lt;\/strong&gt;/g, "</strong>");
+  }
+
+  function renderBrief(i) {
+    var s = STATIONS[i];
+    var html = "<h1>Station " + (i + 1) + "</h1>";
+    html += "<dl>";
+    html += "<dt>Patient</dt><dd>" + escapeText(s.patient) + "</dd>";
+    html += "<dt>Consultation</dt><dd>" + escapeText(s.consultation) + "</dd>";
+    html += "<dt>Booking note</dt><dd>" + escapeText(s.booking) + "</dd>";
+    html += "</dl>";
+    html += "<h2>Records</h2><ul>";
+    s.records.forEach(function (r) {
+      html += "<li><strong>" + escapeText(r[0]) + ":</strong> " + safeRich(r[1]) + "</li>";
+    });
+    html += "</ul>";
+    briefEl.innerHTML = html;
+  }
+
+  function buildTrack() {
+    var track = el("track");
+    track.innerHTML = "";
+    for (var i = 0; i < TOTAL; i++) track.appendChild(document.createElement("li"));
+    var jump = el("jump");
+    jump.innerHTML = "";
+    for (var j = 0; j < TOTAL; j++) {
+      var o = document.createElement("option");
+      o.value = String(j);
+      o.textContent = "Station " + (j + 1);
+      jump.appendChild(o);
+    }
+  }
+
+  function phaseLength(p) { return p === "read" ? READ_MS : CONSULT_MS; }
+
+  function save() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+  function load() {
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+  function clearSaved() {
+    try { localStorage.removeItem(STORE_KEY); } catch (e) {}
+  }
+
+  function fmt(ms) {
+    var total = Math.max(0, Math.ceil(ms / 1000));
+    var m = Math.floor(total / 60), s = total % 60;
+    return m + ":" + (s < 10 ? "0" : "") + s;
+  }
+
+  function remaining() {
+    if (!state) return 0;
+    if (state.paused) return state.left;
+    return state.endsAt - Date.now();
+  }
+
+  function beginPhase(stationIdx, phase) {
+    state = { station: stationIdx, phase: phase, paused: false, endsAt: Date.now() + phaseLength(phase), left: 0, flashed: false };
+    renderBrief(stationIdx);
+    save();
+    paint();
+  }
+
+  // Move forward when a phase runs out. Handles long gaps (e.g. a throttled background tab)
+  // by carrying the overrun into the next phase so the schedule stays on true time.
+  function advanceIfDue() {
+    if (!state || state.paused) return;
+    var guard = 0;
+    while (state && Date.now() >= state.endsAt && guard < 20) {
+      guard++;
+      var overrun = Date.now() - state.endsAt;
+      if (state.phase === "read") {
+        state.phase = "consult";
+        state.flashed = false;
+        state.endsAt = Date.now() - overrun + CONSULT_MS;
+      } else if (state.station < TOTAL - 1) {
+        state.station += 1;
+        state.phase = "read";
+        state.flashed = false;
+        state.endsAt = Date.now() - overrun + READ_MS;
+        renderBrief(state.station);
+      } else {
+        finish();
+        return;
+      }
+      save();
+    }
+  }
+
+  function paint() {
+    if (!state) return;
+    var left = remaining();
+    var len = phaseLength(state.phase);
+    clockEl.dataset.phase = state.phase;
+    el("stationLine").textContent = "Station " + (state.station + 1) + " of " + TOTAL;
+    el("phaseLabel").textContent = state.phase === "read" ? "Reading time" : "Consultation";
+    el("timeLeft").textContent = fmt(left);
+    el("barFill").style.width = (100 * (1 - Math.max(0, left) / len)).toFixed(2) + "%";
+    var next;
+    if (state.phase === "read") next = "Next: 12 minute consultation";
+    else if (state.station < TOTAL - 1) next = "Next: station " + (state.station + 2) + ", reading time";
+    else next = "Last station. The mock ends when this timer does.";
+    el("nextLine").textContent = next;
+    el("pausedFlag").hidden = !state.paused;
+    el("pauseBtn").textContent = state.paused ? "Resume" : "Pause";
+    var dots = el("track").children;
+    for (var i = 0; i < dots.length; i++) {
+      dots[i].className = i < state.station ? "done" : (i === state.station ? "now" : "");
+    }
+    el("jump").value = String(state.station);
+    el("phaseSel").value = state.phase;
+
+    // One minute warning
+    var warn = state.phase === "consult" && left > 0 && left <= 60000;
+    clockEl.classList.toggle("warn", warn);
+    if (warn && !state.flashed) {
+      state.flashed = true;
+      save();
+      clockEl.classList.remove("flash");
+      void clockEl.offsetWidth;
+      clockEl.classList.add("flash");
+      setTimeout(function () { clockEl.classList.remove("flash"); }, 3100);
+    }
+    if (!warn) clockEl.classList.remove("flash");
+
+    // Keep the slider in step unless the tutor is dragging it
+    var scrub = el("scrub");
+    scrub.max = String(len / 1000);
+    if (!scrubbing) scrub.value = String(Math.max(0, Math.round(left / 1000)));
+    el("scrubOut").textContent = fmt(scrubbing ? scrub.value * 1000 : left);
+  }
+
+  function tick() {
+    advanceIfDue();
+    paint();
+  }
+
+  function showRunning() {
+    startScreen.hidden = true;
+    doneScreen.hidden = true;
+    briefEl.hidden = false;
+    clockEl.hidden = false;
+    if (!ticker) ticker = setInterval(tick, 250);
+  }
+
+  function finish() {
+    state = null;
+    clearSaved();
+    if (ticker) { clearInterval(ticker); ticker = null; }
+    briefEl.hidden = true;
+    clockEl.hidden = true;
+    startScreen.hidden = true;
+    doneScreen.hidden = false;
+  }
+
+  function start() {
+    showRunning();
+    beginPhase(0, "read");
+  }
+
+  function resume() {
+    var saved = load();
+    if (!saved) { start(); return; }
+    state = saved;
+    renderBrief(state.station);
+    showRunning();
+    // If it was running when the page closed, the clock kept going in real time.
+    advanceIfDue();
+    paint();
+  }
+
+  function togglePause() {
+    if (!state) return;
+    if (state.paused) {
+      state.endsAt = Date.now() + state.left;
+      state.paused = false;
+    } else {
+      state.left = state.endsAt - Date.now();
+      state.paused = true;
+    }
+    save();
+    paint();
+  }
+
+  var scrubbing = false;
+
+  // Move to any station and phase, starting that phase from full time
+  function setPosition(idx, phase) {
+    var wasPaused = state && state.paused;
+    beginPhase(idx, phase);
+    if (wasPaused) { state.paused = true; state.left = phaseLength(phase); save(); paint(); }
+  }
+
+  // Set exactly how much time is left in the current phase
+  function setTimeLeft(seconds) {
+    if (!state) return;
+    var ms = Math.max(1000, Math.min(phaseLength(state.phase), seconds * 1000));
+    if (state.paused) state.left = ms;
+    else state.endsAt = Date.now() + ms;
+    state.flashed = ms <= 60000;
+    save();
+    paint();
+  }
+
+  // Wire up
+  buildTrack();
+  el("startBtn").addEventListener("click", start);
+  el("resumeBtn").addEventListener("click", resume);
+  el("restartBtn").addEventListener("click", function () {
+    doneScreen.hidden = true;
+    startScreen.hidden = false;
+    el("resumeBtn").hidden = true;
+  });
+  el("pauseBtn").addEventListener("click", togglePause);
+  el("jump").addEventListener("change", function (e) { setPosition(parseInt(e.target.value, 10), "read"); });
+  el("phaseSel").addEventListener("change", function (e) { setPosition(state.station, e.target.value); });
+  var scrub = el("scrub");
+  scrub.addEventListener("input", function () {
+    scrubbing = true;
+    el("scrubOut").textContent = fmt(scrub.value * 1000);
+  });
+  scrub.addEventListener("change", function () {
+    scrubbing = false;
+    setTimeLeft(parseInt(scrub.value, 10));
+  });
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) tick(); });
+
+  // Offer to resume if the tab was closed or reloaded mid mock
+  var saved = load();
+  if (saved && typeof saved.station === "number") {
+    el("resumeBtn").hidden = false;
+    el("startBtn").textContent = "Start from station 1";
+  }
+})();
+</script>
+</body>
+</html>
