@@ -47,6 +47,8 @@ interface Stub {
   /** Resolve the purchase read by hand, to observe what went out alongside it. */
   holdPurchases?: Promise<void>
   grant?: Record<string, unknown> | null
+  /** The cohort the membership join returns, or none. */
+  cohort?: { id: string; station_ids: string[]; trainer_email: string } | null
   user?: typeof USER | null
 }
 
@@ -89,7 +91,10 @@ function install(stub: Stub) {
             return { data: stub.purchases ?? [], error: stub.purchasesError ?? null }
           })
         case 'cohort_members':
-          return chain(async () => ({ data: null, error: null }))
+          return chain(async () => ({
+            data: stub.cohort ? { cohorts: stub.cohort } : null,
+            error: null,
+          }))
         case 'trial_grants':
           return chain(async () => ({ data: stub.grant ?? null, error: null }))
         case 'stations':
@@ -199,6 +204,33 @@ describe('when the purchase read breaks', () => {
     expect(result.trial?.state).toBe('trial')
     expect(result.cohortOnly).toBe(false)
     for (const table of TRIAL_DETAIL_TABLES) expect(tables).not.toContain(table)
+    spy.mockRestore()
+  })
+})
+
+describe('when the purchase read breaks for a cohort member', () => {
+  it('does not narrow a coaching student to an empty allowlist', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    install({
+      purchasesError: { message: 'down' },
+      cohort: { id: 'c-1', station_ids: [], trainer_email: 'coach@example.com' },
+    })
+    const result = await getServerEntitlement()
+    expect(result.failedOpen).toBe(true)
+    expect(result.allowed).toBe(true)
+    expect(result.cohort?.id).toBe('c-1')
+    expect(result.cohortOnly).toBe(false)
+    spy.mockRestore()
+  })
+
+  it('still limits a pilot trainee to their assigned cases', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    install({
+      purchasesError: { message: 'down' },
+      cohort: { id: 'c-2', station_ids: FIVE, trainer_email: 'trainer@example.com' },
+    })
+    const result = await getServerEntitlement()
+    expect(result.cohortOnly).toBe(true)
     spy.mockRestore()
   })
 })

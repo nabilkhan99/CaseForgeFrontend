@@ -12,6 +12,8 @@ import {
 } from './entitlements'
 import { parseAdminEmails } from '@/lib/admin/guard'
 import { ACCESS_OPENS } from './plans'
+import type { CohortAccess } from './cohortAccess'
+import { NO_TRIAL, type TrialAccess } from './trialAccess'
 
 const row = (over: Partial<EntitlementRow>): EntitlementRow => ({
   plan: 'self_study',
@@ -709,3 +711,60 @@ describe('decideAccess', () => {
   })
 })
 
+describe('decideAccess with a cohort', () => {
+  const ctx = (over: Partial<AccessContext> = {}): AccessContext => ({
+    email: 'trainee@nhs.net',
+    admins: new Set<string>(),
+    now: DURING,
+    ...over,
+  })
+  const cohort = (stationIds: string[]): CohortAccess => ({
+    id: 'cohort-1',
+    stationIds,
+    trainerEmail: 'coach@example.com',
+  })
+  const PILOT = cohort(['st-1', 'st-2', 'st-3', 'st-4', 'st-5'])
+  const COACHING = cohort([])
+  const trial = (state: 'trial' | 'trial_ended'): TrialAccess => ({ ...NO_TRIAL, state })
+
+  it('leaves a purchased coaching student the whole bank', () => {
+    const d = decideAccess([row({ plan: 'complete' })], ctx({ cohort: COACHING }))
+    expect(d).toMatchObject({ allowed: true, cohortOnly: false })
+  })
+
+  it('gives a coaching student whose purchase lapsed the ordinary lapsed state, not an empty allowlist', () => {
+    const d = decideAccess([row({})], ctx({ now: AFTER_PREORDER_WINDOW, cohort: COACHING }))
+    expect(d).toMatchObject({ allowed: false, cohortOnly: false })
+    expect(d.entitlement.state).toBe('read_only')
+  })
+
+  it('grants nothing for an empty cohort alone', () => {
+    expect(decideAccess([], ctx({ cohort: COACHING }))).toMatchObject({
+      allowed: false,
+      cohortOnly: false,
+    })
+  })
+
+  it('still lets a pilot trainee with no purchase into their assigned cases', () => {
+    expect(decideAccess([], ctx({ cohort: PILOT }))).toMatchObject({
+      allowed: true,
+      cohortOnly: true,
+    })
+  })
+
+  it('lets a live trial carry an empty cohort', () => {
+    expect(decideAccess([], ctx({ cohort: COACHING, trial: trial('trial') }))).toMatchObject({
+      allowed: true,
+      trialOnly: true,
+      cohortOnly: false,
+    })
+  })
+
+  it('grants nothing once that trial has ended', () => {
+    expect(decideAccess([], ctx({ cohort: COACHING, trial: trial('trial_ended') }))).toMatchObject({
+      allowed: false,
+      trialOnly: false,
+      cohortOnly: false,
+    })
+  })
+})
