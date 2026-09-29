@@ -102,7 +102,7 @@ export default function CoachingSessionSelect({ accountEmail }: CoachingSessionS
         >
           <p className="text-[15px] font-semibold text-heading">Your coaching session is booked.</p>
           <p className="mt-1 text-[13px] leading-[1.65] text-muted">
-            {bookedLabel}. We&rsquo;ll email your joining details nearer the time.
+            {bookedLabel}. Your joining link will appear on your dashboard, and in your email, a few days beforehand.
           </p>
         </motion.div>
       ) : (
