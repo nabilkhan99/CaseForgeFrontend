@@ -182,81 +182,45 @@ function rollingSubscription() {
 }
 
 describe('a monthly renewal', () => {
+  // No renewal receipts, by decision (2 Oct 2026). A renewal moves the paid-up
+  // period on and sends nothing: the first renewal ever processed emailed a
+  // receipt to a subscriber who had already sat his exam, and it was how he
+  // learned of the charge. These tests pin both halves — the silence, and the
+  // period refresh that a paying subscriber's access depends on.
   beforeEach(() => {
     vi.stubEnv('STRIPE_PRICE_SELF_STUDY_MONTHLY', 'price_monthly')
     mocks.subscriptionsRetrieve.mockResolvedValue(rollingSubscription())
-    mocks.issueReceipt.mockResolvedValue({
-      id: 'r-4479',
-      receiptNumber: 'FF-26-4479',
-      pdf: Buffer.from('%PDF'),
-      fileName: 'Fourteen-Fisherman-receipt-FF-26-4479.pdf',
-      periodEnd: new Date(1790418600 * 1000),
-      content: {},
-    })
   })
 
-  it('keys the receipt on the INVOICE id, not a session', async () => {
-    // A renewal has no checkout session. The invoice is what makes a
-    // redelivered `invoice.paid` reprint one number instead of burning another.
+  it('still refreshes the subscription, so access rolls forward', async () => {
     await deliver(invoicePaid())
 
-    expect(mocks.issueReceipt.mock.calls[0][1]).toMatchObject({
-      stripeEventKey: 'in_test_999',
-      planKey: 'self_study_monthly',
-      amountPence: 12900,
-      kind: 'renewal',
-    })
+    expect(mocks.subscriptionsRetrieve).toHaveBeenCalledWith('sub_1', expect.anything())
   })
 
-  it('emails the renewal receipt once', async () => {
+  it('issues no receipt for a renewal', async () => {
     await deliver(invoicePaid())
-
-    expect(mocks.claimReceiptEmail).toHaveBeenCalledWith(expect.anything(), 'r-4479')
-    expect(mocks.sendReceiptEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ isRenewal: true, hasSetupLink: false, setupUrl: null }),
-    )
-  })
-
-  it('does NOT re-email when Stripe redelivers the same invoice', async () => {
-    // Allocation is idempotent, so a redelivery lands on the same receipt —
-    // right for the number, wrong for the mail. A redelivery is not a failure
-    // Stripe backs off from; it is a success that keeps re-firing, so without
-    // the claim every subscriber would collect duplicates of one receipt.
-    mocks.claimReceiptEmail.mockResolvedValue(false)
-
-    await deliver(invoicePaid())
-
-    expect(mocks.issueReceipt).toHaveBeenCalledTimes(1)
-    expect(mocks.sendReceiptEmail).not.toHaveBeenCalled()
-  })
-
-  it('hands the claim back when the renewal email fails', async () => {
-    mocks.sendReceiptEmail.mockResolvedValue({ sent: false, error: 'brevo_error' })
-
-    await deliver(invoicePaid())
-
-    expect(mocks.releaseReceiptEmail).toHaveBeenCalledWith(expect.anything(), 'r-4479')
-  })
-
-  it('states the renewal amount Stripe actually took', async () => {
-    await deliver(invoicePaid({ amount_paid: 9900 }))
-
-    expect(mocks.sendReceiptEmail.mock.calls[0][0].renewalAmount).toBe('£99.00')
-  })
-
-  it('issues nothing for the FIRST invoice of a subscription', async () => {
-    // subscription_create was already receipted by the checkout handler. Without
-    // this gate the buyer gets two receipts, on two numbers, for one payment.
-    await deliver(invoicePaid({ billing_reason: 'subscription_create' }))
 
     expect(mocks.issueReceipt).not.toHaveBeenCalled()
+  })
+
+  it('emails nothing for a renewal', async () => {
+    await deliver(invoicePaid())
+
+    expect(mocks.sendReceiptEmail).not.toHaveBeenCalled()
+    expect(mocks.claimReceiptEmail).not.toHaveBeenCalled()
+  })
+
+  it('stays silent when Stripe redelivers the same invoice', async () => {
+    await deliver(invoicePaid())
+    await deliver(invoicePaid())
+
     expect(mocks.sendReceiptEmail).not.toHaveBeenCalled()
   })
 
-  it('sends nothing when no order sits behind the subscription', async () => {
-    mocks.order = null
-
-    await deliver(invoicePaid())
+  it('issues nothing for the FIRST invoice of a subscription either', async () => {
+    // subscription_create was receipted by the checkout handler, as before.
+    await deliver(invoicePaid({ billing_reason: 'subscription_create' }))
 
     expect(mocks.issueReceipt).not.toHaveBeenCalled()
     expect(mocks.sendReceiptEmail).not.toHaveBeenCalled()

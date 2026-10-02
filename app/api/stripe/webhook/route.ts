@@ -18,7 +18,7 @@ import { resolvePurchaseEmail } from '@/lib/commerce/buyerEmail';
 import { sendReferralEmail } from '@/lib/email/referralEmail';
 import { sendReceiptEmail } from '@/lib/email/receiptEmail';
 import { sendSetPasswordEmail } from '@/lib/email/accountEmail';
-import { claimReceiptEmail, issueReceipt, releaseReceiptEmail } from '@/lib/receipts/issueReceipt';
+import { issueReceipt } from '@/lib/receipts/issueReceipt';
 import { paymentMethodLabel } from '@/lib/receipts/paymentMethod';
 import { formatAmount, formatReceiptDate, isReceiptPlanKey } from '@/lib/receipts/receiptContent';
 import { pushPreorderContactToBrevo } from '@/lib/marketing/preorderContact';
@@ -125,7 +125,7 @@ export async function POST(request: Request) {
     return handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
   }
   if (event.type === 'invoice.paid') {
-    return handleInvoicePaid(event.data.object as Stripe.Invoice, new Date(event.created * 1000));
+    return handleInvoicePaid(event.data.object as Stripe.Invoice);
   }
 
   return NextResponse.json({ received: true, ignored: event.type });
@@ -1091,18 +1091,17 @@ async function syncSubscription(subscription: Stripe.Subscription): Promise<void
  * The subscription is re-read rather than trusted from the invoice: the invoice
  * carries the subscription id, not its current period.
  */
-async function handleInvoicePaid(invoice: Stripe.Invoice, chargedAt: Date) {
+async function handleInvoicePaid(invoice: Stripe.Invoice) {
   const subscriptionId = subscriptionIdFromInvoice(invoice);
   if (!subscriptionId) {
     // A one-off invoice with no subscription behind it — nothing of ours.
     return NextResponse.json({ received: true, ignored: 'no_subscription' });
   }
 
-  let subscription: Stripe.Subscription | null = null;
   try {
     // Expanded, because syncSubscription will not write anything until it can
     // see that this invoice is paid.
-    subscription = await getStripe().subscriptions.retrieve(subscriptionId, {
+    const subscription = await getStripe().subscriptions.retrieve(subscriptionId, {
       expand: ['latest_invoice'],
     });
     await syncSubscription(subscription);
@@ -1113,144 +1112,13 @@ async function handleInvoicePaid(invoice: Stripe.Invoice, chargedAt: Date) {
     });
   }
 
-  // Its own try, deliberately not sharing the one above. The period refresh and
-  // the customer's receipt are unrelated obligations, and this handler always
-  // returns 200 — so folding them together meant a failed period write silently
-  // cost a paying subscriber their receipt, permanently, with no Stripe retry
-  // to recover it.
-  if (subscription) {
-    try {
-      await deliverRenewalReceipt(invoice, subscription, chargedAt);
-    } catch (error: unknown) {
-      console.error('[stripe-webhook] renewal receipt failed (non-fatal)', {
-        subscriptionId,
-        invoiceId: invoice.id,
-        error,
-      });
-    }
-  }
-
+  // NO RENEWAL RECEIPT, by decision (Nabil, 2 Oct 2026). The first renewal
+  // ever processed (1 Oct) emailed a receipt to a subscriber who had already
+  // sat his exam; it was how he learned of the charge, and he asked for a
+  // refund. Renewals now move the period on and say nothing. The purchase
+  // receipt is untouched, and Stripe's customer portal still holds every
+  // invoice for anyone who wants one.
   return NextResponse.json({ received: true, refreshed: subscriptionId });
-}
-
-/**
- * A monthly renewal cleared — send its receipt.
- *
- * Only for `billing_reason: subscription_cycle`. The FIRST invoice of a
- * subscription is `subscription_create`, and that charge already had its
- * receipt sent by the checkout handler; without this gate the monthly buyer
- * would get two receipts for one payment, on two different numbers.
- *
- * The plan comes from the PRICE, not from metadata: a renewal arrives attached
- * to the subscription, and a subscription carries no checkout metadata. This is
- * what `planForStripePriceId` exists for.
- *
- * Entirely best-effort. A missing renewal receipt is a support email; a thrown
- * exception here would re-run the whole invoice handler on Stripe's retry.
- */
-async function deliverRenewalReceipt(
-  invoice: Stripe.Invoice,
-  subscription: Stripe.Subscription,
-  chargedAt: Date,
-): Promise<void> {
-  if (invoice.billing_reason !== 'subscription_cycle') return;
-  if (!invoice.id) return;
-
-  const plan = planFromSubscription(subscription);
-  if (!plan || !isReceiptPlanKey(plan) || !isRollingPlan(plan)) return;
-
-  const supabase = getSupabaseAdmin();
-  const { data: order, error } = await supabase
-    .from('preorders')
-    .select('id, email, full_name')
-    .eq('stripe_subscription_id', subscription.id)
-    .neq('status', 'refunded')
-    // A subscription has exactly one order by construction, but `maybeSingle`
-    // ERRORS on a second row rather than picking one — and a duplicate here
-    // would cost a paying subscriber their receipt. Both rows would be the
-    // same customer anyway, so take one rather than fail.
-    .limit(1)
-    .maybeSingle();
-
-  if (error || !order?.email) {
-    console.error('[stripe-webhook] renewal receipt: no order behind this subscription', {
-      subscriptionId: subscription.id,
-      invoiceId: invoice.id,
-      error,
-    });
-    return;
-  }
-
-  const period = readAccessPeriod(subscription);
-  const receipt = await issueReceipt(supabase, {
-    // Idempotency key. The invoice, not the session — a renewal has no session,
-    // and this is what makes a redelivered `invoice.paid` reprint one number.
-    stripeEventKey: invoice.id,
-    preorderId: order.id,
-    email: order.email,
-    customerName: order.full_name ?? null,
-    planKey: plan,
-    // What this invoice actually took, which is not necessarily the list price.
-    amountPence: invoice.amount_paid ?? 0,
-    currency: invoice.currency ?? 'gbp',
-    // An invoice records the types it was ALLOWED to use, not the one it did.
-    // On our subscriptions that is null (it inherits the customer default), so
-    // this falls through to "Card" — correct today, because card is all we take.
-    // If a bank-transfer subscription is ever sold, read the charge instead.
-    paymentMethod: paymentMethodLabel(invoice.payment_settings?.payment_method_types),
-    paidAt: chargedAt,
-    periodStart: period.startsAt ? new Date(period.startsAt) : null,
-    periodEnd: period.endsAt ? new Date(period.endsAt) : null,
-    kind: 'renewal',
-  });
-
-  if (!receipt) return;
-
-  // Allocation is idempotent, so a redelivered `invoice.paid` lands back on the
-  // SAME receipt — which is right for the number and wrong for the mail. Stripe
-  // redelivers routinely, and a redelivery is not a failure it backs off from;
-  // it is a success that keeps re-firing. Without this claim every monthly
-  // subscriber would collect duplicate copies of one receipt.
-  if (!(await claimReceiptEmail(supabase, receipt.id))) {
-    console.info('[stripe-webhook] renewal receipt already emailed — skipping', {
-      receiptNumber: receipt.receiptNumber,
-      invoiceId: invoice.id,
-    });
-    return;
-  }
-
-  // Wrapped for the same reason the purchase path's delivery is: we are holding
-  // a claim, so a THROWN error has to hand it back too, not just a false. The
-  // callee is already hardened, which makes this defence in depth rather than a
-  // live fix — but the asymmetry is exactly how the purchase-path bug survived.
-  let sent: { sent: boolean; error?: string };
-  try {
-    sent = await sendReceiptEmail({
-      toEmail: order.email,
-      toName: order.full_name ?? null,
-      firstName: order.full_name ?? null,
-      planKey: plan,
-      nextBillingDate: receipt.periodEnd ? formatReceiptDate(receipt.periodEnd) : null,
-      // What this invoice actually took, so the copy cannot drift from the charge.
-      renewalAmount: formatAmount(invoice.amount_paid ?? 0),
-      // A month in, they have had an account for a month.
-      hasSetupLink: false,
-      setupUrl: null,
-      isRenewal: true,
-      pdf: receipt.pdf,
-      fileName: receipt.fileName,
-    });
-  } catch (error: unknown) {
-    sent = { sent: false, error: error instanceof Error ? error.message : String(error) };
-  }
-
-  if (!sent.sent) {
-    console.error('[stripe-webhook] renewal receipt email failed — handing the claim back', {
-      receiptNumber: receipt.receiptNumber,
-      result: sent,
-    });
-    await releaseReceiptEmail(supabase, receipt.id);
-  }
 }
 
 /**
