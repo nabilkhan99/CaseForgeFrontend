@@ -3,7 +3,6 @@ import PortfolioToolClient from '@/components/portfolio/PortfolioToolClient';
 import PortfolioBelowFold from '@/components/portfolio/PortfolioBelowFold';
 import BelowFoldGate from '@/components/portfolio/BelowFoldGate';
 import PortfolioReviewStateProvider from '@/components/portfolio/PortfolioReviewState';
-import ReferralModalProvider from '@/components/portfolio/ReferralModalProvider';
 import FreeStationsBanner from '@/components/portfolio/FreeStationsBanner';
 import { PORTFOLIO_TOOL_JSON_LD, pageMetadata } from '@/lib/seo/site';
 
@@ -33,9 +32,6 @@ export const metadata: Metadata = pageMetadata({
  * block must not be: PortfolioReviewStateProvider is the seam between them, and
  * BelowFoldGate hides the block (without unmounting it) once a review is on
  * screen — including one restored from localStorage for a returning user.
- *
- * ReferralModalProvider wraps both so the banner and the below-fold block share
- * one modal.
  */
 export default function GpPortfolioToolPage() {
     return (
@@ -47,16 +43,14 @@ export default function GpPortfolioToolPage() {
                 dangerouslySetInnerHTML={{ __html: JSON.stringify(PORTFOLIO_TOOL_JSON_LD) }}
             />
             <PortfolioReviewStateProvider>
-                <ReferralModalProvider>
-                    {/* The other thing we make, one line and a link above the
-                        tool. It gates nothing: the tool below is identical
-                        whether or not this is read or clicked. */}
-                    <FreeStationsBanner />
-                    <PortfolioToolClient />
-                    <BelowFoldGate>
-                        <PortfolioBelowFold />
-                    </BelowFoldGate>
-                </ReferralModalProvider>
+                {/* The other thing we make, one line and a link above the
+                    tool. It gates nothing: the tool below is identical
+                    whether or not this is read or clicked. */}
+                <FreeStationsBanner />
+                <PortfolioToolClient />
+                <BelowFoldGate>
+                    <PortfolioBelowFold />
+                </BelowFoldGate>
             </PortfolioReviewStateProvider>
         </>
     );

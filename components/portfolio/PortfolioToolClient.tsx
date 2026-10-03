@@ -8,7 +8,6 @@ import { CaseForm } from '@/components/CaseForm';
 import { ReviewDisplay } from '@/components/ReviewDisplay';
 import type { CaseReviewResponse } from '@/lib/types';
 import ErrorBoundary from '@/components/ErrorBoundary';
-import ReferralBanner from '@/components/portfolio/ReferralBanner';
 import { usePortfolioReviewState } from '@/components/portfolio/PortfolioReviewState';
 import { analytics } from '@/lib/analytics';
 import { FeedbackWidget } from '@/components/FeedbackWidget';
@@ -76,12 +75,7 @@ export default function PortfolioToolClient() {
       {/* H1, then the input — nothing between them. The H1 stands down once a
           review exists because ReviewDisplay renders the generated case title as
           the page's <h1> from then on, and two <h1>s would split the topic
-          signal the quiet one exists to give.
-
-          The referral strip that used to sit here, and its twin at the top of
-          the output, are both gone: ReferralBanner lives in the page shell
-          above, so it is on screen in either state and a copy in here would be
-          the two-identical-bars problem the strip's own comment warned about. */}
+          signal the quiet one exists to give. */}
       {!review && (
         <h1 className="mb-4 text-[18px] font-semibold leading-snug tracking-tight text-heading">
           Free GP portfolio tool: AI clinical case review generator
@@ -109,12 +103,6 @@ export default function PortfolioToolClient() {
       <div className="min-h-[100dvh] bg-surface font-sans">
         <AppNavbar />
         <div className="pt-20">
-          {/* Contained, not full-bleed: the banner is a card that lines up with
-              the navbar above it, as in the design. The bar it replaced was
-              edge-to-edge, which is why it sat outside this container. */}
-          <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
-            <ReferralBanner placement="portfolio-authed" />
-          </div>
           <main className="pt-8 pb-16 px-6">
             <div className="max-w-[900px] mx-auto space-y-8">
               {content}
@@ -129,9 +117,6 @@ export default function PortfolioToolClient() {
     <div className="min-h-[100dvh] bg-surface">
       <LandingNavbar user={user} />
       <div className="pt-20">
-        <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
-          <ReferralBanner placement="portfolio-anon" />
-        </div>
         <div className="pt-8 max-w-7xl mx-auto space-y-8 px-4 sm:px-6 lg:px-8">
           {content}
         </div>

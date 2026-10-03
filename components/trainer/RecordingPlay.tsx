@@ -46,7 +46,7 @@ function speedLabel(speed: number): string {
  * a list a trainer plays at most one item from would be nine pointless round
  * trips and eight expiries.
  *
- * PORTALLED, unlike ReferralModal. Every row in the session list is a
+ * PORTALLED. Every row in the session list is a
  * `motion.div`, and a transformed ancestor becomes the containing block for
  * `position: fixed` descendants — the same trap AppNavbar documents for its
  * dropdown overlay. Rendered in place, this dialog would be "full screen"
@@ -118,7 +118,7 @@ export default function RecordingPlay({
   // Escape closes, focus moves to the dialog on open and back to the play
   // button on close, and the page behind is locked — without the lock the list
   // scrolls under the sheet on a phone, so closing drops you somewhere you did
-  // not choose. Same rules as ReferralModal and the navbar's mobile menu.
+  // not choose. Same rules as the navbar's mobile menu.
   useEffect(() => {
     if (!open) return;
     restoreFocusTo.current = document.activeElement as HTMLElement | null;
