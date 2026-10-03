@@ -55,6 +55,42 @@ describe('where it sends people', () => {
   })
 })
 
+describe('where it sits', () => {
+  // Both navbars are position: fixed. Rendered before them, the strip sat
+  // under the navbar at the top of the page and nobody could see it, which
+  // is how it spent its first month in production.
+  const CLIENT = withoutComments(
+    readFileSync(
+      fileURLToPath(new URL('./PortfolioToolClient.tsx', import.meta.url)),
+      'utf8',
+    ),
+  )
+  const PAGE = withoutComments(
+    readFileSync(
+      fileURLToPath(new URL('../../app/gp-portfolio-tool/page.tsx', import.meta.url)),
+      'utf8',
+    ),
+  )
+
+  it('is not rendered by the page, above the tool and its fixed navbar', () => {
+    expect(PAGE).not.toContain('<FreeStationsBanner')
+  })
+
+  it('renders below the navbar in both the signed-in and anonymous shells', () => {
+    const mounts = [...CLIENT.matchAll(/<FreeStationsBanner \/>/g)].map((m) => m.index ?? -1)
+    expect(mounts).toHaveLength(2)
+
+    const appNavbar = CLIENT.indexOf('<AppNavbar />')
+    const landingNavbar = CLIENT.indexOf('<LandingNavbar')
+    expect(appNavbar).toBeGreaterThan(-1)
+    expect(landingNavbar).toBeGreaterThan(appNavbar)
+
+    expect(mounts[0]).toBeGreaterThan(appNavbar)
+    expect(mounts[0]).toBeLessThan(landingNavbar)
+    expect(mounts[1]).toBeGreaterThan(landingNavbar)
+  })
+})
+
 describe('what it does not do', () => {
   it('has no form and no email field', () => {
     expect(CODE).not.toContain('<form')

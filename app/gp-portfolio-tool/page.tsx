@@ -3,7 +3,6 @@ import PortfolioToolClient from '@/components/portfolio/PortfolioToolClient';
 import PortfolioBelowFold from '@/components/portfolio/PortfolioBelowFold';
 import BelowFoldGate from '@/components/portfolio/BelowFoldGate';
 import PortfolioReviewStateProvider from '@/components/portfolio/PortfolioReviewState';
-import FreeStationsBanner from '@/components/portfolio/FreeStationsBanner';
 import { PORTFOLIO_TOOL_JSON_LD, pageMetadata } from '@/lib/seo/site';
 
 export const metadata: Metadata = pageMetadata({
@@ -43,10 +42,6 @@ export default function GpPortfolioToolPage() {
                 dangerouslySetInnerHTML={{ __html: JSON.stringify(PORTFOLIO_TOOL_JSON_LD) }}
             />
             <PortfolioReviewStateProvider>
-                {/* The other thing we make, one line and a link above the
-                    tool. It gates nothing: the tool below is identical
-                    whether or not this is read or clicked. */}
-                <FreeStationsBanner />
                 <PortfolioToolClient />
                 <BelowFoldGate>
                     <PortfolioBelowFold />

@@ -8,6 +8,7 @@ import { CaseForm } from '@/components/CaseForm';
 import { ReviewDisplay } from '@/components/ReviewDisplay';
 import type { CaseReviewResponse } from '@/lib/types';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import FreeStationsBanner from '@/components/portfolio/FreeStationsBanner';
 import { usePortfolioReviewState } from '@/components/portfolio/PortfolioReviewState';
 import { analytics } from '@/lib/analytics';
 import { FeedbackWidget } from '@/components/FeedbackWidget';
@@ -103,6 +104,11 @@ export default function PortfolioToolClient() {
       <div className="min-h-[100dvh] bg-surface font-sans">
         <AppNavbar />
         <div className="pt-20">
+          {/* Under the fixed navbar, not above it in the page: rendered first
+              in the document, the strip sat beneath the navbar unseen. */}
+          <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+            <FreeStationsBanner />
+          </div>
           <main className="pt-8 pb-16 px-6">
             <div className="max-w-[900px] mx-auto space-y-8">
               {content}
@@ -117,6 +123,9 @@ export default function PortfolioToolClient() {
     <div className="min-h-[100dvh] bg-surface">
       <LandingNavbar user={user} />
       <div className="pt-20">
+        <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+          <FreeStationsBanner />
+        </div>
         <div className="pt-8 max-w-7xl mx-auto space-y-8 px-4 sm:px-6 lg:px-8">
           {content}
         </div>
