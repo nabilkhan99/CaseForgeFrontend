@@ -99,6 +99,10 @@ describe('the rest of the redirect table still stands', () => {
     ['/dashboard/history', '/dashboard/development'],
     ['/dashboard/trend', '/dashboard/development'],
     ['/sca-cases/examination-expected', '/sca-cases/remote-triage-acute-headache'],
+    [
+      '/sca-cases/cardiovascular-risk-and-impaired-fasting-glycaemia-in-a-south-asian-male',
+      '/sca-cases/pre-diabetes-and-cardiovascular-risk-after-a-health-check',
+    ],
   ])('%s → %s', async (source, destination) => {
     const redirects = await config.redirects()
     expect(redirects).toContainEqual({ source, destination, permanent: true })

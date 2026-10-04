@@ -91,6 +91,15 @@ const CASE_SEO_OVERRIDES: Record<string, { condition?: string; slug?: string }> 
         condition: 'Remote Triage of an Acute Headache (Examination Expected)',
         slug: 'remote-triage-acute-headache',
     },
+    // Was "Cardiovascular Risk and Impaired Fasting Glycaemia in a South Asian
+    // Male": impaired fasting glycaemia describes a fasting glucose, and his
+    // result is an HbA1c of 45, so the case was retitled to pre-diabetes. The
+    // address is pinned here so the title can change freely (redirected in
+    // next.config.js).
+    '16c48616-d334-4d20-8af1-f17388f702b8': {
+        condition: 'Pre-diabetes and Cardiovascular Risk After a Health Check',
+        slug: 'pre-diabetes-and-cardiovascular-risk-after-a-health-check',
+    },
 };
 
 export function buildCaseSeoIndex<T extends PublicCase>(cases: T[]) {

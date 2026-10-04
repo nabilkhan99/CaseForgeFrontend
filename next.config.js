@@ -32,6 +32,13 @@ const nextConfig = {
         destination: '/sca-cases/remote-triage-acute-headache',
         permanent: true,
       },
+      // The pre-diabetes risk case was titled "impaired fasting glycaemia",
+      // which is wrong for an HbA1c result; its address moved with the fix.
+      {
+        source: '/sca-cases/cardiovascular-risk-and-impaired-fasting-glycaemia-in-a-south-asian-male',
+        destination: '/sca-cases/pre-diabetes-and-cardiovascular-risk-after-a-health-check',
+        permanent: true,
+      },
       // History and Trend collapsed into one Development page. Both URLs are in
       // people's history and in older emails, and the session list one of them
       // used to show now lives on the Library topic pages — so they redirect to
