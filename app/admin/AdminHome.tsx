@@ -12,6 +12,11 @@ interface AdminDestination {
 /** The admin surfaces, in the order you'd reach for them on a launch day. */
 const DESTINATIONS: readonly AdminDestination[] = [
   {
+    href: '/admin/leads',
+    title: 'Leads',
+    blurb: 'Free case and trial leads in the order to call them. Log each call and the next step follows.',
+  },
+  {
     href: '/admin/orders',
     title: 'Orders',
     blurb: 'Every purchase: revenue, refunds, plan split and coaching session bookings.',
