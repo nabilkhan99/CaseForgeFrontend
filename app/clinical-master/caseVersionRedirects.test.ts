@@ -192,6 +192,6 @@ describe('the feedback report\'s link onward', () => {
   })
 
   it('leaves further reading on the case that was sat', () => {
-    expect(REPORT).toContain('<PccsFurtherReading stationId={feedback.station_id}')
+    expect(REPORT).toContain('<FurtherReading stationId={feedback.station_id}')
   })
 })
