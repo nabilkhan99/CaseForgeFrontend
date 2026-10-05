@@ -16,12 +16,11 @@
  *     new 0-10.5) and is therefore useless for comparison. We read verdict and
  *     weighted_score off `session_results` only.
  *
- * The reducer is pure and exported separately so it can be unit-tested without
- * a database; the query wrapper is the only part that touches Supabase.
+ * Everything here is pure: callers run their own queries (the library's in
+ * lib/supabase/queries/station-library.ts, the admin progress route's on the
+ * server) and hand the rows in, so it is unit-tested without a database.
  */
 
-import { createClient } from '@/lib/supabase/client';
-import { visibleStationStates } from '@/lib/stations/visibility';
 import { PASSING_VERDICTS, type Verdict } from '@/lib/clinical-master/types';
 
 /**
@@ -194,72 +193,4 @@ export function passedStationIds(passMap: Map<string, StationPassState>): Set<st
     if (state.passed) passed.add(stationId);
   }
   return passed;
-}
-
-/**
- * Every VISIBLE station this user has attempted, with its pass state.
- *
- * One round trip: completed sessions joined to their (1:1) marking result.
- * Guest sessions never appear — they carry a null user_id and are filtered out
- * by the user_id match.
- *
- * The `stations!inner` join filters to the same station states the library and
- * the station-count denominators use. Without it a pass at a staged station —
- * runnable on preview deployments, or live-then-deactivated — counts towards a
- * numerator whose denominator excludes it, and the dashboard can render the
- * impossible "Passed 4 of 3 stations".
- *
- * Returns null (not an empty Map) when the query fails, so callers can hide the
- * number instead of asserting a fabricated zero.
- */
-export async function getStationPassMap(
-  userId: string,
-): Promise<Map<string, StationPassState> | null> {
-  const supabase = createClient();
-
-  const { data, error } = await supabase
-    .from('clinical_sessions')
-    .select(
-      'station_id, stations!inner(is_active), session_results(verdict, weighted_score, max_score)',
-    )
-    .eq('user_id', userId)
-    .eq('status', 'completed')
-    .in('stations.is_active', visibleStationStates());
-
-  if (error) {
-    console.error('[passTracking] session query failed', error);
-    return null;
-  }
-
-  return reduceStationPassMap(flattenSessionRows(data));
-}
-
-interface JoinedSessionRow {
-  station_id: string | null;
-  session_results: {
-    verdict: string | null;
-    weighted_score: number | string | null;
-    max_score?: number | string | null;
-  } | null;
-}
-
-/**
- * Flatten the PostgREST join shape. `session_results` has a unique constraint
- * on session_id, so it arrives as a single object (or null), not an array —
- * but tolerate the array shape rather than silently dropping every result if
- * that constraint ever changes.
- */
-export function flattenSessionRows(rows: unknown): StationAttemptRow[] {
-  if (!Array.isArray(rows)) return [];
-
-  return (rows as JoinedSessionRow[]).map((row) => {
-    const joined = row.session_results;
-    const result = Array.isArray(joined) ? (joined[0] ?? null) : joined;
-    return {
-      station_id: row.station_id,
-      verdict: result?.verdict ?? null,
-      weighted_score: result?.weighted_score ?? null,
-      max_score: result?.max_score ?? null,
-    };
-  });
 }

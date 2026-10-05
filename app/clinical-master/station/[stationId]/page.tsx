@@ -17,16 +17,16 @@ import LockGlyph from '@/components/ui/LockGlyph';
 import { isStationLocked, useCohortAllowlist } from '@/hooks/useCohortAllowlist';
 import { isStationLockedForTrial, trialStationAllowlist, useTrialStatus } from '@/hooks/useTrialStatus';
 import { CASE_VERSION_REFUSED } from '@/lib/stations/caseVersionCodes';
+import { STATION_BRIEF_COLUMNS, toStationBrief, type StationBrief } from '@/lib/clinical-master/stationBrief';
 
-interface StationData {
-  id: string;
-  title: string;
-  patient_name: string;
-  candidate_instructions: string;
-  reading_duration_seconds: number;
-  consultation_duration_seconds: number;
-  domain_name: string;
-}
+type StationData = StationBrief;
+
+/** The server route's answer, as the page acts on it. */
+type ServerBrief =
+  | { kind: 'brief'; station: StationData }
+  | { kind: 'forward'; target: string }
+  | { kind: 'refused'; message: string }
+  | { kind: 'unavailable' };
 
 function ReadingPhaseContent() {
   const params = useParams();
@@ -39,6 +39,9 @@ function ReadingPhaseContent() {
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The version rule's sentence when this case is not one this person may
+  // open and there is no other version of it to send them to.
+  const [refusal, setRefusal] = useState<string | null>(null);
   const [readingComplete, setReadingComplete] = useState(false);
   // Set when the API refuses this case for a trial account. The client-side
   // check below should have caught it first, but the answer arrives
@@ -64,38 +67,96 @@ function ReadingPhaseContent() {
   const locked = cohortLocked || trialLocked;
 
   useEffect(() => {
+    let cancelled = false;
+
+    /**
+     * The server's view of this case, for the versions the browser cannot or
+     * should not render from its own read (app/api/clinical-master/
+     * station-brief). It applies the same version rule as Begin: the brief to
+     * show; or a forward to the version of this slot the person does see; or
+     * the rule's sentence when there is nowhere to send them. `unavailable`
+     * is everything else (not found, signed out, a failed request).
+     */
+    async function fetchServerBrief(): Promise<ServerBrief> {
+      try {
+        const res = await fetch(`/api/clinical-master/station-brief/${stationId}`);
+        const body = await res.json().catch(() => null);
+        if (res.ok && body?.station) return { kind: 'brief', station: body.station as StationData };
+        if (body?.code === CASE_VERSION_REFUSED) {
+          const target = typeof body.redirectStationId === 'string' ? body.redirectStationId : null;
+          if (target && target !== stationId) return { kind: 'forward', target };
+          return { kind: 'refused', message: typeof body.error === 'string' ? body.error : 'This case is not available.' };
+        }
+      } catch {
+        // Network failure: treated as no answer, below.
+      }
+      return { kind: 'unavailable' };
+    }
+
     async function fetchStation() {
       const supabase = createClient();
-      const { data: s, error: fetchError } = await supabase
+      const { data: s } = await supabase
         .from('stations')
-        .select('id, title, patient_name, candidate_instructions, domain_id, reading_duration_seconds, consultation_duration_seconds')
+        .select(`${STATION_BRIEF_COLUMNS}, lifecycle, replaces_station_id`)
         .eq('id', stationId)
-        .single();
+        .maybeSingle();
 
-      if (fetchError || !s) {
-        setLoading(false);
-        return;
+      // THE FAST PATH, and today the only one: a plain live case, read in the
+      // browser and rendered exactly as it always has been. Anything else asks
+      // the server once — no row (a draft, or an archived case this person
+      // has no consultation on), an archived row, or a live REPLACEMENT, which
+      // a keeper of the old case must be forwarded from before they read it,
+      // not only when they press Begin.
+      const plainLive = s !== null && s.lifecycle === 'live' && !s.replaces_station_id;
+      if (!plainLive) {
+        const server = await fetchServerBrief();
+        if (cancelled) return;
+        if (server.kind === 'forward') {
+          // Keep the spinner up while the other version's brief loads.
+          router.replace(
+            from
+              ? `/clinical-master/station/${server.target}?from=${from}`
+              : `/clinical-master/station/${server.target}`,
+          );
+          return;
+        }
+        if (server.kind === 'refused') {
+          setRefusal(server.message);
+          setLoading(false);
+          return;
+        }
+        if (server.kind === 'brief') {
+          setStation(server.station);
+          setLoading(false);
+          return;
+        }
+        // No answer from the server: fall back to the browser's own read,
+        // which is what this page showed before case versions existed. Begin
+        // is gated server-side either way.
+        if (!s) {
+          setLoading(false);
+          return;
+        }
       }
+      if (!s) return;
 
       const { data: domain } = await supabase
         .from('domains')
         .select('name')
         .eq('id', s.domain_id)
         .single();
+      if (cancelled) return;
 
-      setStation({
-        id: s.id,
-        title: s.title,
-        patient_name: s.patient_name,
-        candidate_instructions: s.candidate_instructions || '',
-        reading_duration_seconds: s.reading_duration_seconds || 180,
-        consultation_duration_seconds: s.consultation_duration_seconds || 720,
-        domain_name: domain?.name || 'General Practice',
-      });
+      setStation(toStationBrief(s, domain?.name));
       setLoading(false);
     }
 
     if (stationId) fetchStation();
+    return () => {
+      cancelled = true;
+    };
+    // `from` and `router` only shape a forward; the read is per case.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stationId]);
 
   const handleStartConsultation = useCallback(async () => {
@@ -190,7 +251,7 @@ function ReadingPhaseContent() {
     return (
       <div className="min-h-[100dvh] bg-surface flex items-center justify-center">
         <div className="text-center">
-          <p className="text-muted mb-4">Station not found</p>
+          <p className="text-muted mb-4">{refusal ?? 'Station not found'}</p>
           <Link href={from ? `/dashboard/library/${from}` : '/dashboard/library'} className="text-primary hover:underline text-sm">
             Back to Library
           </Link>

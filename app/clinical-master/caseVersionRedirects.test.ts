@@ -26,6 +26,7 @@ function withoutComments(code: string): string {
 const BRIEF = withoutComments(source('./station/[stationId]/page.tsx'))
 const SESSION = withoutComments(source('./session/[sessionId]/page.tsx'))
 const REPORT = withoutComments(source('../../components/clinical-master/FeedbackReport.tsx'))
+const HOOK = withoutComments(source('../../hooks/useRealtimeSession.ts'))
 
 describe('the brief page, when create-session refuses the version', () => {
   const branch = BRIEF.slice(BRIEF.indexOf('body?.code === CASE_VERSION_REFUSED'))
@@ -57,18 +58,87 @@ describe('the brief page, when create-session refuses the version', () => {
   })
 })
 
+describe('the brief page, when its own read cannot show the case', () => {
+  const effect = BRIEF.slice(BRIEF.indexOf('async function fetchServerBrief'), BRIEF.indexOf('if (stationId) fetchStation();'))
+
+  it('keeps the browser read as the fast path for a plain live case', () => {
+    expect(effect).toContain(".from('stations')")
+    expect(effect).toContain("s.lifecycle === 'live' && !s.replaces_station_id")
+    // The route is consulted only off the fast path.
+    const routeCall = effect.indexOf('await fetchServerBrief()')
+    expect(routeCall).toBeGreaterThan(effect.indexOf('if (!plainLive) {'))
+    expect(effect.match(/await fetchServerBrief\(\)/g)).toHaveLength(1)
+  })
+
+  it('asks the server route, once, by case id', () => {
+    expect(effect).toContain('fetch(`/api/clinical-master/station-brief/${stationId}`)')
+  })
+
+  it('forwards a version refusal that names another case, keeping `from`', () => {
+    expect(effect).toContain('body?.code === CASE_VERSION_REFUSED')
+    expect(effect).toContain('target && target !== stationId')
+    expect(effect).toContain('`/clinical-master/station/${server.target}?from=${from}`')
+    expect(effect).toContain('router.replace(')
+  })
+
+  it('renders the refusal sentence when there is nowhere to forward', () => {
+    expect(effect).toContain('setRefusal(server.message)')
+    expect(BRIEF).toContain("{refusal ?? 'Station not found'}")
+  })
+
+  it('renders the server\'s brief when it allows the case', () => {
+    expect(effect).toContain('setStation(server.station)')
+  })
+
+  it('falls back to the browser read when the server cannot answer', () => {
+    const unavailable = effect.slice(effect.indexOf("if (server.kind === 'brief')"))
+    expect(unavailable).toContain('toStationBrief(s, domain?.name)')
+  })
+})
+
+describe('the realtime hook, when the token endpoint refuses', () => {
+  it('still surfaces the body\'s sentence as `error`', () => {
+    expect(HOOK).toContain('body.error || `Token request failed: ${res.statusText}`')
+  })
+
+  it('carries the body\'s code and redirect target through the throw', () => {
+    expect(HOOK).toContain("typeof body.code === 'string' ? body.code : null")
+    expect(HOOK).toContain("typeof body.redirectStationId === 'string' ? body.redirectStationId : null")
+    expect(HOOK).toContain('setErrorCode(err instanceof TokenRequestError ? err.code : null)')
+    expect(HOOK).toContain('setErrorRedirectStationId(err instanceof TokenRequestError ? err.redirectStationId : null)')
+  })
+
+  it('clears them on every new connect, and returns them alongside `error`', () => {
+    const connect = HOOK.slice(HOOK.indexOf('const connect = useCallback'))
+    expect(connect.indexOf('setErrorCode(null)')).toBeLessThan(connect.indexOf('fetch(tokenEndpoint'))
+    const returned = HOOK.slice(HOOK.lastIndexOf('return {'))
+    expect(returned).toContain('errorCode,')
+    expect(returned).toContain('errorRedirectStationId,')
+  })
+})
+
 describe('the session page, when the token route refuses the case', () => {
-  it('recognises the version refusals and the station mismatch by their sentences', () => {
-    expect(SESSION).toContain('CASE_REFUSAL_REASONS.map(runRefusalMessage)')
-    expect(SESSION).toContain('STATION_MISMATCH_MESSAGE')
+  it('recognises the version refusals and the station mismatch by their codes, not their sentences', () => {
+    expect(SESSION).toContain('new Set([CASE_VERSION_REFUSED, STATION_MISMATCH])')
+    expect(SESSION).toContain('CASE_REFUSAL_CODES.has(errorCode)')
+    expect(SESSION).not.toContain('runRefusalMessage')
+    expect(SESSION).not.toContain('STATION_MISMATCH_MESSAGE')
   })
 
   it('offers the brief (which forwards) instead of a "Try again" that can only be refused', () => {
-    const screen = SESSION.slice(SESSION.indexOf('CASE_REFUSAL_MESSAGES.has(error)'))
+    const screen = SESSION.slice(SESSION.indexOf('CASE_REFUSAL_CODES.has(errorCode)'))
     const end = screen.indexOf('if (error && !isConnected) {')
     const refusal = screen.slice(0, end)
-    expect(refusal).toContain('`/clinical-master/station/${stationId}')
+    expect(refusal).toContain('errorRedirectStationId ?? stationId')
+    expect(refusal).toContain('`/clinical-master/station/${briefStationId}')
     expect(refusal).not.toContain('connect()')
+  })
+
+  it('leaves every other error on the existing connection screen', () => {
+    const refusalAt = SESSION.indexOf('CASE_REFUSAL_CODES.has(errorCode)')
+    const genericAt = SESSION.indexOf('if (error && !isConnected) {')
+    expect(refusalAt).toBeGreaterThan(0)
+    expect(refusalAt).toBeLessThan(genericAt)
   })
 
   it('reopens itself on the session row\'s own case when the URL names another', () => {

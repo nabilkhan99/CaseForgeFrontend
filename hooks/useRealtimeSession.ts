@@ -316,6 +316,24 @@ interface UseRealtimeSessionProps {
 
 type SessionStatus = 'disconnected' | 'connecting' | 'connected';
 
+/**
+ * A refusal from the token endpoint, carrying the machine-readable half of its
+ * body alongside the person-facing `error` sentence. The message is what the
+ * hook has always surfaced as `error`; `code` (and `redirectStationId`, when
+ * the refusal names another version of the case) are exposed as well so a
+ * page can branch on the code instead of matching the sentence.
+ */
+class TokenRequestError extends Error {
+    constructor(
+        message: string,
+        public readonly code: string | null,
+        public readonly redirectStationId: string | null,
+    ) {
+        super(message);
+        this.name = 'TokenRequestError';
+    }
+}
+
 interface TokenResponse {
     ephemeralKey: string;
     callsUrl: string;
@@ -354,6 +372,10 @@ export function useRealtimeSession({
     const [transcript, setTranscript] = useState<TranscriptItem[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [errorKind, setErrorKind] = useState<SessionErrorKind | null>(null);
+    // The token endpoint's `code` / `redirectStationId` for the error above,
+    // when it came from a refused mint; null for every other failure.
+    const [errorCode, setErrorCode] = useState<string | null>(null);
+    const [errorRedirectStationId, setErrorRedirectStationId] = useState<string | null>(null);
     // Keep the screen on for the length of the consultation: the trainee is
     // talking, not touching, and a phone locking mid-station suspends the
     // tab and kills the call. Best-effort — unsupported browsers just skip it.
@@ -2010,6 +2032,8 @@ export function useRealtimeSession({
             setStatus('connecting');
             setError(null);
             setErrorKind(null);
+            setErrorCode(null);
+            setErrorRedirectStationId(null);
             endedRef.current = false;
             debugEnabledRef.current =
                 typeof window !== 'undefined' && window.location.search.includes('voicedebug');
@@ -2028,7 +2052,11 @@ export function useRealtimeSession({
             });
             if (!res.ok) {
                 const body = await res.json().catch(() => ({}));
-                throw new Error(body.error || `Token request failed: ${res.statusText}`);
+                throw new TokenRequestError(
+                    body.error || `Token request failed: ${res.statusText}`,
+                    typeof body.code === 'string' ? body.code : null,
+                    typeof body.redirectStationId === 'string' ? body.redirectStationId : null,
+                );
             }
             const { ephemeralKey, callsUrl, durationSeconds, origin, lane }: TokenResponse =
                 await res.json();
@@ -2242,6 +2270,8 @@ export function useRealtimeSession({
             const message = err instanceof Error ? err.message : 'Failed to connect';
             setError(message);
             setErrorKind(err instanceof MicError ? err.kind : 'connection');
+            setErrorCode(err instanceof TokenRequestError ? err.code : null);
+            setErrorRedirectStationId(err instanceof TokenRequestError ? err.redirectStationId : null);
             teardown();
             onError?.(message);
         }
@@ -2339,6 +2369,10 @@ export function useRealtimeSession({
         getPatientLevel,
         error,
         errorKind,
+        /** The token endpoint's refusal `code`, when `error` came from one. */
+        errorCode,
+        /** The version of the case a token refusal pointed at, if any. */
+        errorRedirectStationId,
         status,
         /**
          * Put a UI moment in the call's flight recorder, for the things the

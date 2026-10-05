@@ -7,8 +7,7 @@ import Link from 'next/link';
 import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { micRecoveryHint } from '@/lib/clinical-master/micErrors';
 import { isStartableStatus } from '@/lib/clinical-master/sessionLifecycle';
-import { runRefusalMessage, type RunRefusal } from '@/lib/stations/caseVersions';
-import { STATION_MISMATCH_MESSAGE } from '@/lib/stations/caseVersionCodes';
+import { CASE_VERSION_REFUSED, STATION_MISMATCH } from '@/lib/stations/caseVersionCodes';
 import { createClient } from '@/lib/supabase/client';
 import ConnectingScreen from '@/components/clinical-master/ConnectingScreen';
 import ConsultationStage from '@/components/clinical-master/ConsultationStage';
@@ -18,15 +17,11 @@ import ConfirmModal from '@/components/ui/ConfirmModal';
 /**
  * The token route's refusals that are about WHICH CASE, not the connection:
  * the version rule (a replaced case, a draft) and a station id that is not the
- * session's. The hook surfaces only the route's `error` sentence, so they are
- * recognised by it. Retrying cannot fix any of them — the way on is the brief,
- * which forwards to the version of the case this person does see.
+ * session's. Recognised by the route's `code`, which the hook passes through
+ * beside the sentence. Retrying cannot fix any of them — the way on is the
+ * brief, which forwards to the version of the case this person does see.
  */
-const CASE_REFUSAL_REASONS: readonly RunRefusal[] = ['draft', 'archived_not_kept', 'replaced_for_keeper'];
-const CASE_REFUSAL_MESSAGES: ReadonlySet<string> = new Set([
-  ...CASE_REFUSAL_REASONS.map(runRefusalMessage),
-  STATION_MISMATCH_MESSAGE,
-]);
+const CASE_REFUSAL_CODES: ReadonlySet<string> = new Set([CASE_VERSION_REFUSED, STATION_MISMATCH]);
 
 interface StationData {
   id: string;
@@ -134,7 +129,7 @@ function LiveConsultationContent() {
     router.push(feedbackUrl);
   }, [router, sessionId, from]);
 
-  const { isConnected, isSpeaking, transcript, connect, endConsultation, disconnect, setMicMuted, getPatientLevel, error, errorKind, status, logEvent } =
+  const { isConnected, isSpeaking, transcript, connect, endConsultation, disconnect, setMicMuted, getPatientLevel, error, errorKind, errorCode, errorRedirectStationId, status, logEvent } =
     useRealtimeSession({
       sessionId,
       stationId: stationId || undefined,
@@ -231,10 +226,13 @@ function LiveConsultationContent() {
     );
   }
 
-  if (error && !isConnected && stationId && CASE_REFUSAL_MESSAGES.has(error)) {
+  if (error && !isConnected && stationId && errorCode !== null && CASE_REFUSAL_CODES.has(errorCode)) {
+    // Straight to the version the route named when it named one; otherwise
+    // this case's own brief, which forwards or explains.
+    const briefStationId = errorRedirectStationId ?? stationId;
     const briefHref = from
-      ? `/clinical-master/station/${stationId}?from=${from}`
-      : `/clinical-master/station/${stationId}`;
+      ? `/clinical-master/station/${briefStationId}?from=${from}`
+      : `/clinical-master/station/${briefStationId}`;
     return (
       <div className="min-h-[100dvh] bg-surface flex items-center justify-center px-6">
         <motion.div
