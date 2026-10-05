@@ -167,7 +167,7 @@ export async function getServerEntitlement(): Promise<ServerEntitlement> {
       user,
       failedOpen: false,
       ...decision,
-      trial: await loadTrialAccessForGrant(getSupabaseAdmin(), grant, now),
+      trial: await loadTrialAccessForGrant(adminOr(supabase), grant, now),
     }
   }
 
@@ -192,6 +192,27 @@ export async function getServerEntitlement(): Promise<ServerEntitlement> {
 
 /** A cohort with its station ids widened for this person (see above). */
 async function personaliseCohort(cohort: CohortAccess, userId: string): Promise<CohortAccess> {
-  const stationIds = await personaliseAllowlist(getSupabaseAdmin(), cohort.stationIds, userId)
+  const admin = tryAdmin()
+  if (!admin) return cohort
+  const stationIds = await personaliseAllowlist(admin, cohort.stationIds, userId)
   return { ...cohort, stationIds }
+}
+
+/**
+ * The service-role client, or null when this deployment has no service key (a
+ * preview without it). Callers fall back to what they did before case versions
+ * rather than turning a missing key into a failed entitlement.
+ */
+function tryAdmin(): ReturnType<typeof getSupabaseAdmin> | null {
+  try {
+    return getSupabaseAdmin()
+  } catch (error) {
+    console.error('[serverEntitlement] service-role client unavailable', error)
+    return null
+  }
+}
+
+/** The service-role client if there is one, else the user's own client. */
+function adminOr<T>(fallback: T): ReturnType<typeof getSupabaseAdmin> | T {
+  return tryAdmin() ?? fallback
 }
