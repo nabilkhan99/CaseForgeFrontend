@@ -70,9 +70,15 @@ function grant(over: Partial<TrialGrant> = {}): TrialGrant {
  * touched by requests that get past the entitlement gate — which is the point
  * of most of these tests.
  */
-function stubAdmin(session: { id: string; user_id: string | null; status: string } | null = null) {
+function stubAdmin(
+  session: { id: string; user_id: string | null; status: string; station_id?: string } | null = null,
+) {
+  // Live and replacing nothing — today's bank — so the version gate opens it
+  // and only the rules pinned here decide.
   const station = {
     id: 'st-1',
+    lifecycle: 'live',
+    replaces_station_id: null,
     consultation_duration_seconds: 720,
     voice_gender: 'female',
   }
@@ -90,7 +96,8 @@ function stubAdmin(session: { id: string; user_id: string | null; status: string
   const sessionChain = {
     select: () => sessionChain,
     eq: () => sessionChain,
-    maybeSingle: async () => ({ data: session }),
+    // The row is for st-1, the case every request here asks for.
+    maybeSingle: async () => ({ data: session ? { station_id: 'st-1', ...session } : null }),
     update,
     insert,
   }

@@ -7,11 +7,26 @@ import Link from 'next/link';
 import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { micRecoveryHint } from '@/lib/clinical-master/micErrors';
 import { isStartableStatus } from '@/lib/clinical-master/sessionLifecycle';
+import { runRefusalMessage, type RunRefusal } from '@/lib/stations/caseVersions';
+import { STATION_MISMATCH_MESSAGE } from '@/lib/stations/caseVersionCodes';
 import { createClient } from '@/lib/supabase/client';
 import ConnectingScreen from '@/components/clinical-master/ConnectingScreen';
 import ConsultationStage from '@/components/clinical-master/ConsultationStage';
 import SessionControls from '@/components/clinical-master/SessionControls';
 import ConfirmModal from '@/components/ui/ConfirmModal';
+
+/**
+ * The token route's refusals that are about WHICH CASE, not the connection:
+ * the version rule (a replaced case, a draft) and a station id that is not the
+ * session's. The hook surfaces only the route's `error` sentence, so they are
+ * recognised by it. Retrying cannot fix any of them — the way on is the brief,
+ * which forwards to the version of the case this person does see.
+ */
+const CASE_REFUSAL_REASONS: readonly RunRefusal[] = ['draft', 'archived_not_kept', 'replaced_for_keeper'];
+const CASE_REFUSAL_MESSAGES: ReadonlySet<string> = new Set([
+  ...CASE_REFUSAL_REASONS.map(runRefusalMessage),
+  STATION_MISMATCH_MESSAGE,
+]);
 
 interface StationData {
   id: string;
@@ -80,10 +95,19 @@ function LiveConsultationContent() {
       const supabase = createClient();
       const { data } = await supabase
         .from('clinical_sessions')
-        .select('status')
+        .select('status, station_id')
         .eq('id', sessionId)
         .maybeSingle();
       if (cancelled) return;
+      // The URL names a different case from the one this session was opened
+      // for (a hand-edited or stale link). The token route refuses that mint
+      // now; reopen the page on the session's own case instead of showing it.
+      if (data?.station_id && stationId && data.station_id !== stationId) {
+        const params = new URLSearchParams({ stationId: data.station_id });
+        if (from) params.set('from', from);
+        router.replace(`/clinical-master/session/${sessionId}?${params.toString()}`);
+        return;
+      }
       // No row yet is normal: the token route opens one for a client that came
       // straight here. Only a row that exists and has finished is a redirect.
       if (data && !isStartableStatus(data.status)) {
@@ -97,7 +121,7 @@ function LiveConsultationContent() {
     }
     readSessionState();
     return () => { cancelled = true; };
-  }, [sessionId, router, from]);
+  }, [sessionId, stationId, router, from]);
 
   // Graceful end (button, timer, or the model's end_consultation tool): the hook
   // persists the transcript + moves the session to 'processing', then this fires.
@@ -203,6 +227,36 @@ function LiveConsultationContent() {
           <h3 className="text-[18px] font-semibold text-heading mb-1">Finalising Consultation</h3>
           <p className="text-[14px] text-muted">Generating your feedback...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (error && !isConnected && stationId && CASE_REFUSAL_MESSAGES.has(error)) {
+    const briefHref = from
+      ? `/clinical-master/station/${stationId}?from=${from}`
+      : `/clinical-master/station/${stationId}`;
+    return (
+      <div className="min-h-[100dvh] bg-surface flex items-center justify-center px-6">
+        <motion.div
+          className="max-w-md text-center"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <h3 className="text-[18px] font-semibold text-heading mb-2">This case can&apos;t be started here</h3>
+          <p className="text-[14px] leading-[1.65] text-muted mb-6">{error}</p>
+          <div className="flex flex-col items-center gap-3">
+            <Link
+              href={briefHref}
+              className="min-h-[44px] rounded-xl px-6 py-3 text-[14px] font-semibold text-white"
+              style={{ background: 'linear-gradient(135deg, #B45309, #D97706)', boxShadow: '0 4px 12px rgba(180,83,9,0.2)' }}
+            >
+              Open the case
+            </Link>
+            <Link href="/dashboard/library" className="text-[13px] font-semibold text-primary hover:underline">
+              Back to library
+            </Link>
+          </div>
+        </motion.div>
       </div>
     );
   }

@@ -7,6 +7,7 @@ import {
   type TrialGrant,
 } from '@/lib/commerce/trialAccess'
 import type { Entitlement } from '@/lib/commerce/entitlements'
+import { fakeDb } from '@/lib/stations/caseVersionsFakeDb'
 
 /**
  * The authed chokepoint for the five FIXED CASES.
@@ -122,9 +123,23 @@ function request(body: unknown = { sessionId: 'sess-1', stationId: 'st-1' }) {
   return { json: async () => body } as never
 }
 
+/**
+ * The service-role client the route uses for the case-version read: every case
+ * these tests name is live and replaces nothing, which is today's bank, so the
+ * version gate opens them all and only the rules pinned here decide.
+ */
+const LIVE_BANK = fakeDb({
+  stations: ['st-1', 'st-2', 'st-3', 'st-4', 'st-5', 'st-99'].map((id) => ({
+    id,
+    lifecycle: 'live',
+    replaces_station_id: null,
+  })),
+  case_keepers: [],
+})
+
 beforeEach(() => {
   vi.clearAllMocks()
-  getSupabaseAdmin.mockReturnValue({})
+  getSupabaseAdmin.mockReturnValue(LIVE_BANK.client)
   startTrialWindowFor.mockResolvedValue(undefined)
 })
 
