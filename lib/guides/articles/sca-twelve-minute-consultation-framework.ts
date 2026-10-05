@@ -107,7 +107,7 @@ export const scaTwelveMinuteConsultationFramework: GuideArticle = {
                 },
                 {
                     type: 'text',
-                    text: 'The fastest version of that practice needs a partner and structured cases, and the method is in [link: How to Practise SCA Cases With a Study Partner]. The words that make the switch, the summaries and the safety netting land cleanly under pressure are collected in [link: The SCA Phrase Bank]. And if you need cases built for exactly this kind of timed practice, our free library has 79 SCA practice cases drawn directly from the RCGP curriculum, each with a candidate brief, patient script and marking scheme, with a built in 12 minute timer on every case. It is free whenever it would help.',
+                    text: 'The fastest version of that practice needs a partner and structured cases, and the method is in [link: How to Practise SCA Cases With a Study Partner]. The words that make the switch, the summaries and the safety netting land cleanly under pressure are collected in [link: The SCA Phrase Bank]. And if you need cases built for exactly this kind of timed practice, our free library has 200 SCA practice cases drawn directly from the RCGP curriculum, each with a candidate brief, patient script and marking scheme, with a built in 12 minute timer on every case. It is free whenever it would help.',
                 },
             ],
         },

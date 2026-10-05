@@ -83,7 +83,7 @@ export const managingScaAnxiety: GuideArticle = {
                 },
                 {
                     type: 'text',
-                    text: 'There is no soft close to put on this page, so here is the plain one. The anxious candidate’s instinct is usually more reading, because reading soothes; the evidence points the other way, toward more rehearsal, because rehearsal removes the uncertainty the anxiety feeds on. If running more timed cases is the next right step, our free library of 79 SCA practice cases from the RCGP curriculum is there whenever it helps.',
+                    text: 'There is no soft close to put on this page, so here is the plain one. The anxious candidate’s instinct is usually more reading, because reading soothes; the evidence points the other way, toward more rehearsal, because rehearsal removes the uncertainty the anxiety feeds on. If running more timed cases is the next right step, our free library of 200 SCA practice cases from the RCGP curriculum is there whenever it helps.',
                 },
             ],
         },

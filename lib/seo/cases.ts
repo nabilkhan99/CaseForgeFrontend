@@ -132,3 +132,25 @@ export function caseTitle(condition: string) {
 export function caseDescription(condition: string) {
     return `Free SCA practice case covering ${condition}. Candidate brief, patient script, marking scheme and learning points. Built from the RCGP curriculum for GP registrar exam preparation.`;
 }
+
+/**
+ * The page's meta (and Open Graph / Twitter) description: the hand-written
+ * stations.seo_description when a case has one, otherwise the template above.
+ * A blank or whitespace-only value counts as none.
+ */
+export function caseMetaDescription(caseItem: { condition: string; seo_description?: string | null }) {
+    const written = caseItem.seo_description?.trim();
+    return written ? written : caseDescription(caseItem.condition);
+}
+
+/**
+ * Static copy's fallback for the size of the public library, used only where
+ * no live count reaches the text (or the count read failed). The bank is held
+ * at 200 cases through the Oct 2026 rewrite.
+ */
+export const PUBLIC_LIBRARY_SIZE_FALLBACK = 200;
+
+/** The number to print for the public library: the live count, or the fallback. */
+export function publicLibrarySize(liveCount: number | null | undefined) {
+    return liveCount && liveCount > 0 ? liveCount : PUBLIC_LIBRARY_SIZE_FALLBACK;
+}

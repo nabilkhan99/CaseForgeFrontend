@@ -105,7 +105,7 @@ export const scaRevisionTimeline: GuideArticle = {
                 },
                 {
                     type: 'text',
-                    text: 'If you need cases to build the plan around, our free library has 79 SCA practice cases drawn directly from the RCGP curriculum, organised by curriculum topic, each with a candidate brief, patient script, marking scheme and a built in 12 minute timer. It is free to use for as much of the plan as it helps with.',
+                    text: 'If you need cases to build the plan around, our free library has 200 SCA practice cases drawn directly from the RCGP curriculum, organised by curriculum topic, each with a candidate brief, patient script, marking scheme and a built in 12 minute timer. It is free to use for as much of the plan as it helps with.',
                 },
             ],
         },

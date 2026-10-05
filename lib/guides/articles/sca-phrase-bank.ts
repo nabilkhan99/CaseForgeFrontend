@@ -176,7 +176,7 @@ export const scaPhraseBank: GuideArticle = {
             blocks: [
                 {
                     type: 'text',
-                    text: 'A phrase you have read once will not be there at minute 9 of a real case. A phrase you have used thirty times will. So pick a handful from each section that sound like you, write your own variants, and then run them inside timed practice cases with a partner whose job is to drop cues, push back and tell you which lines landed as human and which landed as performed. The method for that practice is in [link: How to Practise SCA Cases With a Study Partner], and if you need cases to run it with, our free library of 79 SCA practice cases built from the RCGP curriculum, each with a patient script written to give your partner exactly those cues, is open to you whenever it helps.',
+                    text: 'A phrase you have read once will not be there at minute 9 of a real case. A phrase you have used thirty times will. So pick a handful from each section that sound like you, write your own variants, and then run them inside timed practice cases with a partner whose job is to drop cues, push back and tell you which lines landed as human and which landed as performed. The method for that practice is in [link: How to Practise SCA Cases With a Study Partner], and if you need cases to run it with, our free library of 200 SCA practice cases built from the RCGP curriculum, each with a patient script written to give your partner exactly those cues, is open to you whenever it helps.',
                 },
             ],
         },

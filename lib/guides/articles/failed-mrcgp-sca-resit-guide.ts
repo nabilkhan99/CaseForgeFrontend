@@ -119,7 +119,7 @@ export const failedMrcgpScaResitGuide: GuideArticle = {
                 },
                 {
                     type: 'text',
-                    text: 'A fail in this exam is a detour, and a well used one often produces a stronger consulter than a narrow first time pass, because nothing focuses preparation like precise feedback taken seriously. If targeted cases would help the rebuild, our free library has 79 SCA practice cases built directly from the RCGP curriculum, each with a candidate brief, patient script and a marking scheme aligned to the 3 domains, and you are welcome to use it whenever it helps.',
+                    text: 'A fail in this exam is a detour, and a well used one often produces a stronger consulter than a narrow first time pass, because nothing focuses preparation like precise feedback taken seriously. If targeted cases would help the rebuild, our free library has 200 SCA practice cases built directly from the RCGP curriculum, each with a candidate brief, patient script and a marking scheme aligned to the 3 domains, and you are welcome to use it whenever it helps.',
                 },
             ],
         },

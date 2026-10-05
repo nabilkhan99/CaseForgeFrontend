@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCaseSeoIndex } from './cases'
+import { buildCaseSeoIndex, caseDescription, caseMetaDescription, publicLibrarySize } from './cases'
 import type { PublicCase } from '@/lib/cases/publicCases'
 
 /**
@@ -44,5 +44,29 @@ describe('cases without an override', () => {
       caseWith('00000000-0000-0000-0000-000000000000', 'Teacher with a blocked nose for months asking for something stronger'),
     ])
     expect(entry.slug).toBe('blocked-nose-for-months-asking-for-something-stronger')
+  })
+})
+
+describe('a case page description', () => {
+  it('prefers the hand-written seo_description, trimmed', () => {
+    expect(caseMetaDescription({ condition: 'Gout', seo_description: '  A hot, swollen toe.  ' })).toBe('A hot, swollen toe.')
+  })
+
+  it.each([
+    ['missing', undefined],
+    ['null', null],
+    ['blank', '   '],
+  ])('falls back to the template when it is %s', (_label, seo_description) => {
+    expect(caseMetaDescription({ condition: 'Gout', seo_description })).toBe(caseDescription('Gout'))
+  })
+})
+
+describe('the public library size in copy', () => {
+  it('prints the live count when there is one', () => {
+    expect(publicLibrarySize(201)).toBe(201)
+  })
+
+  it.each([0, null, undefined])('says 200 when the count is %s', (count) => {
+    expect(publicLibrarySize(count)).toBe(200)
   })
 })

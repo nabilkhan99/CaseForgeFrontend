@@ -91,7 +91,7 @@ export const scaExamDay: GuideArticle = {
                 },
                 {
                     type: 'text',
-                    text: 'The deepest exam day comfort is not on this page at all: it is having run so many timed consultations that the day feels like a format you know. If your practice rota needs material to get there, our free library of 79 SCA practice cases built from the RCGP curriculum, with reading time briefs, patient scripts and a built in 12 minute timer, is open whenever it helps.',
+                    text: 'The deepest exam day comfort is not on this page at all: it is having run so many timed consultations that the day feels like a format you know. If your practice rota needs material to get there, our free library of 200 SCA practice cases built from the RCGP curriculum, with reading time briefs, patient scripts and a built in 12 minute timer, is open whenever it helps.',
                 },
             ],
         },

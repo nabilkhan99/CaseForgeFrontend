@@ -79,7 +79,7 @@ export default function GuideTimeline({ sections }: GuideTimelineProps) {
                         Free, no paywall
                     </div>
                     <p className="mt-3 text-sm leading-relaxed text-body">
-                        79 practice cases with marking schemes, built from the RCGP curriculum.
+                        200 practice cases with marking schemes, built from the RCGP curriculum.
                     </p>
                     <Link
                         href={CASE_LIBRARY_PATH}
