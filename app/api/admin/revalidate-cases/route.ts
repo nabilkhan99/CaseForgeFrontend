@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { isAdmin } from '@/lib/admin/guard';
+import { cookiePostRefusal } from '@/lib/admin/cookiePostGuard';
 
 /**
  * POST /api/admin/revalidate-cases — refresh the public case surfaces now.
@@ -12,10 +13,19 @@ import { isAdmin } from '@/lib/admin/guard';
  * away, not up to an hour later, so the switch-on calls this.
  *
  * Two ways in, both fail closed:
- *  - a signed-in admin (ADMIN_EMAILS, via lib/admin/guard), for a button;
- *  - `Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>`, for a CLI script that
- *    has no browser session. Compared in constant time; an unset key never
- *    matches anything.
+ *  - a signed-in admin (ADMIN_EMAILS, via lib/admin/guard), for a button. The
+ *    session cookie is ambient, so this path also passes the CSRF guard
+ *    (lib/admin/cookiePostGuard): JSON content type, and an Origin, if sent,
+ *    naming this host;
+ *  - `Authorization: Bearer <CASE_REVALIDATE_SECRET>`, for a CLI script that
+ *    has no browser session. Compared in constant time (both sides hashed).
+ *
+ * ENV: CASE_REVALIDATE_SECRET — a dedicated random secret (e.g.
+ * `openssl rand -hex 32`), set in Vercel and in the switch-on script's
+ * environment. Deliberately NOT the Supabase service-role key: that key opens
+ * the whole database, and a cache-clearing endpoint is no reason to send it
+ * over the wire or keep it in a script's shell. Unset (or empty) disables the
+ * bearer path entirely; the admin session still works.
  *
  * It only clears caches: no data is read or written, so the worst a caller can
  * do is make the next visitor wait for a fresh render.
@@ -35,9 +45,9 @@ function digest(value: string): Buffer {
     return createHash('sha256').update(value, 'utf8').digest();
 }
 
-/** True when the request carries the service-role key as a bearer token. */
-function hasServiceRoleBearer(request: Request): boolean {
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+/** True when the request carries CASE_REVALIDATE_SECRET as a bearer token. */
+function hasRevalidateBearer(request: Request): boolean {
+    const key = process.env.CASE_REVALIDATE_SECRET?.trim();
     if (!key) return false;
 
     const header = request.headers.get('authorization') ?? '';
@@ -50,9 +60,16 @@ function hasServiceRoleBearer(request: Request): boolean {
 }
 
 export async function POST(request: Request) {
-    const allowed = hasServiceRoleBearer(request) || (await isAdmin());
-    if (!allowed) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!hasRevalidateBearer(request)) {
+        // The cookie path: refuse a cross-site or non-JSON request before
+        // even looking at the session.
+        const refusal = cookiePostRefusal(request);
+        if (refusal) {
+            return NextResponse.json({ error: refusal.error }, { status: refusal.status });
+        }
+        if (!(await isAdmin())) {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
     }
 
     try {

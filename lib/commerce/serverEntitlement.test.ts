@@ -19,6 +19,12 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => mocks.client,
 }))
+// The trial's five and a cohort's cases are read with the service role (an
+// archived case is invisible under RLS to non-keepers); the same recording
+// stub answers both, so the query plan below still sees every table.
+vi.mock('@/lib/supabase/admin', () => ({
+  getSupabaseAdmin: () => mocks.client,
+}))
 
 const { getServerEntitlement } = await import('./serverEntitlement')
 
@@ -190,6 +196,24 @@ describe('a trial account', () => {
     expect(result.bypass).toBe(true)
     expect(result.trialOnly).toBe(false)
     for (const table of TRIAL_DETAIL_TABLES) expect(tables).not.toContain(table)
+  })
+})
+
+describe('a cohort-only account', () => {
+  it('reads its assigned cases\' version columns once, and keeps the list as assigned today', async () => {
+    const tables = install({ cohort: { id: 'c-1', station_ids: FIVE, trainer_email: 'trainer@example.com' } })
+    const result = await getServerEntitlement()
+    expect(result.cohortOnly).toBe(true)
+    expect(result.cohort?.stationIds).toEqual(FIVE)
+    // One read beyond the batch, and no keeper read: nothing is replaced.
+    expect(tables.slice(3)).toEqual(['stations'])
+  })
+
+  it('costs a paying cohort member nothing extra', async () => {
+    const tables = install({ purchases: [PAID], cohort: { id: 'c-1', station_ids: FIVE, trainer_email: 't@example.com' } })
+    const result = await getServerEntitlement()
+    expect(result.cohortOnly).toBe(false)
+    expect([...tables].sort()).toEqual(['cohort_members', 'preorders', 'trial_grants'])
   })
 })
 

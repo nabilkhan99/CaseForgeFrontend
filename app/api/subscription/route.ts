@@ -26,6 +26,12 @@ export interface TrialSubscription {
    * means the trial opens nothing (see loadTrialAccessForGrant: it fails closed), which
    * the surfaces render as "everything is locked" rather than "everything is
    * open".
+   *
+   * PER PERSON, BY SLOT: once a free case is replaced this can carry both
+   * versions of its slot (getServerEntitlement widens it; see
+   * lib/stations/caseVersionsAllowlist.ts), so a lock drawn by plain
+   * membership is right and the panel maps it through the person's index.
+   * `allowance` still counts slots.
    */
   freeStationIds: string[];
   /** Distinct cases of the five with at least one consultation begun. 0–5. */
@@ -107,7 +113,8 @@ export interface SubscriptionResponse {
    * and an admin. `stationIds` is then the WHOLE of what the client may open,
    * which is what the library locks against. Null therefore reads as "no limit",
    * and a cohort member with an empty allowlist reads as "no cases", which are
-   * the right defaults for both.
+   * the right defaults for both. `stationIds` is widened per person by slot,
+   * as the trial's five are (see TrialSubscription.freeStationIds).
    */
   cohort: { id: string; stationIds: string[] } | null;
   /**

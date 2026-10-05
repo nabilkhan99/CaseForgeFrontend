@@ -138,6 +138,17 @@ describe('create-session and the case-version rule', () => {
     expect(sessions.inserts).toHaveLength(0)
   })
 
+  it('answers 503 try-again, never a row, when the keeper read fails', async () => {
+    // A keeper's own old case must not be refused, nor a non-keeper let in,
+    // on a guess: the person is asked to try again.
+    signedIn('keeper@example.com', 'keeper')
+    bank.failing.add('case_keepers')
+    const { status, body } = await start('OLD')
+    expect(status).toBe(503)
+    expect(body).toMatchObject({ code: 'case_version_unavailable' })
+    expect(sessions.inserts).toHaveLength(0)
+  })
+
   it('answers a failed station read with a 500, never a row', async () => {
     bank.failing.add('stations')
     expect((await start('PLAIN')).status).toBe(500)

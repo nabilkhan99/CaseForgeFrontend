@@ -12,7 +12,7 @@ import { isStartableStatus } from '@/lib/clinical-master/sessionLifecycle';
 import { mintEphemeralKey, unreliableEchoCancellation } from '@/lib/clinical-master/realtimeToken';
 import { voiceForStation } from '@/lib/clinical-master/realtimeSession';
 import {
-  caseVersionRefusalBody,
+  caseVersionGateFailure,
   gateStationRun,
   isAdminEmail,
   toVersionedStation,
@@ -137,7 +137,9 @@ export async function POST(req: NextRequest) {
     isAdmin: isAdminEmail(user.email),
   });
   if (!version.allowed) {
-    return NextResponse.json(caseVersionRefusalBody(version), { status: 403 });
+    // 403 for the rule's refusal; 503 "try again" when the keeper read failed.
+    const failure = caseVersionGateFailure(version);
+    return NextResponse.json(failure.body, { status: failure.status });
   }
 
   // Ensure the session exists and belongs to this user, then mark it live

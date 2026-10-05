@@ -111,3 +111,53 @@ describe('getUserStats', () => {
     });
   });
 });
+
+describe('rollUpDomains (per-domain totals over the person\'s index)', () => {
+  const DOMAINS = [
+    { id: 'heart', name: 'Heart' },
+    { id: 'mind', name: 'Mind' },
+  ];
+
+  it('counts today\'s bank exactly as a live-row count would', async () => {
+    const { rollUpDomains } = await import('./dashboard');
+    const index = [
+      { id: 'a', domain_id: 'heart' },
+      { id: 'b', domain_id: 'heart' },
+      { id: 'c', domain_id: 'mind' },
+    ];
+    const rows = rollUpDomains(DOMAINS, index, [{ station_id: 'a', overall_score: 7 }]);
+    expect(rows.map((r) => [r.name, r.total, r.completed])).toEqual([
+      ['Heart', 2, 1],
+      ['Mind', 1, 0],
+    ]);
+    expect(rows[0].percentage).toBe(Math.round((7 / 10.5) * 100));
+  });
+
+  it('credits a keeper\'s old case to its own domain, even when the replacement moved topic', async () => {
+    const { rollUpDomains } = await import('./dashboard');
+    // The keeper's index holds OLD (heart); the live replacement NEW is filed
+    // under mind and is not in their index at all.
+    const keeperIndex = [
+      { id: 'OLD', domain_id: 'heart' },
+      { id: 'c', domain_id: 'mind' },
+    ];
+    const rows = rollUpDomains(DOMAINS, keeperIndex, [
+      { station_id: 'OLD', overall_score: 8 },
+      // An attempt on a case outside the index is not progress through it.
+      { station_id: 'NEW', overall_score: 9 },
+    ]);
+    expect(rows.map((r) => [r.name, r.total, r.completed])).toEqual([
+      ['Heart', 1, 1],
+      ['Mind', 1, 0],
+    ]);
+  });
+
+  it('keeps unscored legacy attempts out of the average but in the count', async () => {
+    const { rollUpDomains } = await import('./dashboard');
+    const rows = rollUpDomains(DOMAINS, [{ id: 'a', domain_id: 'heart' }], [
+      { station_id: 'a', overall_score: null },
+      { station_id: 'a', overall_score: 0 },
+    ]);
+    expect(rows[0]).toMatchObject({ completed: 2, percentage: 0 });
+  });
+});

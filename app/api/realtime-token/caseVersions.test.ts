@@ -155,6 +155,17 @@ describe('the realtime mint and the case-version rule', () => {
     expect((await mint('DRAFT')).status).toBe(200)
   })
 
+  it('answers 503 try-again, and mints nothing, when the keeper read fails', async () => {
+    signedIn('keeper@example.com', 'keeper')
+    sessionRow('OLD', 'keeper')
+    db.failing.add('case_keepers')
+    const { status, body } = await mint('OLD')
+    expect(status).toBe(503)
+    expect(body).toMatchObject({ code: 'case_version_unavailable' })
+    expect(mintEphemeralKey).not.toHaveBeenCalled()
+    expect(db.updates).toHaveLength(0)
+  })
+
   it('404s an id that names no case', async () => {
     expect((await mint('no-such-case')).status).toBe(404)
     expect(mintEphemeralKey).not.toHaveBeenCalled()

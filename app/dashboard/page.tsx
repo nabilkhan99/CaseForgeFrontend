@@ -12,6 +12,7 @@ import PrimaryButton from '@/components/ui/PrimaryButton';
 import TrainingHeatmap from '@/components/dashboard/TrainingHeatmap';
 import TrialPanel from '@/components/dashboard/TrialPanel';
 import { getUserStats, getDailyActivityTimestamps } from '@/lib/supabase/queries/dashboard';
+import { stationsForAllowlist } from '@/lib/stations/caseVersionsAllowlist';
 import { getRandomStation, getStationIndex } from '@/lib/supabase/queries/station-library';
 import type { Station } from '@/lib/supabase/queries/station-library';
 import { saveExamDate } from '@/lib/supabase/queries/profile';
@@ -211,12 +212,15 @@ function DashboardContent() {
         // case's own attempt history, and a separate fetch could disagree with
         // the board about it. Ordered by the ids, which arrive in
         // `free_trial_order` — the pairing is the point of that column.
+        //
+        // Mapped through THIS PERSON'S index, slot by slot: once a free case
+        // is replaced, `freeStationIds` carries both versions of its slot for
+        // this person (the server widens it, lib/stations/caseVersionsAllowlist),
+        // and the index holds exactly one of them — the old case for its
+        // keeper, the replacement for everyone else. So the panel still shows
+        // five cases, each the version this person runs.
         const freeIds = access?.trial?.freeStationIds ?? [];
-        const byId = new Map(stationIndex.map((station) => [station.id, station]));
-        const freeStations = freeIds
-          .map((id) => byId.get(id))
-          .filter((station): station is Station => station !== undefined);
-        setTrialStations(freeStations);
+        setTrialStations(stationsForAllowlist(freeIds, stationIndex));
 
         // A live trial has no Up next: its panel already lists the five cases,
         // each with Start. Everyone else gets the daily pick. The picker only

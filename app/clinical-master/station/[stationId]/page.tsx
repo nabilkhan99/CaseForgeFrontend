@@ -18,15 +18,9 @@ import { isStationLocked, useCohortAllowlist } from '@/hooks/useCohortAllowlist'
 import { isStationLockedForTrial, trialStationAllowlist, useTrialStatus } from '@/hooks/useTrialStatus';
 import { CASE_VERSION_REFUSED } from '@/lib/stations/caseVersionCodes';
 import { STATION_BRIEF_COLUMNS, toStationBrief, type StationBrief } from '@/lib/clinical-master/stationBrief';
+import { fetchServerBrief } from '@/lib/clinical-master/serverBrief';
 
 type StationData = StationBrief;
-
-/** The server route's answer, as the page acts on it. */
-type ServerBrief =
-  | { kind: 'brief'; station: StationData }
-  | { kind: 'forward'; target: string }
-  | { kind: 'refused'; message: string }
-  | { kind: 'unavailable' };
 
 function ReadingPhaseContent() {
   const params = useParams();
@@ -69,30 +63,6 @@ function ReadingPhaseContent() {
   useEffect(() => {
     let cancelled = false;
 
-    /**
-     * The server's view of this case, for the versions the browser cannot or
-     * should not render from its own read (app/api/clinical-master/
-     * station-brief). It applies the same version rule as Begin: the brief to
-     * show; or a forward to the version of this slot the person does see; or
-     * the rule's sentence when there is nowhere to send them. `unavailable`
-     * is everything else (not found, signed out, a failed request).
-     */
-    async function fetchServerBrief(): Promise<ServerBrief> {
-      try {
-        const res = await fetch(`/api/clinical-master/station-brief/${stationId}`);
-        const body = await res.json().catch(() => null);
-        if (res.ok && body?.station) return { kind: 'brief', station: body.station as StationData };
-        if (body?.code === CASE_VERSION_REFUSED) {
-          const target = typeof body.redirectStationId === 'string' ? body.redirectStationId : null;
-          if (target && target !== stationId) return { kind: 'forward', target };
-          return { kind: 'refused', message: typeof body.error === 'string' ? body.error : 'This case is not available.' };
-        }
-      } catch {
-        // Network failure: treated as no answer, below.
-      }
-      return { kind: 'unavailable' };
-    }
-
     async function fetchStation() {
       const supabase = createClient();
       const { data: s } = await supabase
@@ -109,7 +79,9 @@ function ReadingPhaseContent() {
       // not only when they press Begin.
       const plainLive = s !== null && s.lifecycle === 'live' && !s.replaces_station_id;
       if (!plainLive) {
-        const server = await fetchServerBrief();
+        // The server's view (app/api/clinical-master/station-brief), under the
+        // same version rule as Begin: see lib/clinical-master/serverBrief.ts.
+        const server = await fetchServerBrief(stationId);
         if (cancelled) return;
         if (server.kind === 'forward') {
           // Keep the spinner up while the other version's brief loads.

@@ -38,7 +38,11 @@ export function useCohortAllowlist(): Set<string> | null {
   return stationIds;
 }
 
-/** True when a cohort limit is in force AND this station is outside it. */
+/**
+ * True when a cohort limit is in force AND this station is outside it. The
+ * list arrives widened for this person by slot, as the trial's does (see
+ * isStationLockedForTrial), so replaced cases need nothing extra here.
+ */
 export function isStationLocked(allowlist: Set<string> | null, stationId: string): boolean {
   return allowlist !== null && !allowlist.has(stationId);
 }

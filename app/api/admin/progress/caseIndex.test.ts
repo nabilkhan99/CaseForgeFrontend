@@ -46,26 +46,67 @@ describe('archivedStationIds', () => {
 });
 
 describe('loadKeptPairs', () => {
-  function client(response: { data: unknown; error: unknown }) {
-    const from = vi.fn(() => ({
-      select: () => ({ in: () => Promise.resolve(response) }),
-    }));
-    return { from, supabase: { from } as unknown as SupabaseClient };
+  /**
+   * A chain that answers each page by its `.range(from, to)`: `pages[n]` is
+   * the n-th page's rows (or an error). Records each range asked for.
+   */
+  function client(pages: { data: unknown; error: unknown }[]) {
+    const ranges: [number, number][] = [];
+    const from = vi.fn(() => {
+      const chain = {
+        select: () => chain,
+        in: () => chain,
+        order: () => chain,
+        range: (start: number, end: number) => {
+          ranges.push([start, end]);
+          return Promise.resolve(pages[ranges.length - 1] ?? { data: [], error: null });
+        },
+      };
+      return chain;
+    });
+    return { from, ranges, supabase: { from } as unknown as SupabaseClient };
   }
 
   it('skips the query when nothing archived was attempted', async () => {
-    const { from, supabase } = client({ data: [], error: null });
+    const { from, supabase } = client([{ data: [], error: null }]);
     expect(await loadKeptPairs(supabase, [])).toEqual(new Set());
     expect(from).not.toHaveBeenCalled();
   });
 
   it('returns user:station pairs', async () => {
-    const { supabase } = client({ data: [{ user_id: 'keeper', station_id: 'old' }], error: null });
+    const { supabase } = client([{ data: [{ user_id: 'keeper', station_id: 'old' }], error: null }]);
     expect(await loadKeptPairs(supabase, ['old'])).toEqual(new Set(['keeper:old']));
   });
 
+  it('pages past the 1000-row response cap', async () => {
+    const full = Array.from({ length: 1000 }, (_, i) => ({ user_id: `u${i}`, station_id: 'old' }));
+    const rest = Array.from({ length: 3 }, (_, i) => ({ user_id: `v${i}`, station_id: 'old' }));
+    const { ranges, supabase } = client([
+      { data: full, error: null },
+      { data: rest, error: null },
+    ]);
+    const pairs = await loadKeptPairs(supabase, ['old']);
+    expect(pairs.size).toBe(1003);
+    expect(pairs.has('v2:old')).toBe(true);
+    expect(ranges).toEqual([
+      [0, 999],
+      [1000, 1999],
+    ]);
+  });
+
   it('fails closed to nobody keeps anything', async () => {
-    const { supabase } = client({ data: null, error: { message: 'boom' } });
+    const { supabase } = client([{ data: null, error: { message: 'boom' } }]);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(await loadKeptPairs(supabase, ['old'])).toEqual(new Set());
+    errorSpy.mockRestore();
+  });
+
+  it('fails closed on a later page too, rather than counting half the keepers', async () => {
+    const full = Array.from({ length: 1000 }, (_, i) => ({ user_id: `u${i}`, station_id: 'old' }));
+    const { supabase } = client([
+      { data: full, error: null },
+      { data: null, error: { message: 'boom' } },
+    ]);
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(await loadKeptPairs(supabase, ['old'])).toEqual(new Set());
     errorSpy.mockRestore();

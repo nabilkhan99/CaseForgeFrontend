@@ -27,6 +27,7 @@ const BRIEF = withoutComments(source('./station/[stationId]/page.tsx'))
 const SESSION = withoutComments(source('./session/[sessionId]/page.tsx'))
 const REPORT = withoutComments(source('../../components/clinical-master/FeedbackReport.tsx'))
 const HOOK = withoutComments(source('../../hooks/useRealtimeSession.ts'))
+const SERVER_BRIEF = withoutComments(source('../../lib/clinical-master/serverBrief.ts'))
 
 describe('the brief page, when create-session refuses the version', () => {
   const branch = BRIEF.slice(BRIEF.indexOf('body?.code === CASE_VERSION_REFUSED'))
@@ -59,24 +60,25 @@ describe('the brief page, when create-session refuses the version', () => {
 })
 
 describe('the brief page, when its own read cannot show the case', () => {
-  const effect = BRIEF.slice(BRIEF.indexOf('async function fetchServerBrief'), BRIEF.indexOf('if (stationId) fetchStation();'))
+  const effect = BRIEF.slice(BRIEF.indexOf('async function fetchStation'), BRIEF.indexOf('if (stationId) fetchStation();'))
 
   it('keeps the browser read as the fast path for a plain live case', () => {
     expect(effect).toContain(".from('stations')")
     expect(effect).toContain("s.lifecycle === 'live' && !s.replaces_station_id")
     // The route is consulted only off the fast path.
-    const routeCall = effect.indexOf('await fetchServerBrief()')
+    const routeCall = effect.indexOf('await fetchServerBrief(stationId)')
     expect(routeCall).toBeGreaterThan(effect.indexOf('if (!plainLive) {'))
-    expect(effect.match(/await fetchServerBrief\(\)/g)).toHaveLength(1)
+    expect(effect.match(/await fetchServerBrief\(/g)).toHaveLength(1)
   })
 
-  it('asks the server route, once, by case id', () => {
-    expect(effect).toContain('fetch(`/api/clinical-master/station-brief/${stationId}`)')
+  it('asks the server route through the shared reader (lib/clinical-master/serverBrief)', () => {
+    expect(BRIEF).toContain("import { fetchServerBrief } from '@/lib/clinical-master/serverBrief'")
+    expect(SERVER_BRIEF).toContain('`/api/clinical-master/station-brief/${encodeURIComponent(stationId)}`')
   })
 
   it('forwards a version refusal that names another case, keeping `from`', () => {
-    expect(effect).toContain('body?.code === CASE_VERSION_REFUSED')
-    expect(effect).toContain('target && target !== stationId')
+    expect(SERVER_BRIEF).toContain('body?.code === CASE_VERSION_REFUSED')
+    expect(SERVER_BRIEF).toContain('target && target !== stationId')
     expect(effect).toContain('`/clinical-master/station/${server.target}?from=${from}`')
     expect(effect).toContain('router.replace(')
   })
@@ -93,6 +95,36 @@ describe('the brief page, when its own read cannot show the case', () => {
   it('falls back to the browser read when the server cannot answer', () => {
     const unavailable = effect.slice(effect.indexOf("if (server.kind === 'brief')"))
     expect(unavailable).toContain('toStationBrief(s, domain?.name)')
+  })
+})
+
+describe('the session page, when its own read cannot see the case (an admin\'s draft)', () => {
+  const effect = SESSION.slice(SESSION.indexOf('async function fetchStation'), SESSION.indexOf('fetchStation();'))
+
+  it('keeps the browser read first, and asks the server only when it comes back empty', () => {
+    expect(effect).toContain(".from('stations')")
+    const browserHit = effect.indexOf('if (data) {')
+    const serverCall = effect.indexOf('await fetchServerBrief(stationId)')
+    expect(browserHit).toBeGreaterThan(0)
+    expect(serverCall).toBeGreaterThan(browserHit)
+  })
+
+  it('takes everything connect() waits for from the server\'s brief', () => {
+    const brief = effect.slice(effect.indexOf("if (server.kind === 'brief')"))
+    for (const field of ['id', 'title', 'patient_name', 'consultation_duration_seconds']) {
+      expect(brief).toContain(`${field}: server.station.${field}`)
+    }
+    expect(SESSION).toContain("sessionState === 'startable' && station &&")
+  })
+
+  it('sends a version refusal to the brief, which forwards or explains', () => {
+    expect(effect).toContain("server.kind === 'forward' || server.kind === 'refused'")
+    expect(effect).toContain('`/clinical-master/station/${target}?from=${from}`')
+  })
+
+  it('says so, instead of waiting forever, when nobody can load the case', () => {
+    expect(effect).toContain('setStationUnavailable(true)')
+    expect(SESSION).toContain('if (stationUnavailable && !station)')
   })
 })
 

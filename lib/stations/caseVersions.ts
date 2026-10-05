@@ -45,7 +45,7 @@ export function isStationLifecycle(value: unknown): value is StationLifecycle {
  *
  * `live` is the catalogue in display order. `kept` is the archived cases this
  * person keeps (rows they can read: RLS lets a person read an archived case
- * they have a consultation on, and every keeper has one).
+ * they have a MARKED consultation on, and every keeper has one).
  *
  * A kept case whose replacement is not live (not switched on yet, or never
  * written) is appended at the end, so a keeper never loses a case they did. In

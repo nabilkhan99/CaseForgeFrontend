@@ -57,7 +57,14 @@ export function trialStationAllowlist(trial: TrialSubscription | null): string[]
   return trial.freeStationIds
 }
 
-/** True when a trial limit is in force AND this case sits outside it. */
+/**
+ * True when a trial limit is in force AND this case sits outside it.
+ *
+ * Plain membership is enough even after cases are replaced: the server sends
+ * the list already widened for this person by slot (the old case for its
+ * keeper, the replacement for everyone else; lib/stations/caseVersionsAllowlist),
+ * so a case this person runs is on it whichever version carries the flag.
+ */
 export function isStationLockedForTrial(
   freeStationIds: readonly string[] | null,
   stationId: string,

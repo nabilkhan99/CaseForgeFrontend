@@ -17,6 +17,8 @@ vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({}) }))
 
 const {
   CASE_VERSION_REFUSED,
+  CASE_VERSION_UNAVAILABLE,
+  caseVersionGateFailure,
   caseVersionRefusalBody,
   gateStationRun,
   isAdminEmail,
@@ -123,11 +125,25 @@ describe('gateStationRun', () => {
     expect(db.reads).not.toContain('case_keepers')
   })
 
-  it('fails closed to "keeps nothing" when the keeper read errors', async () => {
-    // Never worse than today: the person is offered the live catalogue.
+  it('answers try-again, never a guess, when the keeper read errors', async () => {
+    // "Keeps nothing" would refuse a keeper their own old case and open the
+    // replacement they must never see. A gate cannot guess either way.
     db.failing.add('case_keepers')
-    expect((await gateStationRun(client(), station('OLD1'), KEEPER)).allowed).toBe(false)
-    expect(await gateStationRun(client(), station('NEW1'), KEEPER)).toEqual({ allowed: true })
+    const unavailable = {
+      allowed: false,
+      unavailable: true,
+      message: 'Could not check this case just now. Try again in a moment.',
+    }
+    expect(await gateStationRun(client(), station('OLD1'), KEEPER)).toEqual(unavailable)
+    expect(await gateStationRun(client(), station('NEW1'), KEEPER)).toEqual(unavailable)
+    expect(await gateStationRun(client(), station('NEW1'), OTHER)).toEqual(unavailable)
+  })
+
+  it('still answers a plain live case with no keeper read, so a keeper outage cannot block today\'s bank', async () => {
+    db.failing.add('case_keepers')
+    expect(await gateStationRun(client(), station('PLAIN'), KEEPER)).toEqual({ allowed: true })
+    // A draft needs no keeper read either: refused to every non-admin.
+    expect((await gateStationRun(client(), station('DRAFT'), KEEPER)).allowed).toBe(false)
   })
 })
 
@@ -172,6 +188,11 @@ describe('practiseStationIdFor', () => {
   it('falls back to the case itself when there is nothing better', async () => {
     expect(await practiseStationIdFor(client(), station('OLD2'), OTHER)).toBe('OLD2')
   })
+
+  it('falls back to the case itself when the keeper read errors', async () => {
+    db.failing.add('case_keepers')
+    expect(await practiseStationIdFor(client(), station('OLD1'), OTHER)).toBe('OLD1')
+  })
 })
 
 describe('caseVersionRefusalBody', () => {
@@ -190,6 +211,21 @@ describe('caseVersionRefusalBody', () => {
     expect(
       caseVersionRefusalBody({ allowed: false, reason: 'draft', message: 'm', redirectStationId: null }),
     ).not.toHaveProperty('redirectStationId')
+  })
+})
+
+describe('caseVersionGateFailure', () => {
+  it('is a 403 with the refusal body for a refusal', () => {
+    expect(
+      caseVersionGateFailure({ allowed: false, reason: 'draft', message: 'm', redirectStationId: null }),
+    ).toEqual({ status: 403, body: { error: 'm', code: CASE_VERSION_REFUSED, reason: 'draft' } })
+  })
+
+  it('is a 503 try-again when the rule could not be checked', () => {
+    expect(caseVersionGateFailure({ allowed: false, unavailable: true, message: 'm' })).toEqual({
+      status: 503,
+      body: { error: 'm', code: CASE_VERSION_UNAVAILABLE },
+    })
   })
 })
 

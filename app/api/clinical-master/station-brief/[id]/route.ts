@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import {
-  caseVersionRefusalBody,
+  caseVersionGateFailure,
   gateStationRun,
   isAdminEmail,
   toVersionedStation,
@@ -23,7 +23,7 @@ import {
  *
  *  - a DRAFT, which only the service role can read, but which an admin must be
  *    able to open to try before approving it;
- *  - an ARCHIVED case, which RLS shows only to someone with a consultation on
+ *  - an ARCHIVED case, which RLS shows only to someone MARKED on
  *    it, so a non-keeper following an old link sees "Station not found" when
  *    there is a replacement to send them to.
  *
@@ -36,6 +36,7 @@ import {
  *   wrong version, nowhere to go   → 403 refusal body, its sentence to show
  *   draft for a non-admin          → 404, the same answer as an id that names
  *                                    nothing, so a draft's id cannot be probed
+ *   keeper read failed             → 503 "try again", never a guess
  *
  * The page calls it only when its own read comes back empty or names a case
  * that is not plain-live, so today it is never called.
@@ -85,10 +86,12 @@ export async function GET(
   });
   if (!gate.allowed) {
     // A draft is nobody's but the admins': answer as if it did not exist.
-    if (gate.reason === 'draft') {
+    if ('reason' in gate && gate.reason === 'draft') {
       return NextResponse.json(NOT_FOUND, { status: 404 });
     }
-    return NextResponse.json(caseVersionRefusalBody(gate), { status: 403 });
+    // 403 refusal (with its forward), or 503 when the keeper read failed.
+    const failure = caseVersionGateFailure(gate);
+    return NextResponse.json(failure.body, { status: failure.status });
   }
 
   // The domain's name is a label; a failed read falls back to the page's own

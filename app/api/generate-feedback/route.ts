@@ -80,6 +80,20 @@ async function practiseTarget(
     );
 }
 
+/**
+ * A DRAFT case is nobody's but the admins' (lib/stations/caseVersions.ts):
+ * its text must not leave the server for anyone else, and nobody else's read
+ * may spend a marking run on it. Only an admin can have started one, so in
+ * practice this is someone else opening an admin's draft run (or a guest
+ * session) by its id. Answered as a session that does not exist, exactly like
+ * the station-brief route answers a draft, so a draft cannot be probed.
+ */
+function hiddenDraft(lifecycle: unknown, viewer: RunViewer): boolean {
+    return lifecycle === 'draft' && !viewer.isAdmin;
+}
+
+const SESSION_NOT_FOUND = { error: 'Session not found' } as const;
+
 function toFeedback(
     sessionId: string,
     row: SessionResultRow,
@@ -248,6 +262,9 @@ export async function POST(request: NextRequest) {
                   }
                 | null;
             const sessionStationId = session?.station_id as string | undefined;
+            if (hiddenDraft(station?.lifecycle, viewer)) {
+                return NextResponse.json(SESSION_NOT_FOUND, { status: 404 });
+            }
             return NextResponse.json({
                 status: 'ready',
                 feedback: toFeedback(
@@ -285,6 +302,10 @@ export async function POST(request: NextRequest) {
             | { title?: string; lifecycle?: string; replaces_station_id?: string | null }
             | null;
         const stationTitle = stationRow?.title;
+        // Before anything is returned or triggered: no title, no marking.
+        if (hiddenDraft(stationRow?.lifecycle, viewer)) {
+            return NextResponse.json(SESSION_NOT_FOUND, { status: 404 });
+        }
         // Not computed while polling: only the responses that end the page's
         // polling carry a link onward, so the 3-second poll never pays for it.
         const practise = () => practiseTarget(supabase, stationId, stationRow, viewer);

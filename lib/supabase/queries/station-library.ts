@@ -121,7 +121,8 @@ type BrowserClient = ReturnType<typeof createClient>;
  *
  * Skipped outright, no query at all, when they keep nothing, which is every
  * person until a batch is switched on and most people after. RLS lets a person
- * read an archived case they have a consultation on, and every keeper has one.
+ * read an archived case they have a MARKED consultation on (migration
+ * 20261006), and every keeper has one: that is what makes them a keeper.
  * Fails closed to "keeps nothing" like loadKeptStationIds: the person then sees
  * the live catalogue, never worse than before case versions existed.
  */

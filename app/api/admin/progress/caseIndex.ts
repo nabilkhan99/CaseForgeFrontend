@@ -25,34 +25,49 @@ export function keptPairKey(userId: string | null, stationId: string | null): st
   return `${userId}:${stationId}`;
 }
 
+/** PostgREST's default response cap: a longer answer arrives in pages. */
+const KEEPER_PAGE = 1000;
+
 /**
- * Every (person, case) keeper pair on the given archived cases, in one query.
+ * Every (person, case) keeper pair on the given archived cases.
  *
  * Narrowed by station rather than by user: keeper rows only matter for
  * archived cases somebody actually attempted (at most the replaced cases),
  * whereas a list of every user id would build a URL longer than the answer.
- * Skipped entirely while nothing is archived. Fails closed to "nobody keeps
- * anything", as lib/stations/caseVersionsData.ts does: old-case passes then
- * drop out of the count rather than the page failing.
+ * Skipped entirely while nothing is archived.
+ *
+ * PAGED, because one popular old case can have more keepers than PostgREST
+ * returns in one response (1000 rows), and a silently truncated read would
+ * drop real passes from the count. Same loop as countKeepers in
+ * app/api/admin/case-review/caseReviewData.ts, ordered so the pages are
+ * stable.
+ *
+ * Fails closed to "nobody keeps anything", as lib/stations/caseVersionsData.ts
+ * does, on any page's error: old-case passes then drop out of the count rather
+ * than the page failing, and never half of them.
  */
 export async function loadKeptPairs(
   supabase: SupabaseClient,
   archivedStationIds: readonly string[],
 ): Promise<Set<string>> {
   if (archivedStationIds.length === 0) return new Set();
-  const { data, error } = await supabase
-    .from('case_keepers')
-    .select('user_id, station_id')
-    .in('station_id', [...archivedStationIds]);
-  if (error) {
-    console.error('[admin-progress] keeper lookup failed', error);
-    return new Set();
+  const pairs = new Set<string>();
+  for (let from = 0; ; from += KEEPER_PAGE) {
+    const { data, error } = await supabase
+      .from('case_keepers')
+      .select('user_id, station_id')
+      .in('station_id', [...archivedStationIds])
+      .order('station_id')
+      .order('user_id')
+      .range(from, from + KEEPER_PAGE - 1);
+    if (error) {
+      console.error('[admin-progress] keeper lookup failed', error);
+      return new Set();
+    }
+    const rows = (data ?? []) as { user_id: string; station_id: string }[];
+    for (const row of rows) pairs.add(keptPairKey(row.user_id, row.station_id));
+    if (rows.length < KEEPER_PAGE) return pairs;
   }
-  return new Set(
-    ((data ?? []) as { user_id: string; station_id: string }[]).map((row) =>
-      keptPairKey(row.user_id, row.station_id),
-    ),
-  );
 }
 
 /** Archived case ids that appear in these sessions: the only ones keepers matter for. */

@@ -16,6 +16,7 @@ import type {
     LastStation,
 } from '@/lib/dashboard/types';
 import { visibleStationStates } from '@/lib/stations/visibility';
+import { getAllStations } from '@/lib/supabase/queries/station-library';
 import { MAX_WEIGHTED_SCORE, PASSING_VERDICTS } from '@/lib/clinical-master/types';
 
 // New SCA schema (Build Package Section 12): domains carry CP/P/F/CF grades and
@@ -57,7 +58,12 @@ export async function getUserStats(userId: string): Promise<UserStats> {
         .eq('user_id', userId)
         .eq('status', 'completed');
 
-    // Count total active stations
+    // Count total active stations. Case versions leave this number alone: a
+    // person's case index (resolveCaseIndex) holds exactly one version of
+    // every live slot, the kept old case standing in for its replacement, so
+    // its size is the live count for everyone. Nothing on the dashboard draws
+    // it any more (the guarantee line counts the index itself); kept for the
+    // UserStats shape.
     const { count: totalStations } = await supabase
         .from('stations')
         .select('*', { count: 'exact', head: true })
@@ -188,75 +194,89 @@ export async function getPerformanceMetrics(userId: string): Promise<Performance
     };
 }
 
+/** A case in a person's index, as the domain roll-up reads it. */
+export interface IndexedCase {
+    id: string;
+    domain_id: string;
+}
+
+/** One completed consultation, as the domain roll-up reads it. */
+export interface CompletedScore {
+    station_id: string | null;
+    overall_score: number | null;
+}
+
 /**
- * Fetch blueprint domain progress
+ * Per-domain totals and progress over THIS PERSON'S case index (pure).
+ *
+ * Totals come from the index, not from a count of live rows: a keeper's old
+ * case stands in for its replacement, and if the replacement was filed under
+ * another topic, a live-row count would credit the wrong domain. A completed
+ * consultation counts under the domain of the case it was sat on, and only if
+ * that case is in the index (an attempt on a replaced case this person does
+ * not keep, or on an admin's draft, is not progress through their bank).
  */
-export async function getBlueprintDomains(userId: string): Promise<BlueprintDomain[]> {
-    const supabase = createClient();
-
-    // Get all domains
-    const { data: domains } = await supabase
-        .from('domains')
-        .select('id, name, display_order')
-        .order('display_order', { ascending: true });
-
-    if (!domains || domains.length === 0) {
-        return [];
+export function rollUpDomains(
+    domains: readonly { id: string; name: string }[],
+    index: readonly IndexedCase[],
+    completed: readonly CompletedScore[],
+): BlueprintDomain[] {
+    const domainOf = new Map(index.map((station) => [station.id, station.domain_id]));
+    const countByDomain: Record<string, number> = {};
+    for (const station of index) {
+        if (station.domain_id) countByDomain[station.domain_id] = (countByDomain[station.domain_id] || 0) + 1;
     }
 
-    // Get total stations per domain
-    const { data: stationCounts } = await supabase
-        .from('stations')
-        .select('domain_id')
-        .in('is_active', visibleStationStates());
-
-    const countByDomain: Record<string, number> = {};
-    stationCounts?.forEach(s => {
-        if (s.domain_id) {
-            countByDomain[s.domain_id] = (countByDomain[s.domain_id] || 0) + 1;
-        }
-    });
-
-    // Get completed sessions with scores, joined to stations to get domain_id
-    const { data: completedSessions } = await supabase
-        .from('clinical_sessions')
-        .select('overall_score, stations!inner(domain_id)')
-        .eq('user_id', userId)
-        .eq('status', 'completed');
-
-    // Compute per-domain: completed count + average score. Sessions without a
-    // score (legacy, pre-marking-engine) count as completed but are excluded
-    // from the average so they don't read as 0-mark attempts.
+    // Sessions without a score (legacy, pre-marking-engine) count as completed
+    // but are excluded from the average so they don't read as 0-mark attempts.
     const domainStats: Record<string, { completed: number; scored: number; totalScore: number }> = {};
-    completedSessions?.forEach(s => {
-        const station = s.stations as unknown as { domain_id: string } | null;
-        const domainId = station?.domain_id;
-        if (!domainId) return;
-        if (!domainStats[domainId]) {
-            domainStats[domainId] = { completed: 0, scored: 0, totalScore: 0 };
+    for (const session of completed) {
+        const domainId = session.station_id ? domainOf.get(session.station_id) : undefined;
+        if (!domainId) continue;
+        const stats = (domainStats[domainId] ??= { completed: 0, scored: 0, totalScore: 0 });
+        stats.completed += 1;
+        if (typeof session.overall_score === 'number' && session.overall_score > 0) {
+            stats.scored += 1;
+            stats.totalScore += session.overall_score;
         }
-        domainStats[domainId].completed += 1;
-        if (typeof s.overall_score === 'number' && s.overall_score > 0) {
-            domainStats[domainId].scored += 1;
-            domainStats[domainId].totalScore += s.overall_score;
-        }
-    });
+    }
 
     return domains.map((domain, index) => {
         const stats = domainStats[domain.id] || { completed: 0, scored: 0, totalScore: 0 };
-        const total = countByDomain[domain.id] || 0;
         // clinical_sessions.overall_score is now the weighted score (0 to 10.5).
         const avgWeighted = stats.scored > 0 ? stats.totalScore / stats.scored : 0;
-        const percentage = Math.round((avgWeighted / MAX_WEIGHTED) * 100);
-
         return {
             id: index + 1,
             name: domain.name,
             completed: stats.completed,
-            total,
-            percentage,
+            total: countByDomain[domain.id] || 0,
+            percentage: Math.round((avgWeighted / MAX_WEIGHTED) * 100),
         };
     });
+}
+
+/**
+ * Fetch blueprint domain progress, over this person's case index (see
+ * rollUpDomains). Today the index is the live bank, so the totals are the
+ * live-row counts they always were.
+ */
+export async function getBlueprintDomains(userId: string): Promise<BlueprintDomain[]> {
+    const supabase = createClient();
+
+    const [{ data: domains }, index, { data: completedSessions }] = await Promise.all([
+        supabase.from('domains').select('id, name, display_order').order('display_order', { ascending: true }),
+        getAllStations(userId),
+        supabase
+            .from('clinical_sessions')
+            .select('station_id, overall_score')
+            .eq('user_id', userId)
+            .eq('status', 'completed'),
+    ]);
+
+    if (!domains || domains.length === 0) {
+        return [];
+    }
+    return rollUpDomains(domains, index, (completedSessions ?? []) as CompletedScore[]);
 }
 
 /**

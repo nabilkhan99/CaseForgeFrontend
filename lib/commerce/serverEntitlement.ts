@@ -1,5 +1,7 @@
 import type { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
+import { getSupabaseAdmin } from '@/lib/supabase/admin'
+import { personaliseAllowlist } from '@/lib/stations/caseVersionsAllowlistData'
 import { parseAdminEmails } from '@/lib/admin/guard'
 import { effectiveLaunchDate } from '@/lib/commerce/launchDate'
 import {
@@ -8,7 +10,7 @@ import {
   type AccessDecision,
   type EntitlementRow,
 } from './entitlements'
-import { loadCohortAccess } from './cohortAccess'
+import { loadCohortAccess, type CohortAccess } from './cohortAccess'
 import { loadTrialAccessForGrant, loadTrialGrant, trialAccessFromGrant } from './trialAccess'
 import { exactEmailPattern } from './emailFilter'
 
@@ -155,15 +157,41 @@ export async function getServerEntitlement(): Promise<ServerEntitlement> {
   // outranking it" — the one case where WHICH cases the account may open is the
   // trial's to say, and where the dashboard draws progress. Swapping in the full
   // picture changes nothing `decideAccess` decided: it reads only `state`.
+  //
+  // The SERVICE-ROLE client for the five: once a flagged case is replaced, its
+  // slot must be followed to the version this person runs, and RLS hides an
+  // archived case from everyone not marked on it (see loadFreeTrialStations).
   if (grant && decision.trialOnly) {
     return {
       supabase,
       user,
       failedOpen: false,
       ...decision,
-      trial: await loadTrialAccessForGrant(supabase, grant, now),
+      trial: await loadTrialAccessForGrant(getSupabaseAdmin(), grant, now),
+    }
+  }
+
+  // A cohort-only seat's cases, read per person by slot exactly as the trial's
+  // are (lib/stations/caseVersionsAllowlist.ts): a keeper keeps the old version
+  // of an assigned case, everyone else gets the replacement, whichever id the
+  // trainer assigned. Done here, once, so create-session, realtime-token and
+  // /api/subscription (and so every lock in the library) read one list. Only a
+  // cohort-ONLY account pays the read; today it returns the list unchanged.
+  if (decision.cohortOnly && decision.cohort) {
+    return {
+      supabase,
+      user,
+      failedOpen: false,
+      ...decision,
+      cohort: await personaliseCohort(decision.cohort, user.id),
     }
   }
 
   return { supabase, user, failedOpen: false, ...decision }
+}
+
+/** A cohort with its station ids widened for this person (see above). */
+async function personaliseCohort(cohort: CohortAccess, userId: string): Promise<CohortAccess> {
+  const stationIds = await personaliseAllowlist(getSupabaseAdmin(), cohort.stationIds, userId)
+  return { ...cohort, stationIds }
 }

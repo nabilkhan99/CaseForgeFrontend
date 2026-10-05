@@ -400,9 +400,19 @@ describe('loadFreeTrialStationIds', () => {
     expect(await loadFreeTrialStationIds(client)).toEqual(['st-2', 'st-1'])
     // The flag is the set. Nothing else selects the trial's cases.
     expect(eq).toHaveBeenCalledWith('is_free_trial', true)
-    // And the same visibility rule the library reads by, so a flagged-but-
-    // staged case cannot be openable and invisible at the same time.
-    expect(inFilter).toHaveBeenCalledWith('is_active', [true])
+    // Live and archived, never drafts: a replaced free case still names its
+    // slot (loadTrialAccessForGrant follows it to the version each person runs).
+    expect(inFilter).toHaveBeenCalledWith('lifecycle', ['live', 'archived'])
+  })
+
+  it('counts a flagged replacement of a flagged old case as the same slot', async () => {
+    const { client } = stubStations([
+      { id: 'st-1', lifecycle: 'live', replaces_station_id: null },
+      { id: 'old-2', lifecycle: 'archived', replaces_station_id: null },
+      { id: 'st-3', lifecycle: 'live', replaces_station_id: null },
+      { id: 'new-2', lifecycle: 'live', replaces_station_id: 'old-2' },
+    ])
+    expect(await loadFreeTrialStationIds(client)).toEqual(['st-1', 'old-2', 'st-3'])
   })
 
   it('throws rather than reporting an empty set when the read fails', async () => {

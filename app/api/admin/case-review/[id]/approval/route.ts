@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getAdminEmail } from '@/lib/admin/guard'
+import { cookiePostRefusal } from '@/lib/admin/cookiePostGuard'
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
 import type { ApprovalAction } from '@/components/admin/case-review/types'
 import { UUID_RE, setApproval } from '../../caseReviewData'
@@ -20,8 +21,16 @@ function isApprovalAction(value: unknown): value is ApprovalAction {
  * Draft rows only: anything else is refused with 409, and nothing else on the
  * row is written. In particular this never switches a case on: lifecycle and
  * is_active are untouched (see caseReviewData.ts).
+ *
+ * Authorised by the admin's session cookie, so it passes the CSRF guard first
+ * (lib/admin/cookiePostGuard): JSON only, and a cross-site Origin refused.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const refusal = cookiePostRefusal(request)
+  if (refusal) {
+    return NextResponse.json({ error: refusal.error }, { status: refusal.status })
+  }
+
   const adminEmail = await getAdminEmail()
   if (!adminEmail) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

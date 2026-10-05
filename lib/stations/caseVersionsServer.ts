@@ -27,10 +27,14 @@ import {
     type RunRefusal,
     type VersionedStation,
 } from '@/lib/stations/caseVersions';
-import { loadKeptStationIds, loadReplacementMap } from '@/lib/stations/caseVersionsData';
-import { CASE_VERSION_REFUSED } from '@/lib/stations/caseVersionCodes';
+import { loadKeptStationIdsOrThrow, loadReplacementMap } from '@/lib/stations/caseVersionsData';
+import {
+    CASE_VERSION_REFUSED,
+    CASE_VERSION_UNAVAILABLE,
+    CASE_VERSION_UNAVAILABLE_MESSAGE,
+} from '@/lib/stations/caseVersionCodes';
 
-export { CASE_VERSION_REFUSED } from '@/lib/stations/caseVersionCodes';
+export { CASE_VERSION_REFUSED, CASE_VERSION_UNAVAILABLE } from '@/lib/stations/caseVersionCodes';
 
 /** The person asking. `userId` is null for a signed-out (guest) viewer. */
 export interface RunViewer {
@@ -38,9 +42,38 @@ export interface RunViewer {
     isAdmin: boolean;
 }
 
-export type CaseVersionGate =
-    | { allowed: true }
-    | { allowed: false; reason: RunRefusal; message: string; redirectStationId: string | null };
+/** The rule's answer: this person may not run this version. */
+export interface CaseVersionRefusal {
+    allowed: false;
+    reason: RunRefusal;
+    message: string;
+    redirectStationId: string | null;
+}
+
+/**
+ * The rule could not be applied: the keeper read failed. FAIL CLOSED, but
+ * honestly: not a refusal (it would send a keeper to the replacement they must
+ * never see) and not an allowance (it would let a non-keeper into an old
+ * case). A route answers 503 "try again".
+ */
+export interface CaseVersionUnavailable {
+    allowed: false;
+    unavailable: true;
+    message: string;
+}
+
+export type CaseVersionGate = { allowed: true } | CaseVersionRefusal | CaseVersionUnavailable;
+
+/** Narrow a gate's "no" to the could-not-check case. */
+export function isGateUnavailable(gate: CaseVersionGate): gate is CaseVersionUnavailable {
+    return !gate.allowed && 'unavailable' in gate;
+}
+
+const UNAVAILABLE: CaseVersionUnavailable = Object.freeze({
+    allowed: false,
+    unavailable: true,
+    message: CASE_VERSION_UNAVAILABLE_MESSAGE,
+}) as CaseVersionUnavailable;
 
 /**
  * True when this email is on the ADMIN_EMAILS allowlist. The same allowlist
@@ -83,8 +116,15 @@ export async function gateStationRun(
     // open to all: neither needs the read.
     const keeperRelevant =
         station.lifecycle === 'archived' || (station.lifecycle === 'live' && station.replaces_station_id !== null);
-    const keptIds =
-        keeperRelevant && viewer.userId ? await loadKeptStationIds(service, viewer.userId) : new Set<string>();
+    let keptIds = new Set<string>();
+    if (keeperRelevant && viewer.userId) {
+        try {
+            keptIds = await loadKeptStationIdsOrThrow(service, viewer.userId);
+        } catch (error: unknown) {
+            console.error('[caseVersions] keeper lookup failed at a gate; answering try-again', error);
+            return UNAVAILABLE;
+        }
+    }
 
     const decision = decideCanRun(station, { keptIds, isAdmin: false });
     if (decision.allowed) return decision;
@@ -132,7 +172,7 @@ export async function loadStationRunDecision(
  * sentence (the session page's hook shows `error` as-is, as the guest lane's
  * refusals do); `code` is what a client branches on.
  */
-export function caseVersionRefusalBody(gate: Extract<CaseVersionGate, { allowed: false }>) {
+export function caseVersionRefusalBody(gate: CaseVersionRefusal) {
     return {
         error: gate.message,
         code: CASE_VERSION_REFUSED,
@@ -142,10 +182,24 @@ export function caseVersionRefusalBody(gate: Extract<CaseVersionGate, { allowed:
 }
 
 /**
+ * Status and body for any "no" from the gate: 403 with the refusal body, or
+ * 503 "try again" when the rule could not be checked.
+ */
+export function caseVersionGateFailure(gate: CaseVersionRefusal | CaseVersionUnavailable): {
+    status: 403 | 503;
+    body: Record<string, unknown>;
+} {
+    if ('unavailable' in gate) {
+        return { status: 503, body: { error: gate.message, code: CASE_VERSION_UNAVAILABLE } };
+    }
+    return { status: 403, body: caseVersionRefusalBody(gate) };
+}
+
+/**
  * Which case a "practise this again" link should open for this viewer: the
  * station itself when they may run it, else the version of that slot they do
- * see, else (nothing better to offer) the station itself, whose brief page
- * then explains the refusal.
+ * see, else (nothing better to offer, or the rule could not be checked) the
+ * station itself, whose brief page then applies the rule again.
  */
 export async function practiseStationIdFor(
     service: SupabaseClient,
@@ -153,6 +207,6 @@ export async function practiseStationIdFor(
     viewer: RunViewer,
 ): Promise<string> {
     const gate = await gateStationRun(service, station, viewer);
-    if (gate.allowed) return station.id;
+    if (gate.allowed || isGateUnavailable(gate)) return station.id;
     return gate.redirectStationId ?? station.id;
 }

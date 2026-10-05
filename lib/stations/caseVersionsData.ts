@@ -5,25 +5,58 @@
  * Takes any Supabase client:
  *  - the browser/user client: RLS returns only the person's own keeper rows
  *    (policy "users read their own kept cases") and only archived stations they
- *    have a consultation on (policy "signed-in users can read archived cases
- *    they have used"), which covers every case they keep;
+ *    have a MARKED consultation on (policy "signed-in users can read archived
+ *    cases they have been marked on", migration 20261006), which covers every
+ *    case they keep, since a keeper is exactly someone marked on it;
  *  - the service-role client on the server: reads everything, so callers MUST
  *    pass the right userId.
  *
- * Both functions fail CLOSED to "keeps nothing", logging the error: a person
- * then sees the live catalogue, which is never worse than today's behaviour.
+ * loadKeptStationIds and loadReplacementMap fail to EMPTY, logging the error:
+ * in the browser library a person then sees the live catalogue, which is never
+ * worse than today's behaviour. The server gates must not guess, so they use
+ * loadKeptStationIdsOrThrow and answer "try again" on a failed read.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-/** Ids of the old cases this person keeps. */
-export async function loadKeptStationIds(supabase: SupabaseClient, userId: string): Promise<Set<string>> {
+/**
+ * Ids of the old cases this person keeps, THROWING when the read fails.
+ *
+ * For the server gates (caseVersionsServer.ts) and anything else that decides
+ * who may run what: there, "keeps nothing" is not a safe guess. It would refuse
+ * a keeper their own old case and hand them the replacement the rule says
+ * they must never see, so a gate turns the throw into a "try again" instead.
+ */
+export async function loadKeptStationIdsOrThrow(supabase: SupabaseClient, userId: string): Promise<Set<string>> {
     const { data, error } = await supabase.from('case_keepers').select('station_id').eq('user_id', userId);
-    if (error) {
-        console.error('[caseVersions] keeper lookup failed', error);
+    if (error) throw new KeeperLookupError(error);
+    return new Set((data ?? []).map((row) => (row as { station_id: string }).station_id));
+}
+
+/** The keeper read failed; carries the PostgREST error for the log. */
+export class KeeperLookupError extends Error {
+    readonly detail: unknown;
+    constructor(detail: unknown) {
+        super('case_keepers read failed');
+        this.name = 'KeeperLookupError';
+        this.detail = detail;
+    }
+}
+
+/**
+ * Ids of the old cases this person keeps, failing to EMPTY on a read error.
+ *
+ * For the browser library only, where an empty answer just shows the live
+ * catalogue for one page load (never worse than before case versions). Server
+ * gates use loadKeptStationIdsOrThrow.
+ */
+export async function loadKeptStationIds(supabase: SupabaseClient, userId: string): Promise<Set<string>> {
+    try {
+        return await loadKeptStationIdsOrThrow(supabase, userId);
+    } catch (error: unknown) {
+        console.error('[caseVersions] keeper lookup failed', error instanceof KeeperLookupError ? error.detail : error);
         return new Set();
     }
-    return new Set((data ?? []).map((row) => (row as { station_id: string }).station_id));
 }
 
 /**

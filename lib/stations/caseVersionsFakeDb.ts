@@ -2,7 +2,8 @@
  * TEST-ONLY: a tiny in-memory stand-in for the service-role Supabase client,
  * enough for the case-version gates and the routes around them.
  *
- * Honours `eq`, `in` and `is` filters on reads, so a test states the bank and
+ * Honours `eq`, `neq`, `in` and `is` filters on reads (`order` is accepted
+ * and ignored: rows come back in table order), so a test states the bank and
  * the keeper rows as plain data and the code under test runs its real queries
  * against them. Records every read (per table) so a test can assert that the
  * today-shaped path — every case live, nothing replaced — costs no extra
@@ -53,6 +54,19 @@ function query(db: FakeDb, table: string) {
         select: () => builder,
         eq: (column: string, value: unknown) => {
             filters.push((row) => row[column] === value);
+            return builder;
+        },
+        neq: (column: string, value: unknown) => {
+            filters.push((row) => row[column] !== value);
+            return builder;
+        },
+        order: () => builder,
+        limit: () => builder,
+        // Case-insensitive equality on the pattern with LIKE escapes removed:
+        // enough for the purchase read's exact-email match.
+        ilike: (column: string, pattern: string) => {
+            const wanted = pattern.replace(/\\(.)/g, '$1').toLowerCase();
+            filters.push((row) => String(row[column] ?? '').toLowerCase() === wanted);
             return builder;
         },
         in: (column: string, values: readonly unknown[]) => {

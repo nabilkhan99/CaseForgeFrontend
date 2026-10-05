@@ -120,6 +120,14 @@ describe('GET /api/clinical-master/station-brief/[id]', () => {
     expect(bank.reads).not.toContain('domains')
   })
 
+  it('answers 503 try-again when the keeper read fails', async () => {
+    signedIn('keeper@example.com', 'keeper')
+    bank.failing.add('case_keepers')
+    const { status, body } = await brief(OLD)
+    expect(status).toBe(503)
+    expect(body).toMatchObject({ code: 'case_version_unavailable' })
+  })
+
   it('opens an archived case to its keeper', async () => {
     signedIn('keeper@example.com', 'keeper')
     const { status, body } = await brief(OLD)

@@ -9,6 +9,7 @@ import { micRecoveryHint } from '@/lib/clinical-master/micErrors';
 import { isStartableStatus } from '@/lib/clinical-master/sessionLifecycle';
 import { CASE_VERSION_REFUSED, STATION_MISMATCH } from '@/lib/stations/caseVersionCodes';
 import { createClient } from '@/lib/supabase/client';
+import { fetchServerBrief } from '@/lib/clinical-master/serverBrief';
 import ConnectingScreen from '@/components/clinical-master/ConnectingScreen';
 import ConsultationStage from '@/components/clinical-master/ConsultationStage';
 import SessionControls from '@/components/clinical-master/SessionControls';
@@ -39,6 +40,9 @@ function LiveConsultationContent() {
   const from = searchParams.get('from');
 
   const [station, setStation] = useState<StationData | null>(null);
+  // Neither the browser nor the server could load this case (not found, or a
+  // failed request): say so instead of waiting on a connection that never comes.
+  const [stationUnavailable, setStationUnavailable] = useState(false);
   /**
    * What the session row itself says, because the URL cannot be trusted to mean
    * "start a consultation". 'unknown' until the row has been read — nothing
@@ -63,6 +67,7 @@ function LiveConsultationContent() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     async function fetchStation() {
       if (!stationId) return;
       const supabase = createClient();
@@ -70,10 +75,44 @@ function LiveConsultationContent() {
         .from('stations')
         .select('id, title, patient_name, consultation_duration_seconds')
         .eq('id', stationId)
-        .single();
-      if (data) setStation(data);
+        .maybeSingle();
+      if (cancelled) return;
+      if (data) {
+        setStation(data);
+        return;
+      }
+
+      // THE BROWSER CANNOT SEE EVERY VERSION OF A CASE. A draft is readable
+      // only by the service role, so an admin trying a draft got nothing here
+      // and the consultation never connected (connect() waits for `station`).
+      // Ask the server, exactly as the brief page does: the station-brief
+      // route applies the same version rule as realtime-token and answers with
+      // the fields this page needs (title, patient, duration). Everything the
+      // patient is built from (script, voice, consultation type) is read by
+      // realtime-token itself, server-side.
+      const server = await fetchServerBrief(stationId);
+      if (cancelled) return;
+      if (server.kind === 'brief') {
+        setStation({
+          id: server.station.id,
+          title: server.station.title,
+          patient_name: server.station.patient_name,
+          consultation_duration_seconds: server.station.consultation_duration_seconds,
+        });
+        return;
+      }
+      if (server.kind === 'forward' || server.kind === 'refused') {
+        // Not a version this person runs: the brief forwards or explains.
+        const target = server.kind === 'forward' ? server.target : stationId;
+        router.replace(from ? `/clinical-master/station/${target}?from=${from}` : `/clinical-master/station/${target}`);
+        return;
+      }
+      setStationUnavailable(true);
     }
     fetchStation();
+    return () => { cancelled = true; };
+    // `from` and `router` only shape a forward; the read is per case.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stationId]);
 
   // A consultation that is over opens its report, it does not start again.
@@ -313,6 +352,26 @@ function LiveConsultationContent() {
           <p className="text-muted mb-4">Missing station information</p>
           <Link href="/dashboard/library" className="text-primary hover:underline text-sm">Back to Library</Link>
         </div>
+      </div>
+    );
+  }
+
+  if (stationUnavailable && !station) {
+    return (
+      <div className="min-h-[100dvh] bg-surface flex items-center justify-center px-6">
+        <motion.div className="text-center" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+          <p className="text-muted mb-4">We couldn&apos;t load this case. Try again in a moment.</p>
+          <div className="flex flex-col items-center gap-3">
+            <button
+              onClick={() => window.location.reload()}
+              className="min-h-[44px] rounded-xl px-6 py-3 text-[14px] font-semibold text-white cursor-pointer"
+              style={{ background: 'linear-gradient(135deg, #B45309, #D97706)', boxShadow: '0 4px 12px rgba(180,83,9,0.2)' }}
+            >
+              Try again
+            </button>
+            <Link href="/dashboard/library" className="text-primary hover:underline text-sm">Back to Library</Link>
+          </div>
+        </motion.div>
       </div>
     );
   }

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { visibleStationStates } from '@/lib/stations/visibility'
+import type { VersionedStation } from '@/lib/stations/caseVersions'
+import { personaliseKnownAllowlist, toSlotStation } from '@/lib/stations/caseVersionsAllowlistData'
 
 /**
  * The free trial: FIVE FIXED CASES, UNLIMITED ATTEMPTS, FIVE DAYS.
@@ -212,13 +213,17 @@ export function computeTrialAccess(
   usage: TrialUsage,
   freeStationIds: readonly string[] = [],
   now: Date = new Date(),
+  slotCount: number = freeStationIds.length,
 ): TrialAccess {
   if (!grant) return NO_TRIAL
 
   const stationIds = [...freeStationIds]
   // The flag is the authority; the column is what keeps the copy sane in the
-  // window before anybody has set the flag on anything.
-  const allowance = stationIds.length > 0 ? stationIds.length : grant.allowance
+  // window before anybody has set the flag on anything. Counted in SLOTS, not
+  // ids: once a flagged case is replaced, `freeStationIds` can carry both
+  // versions of one slot for this person (see loadTrialAccessForGrant), and
+  // the trial is still "five cases".
+  const allowance = slotCount > 0 ? slotCount : grant.allowance
   const used = Math.min(Math.max(0, usage.casesTried), allowance)
 
   // Derived rather than trusted. The migration's CHECK makes a half-written
@@ -404,22 +409,44 @@ export async function loadTrialGrant(
  * Nulls sort last so a flagged station nobody has ordered yet still appears —
  * after the ordered ones — rather than jumping the queue or vanishing.
  *
- * `visibleStationStates()` rather than a bare `is_active = true`, so this
- * agrees with `getStationIndex` — the query the library and the dashboard panel
- * build their lists from. Without it a flagged-but-staged station would be
- * openable at the chokepoints and invisible on every surface that offers cases,
- * which is a case a trainee could only reach by guessing a URL.
+ * CASE VERSIONS. Live AND archived flagged rows, one per SLOT. When a flagged
+ * case is replaced, the flag may stay on the old (archived) case, move to the
+ * replacement, or sit on both; whichever it is, the trial still opens that
+ * slot, and loadTrialAccessForGrant turns the slot into the version this
+ * person runs (lib/stations/caseVersionsAllowlist.ts). A flagged replacement
+ * whose old case is flagged too is the same slot, so it is dropped here (the
+ * old case keeps the slot's place in the order). Drafts are never read.
+ *
+ * Callers pass the SERVICE-ROLE client: an archived case is invisible under
+ * RLS to anyone not marked on it, which is precisely the non-keeper whose slot
+ * must still be followed to its replacement. (Today every case is live, so
+ * the rows are the ones the user's own client would have read.)
  */
-export async function loadFreeTrialStationIds(supabase: SupabaseClient): Promise<string[]> {
+export async function loadFreeTrialStations(supabase: SupabaseClient): Promise<VersionedStation[]> {
   const { data, error } = await supabase
     .from('stations')
-    .select('id, free_trial_order')
+    .select('id, free_trial_order, lifecycle, replaces_station_id')
     .eq('is_free_trial', true)
-    .in('is_active', visibleStationStates())
+    .in('lifecycle', ['live', 'archived'])
     .order('free_trial_order', { ascending: true, nullsFirst: false })
     .order('title', { ascending: true })
   if (error) throw error
-  return (data ?? []).map((row) => (row as { id: string }).id)
+  const rows = ((data ?? []) as { id: string; lifecycle?: unknown; replaces_station_id?: unknown }[]).map((row) =>
+    toSlotStation({
+      id: row.id,
+      // A row without the column (an older shape) is a live case, as every
+      // flagged row was before case versions.
+      lifecycle: row.lifecycle ?? 'live',
+      replaces_station_id: row.replaces_station_id ?? null,
+    }),
+  )
+  const flagged = new Set(rows.map((row) => row.id))
+  return rows.filter((row) => !(row.replaces_station_id && flagged.has(row.replaces_station_id)))
+}
+
+/** The trial's slots as ids, in order. See {@link loadFreeTrialStations}. */
+export async function loadFreeTrialStationIds(supabase: SupabaseClient): Promise<string[]> {
+  return (await loadFreeTrialStations(supabase)).map((row) => row.id)
 }
 
 /** One `clinical_sessions` row, as the usage query returns it. */
@@ -481,9 +508,13 @@ export async function countTrialUsage(
  * The five and the progress through them, for a grant already in hand.
  *
  * Two round trips, run in sequence because the usage read is scoped to the
- * station ids. Only worth paying for an account whose access RESTS on the
- * grant: everybody else is decided by {@link trialAccessFromGrant}, which is
- * exact for access and costs nothing on top of the grant read.
+ * station ids (more only once a flagged case has been replaced: see
+ * personaliseKnownAllowlist). Only worth paying for an account whose access
+ * RESTS on the grant: everybody else is decided by {@link trialAccessFromGrant},
+ * which is exact for access and costs nothing on top of the grant read.
+ *
+ * Pass the SERVICE-ROLE client (see {@link loadFreeTrialStations}); the usage
+ * read is scoped to `grant.userId` explicitly.
  *
  * FAILS CLOSED TO AN EMPTY ALLOWLIST. If the flagged stations cannot be read,
  * the trial opens nothing rather than everything. The trainee sees an upsell on
@@ -495,9 +526,9 @@ export async function loadTrialAccessForGrant(
   grant: TrialGrant,
   now: Date = new Date(),
 ): Promise<TrialAccess> {
-  let freeStationIds: string[] = []
+  let slots: VersionedStation[] = []
   try {
-    freeStationIds = await loadFreeTrialStationIds(supabase)
+    slots = await loadFreeTrialStations(supabase)
   } catch (error: unknown) {
     // Quiet for the one failure that is an expected deploy state — the column
     // does not exist until the migration is applied — and loud for anything
@@ -508,15 +539,24 @@ export async function loadTrialAccessForGrant(
     return computeTrialAccess(grant, NO_USAGE, [], now)
   }
 
+  // The five SLOTS, as this person runs them: a keeper of a replaced free case
+  // keeps their old version, everyone else gets the replacement, whichever of
+  // the two carries the flag (lib/stations/caseVersionsAllowlist.ts). This is
+  // the list every chokepoint and every lock reads, so it is widened here,
+  // once. Today it is the flagged ids, unchanged, at no extra read; on a
+  // failed read it is the flagged ids as written, which never opens more.
+  const slotIds = slots.map((slot) => slot.id)
+  const freeStationIds = await personaliseKnownAllowlist(supabase, slotIds, slots, grant.userId)
+
   try {
     const usage = await countTrialUsage(supabase, grant.userId, freeStationIds)
-    return computeTrialAccess(grant, usage, freeStationIds, now)
+    return computeTrialAccess(grant, usage, freeStationIds, now, slotIds.length)
   } catch (error: unknown) {
     // Unlike the allowlist above, an unknown usage count is COSMETIC: it is a
     // progress line, not a gate, so the trial stays open on its five cases and
     // the dashboard simply says nothing has been tried yet.
     console.error('[trial] usage count failed — reporting no cases tried', error)
-    return computeTrialAccess(grant, NO_USAGE, freeStationIds, now)
+    return computeTrialAccess(grant, NO_USAGE, freeStationIds, now, slotIds.length)
   }
 }
 
