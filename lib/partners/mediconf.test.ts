@@ -1,5 +1,8 @@
+import { existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
+  MEDICONF_LOGO,
   MEDICONF_STRAPLINE,
   MEDICONF_WEBINARS,
   mediconfWebinarFor,
@@ -51,6 +54,12 @@ describe('which case points at which webinar', () => {
 })
 
 describe('what the block says about MediConf', () => {
+  it('shows the logo MediConf gave us, from a file that exists', () => {
+    expect(MEDICONF_LOGO?.src).toBe('/partners/mediconf-logo.png')
+    const file = fileURLToPath(new URL(`../../public${MEDICONF_LOGO!.src}`, import.meta.url))
+    expect(existsSync(file)).toBe(true)
+  })
+
   it('uses the strapline MediConf supplied, word for word', () => {
     expect(MEDICONF_STRAPLINE).toBe(
       'Free live CPD for primary care – practical, relevant and ready to apply in practice.',
