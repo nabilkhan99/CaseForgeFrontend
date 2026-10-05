@@ -17,6 +17,11 @@ const DESTINATIONS: readonly AdminDestination[] = [
     blurb: 'Free case and trial leads in the order to call them. Log each call and the next step follows.',
   },
   {
+    href: '/admin/case-review',
+    title: 'Case review',
+    blurb: 'New cases waiting to go live. Read each next to the case it replaces, then approve it.',
+  },
+  {
     href: '/admin/orders',
     title: 'Orders',
     blurb: 'Every purchase: revenue, refunds, plan split and coaching session bookings.',
