@@ -224,7 +224,7 @@ function DashboardContent() {
         // once the bank is exhausted; a random case is still a case to practise.
         if (access?.trial?.state !== 'trial') {
           const recommended = pickNextForYou(stationIndex, dailySeed(today, user.id));
-          setUpNext(recommended ?? (await getRandomStation()));
+          setUpNext(recommended ?? (await getRandomStation(user.id)));
         }
       } catch (error) {
         console.error('[dashboard] failed to load dashboard data', error);

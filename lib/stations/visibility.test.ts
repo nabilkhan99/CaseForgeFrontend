@@ -5,7 +5,7 @@ afterEach(() => {
   vi.unstubAllEnvs()
 })
 
-/** Staged mode bypasses the entitlement gate, so every case here is a paywall case. */
+/** Staged mode now only moves the launch date (lib/commerce/launchDate.ts); every case here is a production-safety case. */
 describe('isStagedDeployment', () => {
   it('is off without the flag, whatever the environment', () => {
     vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', 'preview')
@@ -51,9 +51,13 @@ describe('visibleStationStates', () => {
     expect(visibleStationStates()).toEqual([true])
   })
 
-  it('adds staged stations on a staged deployment', () => {
+  it('never widens to non-live rows, even on a staged deployment', () => {
+    // is_active = false now means a draft or a replaced (archived) case, not
+    // "staged for launch": widening would list old cases beside their
+    // replacements. Staged mode is off for station lists, permanently.
     vi.stubEnv('NEXT_PUBLIC_SHOW_STAGED_STATIONS', '1')
     vi.stubEnv('NEXT_PUBLIC_VERCEL_ENV', 'preview')
-    expect(visibleStationStates()).toEqual([true, false])
+    expect(isStagedDeployment()).toBe(true)
+    expect(visibleStationStates()).toEqual([true])
   })
 })

@@ -5,10 +5,24 @@
  * longer a separate query — they are reduced from the station array by
  * summariseDomains() in lib/stations/librarySearch.ts, so the index page and
  * the domain page can never report different totals for the same bank.
+ *
+ * Every list here is the PERSON'S case index, not the raw catalogue: every
+ * live case, except that a live case replacing an old case this person keeps
+ * is swapped for that old case (resolveCaseIndex in
+ * lib/stations/caseVersions.ts). A keeper therefore sees their old case in its
+ * slot, with its attempts, scores and pass untouched (all keyed by station id),
+ * and never its replacement as well. Everyone else sees the live bank. Today
+ * every station is live and nobody keeps anything, so the index IS the live
+ * bank and nothing changes until a batch is switched on.
+ *
+ * Staged-preview widening (`visibleStationStates()`) is not used here: a
+ * non-live row is now a draft or a replaced case, and only caseVersions decides
+ * who sees those.
  */
 
 import { createClient } from '@/lib/supabase/client';
-import { visibleStationStates } from '@/lib/stations/visibility';
+import { resolveCaseIndex, type StationLifecycle } from '@/lib/stations/caseVersions';
+import { loadKeptStationIds } from '@/lib/stations/caseVersionsData';
 import { extractPresentingComplaint } from '@/lib/stations/presentingComplaint';
 import {
     markAttempt,
@@ -74,9 +88,17 @@ export interface Station {
  * and the flat index can never drift into fetching different shapes.
  */
 const STATION_COLUMNS =
-    'id, title, patient_name, domain_id, consultation_duration_seconds, difficulty, is_active, candidate_instructions';
+    'id, title, patient_name, domain_id, consultation_duration_seconds, difficulty, is_active, lifecycle, replaces_station_id, candidate_instructions';
 
-interface StationRow {
+/**
+ * The same minus the brief, for the dashboard's random pick: it never searches,
+ * and 200 briefs would triple the payload.
+ */
+const STATION_LITE_COLUMNS =
+    'id, title, patient_name, domain_id, consultation_duration_seconds, difficulty, is_active, lifecycle, replaces_station_id';
+
+/** A station row as every library query selects it (the brief is optional). */
+interface StationLiteRow {
     id: string;
     title: string;
     patient_name: string;
@@ -84,7 +106,84 @@ interface StationRow {
     consultation_duration_seconds: number;
     difficulty: string;
     is_active: boolean;
+    lifecycle: StationLifecycle;
+    replaces_station_id: string | null;
+}
+
+interface StationRow extends StationLiteRow {
     candidate_instructions: string | null;
+}
+
+type BrowserClient = ReturnType<typeof createClient>;
+
+/**
+ * The archived cases this person keeps, as full rows.
+ *
+ * Skipped outright, no query at all, when they keep nothing, which is every
+ * person until a batch is switched on and most people after. RLS lets a person
+ * read an archived case they have a consultation on, and every keeper has one.
+ * Fails closed to "keeps nothing" like loadKeptStationIds: the person then sees
+ * the live catalogue, never worse than before case versions existed.
+ */
+async function fetchKeptRows<T extends StationLiteRow>(
+    supabase: BrowserClient,
+    keptIds: ReadonlySet<string>,
+    columns: string,
+): Promise<T[]> {
+    if (keptIds.size === 0) return [];
+    const { data, error } = await supabase
+        .from('stations')
+        .select(columns)
+        .in('id', [...keptIds])
+        .eq('lifecycle', 'archived')
+        .order('title')
+        .overrideTypes<T[], { merge: false }>();
+    if (error) {
+        console.error('Error fetching kept stations:', error.message, error.details, error.hint);
+        return [];
+    }
+    return data ?? [];
+}
+
+/** Keeper ids, then their rows; nothing at all for a signed-out caller. */
+async function fetchKeptRowsForUser<T extends StationLiteRow>(
+    supabase: BrowserClient,
+    userId: string | undefined,
+    columns: string,
+): Promise<T[]> {
+    if (!userId) return [];
+    const keptIds = await loadKeptStationIds(supabase, userId);
+    return fetchKeptRows<T>(supabase, keptIds, columns);
+}
+
+/**
+ * This person's whole case index, in title order. null when the live
+ * catalogue itself could not be read (callers log and show nothing, as before).
+ *
+ * The live query and the keeper lookup run side by side, so a person who keeps
+ * nothing pays one extra small parallel request and no extra latency.
+ */
+async function fetchIndexRows<T extends StationLiteRow>(
+    supabase: BrowserClient,
+    userId: string | undefined,
+    columns: string,
+    label: string,
+): Promise<T[] | null> {
+    const [live, kept] = await Promise.all([
+        supabase
+            .from('stations')
+            .select(columns)
+            .eq('lifecycle', 'live')
+            .order('title')
+            .overrideTypes<T[], { merge: false }>(),
+        fetchKeptRowsForUser<T>(supabase, userId, columns),
+    ]);
+
+    if (live.error) {
+        console.error(`Error fetching ${label}:`, live.error.message, live.error.details, live.error.hint);
+        return null;
+    }
+    return resolveCaseIndex(live.data ?? [], kept);
 }
 
 interface SessionInfo {
@@ -232,38 +331,47 @@ function toStation(row: StationRow, domainName: string, progress: UserStationPro
 }
 
 /**
- * Fetch stations for a specific domain
+ * One topic's cases, as this person sees them.
+ *
+ * The index is resolved and THEN filtered by domain, so a kept old case shows
+ * under its own topic even if its replacement was filed under another one, and
+ * a replacement never shows to the person who keeps the case it replaced.
+ *
+ * Only this domain's live rows are fetched, not the whole bank with its 200
+ * briefs: resolving against every kept case and then filtering gives exactly
+ * the set a full-bank resolve would. The one difference is order: a kept case
+ * whose replacement sits under another topic lands at the end of this list
+ * rather than at that replacement's alphabetical slot, which in a list of this
+ * topic's cases is the more sensible place anyway.
  */
 export async function getStationsForDomain(domainId: string, userId?: string): Promise<Station[]> {
     const supabase = createClient();
 
-    // Fetch stations for domain
-    const { data: stations, error } = await supabase
-        .from('stations')
-        .select(STATION_COLUMNS)
-        .eq('domain_id', domainId)
-        .in('is_active', visibleStationStates())
-        .order('title')
-        .overrideTypes<StationRow[]>();
+    const [live, kept, domain] = await Promise.all([
+        supabase
+            .from('stations')
+            .select(STATION_COLUMNS)
+            .eq('domain_id', domainId)
+            .eq('lifecycle', 'live')
+            .order('title')
+            .overrideTypes<StationRow[]>(),
+        fetchKeptRowsForUser<StationRow>(supabase, userId, STATION_COLUMNS),
+        supabase.from('domains').select('name').eq('id', domainId).single(),
+    ]);
 
-    if (error) {
-        console.error('Error fetching stations:', error.message, error.details, error.hint);
+    if (live.error) {
+        console.error('Error fetching stations:', live.error.message, live.error.details, live.error.hint);
         return [];
     }
 
-    if (!stations || stations.length === 0) {
+    const stations = resolveCaseIndex(live.data ?? [], kept).filter(s => s.domain_id === domainId);
+    if (stations.length === 0) {
         return [];
     }
 
-    // Fetch domain name
-    const { data: domain } = await supabase
-        .from('domains')
-        .select('name')
-        .eq('id', domainId)
-        .single();
+    const domainName = domain.data?.name || 'Unknown';
 
-    const domainName = domain?.name || 'Unknown';
-
+    // Narrowed to the resolved ids, so a kept old case brings its own history.
     const progress = userId
         ? await fetchUserStationProgress(userId, stations.map(s => s.id))
         : EMPTY_PROGRESS;
@@ -272,60 +380,55 @@ export async function getStationsForDomain(domainId: string, userId?: string): P
 }
 
 /**
- * Every visible station, flat, with the current user's progress on each.
+ * Every station in this person's index, flat, with their progress on each.
  *
  * The library's only way in used to be 29 domain folders, so finding "the
  * chest pain one" meant guessing which folder it lived in. Search needs the
  * whole bank in one array; 200 rows is small enough to filter in the browser
  * and avoids a debounced query per keystroke on a phone.
+ *
+ * The dashboard's guarantee line counts passes off this same array, so a
+ * keeper's pass on an old case counts for its slot and every person's
+ * denominator is exactly the live count.
  */
 export async function getStationIndex(userId?: string): Promise<Station[]> {
     const supabase = createClient();
 
-    const { data: stations, error } = await supabase
-        .from('stations')
-        .select(STATION_COLUMNS)
-        .in('is_active', visibleStationStates())
-        .order('title')
-        .overrideTypes<StationRow[]>();
-
-    if (error) {
-        console.error('Error fetching station index:', error.message, error.details, error.hint);
-        return [];
-    }
+    // Progress is fetched unnarrowed (filtering by 200 ids would build a URL
+    // longer than the answer), so it needs nothing from the station rows and
+    // runs alongside them.
+    const [stations, domains, progress] = await Promise.all([
+        fetchIndexRows<StationRow>(supabase, userId, STATION_COLUMNS, 'station index'),
+        supabase.from('domains').select('id, name'),
+        userId ? fetchUserStationProgress(userId) : Promise.resolve(EMPTY_PROGRESS),
+    ]);
 
     if (!stations || stations.length === 0) {
         return [];
     }
 
-    const { data: domains } = await supabase.from('domains').select('id, name');
     const domainNames: Record<string, string> = {};
-    domains?.forEach(d => {
+    domains.data?.forEach(d => {
         domainNames[d.id] = d.name;
     });
-
-    const progress = userId ? await fetchUserStationProgress(userId) : EMPTY_PROGRESS;
 
     return stations.map(s => toStation(s, domainNames[s.domain_id] || 'Unknown', progress));
 }
 
 /**
- * Fetch all active stations (for random selection)
+ * Every station in this person's index, without progress (for random
+ * selection). Resolved exactly like getStationIndex, so a keeper is never
+ * offered the replacement of a case they keep.
  */
-export async function getAllStations(): Promise<Station[]> {
+export async function getAllStations(userId?: string): Promise<Station[]> {
     const supabase = createClient();
 
-    // Fetch stations
-    const { data: stations, error } = await supabase
-        .from('stations')
-        .select('id, title, patient_name, domain_id, consultation_duration_seconds, difficulty, is_active')
-        .in('is_active', visibleStationStates())
-        .order('title');
-
-    if (error) {
-        console.error('Error fetching all stations:', error.message, error.details, error.hint);
-        return [];
-    }
+    const stations = await fetchIndexRows<StationLiteRow>(
+        supabase,
+        userId,
+        STATION_LITE_COLUMNS,
+        'all stations',
+    );
 
     if (!stations || stations.length === 0) {
         return [];
@@ -366,10 +469,10 @@ export async function getAllStations(): Promise<Station[]> {
 
 
 /**
- * Get a random station (for "Start New" button)
+ * Get a random station from this person's index (for "Start New" button)
  */
-export async function getRandomStation(): Promise<Station | null> {
-    const stations = await getAllStations();
+export async function getRandomStation(userId?: string): Promise<Station | null> {
+    const stations = await getAllStations(userId);
     if (stations.length === 0) return null;
 
     const randomIndex = Math.floor(Math.random() * stations.length);

@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/admin/guard';
-import { visibleStationStates } from '@/lib/stations/visibility';
 import { reduceStationPassMap, type StationAttemptRow } from '@/lib/supabase/queries/passTracking';
+import { archivedStationIds, countsTowardsIndex, loadKeptPairs } from './caseIndex';
 
 /**
  * Admin progress API. Guarded (fail-closed) by the ADMIN_EMAILS allowlist —
@@ -15,6 +15,14 @@ import { reduceStationPassMap, type StationAttemptRow } from '@/lib/supabase/que
  *
  * Guest sessions (the /try funnel) carry a null user_id and are excluded —
  * they belong to nobody until the account is claimed.
+ *
+ * Counted over each person's case index (lib/stations/caseVersions.ts), the
+ * same set their library shows: attempts and passes on live cases, plus on the
+ * archived cases that person keeps. An attempt on a replaced case they do not
+ * keep, or on a draft an admin tried, is not progress through their bank. The
+ * denominator is the live count, which is what every person's index holds.
+ * Today every station is live and nobody keeps anything, so nothing is
+ * filtered and the output is unchanged.
  */
 
 /** Users returned. A founder scanning progress does not page; they scan. */
@@ -46,7 +54,7 @@ interface SessionRow {
   user_id: string | null;
   station_id: string | null;
   started_at: string;
-  stations: { title: string | null } | null;
+  stations: { title: string | null; lifecycle: string | null } | null;
   session_results: { verdict: string | null; weighted_score: number | string | null } | null;
 }
 
@@ -65,7 +73,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from('clinical_sessions')
     .select(
-      'user_id, station_id, started_at, stations(title), session_results(verdict, weighted_score)',
+      'user_id, station_id, started_at, stations(title, lifecycle), session_results(verdict, weighted_score)',
     )
     .not('user_id', 'is', null)
     .eq('status', 'completed')
@@ -77,7 +85,11 @@ export async function GET() {
     return NextResponse.json({ error: 'Failed to load progress' }, { status: 500 });
   }
 
-  const sessions = (data ?? []) as unknown as SessionRow[];
+  const allSessions = (data ?? []) as unknown as SessionRow[];
+
+  // ── Each person's case index ── (see ./caseIndex.ts)
+  const kept = await loadKeptPairs(supabase, archivedStationIds(allSessions));
+  const sessions = allSessions.filter((s) => countsTowardsIndex(s, kept));
 
   // Station titles are needed for the expanded per-user list; a station with no
   // title falls back to its id so a row never silently disappears.
@@ -131,7 +143,7 @@ export async function GET() {
   // Two different truncations with two different consequences: a user cap hides
   // whole rows, a session cap silently understates the rows that are shown.
   const usersTruncated = progress.length > MAX_USERS;
-  const sessionsTruncated = sessions.length >= MAX_SESSIONS;
+  const sessionsTruncated = allSessions.length >= MAX_SESSIONS;
 
   // ── Who each user is ──
   // Secondary context: a failure here degrades to a null identity rather than
@@ -152,7 +164,7 @@ export async function GET() {
   const { count: totalStations } = await supabase
     .from('stations')
     .select('*', { count: 'exact', head: true })
-    .in('is_active', visibleStationStates());
+    .eq('lifecycle', 'live');
 
   return NextResponse.json({
     progress: capped.map((p) => ({

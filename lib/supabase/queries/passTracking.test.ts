@@ -327,11 +327,13 @@ describe('getStationPassMap — query shape', () => {
     expect(db.state.filters).toContainEqual(['in', 'stations.is_active', [true]]);
   });
 
-  it('widens with the deployment when staged stations are visible', async () => {
+  it('stays live-only even with the staged-preview flag set', async () => {
+    // Staged mode no longer widens station lists: non-live rows are drafts
+    // and replaced cases now (lib/stations/visibility.ts).
     process.env.NEXT_PUBLIC_SHOW_STAGED_STATIONS = '1';
     await getStationPassMap('user-1');
 
-    expect(db.state.filters).toContainEqual(['in', 'stations.is_active', [true, false]]);
+    expect(db.state.filters).toContainEqual(['in', 'stations.is_active', [true]]);
   });
 
   it('scopes to the user own completed sessions', async () => {
