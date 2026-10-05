@@ -125,7 +125,7 @@ export const scaMarkingDomainsExplained: GuideArticle = {
                 },
                 {
                     type: 'text',
-                    text: 'If you want cases to run this drill with, our free library has 79 SCA practice cases built directly from the RCGP curriculum, each with a candidate brief, patient script and a marking scheme aligned to the 3 domains. It is there whenever it would be useful.',
+                    text: 'If you want cases to run this drill with, our free library has 200 SCA practice cases built directly from the RCGP curriculum, each with a candidate brief, patient script and a marking scheme aligned to the 3 domains. It is there whenever it would be useful.',
                 },
             ],
         },

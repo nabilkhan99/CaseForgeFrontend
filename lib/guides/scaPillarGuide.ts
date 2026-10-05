@@ -271,7 +271,7 @@ export const pillarSections: PillarSection[] = [
         title: 'Putting it together',
         paragraphs: [
             'Passing the SCA comes down to a short list of things done consistently. Understand the format so nothing on the day is a surprise. Internalise the 3 domains, because they are the entire basis of your mark. Build the 12 minute consultation shape until it is automatic. Practise under real timing, with honest feedback, early and often. Target your weakest domain rather than rehearsing your strengths. And walk into the exam treating each case as a real patient, because that, more than anything else, is what the examiners are looking for.',
-            'If you want somewhere to start practising today, our case library has 79 SCA practice cases built directly from the RCGP curriculum, each with a candidate brief, patient script, marking scheme and learning points. It is free, with no paywall, and you are welcome to use it whenever it helps.',
+            'If you want somewhere to start practising today, our case library has 200 SCA practice cases built directly from the RCGP curriculum, each with a candidate brief, patient script, marking scheme and learning points. It is free, with no paywall, and you are welcome to use it whenever it helps.',
         ],
     },
 ];

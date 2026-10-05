@@ -67,7 +67,7 @@ export const bestScaRevisionResources: GuideArticle = {
                 },
                 {
                     type: 'text',
-                    text: 'This is the gap our own free case library exists to fill. It contains 79 SCA practice cases built directly from the case examples the RCGP lists in its curriculum, each with a candidate brief, patient script, marking scheme and learning points, with no paywall and no subscription. Everything is open to read before you rely on it, so you can judge it on its contents.',
+                    text: 'This is the gap our own free case library exists to fill. It contains 200 SCA practice cases built directly from the case examples the RCGP lists in its curriculum, each with a candidate brief, patient script, marking scheme and learning points, with no paywall and no subscription. Everything is open to read before you rely on it, so you can judge it on its contents.',
                 },
             ],
         },
@@ -93,7 +93,7 @@ export const bestScaRevisionResources: GuideArticle = {
                     rows: [
                         [
                             '**Fourteen Fisherman**',
-                            '**79 cases**',
+                            '**200 cases**',
                             '**Coming soon…**',
                             '**Free**',
                             '**Built from the RCGP curriculum, with brief, patient script, marking scheme and learning points; no subscription**',
@@ -251,7 +251,7 @@ export const bestScaRevisionResources: GuideArticle = {
                 },
                 {
                     type: 'text',
-                    text: 'If a free, structured case set would help you start, our library of 79 SCA practice cases built from the RCGP curriculum is open to use whenever it suits you.',
+                    text: 'If a free, structured case set would help you start, our library of 200 SCA practice cases built from the RCGP curriculum is open to use whenever it suits you.',
                 },
             ],
         },

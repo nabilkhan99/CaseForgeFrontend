@@ -237,7 +237,7 @@ export default function GuidesPage() {
                                 </em>
                             </h2>
                             <p className="mt-5 max-w-2xl [font-family:var(--font-serif)] text-xl leading-relaxed text-[#c9bcaa]">
-                                Our case library has 79 SCA practice cases built directly from the RCGP curriculum, each with a candidate brief, patient script, marking scheme and learning points. Free, with no paywall, whenever it helps.
+                                Our case library has 200 SCA practice cases built directly from the RCGP curriculum, each with a candidate brief, patient script, marking scheme and learning points. Free, with no paywall, whenever it helps.
                             </p>
                             <div className="mt-8 flex flex-wrap gap-3">
                                 <Link href={CASE_LIBRARY_PATH} className="primary-button">

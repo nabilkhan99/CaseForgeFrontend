@@ -111,7 +111,7 @@ export const howToPractiseScaCasesStudyPartner: GuideArticle = {
                 },
                 {
                     type: 'text',
-                    text: 'Everything in this method needs only one ingredient you might not already have: cases built with all 4 components. Our free library has 79 of them, drawn directly from the RCGP curriculum, each with the candidate brief, patient script, marking scheme and learning points described above and a built in 12 minute timer. It is free, and it is there whenever your group needs material.',
+                    text: 'Everything in this method needs only one ingredient you might not already have: cases built with all 4 components. Our free library has 200 of them, drawn directly from the RCGP curriculum, each with the candidate brief, patient script, marking scheme and learning points described above and a built in 12 minute timer. It is free, and it is there whenever your group needs material.',
                 },
             ],
         },

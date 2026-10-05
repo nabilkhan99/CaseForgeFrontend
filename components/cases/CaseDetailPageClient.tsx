@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { SeoCase } from '@/lib/seo/cases';
+import { publicLibrarySize, type SeoCase } from '@/lib/seo/cases';
 import CaseTimer from '@/components/cases/CaseTimer';
 import CaseDetailTabs from '@/components/cases/CaseDetailTabs';
 import { MarkdownContent, LearningPointsDisplay } from '@/components/cases/LearningPoints';
@@ -17,6 +17,8 @@ import { caseCtaFor } from '@/lib/trial/freeStationPicks';
 
 interface CaseDetailPageClientProps {
     caseData: SeoCase;
+    /** Live cases in the public library, for the footer line. Falls back to 200. */
+    libraryCaseCount?: number;
 }
 
 // Parse the candidate_instructions markdown into structured sections
@@ -110,7 +112,7 @@ function SectionIcon({ title }: { title: string }) {
 
 
 
-export default function CaseDetailPageClient({ caseData }: CaseDetailPageClientProps) {
+export default function CaseDetailPageClient({ caseData, libraryCaseCount }: CaseDetailPageClientProps) {
     const [user, setUser] = useState<{ id: string } | null>(null);
 
     useEffect(() => {
@@ -373,7 +375,7 @@ export default function CaseDetailPageClient({ caseData }: CaseDetailPageClientP
 
                 <div className="mt-8 flex flex-col gap-4">
                     <div className="rounded-2xl border border-black/[0.06] bg-stone-100/70 p-5 text-sm text-text-secondary leading-relaxed">
-                        Free MRCGP SCA practice case for GP registrars covering {caseData.condition} — {caseData.domain_name}. Includes candidate brief, patient script, marking scheme mapped to the RCGP SCA marking domains, and learning points. Built directly from the RCGP curriculum topic stations listed under &quot;How this might be tested in the MRCGP SCA,&quot; part of a free library of 79 SCA practice cases for simulated consultation assessment preparation.
+                        Free MRCGP SCA practice case for GP registrars covering {caseData.condition} — {caseData.domain_name}. Includes candidate brief, patient script, marking scheme mapped to the RCGP SCA marking domains, and learning points. Built directly from the RCGP curriculum topic stations listed under &quot;How this might be tested in the MRCGP SCA,&quot; part of a free library of {publicLibrarySize(libraryCaseCount)} SCA practice cases for simulated consultation assessment preparation.
                     </div>
                     <Link href="/sca-cases" className="inline-flex w-fit text-primary hover:text-primary/80 text-sm font-medium transition-colors">
                         &larr; Back to Free SCA Practice Cases

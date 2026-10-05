@@ -1,23 +1,30 @@
 import type { Metadata } from 'next';
 import CaseBankPageClient from '@/components/cases/CaseBankPageClient';
-import { getPublicCasesGroupedByDomainForList } from '@/lib/cases/publicCases';
-import { buildCaseSeoIndex } from '@/lib/seo/cases';
+import { getPublicCasesForList, getPublicCasesGroupedByDomainForList } from '@/lib/cases/publicCases';
+import { buildCaseSeoIndex, publicLibrarySize } from '@/lib/seo/cases';
 import { pageMetadata } from '@/lib/seo/site';
 
 export const revalidate = 3600;
 
-export const metadata: Metadata = pageMetadata({
-    title: 'Free SCA Practice Cases | 79 RCGP Curriculum Cases',
-    description:
-        '79 free SCA practice cases built directly from RCGP curriculum topic stations. Candidate brief, patient script, marking scheme and learning points. Free for GP registrar exam prep.',
-    path: '/sca-cases',
-    image: {
-        url: '/og/sca-cases.png',
-        width: 1200,
-        height: 1200,
-        alt: '79 free SCA stations',
-    },
-});
+// The count in the title and description is the live library's real size
+// (read from the same request-cached list the page renders), so it follows the
+// bank as cases are replaced. The share image's alt text stays count-free: the
+// image itself is a fixed PNG.
+export async function generateMetadata(): Promise<Metadata> {
+    const count = publicLibrarySize((await getPublicCasesForList()).length);
+
+    return pageMetadata({
+        title: `Free SCA Practice Cases | ${count} RCGP Curriculum Cases`,
+        description: `${count} free SCA practice cases built directly from RCGP curriculum topic stations. Candidate brief, patient script, marking scheme and learning points. Free for GP registrar exam prep.`,
+        path: '/sca-cases',
+        image: {
+            url: '/og/sca-cases.png',
+            width: 1200,
+            height: 1200,
+            alt: 'Free SCA stations built from the RCGP curriculum',
+        },
+    });
+}
 
 export default async function ScaCasesPage() {
     const domains = await getPublicCasesGroupedByDomainForList();

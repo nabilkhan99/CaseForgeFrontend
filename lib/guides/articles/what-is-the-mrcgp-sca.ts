@@ -147,7 +147,7 @@ export const whatIsTheMrcgpSca: GuideArticle = {
                 },
                 {
                     type: 'text',
-                    text: 'When you are ready to start practising, our case library has 79 SCA practice cases built directly from the RCGP curriculum, each with a candidate brief, patient script, marking scheme and learning points. It is free to use, with no paywall, whenever it would help.',
+                    text: 'When you are ready to start practising, our case library has 200 SCA practice cases built directly from the RCGP curriculum, each with a candidate brief, patient script, marking scheme and learning points. It is free to use, with no paywall, whenever it would help.',
                 },
             ],
         },

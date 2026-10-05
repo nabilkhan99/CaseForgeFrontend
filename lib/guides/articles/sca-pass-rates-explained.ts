@@ -55,7 +55,7 @@ export const scaPassRatesExplained: GuideArticle = {
                 },
                 {
                     type: 'text',
-                    text: 'So let the pass rate do its one useful job, calibrating respect for the exam, and then ignore it, because it is the single variable on this page you cannot influence. The variables you can influence are the 12 consultations you will give, and those are built in practice. If structured cases would help, our free library of 79 SCA practice cases, drawn directly from the RCGP curriculum with marking schemes aligned to the 3 domains, is open whenever it is useful.',
+                    text: 'So let the pass rate do its one useful job, calibrating respect for the exam, and then ignore it, because it is the single variable on this page you cannot influence. The variables you can influence are the 12 consultations you will give, and those are built in practice. If structured cases would help, our free library of 200 SCA practice cases, drawn directly from the RCGP curriculum with marking schemes aligned to the 3 domains, is open whenever it is useful.',
                 },
             ],
         },

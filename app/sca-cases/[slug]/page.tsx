@@ -1,11 +1,21 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import CaseDetailPageClient from '@/components/cases/CaseDetailPageClient';
-import { getPublicCaseById, getPublicCasesForList } from '@/lib/cases/publicCases';
-import { buildCaseSeoIndex, caseDescription, caseTitle } from '@/lib/seo/cases';
+import {
+    findArchivedCaseForwardPath,
+    getPublicCaseById,
+    getPublicCasesForList,
+} from '@/lib/cases/publicCases';
+import { buildCaseSeoIndex, caseMetaDescription, caseTitle } from '@/lib/seo/cases';
 import { absoluteUrl, pageMetadata, SITE_NAME, SITE_URL } from '@/lib/seo/site';
 
 export const revalidate = 3600;
+
+// Slugs outside generateStaticParams must still reach the page: that is how an
+// archived case's old address gets to the forwarding lookup below (and how a
+// case added since the last build gets its page). This is Next's default; it is
+// spelled out so nobody turns it off without seeing what it would break.
+export const dynamicParams = true;
 
 interface PageProps {
     params: Promise<{ slug: string }>;
@@ -40,6 +50,12 @@ async function getSeoCase(slug: string) {
     };
 }
 
+// The live library's size, for the page's "part of a free library of N" line.
+// getPublicCasesForList is request-cached, so this costs nothing extra.
+async function getLiveCaseCount() {
+    return (await getPublicCasesForList()).length;
+}
+
 export async function generateStaticParams() {
     const seoCases = buildCaseSeoIndex(await getPublicCasesForList());
     return seoCases.map(caseItem => ({ slug: caseItem.slug }));
@@ -59,7 +75,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
     return pageMetadata({
         title: caseTitle(caseItem.condition),
-        description: caseDescription(caseItem.condition),
+        description: caseMetaDescription(caseItem),
         path: caseItem.path,
     });
 }
@@ -69,6 +85,14 @@ export default async function ScaCasePage({ params }: PageProps) {
     const caseItem = await getSeoCase(slug);
 
     if (!caseItem) {
+        // Not a live case. If it was one that has since been replaced, its old
+        // address forwards permanently to the replacement's page; otherwise this
+        // is the 404 it always was. Outside any try/catch: permanentRedirect
+        // throws to do its work.
+        const forwardTo = await findArchivedCaseForwardPath({ archivedSlug: slug });
+        if (forwardTo) {
+            permanentRedirect(forwardTo);
+        }
         notFound();
     }
 
@@ -120,7 +144,7 @@ export default async function ScaCasePage({ params }: PageProps) {
                 type="application/ld+json"
                 dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
             />
-            <CaseDetailPageClient caseData={caseItem} />
+            <CaseDetailPageClient caseData={caseItem} libraryCaseCount={await getLiveCaseCount()} />
         </>
     );
 }
