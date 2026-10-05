@@ -11,7 +11,13 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { isStartableStatus } from '@/lib/clinical-master/sessionLifecycle';
 import { mintEphemeralKey, unreliableEchoCancellation } from '@/lib/clinical-master/realtimeToken';
 import { voiceForStation } from '@/lib/clinical-master/realtimeSession';
-import { visibleStationStates } from '@/lib/stations/visibility';
+import {
+  caseVersionRefusalBody,
+  gateStationRun,
+  isAdminEmail,
+  toVersionedStation,
+} from '@/lib/stations/caseVersionsServer';
+import { STATION_MISMATCH, STATION_MISMATCH_MESSAGE } from '@/lib/stations/caseVersionCodes';
 
 
 /**
@@ -108,21 +114,36 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Load the full station for prompt building
+  // Load the full station for prompt building. Any lifecycle: which version
+  // of a case this person may run is the version rule's call, just below, not
+  // a filter on the read. A keeper must be able to re-run the archived case
+  // they keep, which an `is_active` filter would 404.
   const { data: station, error: stationErr } = await admin
     .from('stations')
     .select('*')
     .eq('id', stationId)
-    .in('is_active', visibleStationStates())
     .maybeSingle();
   if (stationErr || !station) {
     return NextResponse.json({ error: 'Station not found' }, { status: 404 });
   }
 
+  // THE VERSION RULE, at the endpoint that spends. Checked here as well as in
+  // create-session for the same reason as the cohort and trial locks above: a
+  // session row can predate the switch-on that archived its case, or a client
+  // can skip the brief page. Keepers re-run what they keep; everyone else runs
+  // the replacement; drafts are admins only. Before the mint, always.
+  const version = await gateStationRun(admin, toVersionedStation(station), {
+    userId: user.id,
+    isAdmin: isAdminEmail(user.email),
+  });
+  if (!version.allowed) {
+    return NextResponse.json(caseVersionRefusalBody(version), { status: 403 });
+  }
+
   // Ensure the session exists and belongs to this user, then mark it live
   const { data: existing } = await admin
     .from('clinical_sessions')
-    .select('id, user_id, status')
+    .select('id, user_id, status, station_id')
     .eq('id', sessionId)
     .maybeSingle();
 
@@ -151,6 +172,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: 'session_finished', code: 'session_finished', sessionStatus: existing.status },
       { status: 409 },
+    );
+  }
+
+  // THE CASE ASKED FOR IS THE CASE THE ROW IS FOR.
+  //
+  // Every check above — cohort, trial, version — and the prompt the patient is
+  // built from read the BODY's station id. Without this, a row created for one
+  // case could be minted against any other the account may open, and the
+  // consultation would then be marked against the row's case: the wrong
+  // patient, scored on the wrong scheme. The guest lane has always refused
+  // this (`guest_station_mismatch`, lib/trial/guestSession.ts); same rule,
+  // same wording. A row with no station on it is left to the checks above.
+  if (existing && existing.station_id && existing.station_id !== stationId) {
+    return NextResponse.json(
+      {
+        error: STATION_MISMATCH_MESSAGE,
+        code: STATION_MISMATCH,
+      },
+      { status: 403 },
     );
   }
 

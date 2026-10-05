@@ -3,6 +3,11 @@ import { getServerEntitlement } from '@/lib/commerce/serverEntitlement';
 import { cohortAllowsStation } from '@/lib/commerce/cohortAccess';
 import { startTrialWindowFor, trialStationRefusal } from '@/lib/commerce/trialAccess';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import {
+  caseVersionRefusalBody,
+  isAdminEmail,
+  loadStationRunDecision,
+} from '@/lib/stations/caseVersionsServer';
 
 export async function POST(req: NextRequest) {
   const { supabase, user, allowed, entitlement, cohort, cohortOnly, trial, trialOnly } =
@@ -52,6 +57,32 @@ export async function POST(req: NextRequest) {
   const stationLock = trialOnly ? trialStationRefusal(trial, stationId) : null;
   if (stationLock) {
     return NextResponse.json({ ...stationLock, state: entitlement.state }, { status: 403 });
+  }
+
+  // WHICH VERSION OF THIS CASE, after every access check above and never in
+  // place of one: a plan, a cohort seat or a trial decides WHETHER someone may
+  // practise; this decides which version of a replaced case they practise.
+  // A keeper of an old case runs the old case and never its replacement;
+  // everyone else runs the replacement; drafts are admins only. The refusal
+  // carries the version they DO see, so the brief page can forward them there
+  // instead of leaving them at a dead end.
+  //
+  // It also answers an unknown id with a 404. Before this, a made-up station id
+  // inserted a `reading` row against a case that does not exist.
+  //
+  // Today every case is live and replaces nothing, so this is one station read
+  // and an `allowed` for everybody.
+  const version = await loadStationRunDecision(getSupabaseAdmin(), stationId, {
+    userId: user.id,
+    isAdmin: isAdminEmail(user.email),
+  });
+  if (!version.found) {
+    return version.failed
+      ? NextResponse.json({ error: 'Could not check this case. Try again.' }, { status: 500 })
+      : NextResponse.json({ error: 'Station not found', code: 'station_not_found' }, { status: 404 });
+  }
+  if (!version.gate.allowed) {
+    return NextResponse.json(caseVersionRefusalBody(version.gate), { status: 403 });
   }
 
   // Check if session already exists (idempotent)

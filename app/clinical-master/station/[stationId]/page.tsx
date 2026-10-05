@@ -16,6 +16,7 @@ import AudioSetupNotice from '@/components/clinical-master/AudioSetupNotice';
 import LockGlyph from '@/components/ui/LockGlyph';
 import { isStationLocked, useCohortAllowlist } from '@/hooks/useCohortAllowlist';
 import { isStationLockedForTrial, trialStationAllowlist, useTrialStatus } from '@/hooks/useTrialStatus';
+import { CASE_VERSION_REFUSED } from '@/lib/stations/caseVersionCodes';
 
 interface StationData {
   id: string;
@@ -132,6 +133,25 @@ function ReadingPhaseContent() {
         if (body?.error === 'trial_station_locked') {
           setServerTrialLocked(true);
           setStarting(false);
+          return;
+        }
+        // The wrong VERSION of a replaced case for this person: a keeper asking
+        // for the replacement of the case they keep, or anyone else asking for
+        // an old case that has been replaced. Forward them to the version of
+        // this slot they do see, keeping `from` so Back still leads home.
+        // Nothing to forward to (a draft, or a replacement not live yet) is the
+        // refusal's own sentence, in place — never the price list: their plan
+        // is fine, it is this case that is not theirs to run.
+        if (body?.code === CASE_VERSION_REFUSED) {
+          const target = typeof body.redirectStationId === 'string' ? body.redirectStationId : null;
+          if (target && target !== stationId) {
+            router.replace(
+              from ? `/clinical-master/station/${target}?from=${from}` : `/clinical-master/station/${target}`,
+            );
+            return;
+          }
+          setStarting(false);
+          setError(typeof body.error === 'string' ? body.error : 'This case is not available.');
           return;
         }
         const renewing = body?.state === 'read_only';

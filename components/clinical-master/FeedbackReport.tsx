@@ -1365,6 +1365,14 @@ export default function FeedbackReport({
   /** Station behind a session we never got a report for, so retries have a target. */
   const [failedStationId, setFailedStationId] = useState<string | null>(null);
   /**
+   * The case "Retry this case" opens, when the route says it is not the one
+   * that was sat: once an old case is replaced, everyone but its keepers is
+   * sent to the replacement. The report itself (and anything keyed on
+   * `feedback.station_id`, like further reading) still describes the case that
+   * was sat. Null means "the same case", which is every case today.
+   */
+  const [practiseStationId, setPractiseStationId] = useState<string | null>(null);
+  /**
    * How long the candidate actually spoke for, on a run the guard refused. Told
    * back to them because "too short" on its own invites an argument, and the
    * number ends it.
@@ -1430,7 +1438,14 @@ export default function FeedbackReport({
         if (cancelled) return;
         const data = await res.json().catch(() => ({} as Record<string, unknown>));
 
-        if (typeof data.stationId === 'string') setFailedStationId(data.stationId);
+        // The route's practise target wins over the raw station: same id today,
+        // the replacement once a case this viewer does not keep is archived.
+        if (typeof data.practiseStationId === 'string') {
+          setFailedStationId(data.practiseStationId);
+          setPractiseStationId(data.practiseStationId);
+        } else if (typeof data.stationId === 'string') {
+          setFailedStationId(data.stationId);
+        }
 
         // 403: this session belongs to someone else. Polling can never fix it.
         if (res.status === 403) {
@@ -1853,9 +1868,9 @@ export default function FeedbackReport({
             <Link href={from ? `/dashboard/library/${from}` : '/dashboard/library'}>
               <PrimaryButton>Practice another case</PrimaryButton>
             </Link>
-            {feedback.station_id && (
+            {(practiseStationId ?? feedback.station_id) && (
               <Link
-                href={`/clinical-master/station/${feedback.station_id}${from ? `?from=${from}` : ''}`}
+                href={`/clinical-master/station/${practiseStationId ?? feedback.station_id}${from ? `?from=${from}` : ''}`}
                 className="min-h-[44px] rounded-[10px] px-4 py-3 text-[13px] font-medium text-primary transition hover:bg-primary/[0.06]"
               >
                 Retry this case

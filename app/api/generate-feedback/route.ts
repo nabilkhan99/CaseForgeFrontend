@@ -5,6 +5,12 @@ import { getTrainerCohort } from '@/lib/trainer/guard';
 import { parseAdminEmails } from '@/lib/admin/guard';
 import { candidateRun } from '@/lib/clinical-master/candidateRun';
 import { triggerMarking } from '@/lib/clinical-master/triggerMarking';
+import {
+    isAdminEmail,
+    practiseStationIdFor,
+    toVersionedStation,
+    type RunViewer,
+} from '@/lib/stations/caseVersionsServer';
 import type { ConsultationFeedback } from '@/lib/clinical-master/types';
 
 /**
@@ -50,6 +56,28 @@ interface SessionResultRow {
     focus_areas: unknown;
     capability_links: string[] | null;
     confidence: unknown;
+}
+
+/**
+ * Where "Retry this case" / "Practise this case again" should go for this
+ * viewer. The report itself always describes the case that was sat (its
+ * station_id never changes); only the link onward follows the version rule. A
+ * keeper is sent back to the old case they keep; anyone else, once a case is
+ * archived, to its replacement. Today every case is live and replaces nothing,
+ * so this is the session's own station, with no query at all.
+ */
+async function practiseTarget(
+    supabase: ReturnType<typeof getSupabaseAdmin>,
+    stationId: string | undefined,
+    station: { lifecycle?: unknown; replaces_station_id?: unknown } | null | undefined,
+    viewer: RunViewer
+): Promise<string | undefined> {
+    if (!stationId || !station) return stationId;
+    return practiseStationIdFor(
+        supabase,
+        toVersionedStation({ id: stationId, ...station }),
+        viewer
+    );
 }
 
 function toFeedback(
@@ -113,6 +141,7 @@ export async function POST(request: NextRequest) {
         } = await authSupabase.auth.getUser();
 
         const supabase = getSupabaseAdmin();
+        const viewer: RunViewer = { userId: user?.id ?? null, isAdmin: isAdminEmail(user?.email) };
 
         /**
          * This request is a trainer reading a student's report, not the student
@@ -202,7 +231,7 @@ export async function POST(request: NextRequest) {
                 // same teaching notes as the public case page, instead of sending
                 // people off to find their case in another tab.
                 .select(
-                    'station_id, transcript, stations(title, clinical_learning_points, data_gathering, clinical_management, relating_to_others)'
+                    'station_id, transcript, stations(title, clinical_learning_points, data_gathering, clinical_management, relating_to_others, lifecycle, replaces_station_id)'
                 )
                 .eq('id', sessionId)
                 .single();
@@ -214,8 +243,11 @@ export async function POST(request: NextRequest) {
                       data_gathering?: string | null;
                       clinical_management?: string | null;
                       relating_to_others?: string | null;
+                      lifecycle?: string;
+                      replaces_station_id?: string | null;
                   }
                 | null;
+            const sessionStationId = session?.station_id as string | undefined;
             return NextResponse.json({
                 status: 'ready',
                 feedback: toFeedback(
@@ -227,13 +259,14 @@ export async function POST(request: NextRequest) {
                     station
                 ),
                 transcript: Array.isArray(session?.transcript) ? session.transcript : [],
+                practiseStationId: await practiseTarget(supabase, sessionStationId, station, viewer),
             });
         }
 
         // 2. Need a transcript before we can mark.
         const { data: session, error: sessionError } = await supabase
             .from('clinical_sessions')
-            .select('id, transcript, status, started_at, completed_at, station_id, stations(title)')
+            .select('id, transcript, status, started_at, completed_at, station_id, stations(title, lifecycle, replaces_station_id)')
             .eq('id', sessionId)
             .single();
 
@@ -248,7 +281,13 @@ export async function POST(request: NextRequest) {
         // Station details so the page can offer "practise this case again"
         // rather than a dead end when the run can never produce feedback.
         const stationId = (session.station_id as string | null) ?? undefined;
-        const stationTitle = (session.stations as { title?: string } | null)?.title;
+        const stationRow = session.stations as
+            | { title?: string; lifecycle?: string; replaces_station_id?: string | null }
+            | null;
+        const stationTitle = stationRow?.title;
+        // Not computed while polling: only the responses that end the page's
+        // polling carry a link onward, so the 3-second poll never pays for it.
+        const practise = () => practiseTarget(supabase, stationId, stationRow, viewer);
 
         if (
             !session.transcript ||
@@ -262,6 +301,7 @@ export async function POST(request: NextRequest) {
                 ageMinutes,
                 stationId,
                 stationTitle,
+                ...(terminal ? { practiseStationId: await practise() } : {}),
             });
         }
 
@@ -285,6 +325,7 @@ export async function POST(request: NextRequest) {
                 ageMinutes,
                 stationId,
                 stationTitle,
+                practiseStationId: await practise(),
             });
         }
 
@@ -318,15 +359,17 @@ export async function POST(request: NextRequest) {
             triggerQueued = outcome.triggered;
         }
 
+        // A transcript exists and the session is terminal, so marking should
+        // have finished long ago. Say so instead of polling into silence.
+        const stalled = terminal && ageMinutes !== null && ageMinutes >= STALLED_AFTER_MINUTES;
         return NextResponse.json({
             status: 'generating',
             triggerQueued,
             ageMinutes,
-            // A transcript exists and the session is terminal, so marking should
-            // have finished long ago. Say so instead of polling into silence.
-            stalled: terminal && ageMinutes !== null && ageMinutes >= STALLED_AFTER_MINUTES,
+            stalled,
             stationId,
             stationTitle,
+            ...(stalled ? { practiseStationId: await practise() } : {}),
         });
     } catch (error) {
         console.error('Feedback route error:', error);
