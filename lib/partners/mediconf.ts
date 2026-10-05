@@ -33,10 +33,15 @@ export const MEDICONF_STRAPLINE =
 export const MEDICONF_WEBINARS_URL = 'https://www.mediconf.co.uk/events/webinar'
 
 /**
- * Public path of the logo MediConf gave permission to use, or null until the
- * file is in /public. The block shows the name in its place until then.
+ * The logo MediConf gave permission to use on our site (with Rebecca's email,
+ * 30 Sept 2026), trimmed to its artwork on a transparent ground. Set this back
+ * to null and the block shows the name in its place.
  */
-export const MEDICONF_LOGO: { src: string; width: number; height: number } | null = null
+export const MEDICONF_LOGO: { src: string; width: number; height: number } | null = {
+  src: '/partners/mediconf-logo.png',
+  width: 640,
+  height: 153,
+}
 
 function webinar(key: MediconfWebinarKey, title: string, date: string, path: string): MediconfWebinar {
   return { key, title, date, url: `https://www.mediconf.co.uk/event/${path}` }
