@@ -45,11 +45,14 @@
  * The five free cases, matched to MediConf's autumn 2026 webinar topics
  * (4 Oct 2026), are the likely first homes:
  *
- *   bd366981-204e-46dd-a3e3-b220d6c7e110  third reliever inhaler in 2 months (respiratory)
+ *   f8a9a22b-dae7-4ef5-a713-5df0c166398a  stopped her preventer inhaler, sore throat (respiratory)
  *   2610a2a8-fd8d-4303-b86a-6d02ed220876  teacher with a blocked nose (allergic rhinitis)
  *   a2c99c9a-4fc3-47fb-8236-bee72c3625e6  allergy testing for a child with eczema
  *   16c48616-d334-4d20-8af1-f17388f702b8  pre-diabetes and cardiovascular risk (also has PCCS)
- *   c72e0e6f-526c-4812-9515-85d4c9fbad59  17-year-old with headaches in exam season
+ *   4101a48e-0f7a-4790-b370-d06a4fa3a87b  frequent migraines asking for prevention
+ *
+ * (Since 7 Oct 2026 the inhaler and headache slots are the replacement cases;
+ * their old ids, bd366981 and c72e0e6f, are archived and seen only by keepers.)
  */
 
 export interface MediconfResource {

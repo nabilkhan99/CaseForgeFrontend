@@ -84,6 +84,16 @@ export const PCCS_FURTHER_READING: Readonly<Record<string, readonly PccsModuleKe
   'cb6e2e32-6dd3-4537-9eb6-9de49b8f4610': ['heartFailure'], // Older Adults: heart failure and diuretic-induced incontinence
   '16c48616-d334-4d20-8af1-f17388f702b8': ['risk'], // Population Health: CV risk and IFG in a South Asian male
   //
+  // Replacements from the case bank rewrite (switched on 7 Oct 2026). The old
+  // rows above stay for the people who keep the old case; everyone else now
+  // runs these, which teach the same ground, so they carry the same modules.
+  'd6bd6a37-6df0-4b57-8195-d857b4c25a88': ['investigations', 'stroke'], // Irregular pulse on a home blood pressure monitor (replaces abnormal ECG, AF)
+  '68ad46e5-c038-4eea-ab41-66fdd1e71864': ['risk', 'lipids'], // Asking for a statin with a low cardiovascular risk (replaces low QRISK statin)
+  'f4d3a7e5-9b39-4fa5-bb9e-6262be02f69a': ['hypertension'], // Newly confirmed hypertension, lifestyle first (replaces BP above 180/100)
+  '33fbccd5-9dc0-436e-81fb-dc6e18d7fe2f': ['lipids'], // Stopped her statin because of aching legs (replaces statin and ezetimibe intolerance)
+  '0cbad27b-3743-45a2-bfda-732bfaae6f77': ['investigations', 'syncope'], // Smartwatch warning about a slow heart rate (replaces low heart rate pre-op)
+  '467bc563-852f-4e59-b7f7-cc6464e2b09a': ['womensHealth'], // Past blood clot, is HRT safe (replaces hot flushes, is HRT safe)
+  //
   // Deliberately absent (see the header): the dry cough after a heart attack
   // (c64a5ae8, lung cancer red flags), the heart failure patient asking not to
   // be resuscitated (baa8226b, an ethics conversation), and the chest pain that

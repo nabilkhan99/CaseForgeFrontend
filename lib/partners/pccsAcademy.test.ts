@@ -70,9 +70,9 @@ describe('the PCCS module catalogue', () => {
 })
 
 describe('which cases signpost which modules', () => {
-  it('links twelve cases, each to one or two modules and never the same one twice', () => {
+  it('links eighteen cases, each to one or two modules and never the same one twice', () => {
     const entries = Object.entries(PCCS_FURTHER_READING)
-    expect(entries).toHaveLength(12)
+    expect(entries).toHaveLength(18)
     for (const [stationId, keys] of entries) {
       expect(stationId).toMatch(UUID)
       expect(keys.length).toBeGreaterThanOrEqual(1)

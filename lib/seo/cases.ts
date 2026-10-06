@@ -34,7 +34,12 @@ function titleCase(value: string) {
         .replace(/\bIbs\b/g, 'IBS')
         .replace(/\bHrt\b/g, 'HRT')
         .replace(/\bT2dm\b/g, 'T2DM')
-        .replace(/\bAdhd\b/g, 'ADHD');
+        .replace(/\bAdhd\b/g, 'ADHD')
+        .replace(/\bA&e\b/g, 'A&E')
+        .replace(/\bMmr\b/g, 'MMR')
+        .replace(/\bCt\b/g, 'CT')
+        .replace(/\bTv\b/g, 'TV')
+        .replace(/\bCpap\b/g, 'CPAP');
 }
 
 export function slugify(value: string) {
@@ -100,6 +105,25 @@ const CASE_SEO_OVERRIDES: Record<string, { condition?: string; slug?: string }> 
         condition: 'Pre-diabetes and Cardiovascular Risk After a Health Check',
         slug: 'pre-diabetes-and-cardiovascular-risk-after-a-health-check',
     },
+    // Replacement cases switched on 7 Oct 2026 (case bank rewrite). Their
+    // auto-derived headings dropped the subject ("Heartburn Who Wants...") or
+    // were too generic ("Hepatitis A", "Urine Infection"). These pages were
+    // never public under the auto slug, so no redirect is needed.
+    '3ed011be-30c2-49bc-8ea8-38db42b1aa66': { condition: 'Shingles in a Teacher Taking Methotrexate', slug: 'shingles-in-a-teacher-taking-methotrexate' },
+    '4e5b2638-a316-4faf-9e9f-1f5183cc8d89': { condition: 'Gallstones on an A&E Letter', slug: 'gallstones-on-an-a-and-e-letter' },
+    'd5705a73-74cf-4d1c-8309-08ddffa740b0': { condition: 'Heartburn in a Night Shift Nurse', slug: 'heartburn-in-a-night-shift-nurse' },
+    '174435e0-553d-4167-88b7-07457d730a18': { condition: 'Fibroid Pressing on the Bladder', slug: 'fibroid-pressing-on-the-bladder' },
+    '467bc563-852f-4e59-b7f7-cc6464e2b09a': { condition: 'HRT After a Past Blood Clot', slug: 'hrt-after-a-past-blood-clot' },
+    '466026c8-2977-400d-8806-9860d927c227': { condition: 'Partner Diagnosed with Hepatitis A', slug: 'partner-diagnosed-with-hepatitis-a' },
+    '22b0c431-c775-4534-9330-40507fd2f2b0': { condition: 'Breast Lump in a Woman with a Learning Disability', slug: 'breast-lump-in-a-woman-with-a-learning-disability' },
+    '17183fdc-f4f7-4f43-9630-09fce2d97c41': { condition: 'Planning a Pregnancy on Lithium', slug: 'planning-a-pregnancy-on-lithium' },
+    'fea91315-0225-4dad-b0f5-d75044c453d4': { condition: 'Spotting and One Sided Pain at Seven Weeks Pregnant', slug: 'spotting-and-one-sided-pain-at-seven-weeks-pregnant' },
+    '60422fa9-cb5d-4be8-bc9e-c3e1d449e844': { condition: 'Widower with Weight Loss and Poor Sleep', slug: 'widower-with-weight-loss-and-poor-sleep' },
+    'ec749e6a-7e2f-4044-883b-95874c4af87b': { condition: 'Low Potassium in a Young Man Preparing for a Modelling Job', slug: 'low-potassium-in-a-young-man-preparing-for-a-modelling-job' },
+    'ef2909ca-39dd-4886-ad69-d58944d3db9d': { condition: 'Fever in a Seven Week Old Baby', slug: 'fever-in-a-seven-week-old-baby' },
+    '4d248034-f0f0-4d17-955b-384de27eed4f': { condition: 'Noisy Breathing in a Dying Mother', slug: 'noisy-breathing-in-a-dying-mother' },
+    'da50dff8-1cfd-4589-a4b9-2fb0ff69ec11': { condition: 'Urine Infection in a Man', slug: 'urine-infection-in-a-man' },
+    'd44ec7a6-ec89-4d22-803c-d2ba779af0ac': { condition: 'Headache and High Blood Pressure After Giving Birth', slug: 'headache-and-high-blood-pressure-after-giving-birth' },
 };
 
 export function buildCaseSeoIndex<T extends PublicCase>(cases: T[]) {
