@@ -65,3 +65,30 @@ describe('copy that can see the live list prints its real size', () => {
     expect(read('components/guides/GuideTimeline.tsx')).toContain('200 practice cases with marking schemes')
   })
 })
+
+/**
+ * The /sca-cases share image is a fixed PNG, so it prints no count at all: it
+ * said "79 free SCA stations" long after the bank grew. Its alt text describes
+ * what the image shows and is count-free too, and the declared size is the file's.
+ */
+describe('the /sca-cases share image', () => {
+  const page = read('app/sca-cases/page.tsx')
+  const start = page.indexOf('image: {')
+  const imageBlock = page.slice(start, page.indexOf('}', start))
+
+  it('points at the PNG with alt text that describes it and prints no number', () => {
+    expect(imageBlock).toContain("url: '/og/sca-cases.png'")
+    const alt = imageBlock.match(/alt:\s*'([^']+)'/)?.[1]
+    expect(alt).toBe(
+      'Free SCA practice cases built from the RCGP curriculum: candidate brief, patient script, marking scheme and learning points',
+    )
+    expect(alt).not.toMatch(/\d/)
+  })
+
+  it('declares the PNG at its real pixel size', () => {
+    const png = readFileSync(fileURLToPath(new URL('../../public/og/sca-cases.png', import.meta.url)))
+    // PNG IHDR: width and height are big-endian uint32s at byte offsets 16 and 20.
+    expect(imageBlock).toContain(`width: ${png.readUInt32BE(16)},`)
+    expect(imageBlock).toContain(`height: ${png.readUInt32BE(20)},`)
+  })
+})

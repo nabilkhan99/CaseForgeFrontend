@@ -8,8 +8,8 @@ export const revalidate = 3600;
 
 // The count in the title and description is the live library's real size
 // (read from the same request-cached list the page renders), so it follows the
-// bank as cases are replaced. The share image's alt text stays count-free: the
-// image itself is a fixed PNG.
+// bank as cases are replaced. The share image is a fixed PNG, so neither it nor
+// its alt text prints a count.
 export async function generateMetadata(): Promise<Metadata> {
     const count = publicLibrarySize((await getPublicCasesForList()).length);
 
@@ -21,7 +21,7 @@ export async function generateMetadata(): Promise<Metadata> {
             url: '/og/sca-cases.png',
             width: 1200,
             height: 1200,
-            alt: 'Free SCA stations built from the RCGP curriculum',
+            alt: 'Free SCA practice cases built from the RCGP curriculum: candidate brief, patient script, marking scheme and learning points',
         },
     });
 }
