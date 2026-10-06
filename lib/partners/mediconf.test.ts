@@ -2,82 +2,168 @@ import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
+  MEDICONF_INTRO,
   MEDICONF_LOGO,
-  MEDICONF_STRAPLINE,
-  MEDICONF_WEBINARS,
-  mediconfWebinarFor,
-  webinarWhen,
+  MEDICONF_REGISTER_URL,
+  MEDICONF_RESOURCES,
+  mediconfResourcesFor,
+  type MediconfResource,
 } from './mediconf'
 
 /**
- * MediConf "further reading": one webinar per free case.
+ * MediConf "further reading": the learning resources MediConf choose for each
+ * case.
  *
- * MediConf signpost GP trainees on five Saturday webinars to the five free
- * cases (Rebecca McConnell, 30 Sept 2026), and in return each of those cases
- * points back at its webinar. Only the five free cases carry a link (Nabil,
- * 4 Oct 2026), so the pairing is pinned here: a swap of the free set that
- * forgets this file fails a test instead of linking the wrong webinar.
+ * MediConf have not sent their list yet, so the shipped map is empty and these
+ * tests run the lookup and the entry rules against a fixture shaped like the
+ * mock-up. The same rules run over the shipped map, so whatever is added to it
+ * later is checked on the way in.
  */
 
+type ResourceMap = Readonly<Record<string, readonly MediconfResource[]>>
+
 const CASE = {
-  relieverInhaler: 'bd366981-204e-46dd-a3e3-b220d6c7e110',
-  allergicRhinitis: '2610a2a8-fd8d-4303-b86a-6d02ed220876',
-  childEczema: 'a2c99c9a-4fc3-47fb-8236-bee72c3625e6',
+  teenHeadache: 'c72e0e6f-526c-4812-9515-85d4c9fbad59',
   preDiabetesRisk: '16c48616-d334-4d20-8af1-f17388f702b8',
-  teenMigraine: 'c72e0e6f-526c-4812-9515-85d4c9fbad59',
+  unlinked: 'dc09415f-53cf-4f02-97ab-4ca6971f0cde',
 } as const
 
-describe('which case points at which webinar', () => {
-  it('links exactly the five free cases', () => {
-    expect(Object.keys(MEDICONF_WEBINARS).sort()).toEqual(Object.values(CASE).sort())
+const HEADACHE: MediconfResource = {
+  key: 'headache-migraine-primary-care',
+  title: 'Headache and migraine in primary care',
+  url: 'https://www.mediconf.co.uk/resources/headache-and-migraine',
+}
+
+const FIXTURE: ResourceMap = {
+  [CASE.teenHeadache]: [
+    HEADACHE,
+    {
+      key: 'medication-overuse-headache',
+      title: 'Medication overuse headache',
+      url: 'https://www.mediconf.co.uk/resources/medication-overuse-headache',
+    },
+  ],
+  [CASE.preDiabetesRisk]: [
+    {
+      key: 'communicating-diabetes-risk',
+      title: 'Communicating diabetes risk',
+      url: 'https://mediconf.co.uk/resources/communicating-diabetes-risk',
+    },
+  ],
+}
+
+const STATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+const KEY = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+const MEDICONF_HOSTS = new Set(['www.mediconf.co.uk', 'mediconf.co.uk'])
+
+/** Everything wrong with a resource map, one line per problem. Empty means it is fit to ship. */
+function problemsWith(resources: ResourceMap): string[] {
+  const problems: string[] = []
+  const urlByKey = new Map<string, string>()
+
+  for (const [stationId, list] of Object.entries(resources)) {
+    if (!STATION_ID.test(stationId)) problems.push(`${stationId}: not a station id`)
+    if (list.length === 0) problems.push(`${stationId}: empty list (drop the entry instead)`)
+
+    const keysHere = new Set<string>()
+    for (const resource of list) {
+      const where = `${stationId} / ${resource.key}`
+      if (!KEY.test(resource.key)) problems.push(`${where}: key is not lowercase-hyphenated`)
+      if (keysHere.has(resource.key)) problems.push(`${where}: key listed twice on one case`)
+      keysHere.add(resource.key)
+
+      const seenUrl = urlByKey.get(resource.key)
+      if (seenUrl !== undefined && seenUrl !== resource.url) {
+        problems.push(`${where}: key already names a different resource`)
+      }
+      urlByKey.set(resource.key, resource.url)
+
+      if (resource.title.trim() === '' || resource.title !== resource.title.trim()) {
+        problems.push(`${where}: title is empty or padded`)
+      }
+      if (resource.title.includes('—')) problems.push(`${where}: em dash in the title`)
+
+      let url: URL | null = null
+      try {
+        url = new URL(resource.url)
+      } catch {
+        problems.push(`${where}: url does not parse`)
+      }
+      if (url && (url.protocol !== 'https:' || !MEDICONF_HOSTS.has(url.hostname))) {
+        problems.push(`${where}: url is not https on mediconf.co.uk`)
+      }
+    }
+  }
+  return problems
+}
+
+describe('which resources a case links', () => {
+  it('lists a case\'s resources in the order given', () => {
+    expect(mediconfResourcesFor(CASE.teenHeadache, FIXTURE).map((resource) => resource.key)).toEqual([
+      'headache-migraine-primary-care',
+      'medication-overuse-headache',
+    ])
   })
 
-  it.each([
-    [CASE.relieverInhaler, 'What is New in Respiratory Medicine 2026', '2026-10-03', 196],
-    [CASE.allergicRhinitis, 'Prescribing and Clinical Pearls for Primary Care', '2026-10-17', 174],
-    [CASE.childEczema, 'Atopic Eczema in Children: What Works in a 10-Minute Consultation', '2026-11-07', 180],
-    [CASE.preDiabetesRisk, 'Communicating Diabetes Risk & Therapeutic Messages to Patients', '2026-11-14', 187],
-    [CASE.teenMigraine, 'Managing Headaches and Migraine', '2026-11-21', 200],
-  ])('%s → %s', (stationId, title, date, eventId) => {
-    const webinar = mediconfWebinarFor(stationId)
-    expect(webinar?.title).toBe(title)
-    expect(webinar?.date).toBe(date)
-    expect(webinar?.url.startsWith(`https://www.mediconf.co.uk/event/${eventId}/`)).toBe(true)
+  it('answers nothing for a case with no resources, or for no case at all', () => {
+    expect(mediconfResourcesFor(CASE.unlinked, FIXTURE)).toEqual([])
+    expect(mediconfResourcesFor(null, FIXTURE)).toEqual([])
+    expect(mediconfResourcesFor(undefined, FIXTURE)).toEqual([])
+    expect(mediconfResourcesFor('', FIXTURE)).toEqual([])
   })
 
-  it('answers nothing for any other case, or for no case at all', () => {
-    expect(mediconfWebinarFor('dc09415f-53cf-4f02-97ab-4ca6971f0cde')).toBeNull()
-    expect(mediconfWebinarFor(null)).toBeNull()
-    expect(mediconfWebinarFor(undefined)).toBeNull()
-    expect(mediconfWebinarFor('')).toBeNull()
+  it('reads the shipped map when not handed one', () => {
+    for (const stationId of [...Object.keys(MEDICONF_RESOURCES), CASE.teenHeadache, CASE.unlinked]) {
+      expect(mediconfResourcesFor(stationId)).toEqual(MEDICONF_RESOURCES[stationId] ?? [])
+    }
   })
 })
 
-describe('what the block says about MediConf', () => {
-  it('shows the logo MediConf gave us, from a file that exists', () => {
-    expect(MEDICONF_LOGO?.src).toBe('/partners/mediconf-logo.png')
-    const file = fileURLToPath(new URL(`../../public${MEDICONF_LOGO!.src}`, import.meta.url))
-    expect(existsSync(file)).toBe(true)
+describe('the entries', () => {
+  it('ships nothing that breaks the rules', () => {
+    expect(problemsWith(MEDICONF_RESOURCES)).toEqual([])
   })
 
-  it('uses the strapline MediConf supplied, word for word', () => {
-    expect(MEDICONF_STRAPLINE).toBe(
-      'Free live CPD for primary care – practical, relevant and ready to apply in practice.',
+  it('accepts entries shaped like the documented example', () => {
+    expect(problemsWith(FIXTURE)).toEqual([])
+  })
+
+  it.each<[string, ResourceMap]>([
+    ['a station id that is not one', { 'headache-case': [HEADACHE] }],
+    ['an empty list', { [CASE.teenHeadache]: [] }],
+    ['a key that is not lowercase-hyphenated', { [CASE.teenHeadache]: [{ ...HEADACHE, key: 'Headache Migraine' }] }],
+    ['one key twice on a case', { [CASE.teenHeadache]: [HEADACHE, HEADACHE] }],
+    [
+      'one key for two different resources',
+      {
+        [CASE.teenHeadache]: [HEADACHE],
+        [CASE.preDiabetesRisk]: [{ ...HEADACHE, url: 'https://www.mediconf.co.uk/resources/other' }],
+      },
+    ],
+    ['a blank title', { [CASE.teenHeadache]: [{ ...HEADACHE, title: '  ' }] }],
+    ['an em dash in a title', { [CASE.teenHeadache]: [{ ...HEADACHE, title: 'Headache — in primary care' }] }],
+    ['an http link', { [CASE.teenHeadache]: [{ ...HEADACHE, url: 'http://www.mediconf.co.uk/resources/x' }] }],
+    ['a link off MediConf', { [CASE.teenHeadache]: [{ ...HEADACHE, url: 'https://example.com/headache' }] }],
+    ['a link that does not parse', { [CASE.teenHeadache]: [{ ...HEADACHE, url: 'mediconf.co.uk/x' }] }],
+  ])('rejects %s', (_label, resources) => {
+    expect(problemsWith(resources)).toHaveLength(1)
+  })
+})
+
+describe('what the group says about MediConf', () => {
+  it('opens with the line agreed in the mock-up', () => {
+    expect(MEDICONF_INTRO).toBe(
+      'From MediConf: free live CPD for primary care, practical, relevant and ready to apply in practice.',
     )
   })
 
-  it('calls a webinar that has not happened yet live', () => {
-    const rhinitis = mediconfWebinarFor(CASE.allergicRhinitis)!
-    expect(webinarWhen(rhinitis, new Date('2026-10-04T18:00:00Z'))).toBe('Live webinar, Saturday 17 October 2026')
+  it('sends "Register with MediConf" to their registration page', () => {
+    expect(MEDICONF_REGISTER_URL).toBe('https://www.mediconf.co.uk/register')
   })
 
-  it('stops calling it live once it has been held', () => {
-    const respiratory = mediconfWebinarFor(CASE.relieverInhaler)!
-    expect(webinarWhen(respiratory, new Date('2026-10-04T18:00:00Z'))).toBe('Webinar held Saturday 3 October 2026')
-  })
-
-  it('still calls it live on the morning it runs', () => {
-    const migraine = mediconfWebinarFor(CASE.teenMigraine)!
-    expect(webinarWhen(migraine, new Date('2026-11-21T08:00:00Z'))).toBe('Live webinar, Saturday 21 November 2026')
+  it('shows the logo MediConf gave us, from a file that exists', () => {
+    expect(MEDICONF_LOGO.src).toBe('/partners/mediconf-logo.png')
+    const file = fileURLToPath(new URL(`../../public${MEDICONF_LOGO.src}`, import.meta.url))
+    expect(existsSync(file)).toBe(true)
   })
 })

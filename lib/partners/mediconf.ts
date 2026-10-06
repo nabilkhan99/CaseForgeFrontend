@@ -1,114 +1,89 @@
 /**
- * MediConf "further reading": the webinar each free case points back at.
+ * MediConf "further reading": the MediConf learning resources each case links.
  *
- * MediConf run free live CPD webinars for primary care, and in autumn 2026 they
- * signpost GP trainees from five of them to our five free cases (Rebecca
- * McConnell, 30 Sept 2026). The free five were chosen to match those webinars
- * (4 Oct 2026), and each of them links its webinar here in return.
+ * MediConf run free live CPD for primary care. From autumn 2026 they signpost
+ * GP trainees from their webinars to our free cases (Rebecca McConnell, 30 Sept
+ * 2026), and in return the cases that match their webinar topics link MediConf
+ * in "Further reading", the same way PCCS modules are linked
+ * (lib/partners/pccsAcademy.ts). What we told MediConf the block would be:
  *
- * Only the five free cases carry a link (Nabil, 4 Oct 2026). Kept in code, keyed
- * by station id, like PCCS_FURTHER_READING: it is five rows of editorial
- * judgement that should be reviewed in a diff and guarded by a test.
+ *  - links to MediConf learning RESOURCES, chosen by MediConf. Not our pick of
+ *    their webinar pages.
+ *  - "Free for primary care professionals. You need a MediConf account to
+ *    access these.", with a link to register. Without that a trainee meets a
+ *    login wall and reasonably concludes the link is broken.
  *
- * The links outlive the webinars. Once a date has passed the block says the
- * webinar was held rather than calling it live; where those links should point
- * afterwards (a recording, or the webinar list) is MediConf's to say.
+ * MediConf have not sent their list yet, so the map below ships EMPTY and the
+ * MediConf group renders on no case. Any case may carry resources, not only
+ * the free five.
+ *
+ * Kept in code, keyed by station id, like PCCS_FURTHER_READING: rows of
+ * editorial judgement that should be reviewed in a diff and guarded by a test
+ * (mediconf.test.ts checks every entry).
+ *
+ * ADDING RESOURCES. One entry per case, keyed by the station id of the case's
+ * LIVE version (a case replaced in the case bank rewrite has a new id).
+ * Resources show in the order listed. For example:
+ *
+ *   export const MEDICONF_RESOURCES = {
+ *     // Disengaged 17-year-old with headaches in exam season
+ *     'c72e0e6f-526c-4812-9515-85d4c9fbad59': [
+ *       {
+ *         key: 'headache-migraine-primary-care',
+ *         title: 'Headache and migraine in primary care',
+ *         url: 'https://www.mediconf.co.uk/<the resource's address>',
+ *       },
+ *     ],
+ *   }
+ *
+ *  - key: short, lowercase, hyphenated and never changed once live. The click
+ *    analytics (mediconf_resource_clicked) count by it. The same resource on
+ *    two cases keeps the same key.
+ *  - title: MediConf's own title for the resource.
+ *  - url: the resource itself, https, on mediconf.co.uk.
+ *
+ * The five free cases, matched to MediConf's autumn 2026 webinar topics
+ * (4 Oct 2026), are the likely first homes:
+ *
+ *   bd366981-204e-46dd-a3e3-b220d6c7e110  third reliever inhaler in 2 months (respiratory)
+ *   2610a2a8-fd8d-4303-b86a-6d02ed220876  teacher with a blocked nose (allergic rhinitis)
+ *   a2c99c9a-4fc3-47fb-8236-bee72c3625e6  allergy testing for a child with eczema
+ *   16c48616-d334-4d20-8af1-f17388f702b8  pre-diabetes and cardiovascular risk (also has PCCS)
+ *   c72e0e6f-526c-4812-9515-85d4c9fbad59  17-year-old with headaches in exam season
  */
 
-export type MediconfWebinarKey = 'respiratory' | 'pearls' | 'eczema' | 'diabetes' | 'headache'
-
-export interface MediconfWebinar {
-  key: MediconfWebinarKey
-  /** MediConf's own title for the webinar, as it appears on their site. */
+export interface MediconfResource {
+  /** Stable analytics name: lowercase and hyphenated, e.g. 'headache-migraine-primary-care'. */
+  key: string
+  /** MediConf's own title for the resource. */
   title: string
-  /** The Saturday it runs, as YYYY-MM-DD (UK). */
-  date: string
   url: string
 }
 
-/** Supplied by MediConf for use on our site; keep it word for word. */
-export const MEDICONF_STRAPLINE =
-  'Free live CPD for primary care – practical, relevant and ready to apply in practice.'
+/** The line that introduces the group: MediConf's strapline, as agreed in the mock-up. */
+export const MEDICONF_INTRO =
+  'From MediConf: free live CPD for primary care, practical, relevant and ready to apply in practice.'
 
-export const MEDICONF_WEBINARS_URL = 'https://www.mediconf.co.uk/events/webinar'
+/** MediConf's account registration page, where the "Register with MediConf" link goes. */
+export const MEDICONF_REGISTER_URL = 'https://www.mediconf.co.uk/register'
 
 /**
  * The logo MediConf gave permission to use on our site (with Rebecca's email,
- * 30 Sept 2026), trimmed to its artwork on a transparent ground. Set this back
- * to null and the block shows the name in its place.
+ * 30 Sept 2026), trimmed to its artwork on a transparent ground.
  */
-export const MEDICONF_LOGO: { src: string; width: number; height: number } | null = {
+export const MEDICONF_LOGO = {
   src: '/partners/mediconf-logo.png',
   width: 640,
   height: 153,
-}
+} as const
 
-function webinar(key: MediconfWebinarKey, title: string, date: string, path: string): MediconfWebinar {
-  return { key, title, date, url: `https://www.mediconf.co.uk/event/${path}` }
-}
+/** Station id -> the MediConf resources it links, in display order. Empty until MediConf send their list. */
+export const MEDICONF_RESOURCES: Readonly<Record<string, readonly MediconfResource[]>> = {}
 
-/** Station id -> its webinar. Only the five free cases. */
-export const MEDICONF_WEBINARS: Readonly<Record<string, MediconfWebinar>> = {
-  // Woman ordering her third reliever inhaler in 2 months
-  'bd366981-204e-46dd-a3e3-b220d6c7e110': webinar(
-    'respiratory',
-    'What is New in Respiratory Medicine 2026',
-    '2026-10-03',
-    '196/what-is-new-in-respiratory-medicine-2026',
-  ),
-  // Teacher with a blocked nose for months (allergic rhinitis, the webinar's sponsored talk).
-  // MediConf's own address for this event carries an older slug; it is the right page.
-  '2610a2a8-fd8d-4303-b86a-6d02ed220876': webinar(
-    'pearls',
-    'Prescribing and Clinical Pearls for Primary Care',
-    '2026-10-17',
-    '174/testosterone-deficiency-and-male-sexual-dysfunction',
-  ),
-  // Parent requesting allergy testing for their child with eczema
-  'a2c99c9a-4fc3-47fb-8236-bee72c3625e6': webinar(
-    'eczema',
-    'Atopic Eczema in Children: What Works in a 10-Minute Consultation',
-    '2026-11-07',
-    '180/atopic-eczema-in-children-what-works-in-a-10-minute-consultation',
-  ),
-  // South Asian man with pre-diabetes and cardiovascular risk after a health check
-  '16c48616-d334-4d20-8af1-f17388f702b8': webinar(
-    'diabetes',
-    'Communicating Diabetes Risk & Therapeutic Messages to Patients',
-    '2026-11-14',
-    '187/communicating-diabetes-risk-therapeutic-messages-to-patients',
-  ),
-  // Disengaged 17-year-old with headaches in exam season
-  'c72e0e6f-526c-4812-9515-85d4c9fbad59': webinar(
-    'headache',
-    'Managing Headaches and Migraine',
-    '2026-11-21',
-    '200/managing-headaches-and-migraine',
-  ),
-}
-
-export function mediconfWebinarFor(stationId: string | null | undefined): MediconfWebinar | null {
-  if (!stationId) return null
-  return MEDICONF_WEBINARS[stationId] ?? null
-}
-
-/**
- * When the webinar is, in words: "Live webinar, Saturday 17 October 2026" until
- * it has run, then "Webinar held Saturday 3 October 2026". They run 09:30 to
- * 11:30 UK time, so midday UTC is safely after the end in either season.
- */
-export function webinarWhen(webinar: MediconfWebinar, now: Date = new Date()): string {
-  const day = new Date(`${webinar.date}T12:00:00Z`)
-  // Built from parts: whether en-GB puts a comma after the weekday varies by
-  // ICU version, and the server and the browser must print the same string.
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'Europe/London',
-  }).formatToParts(day)
-  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? ''
-  const label = `${part('weekday')} ${part('day')} ${part('month')} ${part('year')}`
-  return now.getTime() < day.getTime() ? `Live webinar, ${label}` : `Webinar held ${label}`
+export function mediconfResourcesFor(
+  stationId: string | null | undefined,
+  resources: Readonly<Record<string, readonly MediconfResource[]>> = MEDICONF_RESOURCES,
+): readonly MediconfResource[] {
+  if (!stationId) return []
+  return resources[stationId] ?? []
 }
