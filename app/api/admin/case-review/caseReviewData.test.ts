@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { countChecklist } from '@/components/admin/case-review/checklist'
-import { DRAFT_LIST_COLUMNS, countKeepers, listDrafts, loadDraftReview, setApproval } from './caseReviewData'
+import { DRAFT_LIST_COLUMNS, DRAFT_META_COLUMNS, countKeepers, listDrafts, loadDraftReviewMeta, setApproval } from './caseReviewData'
 
 /**
  * The case review queries against a recording fake of the Supabase client.
@@ -115,28 +115,67 @@ describe('countKeepers', () => {
   })
 })
 
-describe('loadDraftReview', () => {
+describe('loadDraftReviewMeta', () => {
   it('refuses anything that is not a draft', async () => {
     const { client, queries } = fakeClient(() => ({ data: null, error: null }))
-    expect(await loadDraftReview(client, OLD_ID)).toBeNull()
+    expect(await loadDraftReviewMeta(client, OLD_ID)).toBeNull()
     expect(has(queries[0], 'eq', 'lifecycle', 'draft')).toBe(true)
+    expect(queries).toHaveLength(1)
   })
 
-  it('returns the draft with checklist counts next to the old case', async () => {
-    const content = { consultation_type: null, patient_name: 'Ann', patient_age: 40, candidate_instructions: 'brief', station_script: 'script', data_gathering: '|a|b|', clinical_management: null, relating_to_others: null, clinical_learning_points: 'lp', domains: null }
+  it('reads the sign-off and checklist only (the case body comes from the public helper)', async () => {
+    const { client, queries } = fakeClient(() => ({ data: null, error: null }))
+    await loadDraftReviewMeta(client, NEW_ID)
+    expect(has(queries[0], 'select', DRAFT_META_COLUMNS)).toBe(true)
+    for (const body of ['candidate_instructions', 'station_script', 'data_gathering', 'clinical_learning_points']) {
+      expect(DRAFT_META_COLUMNS).not.toContain(body)
+    }
+  })
+
+  it('returns the sign-off, checklist counts and the old case it replaces with its keeper count', async () => {
     const { client } = fakeClient((q) => {
       if (q.table === 'case_keepers') return { data: [{ station_id: OLD_ID }], error: null }
       if (has(q, 'eq', 'id', NEW_ID)) {
         return {
-          data: { ...content, id: NEW_ID, title: 'New', lifecycle: 'draft', seo_description: 'One line.', approved_at: null, approved_by: null, replaces_station_id: OLD_ID, mark_scheme_structured: { domains: [{ domain: 'data_gathering', indicators: [1, 2] }, { domain: 'relating_to_others', indicators: [1] }] } },
+          data: { id: NEW_ID, approved_at: '2026-10-05T12:00:00Z', approved_by: 'ishaq@example.org', replaces_station_id: OLD_ID, mark_scheme_structured: { domains: [{ domain: 'data_gathering', indicators: [1, 2] }, { domain: 'relating_to_others', indicators: [1] }] } },
           error: null,
         }
       }
-      return { data: { ...content, id: OLD_ID, title: 'Old', lifecycle: 'live' }, error: null }
+      return { data: [{ id: OLD_ID, title: 'Old', lifecycle: 'archived' }], error: null }
     })
-    const review = await loadDraftReview(client, NEW_ID)
-    expect(review?.draft).toMatchObject({ id: NEW_ID, seoDescription: 'One line.', candidateInstructions: 'brief', checklist: { data_gathering: 2, clinical_management: 0, relating_to_others: 1 } })
-    expect(review?.old).toMatchObject({ id: OLD_ID, title: 'Old', lifecycle: 'live', keeperCount: 1 })
+    expect(await loadDraftReviewMeta(client, NEW_ID)).toEqual({
+      id: NEW_ID,
+      approvedAt: '2026-10-05T12:00:00Z',
+      approvedBy: 'ishaq@example.org',
+      replacesStationId: OLD_ID,
+      replaces: { id: OLD_ID, title: 'Old', lifecycle: 'archived', keeperCount: 1 },
+      checklist: { data_gathering: 2, clinical_management: 0, relating_to_others: 1 },
+    })
+  })
+
+  it('does not look for an old case when the draft replaces nothing', async () => {
+    const { client, queries } = fakeClient(() => ({
+      data: { id: NEW_ID, approved_at: null, approved_by: null, replaces_station_id: null, mark_scheme_structured: null },
+      error: null,
+    }))
+    expect(await loadDraftReviewMeta(client, NEW_ID)).toMatchObject({ replacesStationId: null, replaces: null, checklist: null })
+    expect(queries).toHaveLength(1)
+  })
+
+  it('says the old case is missing rather than inventing one', async () => {
+    const { client } = fakeClient((q) => {
+      if (q.table === 'case_keepers') return { data: [], error: null }
+      if (has(q, 'eq', 'id', NEW_ID)) {
+        return { data: { id: NEW_ID, approved_at: null, approved_by: null, replaces_station_id: OLD_ID, mark_scheme_structured: null }, error: null }
+      }
+      return { data: [], error: null }
+    })
+    expect(await loadDraftReviewMeta(client, NEW_ID)).toMatchObject({ replacesStationId: OLD_ID, replaces: null })
+  })
+
+  it('throws when the draft read fails, so the page errors rather than 404s', async () => {
+    const { client } = fakeClient(() => ({ data: null, error: { message: 'boom' } }))
+    await expect(loadDraftReviewMeta(client, NEW_ID)).rejects.toThrow('draft read failed')
   })
 })
 

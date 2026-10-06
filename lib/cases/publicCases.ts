@@ -116,18 +116,19 @@ export const getPublicCasesGroupedByDomainForList = cache(async (): Promise<Publ
     return groupByDomain(await getPublicCasesForList());
 });
 
-export const getPublicCaseById = cache(async (id: string): Promise<PublicCase | null> => {
+/**
+ * One case's full body by id, in the shape the public case page renders.
+ * `liveOnly` is what keeps a public read to the live library; only the admin
+ * review read below turns it off. Never throws: a failed read is a null.
+ */
+async function fetchCaseById(id: string, { liveOnly }: { liveOnly: boolean }): Promise<PublicCase | null> {
     const supabase = getSupabaseAdmin();
 
-    const { data: station, error } = await supabase
-        .from('stations')
-        .select(CASE_SELECT_DETAIL)
-        .eq('id', id)
-        .eq('is_active', true)
-        .maybeSingle();
+    const byId = supabase.from('stations').select(CASE_SELECT_DETAIL).eq('id', id);
+    const { data: station, error } = await (liveOnly ? byId.eq('is_active', true) : byId).maybeSingle();
 
     if (error) {
-        console.error('Error fetching public case:', error);
+        console.error(liveOnly ? 'Error fetching public case:' : 'Error fetching case for review:', error);
         return null;
     }
 
@@ -137,7 +138,22 @@ export const getPublicCaseById = cache(async (id: string): Promise<PublicCase | 
 
     const [withDomain] = await attachDomainNames(supabase, [station]);
     return withDomain;
-});
+}
+
+export const getPublicCaseById = cache(
+    async (id: string): Promise<PublicCase | null> => fetchCaseById(id, { liveOnly: true })
+);
+
+/**
+ * ADMIN ONLY. The same read and shape as getPublicCaseById, for a case in any
+ * lifecycle: a draft (hidden from everyone else by RLS) or the archived case it
+ * replaces. It is what lets /admin/case-review/[id] render a draft through the
+ * public case page's own component. Call it only after the ADMIN_EMAILS check;
+ * nothing public may use it.
+ */
+export const getCaseByIdForReview = cache(
+    async (id: string): Promise<PublicCase | null> => fetchCaseById(id, { liveOnly: false })
+);
 
 /*
  * ── Forwarding an old case's address to its replacement ──────────────────────

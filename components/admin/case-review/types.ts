@@ -1,6 +1,6 @@
 /**
- * Shapes shared by the case review API (app/api/admin/case-review) and the
- * admin pages that render it. Kept free of server imports so client
+ * Shapes shared by the case review queries (app/api/admin/case-review) and
+ * the admin pages that render them. Kept free of server imports so client
  * components can use them.
  *
  * "Draft" here always means a stations row with lifecycle = 'draft': a new
@@ -46,39 +46,21 @@ export interface ChecklistCounts {
   relating_to_others: number
 }
 
-/** Everything a reviewer reads about one case, new or old. */
-export interface CaseContent {
+/**
+ * What the review bar shows about one draft, beyond the case itself. The case
+ * body (seo_description included) is read with the public page's own helper,
+ * getCaseByIdForReview in lib/cases/publicCases.ts, so it renders exactly as
+ * trainees will see it; this is only the sign-off state and the checklist.
+ */
+export interface DraftReviewMeta {
   id: string
-  title: string
-  lifecycle: string
-  domain: string | null
-  consultationType: string | null
-  patientName: string | null
-  patientAge: number | null
-  candidateInstructions: string | null
-  stationScript: string | null
-  dataGathering: string | null
-  clinicalManagement: string | null
-  relatingToOthers: string | null
-  learningPoints: string | null
-}
-
-export interface DraftCase extends CaseContent {
-  seoDescription: string | null
   approvedAt: string | null
   approvedBy: string | null
   replacesStationId: string | null
+  /** Null when the draft replaces nothing, or the old row could not be found. */
+  replaces: ReplacedCaseSummary | null
   /** Null when the draft has no structured mark scheme, or it is unreadable. */
   checklist: ChecklistCounts | null
-}
-
-export interface OldCase extends CaseContent {
-  keeperCount: number
-}
-
-export interface CaseReviewDetailResponse {
-  draft: DraftCase
-  old: OldCase | null
 }
 
 export interface CaseApprovalResponse {

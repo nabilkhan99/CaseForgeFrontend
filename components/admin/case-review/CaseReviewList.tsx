@@ -8,9 +8,9 @@ import { fmtDay, fmtKeepers, fmtPatient, metaLine } from './format'
 
 /**
  * Every draft case, split into "waiting for sign-off" and "approved", newest
- * first inside each. A row opens the side by side review, where the sign-off
- * lives: approving means having read the case, so it is not offered from the
- * list.
+ * first inside each. A row opens the case on its public page layout
+ * (/admin/case-review/[id]), where the sign-off lives: approving means having
+ * read the case, so it is not offered from the list.
  */
 
 function ReplacesLine({ draft }: { draft: DraftSummary }) {
@@ -131,7 +131,8 @@ export default function CaseReviewList() {
           <div>
             <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-heading">Case review</h1>
             <p className="mt-2 text-sm text-muted max-w-xl">
-              New cases waiting to go live. Read each one next to the case it replaces, then approve it.
+              New cases waiting to go live. Read each one as trainees will see it, flip to the case it
+              replaces, then approve it.
               Approving does not switch a case on; that is a separate step.
             </p>
           </div>

@@ -4,10 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 
 /**
- * The three /api/admin/case-review routes: the guard, input validation and
- * error mapping. The queries are mocked here; caseReviewData.test.ts covers
- * what they read and write. Plus source pins on the pages and the admin
- * front door, which have no DOM test environment in this repo.
+ * The two /api/admin/case-review routes (the list and the sign-off): the
+ * guard, input validation and error mapping. The queries are mocked here;
+ * caseReviewData.test.ts covers what they read and write. Plus source pins on
+ * the pages and the admin front door, which have no DOM test environment in
+ * this repo. The detail page reads server side (no JSON route); it is run for
+ * real in app/admin/case-review/[id]/page.test.ts.
  */
 
 const mocks = vi.hoisted(() => ({
@@ -15,7 +17,6 @@ const mocks = vi.hoisted(() => ({
   getAdminEmail: vi.fn(),
   getSupabaseAdmin: vi.fn(() => ({})),
   listDrafts: vi.fn(),
-  loadDraftReview: vi.fn(),
   setApproval: vi.fn(),
 }))
 
@@ -24,12 +25,10 @@ vi.mock('@/lib/supabase/admin', () => ({ getSupabaseAdmin: () => mocks.getSupaba
 vi.mock('./caseReviewData', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./caseReviewData')>()),
   listDrafts: (...args: unknown[]) => mocks.listDrafts(...args),
-  loadDraftReview: (...args: unknown[]) => mocks.loadDraftReview(...args),
   setApproval: (...args: unknown[]) => mocks.setApproval(...args),
 }))
 
 const { GET: LIST } = await import('./route')
-const { GET: DETAIL } = await import('./[id]/route')
 const { POST: APPROVAL } = await import('./[id]/approval/route')
 
 const ID = '11111111-1111-4111-8111-111111111111'
@@ -55,7 +54,6 @@ beforeEach(() => {
   mocks.isAdmin.mockResolvedValue(true)
   mocks.getAdminEmail.mockResolvedValue(ADMIN)
   mocks.listDrafts.mockResolvedValue([])
-  mocks.loadDraftReview.mockResolvedValue(null)
   mocks.setApproval.mockResolvedValue({ ok: true, approval: { id: ID, approvedAt: '2026-10-05T12:00:00.000Z', approvedBy: ADMIN } })
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
@@ -64,15 +62,10 @@ describe('the admin guard', () => {
   it('turns non-admins away from every route before touching data', async () => {
     mocks.isAdmin.mockResolvedValue(false)
     mocks.getAdminEmail.mockResolvedValue(null)
-    const responses = await Promise.all([
-      LIST(),
-      DETAIL(new NextRequest(`http://localhost/api/admin/case-review/${ID}`), params(ID)),
-      APPROVAL(...post(ID, { action: 'approve' })),
-    ])
-    expect(responses.map((r) => r.status)).toEqual([403, 403, 403])
+    const responses = await Promise.all([LIST(), APPROVAL(...post(ID, { action: 'approve' }))])
+    expect(responses.map((r) => r.status)).toEqual([403, 403])
     expect(mocks.getSupabaseAdmin).not.toHaveBeenCalled()
     expect(mocks.listDrafts).not.toHaveBeenCalled()
-    expect(mocks.loadDraftReview).not.toHaveBeenCalled()
     expect(mocks.setApproval).not.toHaveBeenCalled()
   })
 })
@@ -89,19 +82,6 @@ describe('GET /api/admin/case-review', () => {
     const res = await LIST()
     expect(res.status).toBe(500)
     expect(await res.json()).toEqual({ error: 'Could not load the draft cases.' })
-  })
-})
-
-describe('GET /api/admin/case-review/{id}', () => {
-  it('400s a malformed id without querying', async () => {
-    const res = await DETAIL(new NextRequest('http://localhost/x'), params('nope'))
-    expect(res.status).toBe(400)
-    expect(mocks.loadDraftReview).not.toHaveBeenCalled()
-  })
-
-  it('404s anything that is not a draft', async () => {
-    const res = await DETAIL(new NextRequest('http://localhost/x'), params(ID))
-    expect(res.status).toBe(404)
   })
 })
 
@@ -151,12 +131,44 @@ describe('the pages (source pins)', () => {
     expect(read(ROOT + 'app/admin/AdminHome.tsx')).toContain("href: '/admin/case-review'")
   })
 
-  it('the list has an empty state, and the detail reuses the public renderers and links to the brief', () => {
-    expect(read(ROOT + 'components/admin/case-review/CaseReviewList.tsx')).toContain('Nothing to review')
-    const detail = read(ROOT + 'components/admin/case-review/CaseReviewDetail.tsx')
-    expect(detail).toContain("from '@/components/cases/LearningPoints'")
-    expect(detail).toContain("from '@/components/cases/MarkScheme'")
-    expect(detail).toContain('/clinical-master/station/${draft.id}')
+  it('the list has an empty state, and every row opens that case\'s review page', () => {
+    const list = read(ROOT + 'components/admin/case-review/CaseReviewList.tsx')
+    expect(list).toContain('Nothing to review')
+    expect(list).toContain('href={`/admin/case-review/${draft.id}`}')
+  })
+
+  it('the detail page gates before it reads, and is never indexed', () => {
+    const page = read(ROOT + 'app/admin/case-review/[id]/page.tsx')
+    const gate = page.indexOf('await requireAdminPage(')
+    const load = page.indexOf('await loadCaseReview(')
+    expect(gate).toBeGreaterThan(-1)
+    expect(load).toBeGreaterThan(gate)
+    expect(page).toContain('robots: { index: false, follow: false }')
+  })
+
+  it('the detail renders the case through the public case page component, not a fork of it', () => {
+    const preview = read(ROOT + 'components/admin/case-review/CaseReviewPreview.tsx')
+    expect(preview).toContain("import CaseDetailPageClient from '@/components/cases/CaseDetailPageClient'")
+    expect(preview).toMatch(/<CaseDetailPageClient\s+caseData=\{shown\}/)
+    expect(preview).toContain('reviewBar={')
+    // The case bodies come from the public page's own read, minus its live filter.
+    const loader = read(ROOT + 'app/admin/case-review/[id]/loadCaseReview.ts')
+    expect(loader).toContain('getCaseByIdForReview(')
+    expect(loader).toContain('buildCaseSeoIndex(')
+  })
+
+  it('the public case page drops its visitor offer under the review bar, and only there', () => {
+    const casePage = read(ROOT + 'components/cases/CaseDetailPageClient.tsx')
+    expect(casePage).toContain('{!user && !reviewBar && (')
+    // The public route never passes one.
+    expect(read(ROOT + 'app/sca-cases/[slug]/page.tsx')).not.toContain('reviewBar')
+  })
+
+  it('the review bar opens the draft as a consultation in a new tab, and goes back to the list', () => {
+    const bar = read(ROOT + 'components/admin/case-review/CaseReviewBar.tsx')
+    expect(bar).toMatch(/href=\{`\/clinical-master\/station\/\$\{meta\.id\}`\}\s+target="_blank"\s+rel="noopener noreferrer"/)
+    expect(bar).toContain('href="/admin/case-review"')
+    expect(bar).toContain('View the case it replaces')
   })
 
   it('no case review file writes lifecycle or is_active', () => {
@@ -164,6 +176,9 @@ describe('the pages (source pins)', () => {
       'app/api/admin/case-review/caseReviewData.ts',
       'app/api/admin/case-review/[id]/approval/route.ts',
       'components/admin/case-review/ApprovalControl.tsx',
+      'components/admin/case-review/CaseReviewBar.tsx',
+      'components/admin/case-review/CaseReviewPreview.tsx',
+      'app/admin/case-review/[id]/loadCaseReview.ts',
     ]) {
       const src = read(ROOT + file)
       expect(src).not.toMatch(/lifecycle:\s*'(live|archived)'/)

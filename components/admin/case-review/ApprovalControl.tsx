@@ -55,8 +55,8 @@ export default function ApprovalControl({ stationId, approvedAt, approvedBy, onC
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-4">
+    <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
         <AnimatePresence mode="wait" initial={false}>
           {approved ? (
             <motion.p
@@ -67,8 +67,8 @@ export default function ApprovalControl({ stationId, approvedAt, approvedBy, onC
               transition={{ duration: 0.2 }}
               className="text-sm text-success font-semibold"
             >
-              Approved {fmtDay(approvedAt)}
-              {approvedBy ? <span className="font-normal text-muted"> by {approvedBy}</span> : null}
+              Approved{approvedBy ? <span className="font-normal text-body"> by {approvedBy}</span> : null}
+              <span className="font-normal text-muted"> on {fmtDay(approvedAt)}</span>
             </motion.p>
           ) : (
             <motion.p
@@ -89,7 +89,7 @@ export default function ApprovalControl({ stationId, approvedAt, approvedBy, onC
             type="button"
             onClick={() => submit('withdraw')}
             disabled={saving}
-            className="text-sm text-muted hover:text-heading underline underline-offset-4 disabled:opacity-40"
+            className="text-xs text-muted hover:text-heading underline underline-offset-4 disabled:opacity-40"
           >
             Withdraw approval
           </button>
@@ -98,14 +98,14 @@ export default function ApprovalControl({ stationId, approvedAt, approvedBy, onC
             type="button"
             onClick={() => submit('approve')}
             disabled={saving}
-            className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white shadow-elevation-1 transition-colors hover:bg-primary-light disabled:opacity-50"
+            className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-white shadow-elevation-1 transition-colors hover:bg-primary-light disabled:opacity-50"
           >
             Approve this case
           </button>
         )}
       </div>
       {error ? (
-        <p role="alert" className="text-sm text-danger">
+        <p role="alert" className="text-xs text-danger">
           {error}
         </p>
       ) : null}

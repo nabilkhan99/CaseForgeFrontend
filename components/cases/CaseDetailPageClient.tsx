@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -22,6 +22,14 @@ interface CaseDetailPageClientProps {
     caseData: SeoCase;
     /** Live cases in the public library, for the footer line. Falls back to 200. */
     libraryCaseCount?: number;
+    /**
+     * Admin review only (/admin/case-review/[id]); the public page never sets
+     * it. Rendered above the case, and while it is set the visitor offer in the
+     * sidebar is left out: a draft cannot be practised free, and the reviewer
+     * is reading the page, not being sold it. Everything else renders exactly
+     * as the public page does, which is the point of reviewing here.
+     */
+    reviewBar?: ReactNode;
 }
 
 // Parse the candidate_instructions markdown into structured sections
@@ -115,7 +123,7 @@ function SectionIcon({ title }: { title: string }) {
 
 
 
-export default function CaseDetailPageClient({ caseData, libraryCaseCount }: CaseDetailPageClientProps) {
+export default function CaseDetailPageClient({ caseData, libraryCaseCount, reviewBar }: CaseDetailPageClientProps) {
     const [user, setUser] = useState<{ id: string } | null>(null);
 
     useEffect(() => {
@@ -295,6 +303,8 @@ export default function CaseDetailPageClient({ caseData, libraryCaseCount }: Cas
             <LandingNavbar user={user} />
 
             <main className="max-w-7xl mx-auto px-4 md:px-6 pt-24 pb-32 md:pt-28 md:pb-16 lg:pb-16">
+                {reviewBar}
+
                 {/* Breadcrumb + meta row */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
                     <div className="flex items-center gap-3 text-sm">
@@ -346,8 +356,9 @@ export default function CaseDetailPageClient({ caseData, libraryCaseCount }: Cas
                             the same reason: a crawler must not open one either.
 
                             Signed-in readers get neither: the free offer is the
-                            guest way in, and an account already has its own. */}
-                        {!user && (
+                            guest way in, and an account already has its own.
+                            Nor does an admin reviewing a case (reviewBar). */}
+                        {!user && !reviewBar && (
                             <>
                                 {isFreeCase ? (
                                     <a href={cta.href} rel="nofollow" className="cta-button mt-4 w-full px-5 py-3.5 text-[15px]">

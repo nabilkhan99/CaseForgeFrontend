@@ -3,7 +3,7 @@
  * code that reads and writes several tables in one flow (the admin coaching
  * routes and the coach cohort linker). Supports only the PostgREST calls that
  * code uses: select, eq, ilike (exact, as exactEmailPattern builds it), in,
- * gte, order, limit, maybeSingle, single, insert, update, upsert.
+ * gte, order, limit, range, maybeSingle, single, insert, update, upsert.
  *
  * Test-only. Never imported by application code.
  */
@@ -56,6 +56,7 @@ export function createFakeSupabase(tables: Record<string, Row[]> = {}): FakeSupa
     let inserted: Row[] = []
     let orderBy: { column: string; ascending: boolean } | null = null
     let limitTo: number | null = null
+    let rangeOf: { from: number; to: number } | null = null
 
     const record = (name: string, args: unknown[]) => fake.calls.push({ table, op: name, args })
 
@@ -78,6 +79,7 @@ export function createFakeSupabase(tables: Record<string, Row[]> = {}): FakeSupa
         })
       }
       if (limitTo !== null) matched = matched.slice(0, limitTo)
+      if (rangeOf !== null) matched = matched.slice(rangeOf.from, rangeOf.to + 1)
       return { data: matched, error: null }
     }
 
@@ -112,6 +114,10 @@ export function createFakeSupabase(tables: Record<string, Row[]> = {}): FakeSupa
       },
       limit: (n: number) => {
         limitTo = n
+        return chain
+      },
+      range: (from: number, to: number) => {
+        rangeOf = { from, to }
         return chain
       },
       update: (values: Row) => {
