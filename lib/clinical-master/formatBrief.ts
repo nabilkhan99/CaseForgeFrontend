@@ -14,12 +14,13 @@
  *    ("**Allergies:** Nil. **Recent Notes:** ..."), so an inline label that
  *    follows sentence content still needs its own block.
  *
- * Also unescapes the literal \" sequences present in stored briefs.
+ * Also unescapes the literal \" sequences present in stored briefs, and drops
+ * markdown images (see stripMarkdownImages).
  */
 export function formatBriefMarkdown(markdown: string): string {
     if (!markdown) return '';
     return (
-        markdown
+        stripMarkdownImages(markdown)
             // Stored escapes: \" -> "
             .replace(/\\"/g, '"')
             // Start a new paragraph at each inline bold label ("**Label:**") that
@@ -36,4 +37,22 @@ export function formatBriefMarkdown(markdown: string): string {
             .replace(/([^\n])\n(?!\n|[ \t]*[-*+][ \t]|[ \t]*\d+\.[ \t])/g, '$1  \n')
             .trim()
     );
+}
+
+/**
+ * Remove markdown images (`![alt](src)`) from a brief.
+ *
+ * Case photos are rendered from lib/stations/casePhotos.ts, never from the
+ * brief text: several stored briefs point at files that were never made, so
+ * the brief painted a broken image whose alt text gave the diagnosis away. A
+ * line that held nothing but the image goes with it, so no empty paragraph or
+ * stray hard break is left behind.
+ */
+export function stripMarkdownImages(markdown: string): string {
+    if (!markdown) return '';
+    return markdown
+        .replace(/^[ \t]*!\[[^\]\n]*\]\([^)\n]*\)[ \t]*(?:\r?\n|$)/gm, '')
+        .replace(/!\[[^\]\n]*\]\([^)\n]*\)/g, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trimEnd();
 }

@@ -14,6 +14,8 @@ import ConsultationTimer from '@/components/clinical-master/ConsultationTimer';
 import AudioSetupNotice from '@/components/clinical-master/AudioSetupNotice';
 import { markTrialSessionStarted } from '@/lib/trial/storage';
 import { patientInitials } from '@/lib/trial/callBrief';
+import { casePhotosFor } from '@/lib/stations/casePhotos';
+import { CasePhotoGallery } from '@/components/clinical-master/CasePhotos';
 
 export interface GuestReadingScreenProps {
   stationId: string;
@@ -178,6 +180,9 @@ export default function GuestReadingScreen({
                 </ReactMarkdown>
               </div>
             </div>
+
+            {/* The photo the brief describes, as on the signed-in brief. */}
+            <CasePhotoGallery photos={casePhotosFor(stationId)} className="mb-6" />
 
             {/* Error */}
             {error && (

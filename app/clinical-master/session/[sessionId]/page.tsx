@@ -14,6 +14,8 @@ import ConnectingScreen from '@/components/clinical-master/ConnectingScreen';
 import ConsultationStage from '@/components/clinical-master/ConsultationStage';
 import SessionControls from '@/components/clinical-master/SessionControls';
 import ConfirmModal from '@/components/ui/ConfirmModal';
+import { CasePhotoTray } from '@/components/clinical-master/CasePhotos';
+import { casePhotosFor } from '@/lib/stations/casePhotos';
 
 /**
  * The token route's refusals that are about WHICH CASE, not the connection:
@@ -423,6 +425,10 @@ function LiveConsultationContent() {
           {error && <span className="text-[11px] text-danger">{error}</span>}
         </div>
       </div>
+
+      {/* The photo the patient sent in, one tap from full screen. Renders
+          nothing for a case without one. */}
+      <CasePhotoTray photos={casePhotosFor(station?.id ?? stationId)} />
 
       {/* Main voice area — shared with /try so the two cannot drift. Every
           station in the library is 720s; the fallback here says 720 while the

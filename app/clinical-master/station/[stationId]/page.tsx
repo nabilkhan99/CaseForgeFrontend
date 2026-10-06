@@ -19,6 +19,8 @@ import { isStationLockedForTrial, trialStationAllowlist, useTrialStatus } from '
 import { CASE_VERSION_REFUSED } from '@/lib/stations/caseVersionCodes';
 import { STATION_BRIEF_COLUMNS, toStationBrief, type StationBrief } from '@/lib/clinical-master/stationBrief';
 import { fetchServerBrief } from '@/lib/clinical-master/serverBrief';
+import { casePhotosFor } from '@/lib/stations/casePhotos';
+import { CasePhotoGallery } from '@/components/clinical-master/CasePhotos';
 
 type StationData = StationBrief;
 
@@ -328,6 +330,10 @@ function ReadingPhaseContent() {
                 </ReactMarkdown>
               </div>
             </div>
+
+            {/* The photo the brief describes (lib/stations/casePhotos.ts).
+                Nothing for a case without one. */}
+            <CasePhotoGallery photos={casePhotosFor(station.id)} className="mb-6" />
 
             {/* Error */}
             {error && (

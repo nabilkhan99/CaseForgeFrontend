@@ -14,6 +14,9 @@ import LandingNavbar from '@/components/landing/LandingNavbar';
 import Container from '@/components/ui/Container';
 import { createClient } from '@/lib/supabase/client';
 import { caseCtaFor } from '@/lib/trial/freeStationPicks';
+import { stripMarkdownImages } from '@/lib/clinical-master/formatBrief';
+import { casePhotosFor } from '@/lib/stations/casePhotos';
+import { CasePhotoGallery } from '@/components/clinical-master/CasePhotos';
 
 interface CaseDetailPageClientProps {
     caseData: SeoCase;
@@ -120,7 +123,8 @@ export default function CaseDetailPageClient({ caseData, libraryCaseCount }: Cas
         supabase.auth.getUser().then(({ data }) => setUser(data.user as { id: string } | null));
     }, []);
 
-    const sections = parseInstructions(caseData.candidate_instructions ?? '');
+    // Markdown images are dropped: photos come from lib/stations/casePhotos.ts.
+    const sections = parseInstructions(stripMarkdownImages(caseData.candidate_instructions ?? ''));
 
     // Which door this case opens. One of the five free ones can be sat here
     // and now; the other ~195 cannot, and the button says so rather than
@@ -201,6 +205,9 @@ export default function CaseDetailPageClient({ caseData, libraryCaseCount }: Cas
                     </div>
                 </div>
             ))}
+
+            {/* The photo the brief describes. Nothing for a case without one. */}
+            <CasePhotoGallery photos={casePhotosFor(caseData.id)} className="pl-7" />
         </div>
     );
 

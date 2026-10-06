@@ -11,6 +11,8 @@ import SessionControls from '@/components/clinical-master/SessionControls';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import { micRecoveryHint } from '@/lib/clinical-master/micErrors';
 import { markTrialSessionStarted } from '@/lib/trial/storage';
+import { CasePhotoTray } from '@/components/clinical-master/CasePhotos';
+import { casePhotosFor } from '@/lib/stations/casePhotos';
 
 export interface GuestCallScreenProps {
   sessionId: string;
@@ -202,6 +204,9 @@ export default function GuestCallScreen({
           {error && <span className="text-[11px] text-danger">{error}</span>}
         </div>
       </div>
+
+      {/* As on the signed-in session screen. */}
+      <CasePhotoTray photos={casePhotosFor(stationId)} />
 
       <ConsultationStage
         patientInitials={patientInitials}
