@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { LeadView } from './assemble'
-import { callerLabel, dueLabel, filterCounts, matchesFilter, matchesSearch, sortLeads } from './board'
+import { callerLabel, dueLabel, filterCounts, matchesFilter, matchesSearch, practiceSummary, sortLeads, touchPoints } from './board'
+import { NO_SIGNALS } from './heat'
 import type { NextAction } from './types'
 
 // Sunday 4 October 2026, 11:45 in London. Invented leads.
@@ -29,6 +30,7 @@ const lead = (email: string, over: Partial<LeadView> = {}): LeadView => ({
   joinedAt: '2026-09-20T10:00:00Z',
   exam: { label: 'Not given', cls: 'unknown', days: null, date: null },
   consultations: 0,
+  stationsTried: 0,
   passes: 0,
   best: null,
   signals: null,
@@ -94,6 +96,35 @@ describe('dueLabel', () => {
     expect(dueLabel('2026-10-05T11:30:00Z', NOW)).toEqual({ text: 'Tomorrow 12:30', tone: 'later' })
     expect(dueLabel('2026-10-07T09:00:00Z', NOW)).toEqual({ text: 'Wed 7 Oct 10:00', tone: 'later' })
     expect(dueLabel(null, NOW)).toEqual({ text: 'Not scheduled', tone: 'none' })
+  })
+})
+
+describe('touch points', () => {
+  it('lists every tracked touch point, strongest buying signal first', () => {
+    const chips = touchPoints({
+      signals: { ...NO_SIGNALS, guideViews: 5, pricingViews: 3, checkoutStarts: 1, studyBudget: 2, activeDays: 4, guestSessions: 2 },
+    })
+    expect(chips.map((c) => c.label)).toEqual([
+      'payment page ×1',
+      'pricing ×3',
+      'study budget ×2',
+      'guides ×5',
+      'free mocks ×2',
+      'on the site 4 days',
+    ])
+    expect(chips.map((c) => c.tone)).toEqual(['hot', 'warm', 'warm', 'plain', 'plain', 'plain'])
+  })
+
+  it('has nothing to show when browsing data is off, or for a single quiet visit', () => {
+    expect(touchPoints({ signals: null })).toEqual([])
+    expect(touchPoints({ signals: { ...NO_SIGNALS, activeDays: 1 } })).toEqual([])
+  })
+})
+
+describe('practiceSummary', () => {
+  it('counts redos as consultations beyond the stations tried', () => {
+    expect(practiceSummary({ consultations: 6, stationsTried: 4, passes: 1, best: 7 })).toBe('6 consultations · 2 redos · 1 passed · best 7.0')
+    expect(practiceSummary({ consultations: 1, stationsTried: 1, passes: 0, best: null })).toBe('1 consultation · 0 passed')
   })
 })
 

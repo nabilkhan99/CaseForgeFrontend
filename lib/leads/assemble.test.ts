@@ -155,7 +155,7 @@ describe('practice and exam timing', () => {
       results: [{ session_id: 's1', verdict: 'Pass', weighted_score: '7.5' }],
     })
     const [lead] = assembleLeads(src)
-    expect(lead).toMatchObject({ kind: 'trial', consultations: 2, passes: 1, best: 7.5, trial: { running: true } })
+    expect(lead).toMatchObject({ kind: 'trial', consultations: 2, stationsTried: 2, passes: 1, best: 7.5, trial: { running: true } })
   })
 
   it('credits a guest with every free mock their browser ran', () => {
@@ -165,7 +165,8 @@ describe('practice and exam timing', () => {
       sessions: [{ id: 's1', user_id: null, station_id: 'a', status: 'completed', started_at: '2026-10-02T10:00:00Z' }],
       browsing: { pidsByEmail: new Map([['guest@example.org', ['p1']]]), byBrowser: new Map([['p1', signals]]) },
     })
-    expect(assembleLeads(src)[0]).toMatchObject({ kind: 'free', consultations: 3 })
+    // Three mocks seen in the browser, one tied to the email: the count is known, which cases they were is not.
+    expect(assembleLeads(src)[0]).toMatchObject({ kind: 'free', consultations: 3, stationsTried: 3 })
   })
 
   it('trusts what they told us on a call over the profile, and the profile over the old form', () => {

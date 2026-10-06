@@ -161,7 +161,7 @@ export default function LeadsBoard() {
             <span>Heat</span>
             <span>Lead</span>
             <span>Exam</span>
-            <span>Practice</span>
+            <span>Activity</span>
             <span>Latest</span>
             <span>Next action</span>
           </div>

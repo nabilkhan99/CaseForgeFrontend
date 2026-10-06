@@ -95,6 +95,51 @@ export function dueLabel(dueAt: string | null, now: Date): { text: string; tone:
   return { text: `${londonDayLabel(due)} ${londonTime(due)}`, tone: 'later' }
 }
 
+export type TouchTone = 'hot' | 'warm' | 'plain'
+
+export interface TouchPoint {
+  label: string
+  tone: TouchTone
+  /** Plain-English meaning, for the tooltip. */
+  title: string
+}
+
+/**
+ * Every tracked touch point as a chip, strongest buying signal first: the
+ * same chips the customer-lead-report HTML shows, which Ishaq asked to keep.
+ * Empty when browsing data is off or the lead left no trace on the site.
+ */
+export function touchPoints(lead: Pick<LeadView, 'signals'>): TouchPoint[] {
+  const s = lead.signals
+  if (!s) return []
+  const chips: Array<TouchPoint | null> = [
+    s.checkoutStarts ? { label: `payment page ×${s.checkoutStarts}`, tone: 'hot', title: 'Opened the payment page' } : null,
+    s.paywallHits ? { label: `paywall ×${s.paywallHits}`, tone: 'hot', title: 'Reached the end of the free trial' } : null,
+    s.pricingViews ? { label: `pricing ×${s.pricingViews}`, tone: 'warm', title: 'Looked at the prices' } : null,
+    s.billingToggles ? { label: `compared plans ×${s.billingToggles}`, tone: 'warm', title: 'Switched between the monthly and three-month prices' } : null,
+    s.studyBudget ? { label: `study budget ×${s.studyBudget}`, tone: 'warm', title: 'Checked whether their deanery funds the course' } : null,
+    s.guideViews ? { label: `guides ×${s.guideViews}`, tone: 'plain', title: 'Read SCA guide pages' } : null,
+    s.casebankViews ? { label: `case bank ×${s.casebankViews}`, tone: 'plain', title: 'Read public case pages' } : null,
+    s.guestSessions ? { label: `free mocks ×${s.guestSessions}`, tone: 'plain', title: 'Free cases started without an account' } : null,
+    s.portfolioCases ? { label: `portfolio ×${s.portfolioCases}`, tone: 'plain', title: 'Wrote cases with the portfolio tool' } : null,
+    s.activeDays >= 2 ? { label: `on the site ${s.activeDays} days`, tone: 'plain', title: 'Separate days they visited' } : null,
+  ]
+  return chips.filter((chip): chip is TouchPoint => chip !== null)
+}
+
+/** "6 consultations · 2 redos · 1 passed · best 7.0" */
+export function practiceSummary(lead: Pick<LeadView, 'consultations' | 'stationsTried' | 'passes' | 'best'>): string {
+  const redos = Math.max(0, lead.consultations - lead.stationsTried)
+  return [
+    `${lead.consultations} consultation${lead.consultations === 1 ? '' : 's'}`,
+    redos ? `${redos} redo${redos === 1 ? '' : 's'}` : null,
+    `${lead.passes} passed`,
+    lead.best !== null ? `best ${lead.best.toFixed(1)}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
 /** "Sun 4 Oct, 11:10" for history lines. */
 export function stampLabel(iso: string): string {
   const at = new Date(iso)

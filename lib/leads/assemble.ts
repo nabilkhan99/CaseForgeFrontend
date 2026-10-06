@@ -132,6 +132,8 @@ export interface LeadView {
   joinedAt: string
   exam: ExamTiming
   consultations: number
+  /** Distinct stations attempted. Consultations beyond this were redos of a case already tried. */
+  stationsTried: number
   passes: number
   best: number | null
   signals: Signals | null
@@ -322,7 +324,10 @@ function buildLead(email: string, group: { aliases: Set<string>; rows: TrialLead
   const stats = practiceStats([...sessions.values()], ix.results)
   const signals = src.browsing ? mergeSignals(src.browsing, allEmails) : null
   // Repeat guest mocks from one browser tie only one session to the email.
-  const consultations = !user && signals && signals.guestSessions > stats.consultations ? signals.guestSessions : stats.consultations
+  const countedFromBrowsing = Boolean(!user && signals && signals.guestSessions > stats.consultations)
+  const consultations = countedFromBrowsing && signals ? signals.guestSessions : stats.consultations
+  // Which cases those uncounted mocks were is unknown, so never claim any of them as a redo.
+  const stationsTried = countedFromBrowsing ? consultations : stats.stationsTried
 
   const followup = ix.followups.get(email)
   const today = londonToday(src.now)
@@ -370,6 +375,7 @@ function buildLead(email: string, group: { aliases: Set<string>; rows: TrialLead
     joinedAt: rows[0].created_at,
     exam,
     consultations,
+    stationsTried,
     passes: stats.passes,
     best: stats.best,
     signals,

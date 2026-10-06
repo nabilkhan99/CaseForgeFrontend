@@ -22,6 +22,8 @@ export interface ResultRow {
 
 export interface PracticeStats {
   consultations: number
+  /** Distinct stations attempted; consultations beyond this are redos. */
+  stationsTried: number
   passes: number
   best: number | null
   /** London days with at least one consultation. */
@@ -31,7 +33,7 @@ export interface PracticeStats {
 
 const PASS_VERDICTS: ReadonlySet<string> = new Set(['Pass', 'Bare Pass'])
 
-export const NO_PRACTICE: PracticeStats = { consultations: 0, passes: 0, best: null, activeDays: 0, last: null }
+export const NO_PRACTICE: PracticeStats = { consultations: 0, stationsTried: 0, passes: 0, best: null, activeDays: 0, last: null }
 
 export function practiceStats(sessions: readonly SessionRow[], results: ReadonlyMap<string, ResultRow>): PracticeStats {
   const real = sessions.filter((s) => s.status !== 'reading' && s.started_at)
@@ -44,6 +46,7 @@ export function practiceStats(sessions: readonly SessionRow[], results: Readonly
   const starts = real.map((s) => new Date(s.started_at as string))
   return {
     consultations: real.length,
+    stationsTried: new Set(real.map((s) => s.station_id)).size,
     passes: marked.filter((r) => r.verdict && PASS_VERDICTS.has(r.verdict)).length,
     best: scores.length ? Math.max(...scores) : null,
     activeDays: new Set(starts.map((d) => londonToday(d))).size,
