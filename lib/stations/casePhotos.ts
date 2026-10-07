@@ -87,11 +87,11 @@ const CASE_PHOTOS: Readonly<Record<string, readonly CasePhoto[]>> = {
     // round. Prompt in case-bank-rewrite/CASE_PHOTO_PROMPTS.md.
     'dab18ec4-ff3e-405e-95a6-b222c615f5c4': [
         {
-            src: '/images/cases/uveitis-eye.png',
+            src: '/cases/dab18ec4-ff3e-405e-95a6-b222c615f5c4/1.jpg',
             alt: 'Patient photo: close-up of the left eye',
             caption: 'Left eye',
-            width: 1536,
-            height: 1024,
+            width: 1600,
+            height: 1073,
         },
     ],
 
