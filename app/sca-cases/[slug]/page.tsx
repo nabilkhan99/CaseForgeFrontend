@@ -115,21 +115,18 @@ export default async function ScaCasePage({ params }: PageProps) {
         '@context': 'https://schema.org',
         '@type': 'BreadcrumbList',
         itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Home', item: SITE_URL },
             {
                 '@type': 'ListItem',
-                position: 1,
+                position: 2,
                 name: 'Free SCA Practice Cases',
                 item: absoluteUrl('/sca-cases'),
             },
             {
                 '@type': 'ListItem',
-                position: 2,
-                name: caseItem.domain_name,
-            },
-            {
-                '@type': 'ListItem',
                 position: 3,
                 name: `${caseItem.condition} SCA Case`,
+                item: absoluteUrl(`/sca-cases/${caseItem.slug}`),
             },
         ],
     };
