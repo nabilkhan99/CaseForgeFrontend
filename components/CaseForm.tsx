@@ -2,12 +2,30 @@
 'use client';
 
 import { useState } from 'react';
-import { api } from '@/lib/api';
+import { api, PortfolioApiError } from '@/lib/api';
 import { CapabilitySelect } from './CapabilitySelect';
 import { CaseReviewResponse } from '@/lib/types';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { analytics } from '@/lib/analytics';
 import { LoadingOverlay } from './common/LoadingOverlay';
+
+const CONTENT_FILTERED_MESSAGE =
+  "Our AI provider's safety filter blocked this case. It happens with some safeguarding, sexual health and self-harm cases. Try describing the sensitive details in brief clinical terms (for example: 'disclosed sexual activity with an adult, safeguarding referral made') and generate again.";
+const GENERIC_FAILURE_MESSAGE =
+  'Something went wrong generating your review. Please try again in a moment.';
+
+// Thrown for problems the user can fix in the form; its message is shown as-is.
+class FormValidationError extends Error {}
+
+function errorMessage(err: unknown): string {
+  if (err instanceof FormValidationError) {
+    return err.message;
+  }
+  if (err instanceof PortfolioApiError && err.contentFiltered) {
+    return CONTENT_FILTERED_MESSAGE;
+  }
+  return GENERIC_FAILURE_MESSAGE;
+}
 
 interface CaseFormProps {
   onReviewGenerated: (review: CaseReviewResponse, experienceGroups: string[]) => void;
@@ -18,14 +36,16 @@ export function CaseForm({ onReviewGenerated }: CaseFormProps) {
   const [selectedCapabilities, setSelectedCapabilities] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [aiSelectEnabled, setAiSelectEnabled] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError(null);
 
     try {
       if (caseDescription.trim().length < 10) {
-        throw new Error('Please enter a longer case description');
+        throw new FormValidationError('Please enter a longer case description');
       }
 
       let capabilitiesToUse = selectedCapabilities;
@@ -39,11 +59,11 @@ export function CaseForm({ onReviewGenerated }: CaseFormProps) {
       } else {
         // Manual selection validation
         if (selectedCapabilities.length === 0) {
-          throw new Error('Please select at least one capability or enable AI selection');
+          throw new FormValidationError('Please select at least one capability or enable AI selection');
         }
 
         if (selectedCapabilities.length > 3) {
-          throw new Error('Please select no more than three capabilities');
+          throw new FormValidationError('Please select no more than three capabilities');
         }
       }
 
@@ -56,8 +76,13 @@ export function CaseForm({ onReviewGenerated }: CaseFormProps) {
           case_description: caseDescription,
           selected_capabilities: capabilitiesToUse,
         }),
+        // Experience groups are a nice-to-have: never lose a generated
+        // review because this side call failed.
         api.selectExperienceGroups({
           case_description: caseDescription,
+        }).catch((err) => {
+          console.error(err);
+          return { experience_groups: [] as string[] };
         }),
       ]);
 
@@ -67,7 +92,12 @@ export function CaseForm({ onReviewGenerated }: CaseFormProps) {
       onReviewGenerated(response, experienceGroupsResponse.experience_groups);
     } catch (err) {
       console.error(err);
-      analytics.trackError('generation_failed', err instanceof Error ? err.message : 'Unknown error');
+      analytics.trackError(
+        'generation_failed',
+        err instanceof Error ? err.message : 'Unknown error',
+        { content_filtered: err instanceof PortfolioApiError && err.contentFiltered },
+      );
+      setError(errorMessage(err));
     } finally {
       setIsLoading(false);
     }
@@ -147,6 +177,20 @@ export function CaseForm({ onReviewGenerated }: CaseFormProps) {
           </span>
         </button>
       </motion.div>
+
+      <AnimatePresence>
+        {error && (
+          <motion.p
+            role="alert"
+            className="mx-auto max-w-2xl text-center text-sm leading-relaxed text-[#B45309]"
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+          >
+            {error}
+          </motion.p>
+        )}
+      </AnimatePresence>
     </motion.form>
     </>
   );

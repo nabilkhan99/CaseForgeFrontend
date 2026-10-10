@@ -7,6 +7,21 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 const PLAYGROUND_API_BASE_URL =
   process.env.NEXT_PUBLIC_PORTFOLIO_PLAYGROUND_API_BASE_URL || '/api';
 
+// Azure OpenAI's content filter rejects some routine clinical cases
+// (safeguarding, sexual health, self-harm). The backend surfaces that as a
+// 500 whose body mentions `content_filter`; callers show different copy for it.
+export class PortfolioApiError extends Error {
+  constructor(message: string, readonly contentFiltered: boolean) {
+    super(message);
+    this.name = 'PortfolioApiError';
+  }
+}
+
+async function portfolioApiError(response: Response, message: string): Promise<PortfolioApiError> {
+  const body = await response.text().catch(() => '');
+  return new PortfolioApiError(`${message}: ${response.status}`, body.includes('content_filter'));
+}
+
 interface SectionImprovementRequest {
   section_type: string;
   section_content: string;
@@ -44,7 +59,7 @@ export const api = {
     });
 
     if (!response.ok) {
-      throw new Error('Failed to generate review');
+      throw await portfolioApiError(response, 'Failed to generate review');
     }
 
     return response.json();
@@ -164,7 +179,7 @@ export const api = {
     });
 
     if (!response.ok) {
-      throw new Error('Failed to select capabilities');
+      throw await portfolioApiError(response, 'Failed to select capabilities');
     }
 
     return response.json();
@@ -181,7 +196,7 @@ export const api = {
     });
 
     if (!response.ok) {
-      throw new Error('Failed to select experience groups');
+      throw await portfolioApiError(response, 'Failed to select experience groups');
     }
 
     return response.json();
